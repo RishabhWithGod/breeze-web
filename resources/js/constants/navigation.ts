@@ -1,0 +1,49 @@
+import {
+  Bell,
+  Briefcase,
+  CalendarCheck,
+  ChartColumn,
+  Clock,
+  Coins,
+  FileText,
+  FolderClosed,
+  Gauge,
+  ReceiptText,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react'
+import { ROUTES } from './routes'
+import type { NavItem } from '@/types'
+
+/**
+ * The full product drawer, in the reference application's order.
+ *
+ * Dashboard, AI Takeoff, Estimates and Jobs are built. The rest resolve to
+ * ModuleController, which renders an "in development" screen — real routes
+ * rather than dead links, so navigation never 404s.
+ */
+export const SIDEBAR_ITEMS: readonly NavItem[] = [
+  { label: 'Dashboard', href: ROUTES.home, icon: Gauge },
+  // Lands on the takeoff history, matching the reference product.
+  { label: 'AI Takeoff', href: ROUTES.aiTakeoff, icon: Sparkles },
+  { label: 'Estimates', href: ROUTES.estimates, icon: FileText },
+  { label: 'Jobs', href: ROUTES.jobs, icon: Briefcase },
+  { label: 'Scheduling', href: ROUTES.scheduling, icon: CalendarCheck },
+  { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock },
+  { label: 'Billing', href: ROUTES.billing, icon: ReceiptText },
+  { label: 'Job Costing', href: ROUTES.jobCosting, icon: ChartColumn },
+  { label: 'Documents', href: ROUTES.documents, icon: FolderClosed },
+  { label: 'Notifications', href: ROUTES.notifications, icon: Bell },
+  { label: 'Settings', href: ROUTES.settings, icon: Settings },
+  { label: 'Security', href: ROUTES.security, icon: ShieldCheck },
+  { label: 'Breeze Bucks', href: ROUTES.breezeBucks, icon: Coins },
+]
+
+export const FOOTER_LINKS: readonly { label: string; href: string }[] = [
+  { label: 'Documentation', href: '#' },
+  { label: 'Release notes', href: '#' },
+  { label: 'Privacy', href: '#' },
+  { label: 'Terms', href: '#' },
+  { label: 'Status', href: '#' },
+]

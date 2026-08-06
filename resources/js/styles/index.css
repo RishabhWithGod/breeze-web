@@ -1,0 +1,368 @@
+@import 'tailwindcss';
+
+/* ============================================================================
+   Breeze AI Takeoff — Design System
+   ----------------------------------------------------------------------------
+   All design tokens live here. Components consume them exclusively through
+   Tailwind utilities (bg-surface-glass, text-brand, rounded-card, ...) so that
+   no component ever hardcodes a raw colour, radius or shadow value.
+   ========================================================================= */
+
+@theme {
+  /* ---- Typography ------------------------------------------------------ */
+  --font-sans:
+    'Roboto', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* The reference UI uses a 10px root with rem sizing; these are the same
+     rendered pixel sizes expressed against a standard 16px root. */
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-2xs--line-height: 1.5;
+  --text-xs: 0.75rem; /* 12px */
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem; /* 14px */
+  --text-sm--line-height: 1.55;
+  --text-md: 0.9375rem; /* 15px */
+  --text-md--line-height: 1.6;
+  --text-base: 1.125rem; /* 18px — body */
+  --text-base--line-height: 1.6;
+  --text-lg: 1.25rem; /* 20px */
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.5rem; /* 24px — card titles */
+  --text-xl--line-height: 1.4;
+  --text-2xl: 1.75rem; /* 28px */
+  --text-2xl--line-height: 1.35;
+  --text-3xl: 2rem; /* 32px — section headings */
+  --text-3xl--line-height: 1.25;
+  --text-4xl: 2.5rem; /* 40px */
+  --text-4xl--line-height: 1.2;
+  --text-5xl: 3.125rem; /* 50px — stat numbers */
+  --text-5xl--line-height: 1.1;
+  --text-6xl: 3.75rem; /* 60px — hero */
+  --text-6xl--line-height: 1.05;
+
+  /* ---- Brand palette --------------------------------------------------- */
+  --color-brand: #33e3ff;
+  --color-brand-soft: #85e9ff;
+  --color-brand-deep: #39d0ff;
+  --color-brand-ink: #09111c;
+
+  --color-navy-950: #06070f;
+  --color-navy-900: #0a1424;
+  --color-navy-800: #1d224c;
+  --color-navy-700: #092261;
+  --color-ocean-900: #070f51;
+  --color-ocean-800: #0d57a1;
+  --color-ocean-700: #174797;
+  --color-ocean-600: #2b5dab;
+  --color-ocean-500: #2c72a1;
+  --color-steel-600: #1f83b6;
+  --color-steel-500: #258abe;
+  --color-steel-400: #518e9e;
+  --color-mist-300: #cbd3de;
+
+  /* ---- Semantic / status ----------------------------------------------- */
+  --color-status-success: #13f60b;
+  --color-status-info: #14dede;
+  --color-status-warning: #fb9613;
+  --color-status-danger: #d10404;
+  --color-status-neutral: #8faab2;
+  --color-accent-violet: #7c32de;
+
+  /* Pale icon-tile fills used by the dashboard list rows. */
+  --color-tile-lilac: #bdc3f5;
+  --color-tile-butter: #f5f5bd;
+
+  /* ---- Translucent surfaces (glassmorphism) ---------------------------- */
+  --color-surface-glass: rgb(255 255 255 / 0.035);
+  --color-surface-glass-strong: rgb(255 255 255 / 0.09);
+  --color-surface-glass-hover: rgb(255 255 255 / 0.07);
+  --color-surface-input: rgb(255 255 255 / 0.18);
+  --color-surface-veil: rgb(255 255 255 / 0.35);
+  --color-surface-blue: rgb(29 86 143 / 0.3);
+  --color-surface-blue-strong: rgb(29 86 143 / 0.5);
+
+  --color-hairline: rgb(255 255 255 / 0.14);
+  --color-hairline-strong: rgb(255 255 255 / 0.28);
+
+  /* ---- Radii ------------------------------------------------------------ */
+  --radius-panel: 0.625rem; /* 10px */
+  --radius-dropzone: 0.75rem; /* 12px */
+  --radius-card: 1rem; /* 16px */
+  --radius-pill: 1.25rem; /* 20px */
+
+  /* ---- Elevation -------------------------------------------------------- */
+  --shadow-panel: 0 3px 6px rgb(83 125 187 / 0.16);
+  --shadow-raised: 0 12px 32px -12px rgb(3 10 25 / 0.7);
+  --shadow-glow: 0 0 0 1px rgb(51 227 255 / 0.35), 0 8px 30px -8px rgb(51 227 255 / 0.45);
+
+  /* ---- Layout ----------------------------------------------------------- */
+  --spacing-navbar: 4.875rem; /* 78px fixed header */
+  --spacing-sidebar: 16.25rem; /* 260px */
+  --container-ultra: 120rem;
+
+  /* ---- Motion ----------------------------------------------------------- */
+  --animate-shimmer: shimmer 1.8s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 2.4s ease-out infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-scan: scan 2.6s ease-in-out infinite;
+  --animate-spin-slow: spin 2.6s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -160% 0;
+  }
+  100% {
+    background-position: 160% 0;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(1000%);
+  }
+}
+
+/* ============================================================================
+   Base layer
+   ========================================================================= */
+
+@layer base {
+  * {
+    border-color: var(--color-hairline);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    /* Fallback tone behind the artwork — also what shows before it decodes. */
+    background-color: #071331;
+    color: var(--color-mist-300);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.6;
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ------------------------------------------------------------------------
+     Application backdrop
+     ------------------------------------------------------------------------
+     Two fixed pseudo-element layers instead of `background-attachment: fixed`
+     on <body>: iOS Safari mishandles fixed attachment, and this keeps the
+     artwork pinned, uniformly `cover`-cropped (never stretched) and cheap to
+     repaint while the page scrolls. Both sit behind #root so every glass
+     surface blurs them correctly.
+     --------------------------------------------------------------------- */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background-image: url('../assets/dashboard-bg.jpeg');
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+  }
+
+  /* Readability overlay: darkens the artwork and re-adds the cyan brand glow. */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      radial-gradient(55rem 40rem at 85% -10%, rgb(51 227 255 / 0.14), transparent 62%),
+      radial-gradient(45rem 38rem at 5% 5%, rgb(44 114 161 / 0.16), transparent 60%),
+      linear-gradient(
+        180deg,
+        rgb(4 11 28 / 0.34) 0%,
+        rgb(5 15 38 / 0.2) 40%,
+        rgb(4 11 28 / 0.46) 100%
+      );
+  }
+
+  /* Portrait phones crop far more aggressively — nudge the focal point and
+     deepen the overlay so text keeps its contrast over the busy mesh. */
+  @media (max-width: 640px) and (orientation: portrait) {
+    body::before {
+      background-position: 70% center;
+    }
+
+    body::after {
+      background-image: linear-gradient(
+        180deg,
+        rgb(4 11 28 / 0.66) 0%,
+        rgb(5 15 38 / 0.54) 45%,
+        rgb(4 11 28 / 0.74) 100%
+      );
+    }
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: #fff;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: var(--color-brand);
+    color: var(--color-brand-ink);
+  }
+
+  /* Consistent, theme-aware focus ring on every interactive element. */
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 0.35rem;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgb(255 255 255 / 0.04);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 0.18);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-brand);
+  }
+}
+
+/* ============================================================================
+   Reusable surface + effect utilities
+   ========================================================================= */
+
+/* Frosted panel used for every card / section in the app.
+   The blur is deliberately light: at higher radii the backdrop's mesh artwork
+   smears into flat colour and the cards stop reading as glass. */
+@utility glass {
+  background-color: var(--color-surface-glass);
+  backdrop-filter: blur(3px) saturate(115%);
+  -webkit-backdrop-filter: blur(3px) saturate(115%);
+}
+
+@utility glass-strong {
+  background-color: var(--color-surface-glass-strong);
+  backdrop-filter: blur(6px) saturate(115%);
+  -webkit-backdrop-filter: blur(6px) saturate(115%);
+}
+
+/* Deep blue gradient used for the sidebar and elevated headers. */
+@utility grad-ocean {
+  background-image: linear-gradient(
+    180deg,
+    rgb(13 87 161 / 0.92) 0%,
+    rgb(7 15 81 / 0.92) 100%
+  );
+}
+
+/* Opaque variant for popovers and dialogs, where page content showing
+   through would hurt legibility. */
+@utility grad-ocean-solid {
+  background-image: linear-gradient(180deg, #0d57a1 0%, #070f51 100%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+@utility grad-ocean-soft {
+  background-image: linear-gradient(
+    180deg,
+    rgb(13 87 161 / 0.28) 0%,
+    rgb(7 15 81 / 0.28) 100%
+  );
+}
+
+/* Dark button / active nav gradient. */
+@utility grad-midnight {
+  background-image: linear-gradient(180deg, #1d224c 0%, #06070f 100%);
+}
+
+/* Radial "spotlight" panel used for hero-style content blocks. */
+@utility grad-spotlight {
+  background-image: radial-gradient(
+    closest-side at 50% 50%,
+    rgb(225 234 246 / 0.28) 0%,
+    rgb(44 114 161 / 0.34) 100%
+  );
+}
+
+@utility grad-sidebar {
+  background-image: radial-gradient(
+    closest-side at 50% 50%,
+    rgb(31 131 182 / 0.5) 0%,
+    rgb(16 66 91 / 0.5) 100%
+  );
+}
+
+/* Skeleton / loading shimmer sweep. */
+@utility shimmer {
+  background-image: linear-gradient(
+    100deg,
+    rgb(255 255 255 / 0.04) 30%,
+    rgb(255 255 255 / 0.16) 50%,
+    rgb(255 255 255 / 0.04) 70%
+  );
+  background-size: 220% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Faint blueprint grid used behind drawing previews. */
+@utility blueprint-grid {
+  background-image:
+    linear-gradient(rgb(51 227 255 / 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(51 227 255 / 0.12) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

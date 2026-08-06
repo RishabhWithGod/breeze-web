@@ -1,0 +1,312 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Resources\ApprovalHistoryResource;
+use App\Http\Resources\FinalSymbolResource;
+use App\Models\AiResult;
+use App\Models\FinalSymbol;
+use App\Models\Foreman;
+use App\Models\Job;
+use App\Services\Ai\ArtefactStore;
+use App\Services\Export\AnnotatedPdfWriter;
+use App\Services\Export\SymbolExporter;
+use App\Services\Takeoff\EstimateBuilder;
+use App\Services\Takeoff\JobFactory;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Response as ResponseFactory;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+/**
+ * The signed-off takeoff: the final symbol table, its exports, and the two
+ * actions that carry it forward into a job and an estimate.
+ *
+ * Everything on this screen is read from final_response.json / `final_symbols`,
+ * never from the AI response.
+ */
+class FinalTakeoffController extends Controller
+{
+    public function show(Request $request, AiResult $result, ArtefactStore $store): Response
+    {
+        $this->authorize('view', $result);
+
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'source' => ['nullable', Rule::in(['all', 'template', 'vector', 'vision', 'ocr'])],
+            'sort' => ['nullable', Rule::in(FinalSymbol::SORTS)],
+        ]);
+
+        $source = $filters['source'] ?? 'all';
+        $sort = $filters['sort'] ?? 'count-desc';
+
+        $symbols = $result->finalSymbols()
+            ->reorder()
+            ->search($filters['search'] ?? null)
+            ->source($source)
+            ->sorted($sort)
+            ->paginate(15)
+            ->withQueryString();
+
+        $result->load([
+            'project', 'workJob', 'estimate', 'upload',
+            'wireSizes', 'panelSchedules', 'equipment', 'circuits', 'boqLines',
+        ]);
+        $payload = $result->final_payload ?? [];
+
+        return Inertia::render('FinalSymbols', [
+            'result' => [
+                'id' => $result->id,
+                'projectId' => $result->project_id,
+                'projectName' => $result->project->name,
+                'client' => $result->project->client,
+                'drawingName' => $result->project->drawing_name,
+                'modelVersion' => $result->model_version,
+                'isFinalised' => $result->isFinalised(),
+                'finalisedAt' => $result->finalised_at?->toISOString(),
+                'pageCount' => $result->page_count,
+                'workJobId' => $result->work_job_id,
+                'workJobName' => $result->workJob?->name,
+                'estimateId' => $result->estimate_id,
+                'estimateNumber' => $result->estimate?->number,
+                'hasAnnotatedPdf' => $store->exists($result->upload?->annotated_path),
+                // Reported by the engine, carried onto this screen unchanged.
+                'runId' => $result->run_id,
+                'processingTime' => $result->processing_time,
+                'pipelineStatus' => $result->pipelineStages(),
+                'warnings' => $result->warnings ?? [],
+                'engineEstimate' => $result->ai_estimate ?? [],
+            ],
+            'symbols' => FinalSymbolResource::collection($symbols),
+            'filters' => [
+                'search' => $filters['search'] ?? '',
+                'source' => $source,
+                'sort' => $sort,
+            ],
+            'totals' => [
+                'symbolTypes' => $result->finalSymbols()->count(),
+                'items' => (int) $result->finalSymbols()->sum('count'),
+                'approved' => data_get($payload, 'metadata.approved', 0),
+                'rejected' => data_get($payload, 'metadata.rejected', 0),
+                'modified' => data_get($payload, 'metadata.modified', 0),
+                'aiItems' => data_get($payload, 'metadata.ai_item_total', 0),
+                'laborHours' => data_get($payload, 'boq.totals.labor_hours', 0),
+                'materialCost' => data_get($payload, 'boq.totals.material_cost', 0),
+            ],
+            'boq' => [
+                'lines' => data_get($payload, 'boq.lines', []),
+                'materials' => data_get($payload, 'boq.materials', []),
+            ],
+
+            // The engine's own priced bill of quantities, beside the reviewed one.
+            'engineBoq' => $result->boqLines->map(fn ($line) => [
+                'item' => $line->item,
+                'description' => $line->description,
+                'quantity' => (float) $line->quantity,
+                'unit' => $line->unit,
+                'unitPrice' => (float) $line->unit_price,
+                'subtotal' => (float) $line->subtotal,
+                'matchedSymbol' => $line->matched_symbol,
+            ])->all(),
+
+            // Everything else the engine read off the drawing.
+            'wireSizes' => $result->wireSizes->map(fn ($wire) => [
+                'page' => $wire->page,
+                'size' => $wire->size,
+                'context' => $wire->context,
+                'count' => $wire->count,
+            ])->all(),
+            'panelSchedules' => $result->panelSchedules->map(fn ($panel) => [
+                'page' => $panel->page,
+                'panelName' => $panel->panel_name,
+                'rows' => $panel->rows ?? [],
+                'rawHeaders' => $panel->raw_headers ?? [],
+            ])->all(),
+            'equipment' => $result->equipment->map(fn ($item) => [
+                'page' => $item->page,
+                'tag' => $item->tag,
+                'description' => $item->description,
+                'rating' => $item->rating,
+                'quantity' => $item->quantity,
+            ])->all(),
+            'circuits' => $result->circuits->map(fn ($circuit) => [
+                'page' => $circuit->page,
+                'number' => $circuit->number,
+                'description' => $circuit->description,
+                'breaker' => $circuit->breaker,
+                'panel' => $circuit->panel,
+            ])->all(),
+            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
+            'history' => ApprovalHistoryResource::collection(
+                $result->history()->with('actor')->take(20)->get()
+            )->resolve(),
+        ]);
+    }
+
+    /** JSON / CSV / XLSX of the reviewed table. */
+    public function export(
+        AiResult $result,
+        string $format,
+        SymbolExporter $exporter,
+    ): StreamedResponse|BinaryFileResponse {
+        $this->authorize('view', $result);
+        abort_unless(in_array($format, ['json', 'csv', 'xlsx'], true), 404);
+
+        $symbols = $result->finalSymbols()->get();
+        $slug = str($result->project->name)->slug()->value();
+
+        if ($format === 'json') {
+            $payload = $exporter->json($result);
+
+            return ResponseFactory::streamDownload(
+                fn () => print json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+                "final_response-{$slug}.json",
+                ['Content-Type' => 'application/json'],
+            );
+        }
+
+        if ($format === 'csv') {
+            $contents = $exporter->csv($symbols);
+
+            return ResponseFactory::streamDownload(
+                fn () => print $contents,
+                "final-symbols-{$slug}.csv",
+                ['Content-Type' => 'text/csv'],
+            );
+        }
+
+        return ResponseFactory::download(
+            $exporter->xlsx($symbols, $result->project->name),
+            "final-symbols-{$slug}.xlsx",
+        )->deleteFileAfterSend();
+    }
+
+    /**
+     * The annotated drawing. Rendered on first request and cached on the artefact
+     * disk; `?refresh=1` re-renders it after further review.
+     */
+    public function annotated(
+        Request $request,
+        AiResult $result,
+        AnnotatedPdfWriter $writer,
+        ArtefactStore $store,
+    ): StreamedResponse {
+        $this->authorize('view', $result);
+
+        $path = $result->upload?->annotated_path;
+
+        if ($request->boolean('refresh') || ! $store->exists($path)) {
+            $path = $writer->write($result);
+        }
+
+        return $store->disk()->download(
+            $path,
+            'annotated-'.str($result->project->name)->slug().'.pdf',
+        );
+    }
+
+    /**
+     * Creates the job from final_response.json, and prices it straight away.
+     *
+     * One action rather than two: the reviewed document already contains the
+     * quantities *and* the engine's bill of quantities, so a job without its
+     * estimate would just be a step waiting to be repeated. A failure to price
+     * still leaves the job — the estimate can be raised again from either screen.
+     */
+    public function storeJob(
+        Request $request,
+        AiResult $result,
+        JobFactory $factory,
+        EstimateBuilder $estimateBuilder,
+    ): RedirectResponse {
+        $this->authorize('view', $result);
+
+        /*
+         * A job is built from final_response.json, so the review has to be signed off
+         * first. Answering with guidance rather than a bare 403 keeps the workflow
+         * navigable: the reviewer is sent back to finish, not into an error screen.
+         */
+        if (! $result->isFinalised()) {
+            return $this->requireFinalisedReview($result, 'a job');
+        }
+
+        $attributes = $request->validate([
+            'name' => ['nullable', 'string', 'max:160'],
+            'client' => ['nullable', 'string', 'max:160'],
+            'location' => ['nullable', 'string', 'max:200'],
+            'job_type' => ['nullable', Rule::in(Job::TYPES)],
+            'foreman_id' => ['nullable', 'integer', 'exists:foremen,id'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+        ]);
+
+        try {
+            $job = $factory->fromFinalJson($result, $request->user(), array_filter(
+                $attributes,
+                fn ($value) => filled($value),
+            ));
+        } catch (RuntimeException $e) {
+            return back()->with('warning', $e->getMessage());
+        }
+
+        $estimate = null;
+
+        try {
+            $estimate = $estimateBuilder->fromFinalJson($result->refresh(), $request->user(), $job);
+        } catch (RuntimeException $e) {
+            return redirect()
+                ->route('jobs.show', $job)
+                ->with('success', "“{$job->name}” was created from the reviewed takeoff.")
+                ->with('warning', "The estimate could not be generated: {$e->getMessage()}");
+        }
+
+        return redirect()
+            ->route('jobs.show', $job)
+            ->with(
+                'success',
+                "“{$job->name}” was created from the reviewed takeoff, priced as {$estimate->number}."
+            );
+    }
+
+    /**
+     * Sends the reviewer back to finish the review, explaining why.
+     *
+     * `AiResultPolicy::convert` is still the security boundary; this is the humane
+     * path for the ordinary case of clicking too early.
+     */
+    private function requireFinalisedReview(AiResult $result, string $what): RedirectResponse
+    {
+        return redirect()
+            ->route('reviews.show', $result)
+            ->with(
+                'warning',
+                "Finalize the review before creating {$what} — it is built from the reviewed "
+                .'counts in final_response.json.'
+            );
+    }
+
+    /** Generates the estimate from final_response.json. */
+    public function storeEstimate(Request $request, AiResult $result, EstimateBuilder $builder): RedirectResponse
+    {
+        $this->authorize('view', $result);
+
+        if (! $result->isFinalised()) {
+            return $this->requireFinalisedReview($result, 'an estimate');
+        }
+
+        try {
+            $estimate = $builder->fromFinalJson($result, $request->user());
+        } catch (RuntimeException $e) {
+            return back()->with('warning', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('estimates.show', $estimate)
+            ->with('success', "Estimate {$estimate->number} was generated from the reviewed takeoff.");
+    }
+}

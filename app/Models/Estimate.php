@@ -1,0 +1,193 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Estimate extends Model
+{
+    use SoftDeletes;
+
+    public const STATUSES = ['draft', 'sent', 'approved', 'rejected'];
+
+    /** Sort keys accepted by `scopeSorted`, mirrored by ESTIMATE_SORT_OPTIONS. */
+    public const SORTS = ['date-desc', 'date-asc', 'amount-desc', 'amount-asc', 'number-asc'];
+
+    protected $fillable = [
+        'job_id',
+        'project_id',
+        'ai_result_id',
+        'number',
+        'client',
+        'project',
+        'issued_on',
+        'amount',
+        'status',
+        'converted_project_id',
+        'converted_at',
+        'material_total',
+        'labor_total',
+        'equipment_total',
+        'subtotal',
+        'markup_pct',
+        'markup_total',
+        'tax_pct',
+        'tax_total',
+        'grand_total',
+        'notes',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'issued_on' => 'date',
+            'amount' => 'decimal:2',
+            'material_total' => 'decimal:2',
+            'labor_total' => 'decimal:2',
+            'equipment_total' => 'decimal:2',
+            'subtotal' => 'decimal:2',
+            'markup_pct' => 'decimal:2',
+            'markup_total' => 'decimal:2',
+            'tax_pct' => 'decimal:2',
+            'tax_total' => 'decimal:2',
+            'grand_total' => 'decimal:2',
+            'converted_at' => 'datetime',
+        ];
+    }
+
+    /** @return BelongsTo<Job, $this> */
+    public function job(): BelongsTo
+    {
+        return $this->belongsTo(Job::class);
+    }
+
+    /** @return HasMany<EstimateItem, $this> */
+    public function items(): HasMany
+    {
+        return $this->hasMany(EstimateItem::class)->orderBy('category')->orderBy('position');
+    }
+
+    /**
+     * The takeoff this estimate was generated from, when it came from one.
+     *
+     * Named `takeoffProject` because `project` is already a column on this table
+     * (the free-text project name), and an attribute always shadows a relation.
+     */
+    public function takeoffProject(): BelongsTo
+    {
+        // The column must be named: `belongsTo` would otherwise infer
+        // `takeoff_project_id` from this method's name.
+        return $this->belongsTo(Project::class, 'project_id');
+    }
+
+    /** @return BelongsTo<AiResult, $this> */
+    public function aiResult(): BelongsTo
+    {
+        return $this->belongsTo(AiResult::class);
+    }
+
+    /**
+     * Re-sums the line items and re-applies markup and tax.
+     *
+     * `amount` stays the headline figure the estimates list sorts on, so it
+     * always mirrors the grand total.
+     */
+    public function recalculateTotals(): void
+    {
+        $items = $this->items()->get();
+        $byCategory = fn (string ...$categories) => (float) $items
+            ->whereIn('category', $categories)
+            ->sum('total');
+
+        $material = $byCategory(EstimateItem::CATEGORY_MATERIAL, EstimateItem::CATEGORY_FIXTURE);
+        $labor = $byCategory(EstimateItem::CATEGORY_LABOR);
+        $equipment = $byCategory(EstimateItem::CATEGORY_EQUIPMENT);
+
+        $subtotal = round($material + $labor + $equipment, 2);
+        $markup = round($subtotal * ((float) $this->markup_pct / 100), 2);
+        $tax = round(($subtotal + $markup) * ((float) $this->tax_pct / 100), 2);
+        $grand = round($subtotal + $markup + $tax, 2);
+
+        $this->update([
+            'material_total' => $material,
+            'labor_total' => $labor,
+            'equipment_total' => $equipment,
+            'subtotal' => $subtotal,
+            'markup_total' => $markup,
+            'tax_total' => $tax,
+            'grand_total' => $grand,
+            'amount' => $grand,
+        ]);
+    }
+
+    /** The takeoff project this estimate was converted into, if any. */
+    public function convertedProject(): BelongsTo
+    {
+        return $this->belongsTo(Project::class, 'converted_project_id');
+    }
+
+    public function isConverted(): bool
+    {
+        return $this->converted_project_id !== null;
+    }
+
+    /** Matches an estimate number, client or project name. */
+    public function scopeSearch(Builder $query, ?string $term): Builder
+    {
+        if (blank($term)) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $query) use ($term) {
+            $query->where('number', 'like', "%{$term}%")
+                ->orWhere('client', 'like', "%{$term}%")
+                ->orWhere('project', 'like', "%{$term}%");
+        });
+    }
+
+    /** Inclusive date window; either bound may be omitted. */
+    public function scopeIssuedBetween(Builder $query, ?string $from, ?string $to): Builder
+    {
+        return $query
+            ->when($from, fn (Builder $query) => $query->whereDate('issued_on', '>=', $from))
+            ->when($to, fn (Builder $query) => $query->whereDate('issued_on', '<=', $to));
+    }
+
+    public function scopeSorted(Builder $query, ?string $sort): Builder
+    {
+        return match ($sort) {
+            'date-asc' => $query->orderBy('issued_on')->orderBy('id'),
+            'amount-desc' => $query->orderByDesc('amount'),
+            'amount-asc' => $query->orderBy('amount'),
+            'number-asc' => $query->orderBy('number'),
+            default => $query->orderByDesc('issued_on')->orderByDesc('id'),
+        };
+    }
+
+    /**
+     * Next reference in the EST-#### series, continuing past soft-deleted rows
+     * so a restored estimate can never collide with a newly created one.
+     */
+    public static function nextNumber(): string
+    {
+        /*
+         * `INTEGER` is SQLite's spelling of this cast; MySQL rejects it outright and
+         * wants `SIGNED`. The series is the one thing that must never depend on which
+         * driver is underneath, so the type is chosen rather than assumed.
+         */
+        $integerType = match (static::query()->getConnection()->getDriverName()) {
+            'mysql', 'mariadb' => 'SIGNED',
+            default => 'INTEGER',
+        };
+
+        $highest = (int) static::withTrashed()
+            ->selectRaw("MAX(CAST(SUBSTR(number, 5) AS {$integerType})) AS seq")
+            ->value('seq');
+
+        return 'EST-'.max($highest + 1, 1001);
+    }
+}

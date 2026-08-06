@@ -1,0 +1,42 @@
+<?php
+
+namespace App\Http\Resources;
+
+use App\Models\Job;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+/** @mixin Job */
+class JobResource extends JsonResource
+{
+    /** @return array<string, mixed> */
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'client' => $this->client,
+            'location' => $this->location,
+            'description' => $this->description,
+            'jobType' => $this->job_type,
+            'status' => $this->status,
+            // Assigned after intake, so absent on a freshly created job.
+            'foreman' => $this->foreman ? [
+                'name' => $this->foreman->name,
+                'initials' => $this->foreman->initials,
+            ] : null,
+            // ISO strings throughout — the client formats with date-fns.
+            'startDate' => $this->start_date?->toISOString(),
+            'endDate' => $this->end_date?->toISOString(),
+            'budget' => $this->budget === null ? null : (float) $this->budget,
+            'isArchived' => $this->archived_at !== null,
+            'teamCount' => $this->team_members_count ?? 0,
+            'estimateCount' => $this->estimates_count ?? 0,
+            'options' => [
+                'createEstimate' => $this->create_estimate,
+                'assignTeam' => $this->assign_team,
+                'notifyClient' => $this->notify_client,
+            ],
+        ];
+    }
+}
