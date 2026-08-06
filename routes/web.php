@@ -13,10 +13,13 @@ use App\Http\Controllers\JobAttachmentController;
 use App\Http\Controllers\JobController;
 use App\Http\Controllers\JobEstimateController;
 use App\Http\Controllers\JobNoteController;
+use App\Http\Controllers\JobScheduleController;
+use App\Http\Controllers\JobTaskController;
 use App\Http\Controllers\JobTeamController;
 use App\Http\Controllers\ModuleController;
 use App\Http\Controllers\ProcessingController;
 use App\Http\Controllers\ResultsController;
+use App\Http\Controllers\SchedulingController;
 use App\Http\Controllers\StatePageController;
 use App\Http\Controllers\SymbolReviewController;
 use App\Http\Controllers\TakeoffHistoryController;
@@ -150,6 +153,31 @@ Route::middleware('auth')->group(function () {
     Route::post('jobs/{job}/duplicate', [JobController::class, 'duplicate'])->name('jobs.duplicate');
     Route::post('jobs/{job}/status', [JobController::class, 'changeStatus'])->name('jobs.status');
 
+    /*
+    | The job's schedule: the plan, its tasks, and the graph that orders them.
+    | Declared before the `{job}` wildcard routes below only in spirit — these are
+    | more specific paths, so ordering does not matter, but they are grouped here to
+    | keep the module readable.
+    */
+    Route::get('jobs/{job}/schedule', [JobScheduleController::class, 'show'])->name('jobs.schedule.show');
+    Route::put('jobs/{job}/schedule', [JobScheduleController::class, 'update'])->name('jobs.schedule.update');
+    Route::post('jobs/{job}/schedule/tasks', [JobTaskController::class, 'store'])->name('jobs.tasks.store');
+    Route::post('jobs/{job}/schedule/reorder', [JobTaskController::class, 'reorder'])->name('jobs.tasks.reorder');
+
+    Route::put('schedule-tasks/{task}', [JobTaskController::class, 'update'])->name('tasks.update');
+    Route::delete('schedule-tasks/{task}', [JobTaskController::class, 'destroy'])->name('tasks.destroy');
+    Route::post('schedule-tasks/{task}/complete', [JobTaskController::class, 'complete'])->name('tasks.complete');
+    Route::post('schedule-tasks/{task}/delay', [JobTaskController::class, 'delay'])->name('tasks.delay');
+    Route::post('schedule-tasks/{task}/move', [JobTaskController::class, 'move'])->name('tasks.move');
+    Route::post('schedule-tasks/{task}/assignments', [JobTaskController::class, 'assign'])->name('tasks.assign');
+    Route::delete('schedule-tasks/{task}/assignments/{assignment}', [JobTaskController::class, 'unassign'])
+        ->name('tasks.unassign');
+    Route::post('schedule-tasks/{task}/dependencies', [JobTaskController::class, 'addDependency'])
+        ->name('tasks.dependencies.store');
+    Route::delete('schedule-tasks/{task}/dependencies/{dependency}', [JobTaskController::class, 'removeDependency'])
+        ->name('tasks.dependencies.destroy');
+    Route::post('schedule-tasks/{task}/comments', [JobTaskController::class, 'comment'])->name('tasks.comments.store');
+
     // Team members
     Route::post('jobs/{job}/team', [JobTeamController::class, 'store'])->name('jobs.team.store');
     Route::delete('jobs/{job}/team/{member}', [JobTeamController::class, 'destroy'])->name('jobs.team.destroy');
@@ -172,6 +200,24 @@ Route::middleware('auth')->group(function () {
     // Estimates raised from a job, and the estimate → project conversion
     Route::post('jobs/{job}/estimates', [JobEstimateController::class, 'store'])->name('jobs.estimates.store');
     Route::post('jobs/{job}/estimates/{estimate}/convert', [JobEstimateController::class, 'convert'])->name('jobs.estimates.convert');
+
+    /*
+    | Scheduling — the crew calendar, and the queue of work still to be booked.
+    | `unassigned` and `schedules` are declared before nothing else needs to win,
+    | but the group sits above the module catch-all so `/scheduling` resolves here.
+    */
+    Route::prefix('scheduling')->group(function () {
+        /*
+         * The module lands on the queue of work still to be booked — that is the
+         * question the screen answers first — and the calendar is one click away.
+         */
+        Route::get('/', [SchedulingController::class, 'unassigned'])->name('scheduling.index');
+        Route::get('calendar', [SchedulingController::class, 'calendar'])->name('scheduling.calendar');
+        Route::get('availability', [SchedulingController::class, 'availability'])->name('scheduling.availability');
+        Route::post('schedules', [SchedulingController::class, 'store'])->name('scheduling.store');
+        Route::put('schedules/{schedule}', [SchedulingController::class, 'update'])->name('scheduling.update');
+        Route::delete('schedules/{schedule}', [SchedulingController::class, 'destroy'])->name('scheduling.destroy');
+    });
 
     Route::get('empty', [StatePageController::class, 'empty'])->name('states.empty');
     Route::get('error', [StatePageController::class, 'error'])->name('states.error');

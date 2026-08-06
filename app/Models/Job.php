@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 
@@ -29,6 +30,20 @@ class Job extends Model
 
     public const TYPES = ['residential', 'commercial', 'industrial'];
 
+    /** Ranked high → low; the unassigned queue's default order. */
+    public const PRIORITIES = ['high', 'medium', 'low'];
+
+    /** Sort keys accepted by `scopeSortedForScheduling`. */
+    public const SCHEDULING_SORTS = [
+        'priority-desc',
+        'priority-asc',
+        'hours-desc',
+        'hours-asc',
+        'value-desc',
+        'created-desc',
+        'name-asc',
+    ];
+
     /** Sort keys accepted by `scopeSorted`, mirrored by JOB_SORT_OPTIONS. */
     public const SORTS = [
         'recent',
@@ -49,6 +64,9 @@ class Job extends Model
         'description',
         'job_type',
         'status',
+        'priority',
+        'estimated_hours',
+        'required_skills',
         'start_date',
         'end_date',
         'budget',
@@ -67,6 +85,8 @@ class Job extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'budget' => 'decimal:2',
+            'estimated_hours' => 'decimal:2',
+            'required_skills' => 'array',
             'create_estimate' => 'boolean',
             'assign_team' => 'boolean',
             'notify_client' => 'boolean',
@@ -130,6 +150,31 @@ class Job extends Model
         return $this->hasMany(Estimate::class)->latest('issued_on');
     }
 
+    /** Crew shifts on the scheduling calendar, earliest first. */
+    public function crewShifts(): HasMany
+    {
+        return $this->hasMany(CrewShift::class)
+            ->orderBy('scheduled_date')
+            ->orderBy('start_time');
+    }
+
+    /**
+     * The schedule this job runs to — its window, working week and progress.
+     *
+     * One per job. Distinct from `crewShifts()`, which is who is on site on which
+     * day; this is the plan those shifts serve.
+     */
+    public function schedule(): HasOne
+    {
+        return $this->hasOne(JobSchedule::class);
+    }
+
+    /** Every task on the schedule, in the order the schedule lists them. */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(JobTask::class)->orderBy('position')->orderBy('id');
+    }
+
     /** @return HasMany<JobNote, $this> */
     public function notes(): HasMany
     {
@@ -180,6 +225,52 @@ class Job extends Model
             'budget-desc' => $query->orderByRaw('budget is null')->orderByDesc('budget'),
             'budget-asc' => $query->orderByRaw('budget is null')->orderBy('budget'),
             default => $query->latest()->latest('id'),
+        };
+    }
+
+    /**
+     * Jobs with no crew shift on the calendar yet.
+     *
+     * "Unassigned" is the absence of a schedule row, not a status: a job can sit at
+     * `scheduled` because an estimate was signed off and still have nobody booked to
+     * do it. Completed and archived work is excluded — there is nothing left to book.
+     */
+    public function scopeUnscheduled(Builder $query): Builder
+    {
+        return $query
+            ->active()
+            ->where('status', '!=', 'completed')
+            ->whereDoesntHave('crewShifts');
+    }
+
+    /** The inverse: jobs that already have at least one shift booked. */
+    public function scopeScheduled(Builder $query): Builder
+    {
+        return $query->active()->whereHas('crewShifts');
+    }
+
+    /**
+     * Ordering for the unassigned queue.
+     *
+     * Priority is stored as a word, so it cannot be ordered alphabetically —
+     * "high" would sort before "low" and "medium" by accident rather than by rank.
+     * `FIELD()` gives the real ranking, with a portable fallback for other drivers.
+     */
+    public function scopeSortedForScheduling(Builder $query, ?string $sort): Builder
+    {
+        $rank = match ($query->getConnection()->getDriverName()) {
+            'mysql', 'mariadb' => "field(priority, 'high', 'medium', 'low')",
+            default => "case priority when 'high' then 1 when 'medium' then 2 else 3 end",
+        };
+
+        return match ($sort) {
+            'priority-asc' => $query->orderByRaw("{$rank} desc")->orderByDesc('id'),
+            'hours-desc' => $query->orderByRaw('estimated_hours is null')->orderByDesc('estimated_hours'),
+            'hours-asc' => $query->orderByRaw('estimated_hours is null')->orderBy('estimated_hours'),
+            'value-desc' => $query->orderByRaw('budget is null')->orderByDesc('budget'),
+            'created-desc' => $query->latest('created_at')->orderByDesc('id'),
+            'name-asc' => $query->orderBy('name'),
+            default => $query->orderByRaw($rank)->orderByDesc('id'),
         };
     }
 

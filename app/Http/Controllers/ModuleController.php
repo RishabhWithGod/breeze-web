@@ -16,10 +16,6 @@ class ModuleController extends Controller
      * @var array<string, array{label: string, description: string}>
      */
     public const MODULES = [
-        'scheduling' => [
-            'label' => 'Scheduling',
-            'description' => 'Crew calendars, dispatch boards and site visit planning.',
-        ],
         'time-tracking' => [
             'label' => 'Time Tracking',
             'description' => 'Clock-ins, timesheets and payroll-ready hour exports.',

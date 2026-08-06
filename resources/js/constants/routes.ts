@@ -30,8 +30,17 @@ export const ROUTES = {
   empty: '/empty',
   error: '/error',
 
-  // Drawer modules awaiting implementation — served by ModuleController.
+  /**
+   * Scheduling lands on the queue of work still to be booked; the calendar is
+   * reached from it.
+   */
   scheduling: '/scheduling',
+  schedulingCalendar: '/scheduling/calendar',
+  schedulingAvailability: '/scheduling/availability',
+  /** Where a booking is created, updated or removed. */
+  schedules: '/scheduling/schedules',
+
+  // Drawer modules awaiting implementation — served by ModuleController.
   timeTracking: '/time-tracking',
   billing: '/billing',
   jobCosting: '/job-costing',

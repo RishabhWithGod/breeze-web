@@ -15,5 +15,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(DemoDataSeeder::class);
+        // Runs after the jobs exist: it books crew onto them.
+        $this->call(SchedulingSeeder::class);
     }
 }
