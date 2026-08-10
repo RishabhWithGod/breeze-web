@@ -163,7 +163,7 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
             },
           ].map((stat) => (
             <div key={stat.label} className="min-w-0 rounded-panel bg-white/5 px-4 py-3">
-              <p className="truncate text-2xs tracking-wide text-white/55 uppercase">
+              <p className="truncate text-2xs tracking-wide text-white/80 uppercase">
                 {stat.label}
               </p>
               <p className="mt-1 text-xl font-bold text-white">{stat.value}</p>
@@ -174,7 +174,7 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
         {/* How the engine fared on this drawing, as it reported it. */}
         {takeoff.pipelineStatus && takeoff.pipelineStatus.length > 0 && (
           <div className="mt-4">
-            <p className="mb-2 text-sm font-medium text-white/70">AI summary</p>
+            <p className="mb-2 text-sm font-medium text-white/90">AI summary</p>
             <ul className="flex flex-wrap gap-2">
               {takeoff.pipelineStatus.map((stage) => (
                 <li
@@ -189,11 +189,11 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
                     )}
                   />
                   <span className="text-sm text-white capitalize">{stage.stage}</span>
-                  <span className="text-2xs text-white/50 uppercase">{stage.status}</span>
+                  <span className="text-2xs text-white/75 uppercase">{stage.status}</span>
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-2xs text-white/45">
+            <p className="mt-2 text-2xs text-white/70">
               {takeoff.engineVersion ? `Engine ${takeoff.engineVersion}` : 'AI engine'}
               {takeoff.engineRunId ? ` · run ${takeoff.engineRunId}` : ''}
               {takeoff.processingTime ? ` · analysed in ${takeoff.processingTime.toFixed(1)}s` : ''}
@@ -212,7 +212,7 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
         )}
 
         <div className="mt-4">
-          <p className="mb-2 text-sm font-medium text-white/70">
+          <p className="mb-2 text-sm font-medium text-white/90">
             {takeoff.reviewed === false ? 'Detected counts (pending review)' : 'Reviewed counts'}
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -222,14 +222,14 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
               </Badge>
             ))}
             {counts.length === 0 && (
-              <span className="text-sm text-white/50">No symbol counts recorded.</span>
+              <span className="text-sm text-white/75">No symbol counts recorded.</span>
             )}
           </div>
         </div>
 
         {(takeoff.wireSizes?.length ?? 0) > 0 && (
           <div className="mt-4">
-            <p className="mb-2 text-sm font-medium text-white/70">Wire sizes on the drawing</p>
+            <p className="mb-2 text-sm font-medium text-white/90">Wire sizes on the drawing</p>
             <div className="flex flex-wrap gap-1.5">
               {takeoff.wireSizes?.map((wire) => (
                 <Badge key={`${wire.size}-${wire.page}`} tone="info" size="sm">

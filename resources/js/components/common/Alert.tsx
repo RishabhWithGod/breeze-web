@@ -75,14 +75,14 @@ export function Alert({
       <Icon size={20} className={cn('mt-0.5 shrink-0', styles.icon)} aria-hidden />
       <div className="min-w-0 flex-1">
         {title && <p className="font-semibold text-white">{title}</p>}
-        <div className="text-md text-white/80">{children}</div>
+        <div className="text-md text-white">{children}</div>
       </div>
       {onDismiss && (
         <button
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss message"
-          className="rounded-full p-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          className="rounded-full p-1 text-white/85 transition-colors hover:bg-white/10 hover:text-white"
         >
           <X size={16} aria-hidden />
         </button>

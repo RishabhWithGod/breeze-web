@@ -62,7 +62,7 @@ export function QuickActionCard({
 
         <span className="relative min-w-0 flex-1">
           <span className="block text-lg font-semibold text-white">{title}</span>
-          <span className="mt-1.5 block text-md text-white/65">{description}</span>
+          <span className="mt-1.5 block text-md text-white/90">{description}</span>
           <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand transition-colors group-hover:text-white">
             {cta}
             <ArrowRight

@@ -94,7 +94,7 @@ function SidebarPromo() {
         <Sparkles size={16} aria-hidden />
         <p className="text-sm font-semibold">AI credits</p>
       </div>
-      <p className="text-xs text-white/65">
+      <p className="text-xs text-white/90">
         18 of 25 takeoffs used this month. Resets on the 1st.
       </p>
       <div className="mt-3 h-1.5 overflow-hidden rounded-pill bg-white/20">
@@ -135,7 +135,7 @@ export function Sidebar() {
           type="button"
           onClick={toggleSidebarCollapsed}
           aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="flex items-center gap-3 border-t border-steel-500/60 px-5 py-3.5 text-sm text-white/70 transition-colors hover:bg-white/8 hover:text-brand"
+          className="flex items-center gap-3 border-t border-steel-500/60 px-5 py-3.5 text-sm text-white/90 transition-colors hover:bg-white/8 hover:text-brand"
         >
           {isSidebarCollapsed ? (
             <PanelLeftOpen size={18} aria-hidden className="mx-auto" />

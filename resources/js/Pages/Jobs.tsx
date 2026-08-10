@@ -270,7 +270,7 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
             >
               {job.name}
             </a>
-            <span className="mt-0.5 flex items-center gap-2 text-sm text-white/50">
+            <span className="mt-0.5 flex items-center gap-2 text-sm text-white/75">
               {job.client ?? '—'}
               {job.isArchived && (
                 <Badge tone="warning" className="py-0 text-2xs">
@@ -300,14 +300,14 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
         job.foreman ? (
           <ForemanBadge foreman={job.foreman} />
         ) : (
-          <span className="text-white/45">Unassigned</span>
+          <span className="text-white/70">Unassigned</span>
         ),
     },
     {
       key: 'startDate',
       header: 'Start Date',
       render: (job) => (
-        <span className="whitespace-nowrap text-white/70">
+        <span className="whitespace-nowrap text-white/90">
           {job.startDate ? formatDate(job.startDate) : '—'}
         </span>
       ),
@@ -334,14 +334,14 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
             icon={PencilLine}
             label={`Edit ${job.name}`}
             size="sm"
-            className="text-white/60 hover:text-brand"
+            className="text-white/85 hover:text-brand"
             onClick={() => router.visit(routeTo.jobEdit(job.id))}
           />
           <IconButton
             icon={Copy}
             label={`Duplicate ${job.name}`}
             size="sm"
-            className="text-white/60 hover:text-brand"
+            className="text-white/85 hover:text-brand"
             onClick={() =>
               router.post(routeTo.jobDuplicate(job.id), {}, { preserveScroll: true })
             }
@@ -350,7 +350,7 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
             icon={job.isArchived ? ArchiveRestore : Archive}
             label={`${job.isArchived ? 'Unarchive' : 'Archive'} ${job.name}`}
             size="sm"
-            className="text-white/60 hover:text-brand"
+            className="text-white/85 hover:text-brand"
             onClick={() =>
               router.post(
                 job.isArchived
@@ -365,7 +365,7 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
             icon={Trash2}
             label={`Delete ${job.name}`}
             size="sm"
-            className="text-white/60 hover:text-status-danger"
+            className="text-white/85 hover:text-status-danger"
             onClick={() => requestDelete(job)}
           />
         </div>
@@ -382,7 +382,7 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
         <header className="flex flex-col gap-4 border-b border-hairline grad-ocean-soft px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-white sm:text-3xl">Jobs</h1>
-            <p className="mt-1 text-md text-white/65">
+            <p className="mt-1 text-md text-white/90">
               Manage all your electrical projects in one place
             </p>
           </div>
@@ -413,7 +413,7 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
             />
 
             <div className="flex items-center gap-3">
-              <span className="text-md text-white/70">View:</span>
+              <span className="text-md text-white/90">View:</span>
               <Button
                 size="sm"
                 variant={isFiltersOpen ? 'primary' : 'secondary'}
@@ -478,7 +478,7 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
 
           {/* Sort */}
           <div className="mb-5 flex flex-wrap items-center justify-end gap-3">
-            <label htmlFor="job-sort" className="text-md text-white/70">
+            <label htmlFor="job-sort" className="text-md text-white/90">
               Sort by:
             </label>
             <SelectField

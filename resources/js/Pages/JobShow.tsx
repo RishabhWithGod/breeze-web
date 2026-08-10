@@ -147,32 +147,32 @@ export default function JobShow({
 
             <dl className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
               <div>
-                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                   <Building2 size={13} aria-hidden className="text-brand" />
                   Client
                 </dt>
                 <dd className="mt-1.5 text-md text-white">{job.client ?? '—'}</dd>
               </div>
               <div>
-                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                   <MapPin size={13} aria-hidden className="text-brand" />
                   Location
                 </dt>
                 <dd className="mt-1.5 text-md text-white">{job.location ?? '—'}</dd>
               </div>
               <div>
-                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                   <CalendarDays size={13} aria-hidden className="text-brand" />
                   Schedule
                 </dt>
                 <dd className="mt-1.5 text-md text-white">
                   {job.startDate ? formatDate(job.startDate) : '—'}
-                  <span className="mx-2 text-white/35">→</span>
+                  <span className="mx-2 text-white/60">→</span>
                   {job.endDate ? formatDate(job.endDate) : '—'}
                 </dd>
               </div>
               <div>
-                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                   <Wallet size={13} aria-hidden className="text-brand" />
                   Budget
                 </dt>
@@ -183,19 +183,19 @@ export default function JobShow({
             </dl>
 
             <div className="mt-5 flex items-center gap-3">
-              <span className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+              <span className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                 <HardHat size={13} aria-hidden className="text-brand" />
                 Foreman
               </span>
               {job.foreman ? (
                 <ForemanBadge foreman={job.foreman} />
               ) : (
-                <span className="text-md text-white/45">Unassigned</span>
+                <span className="text-md text-white/70">Unassigned</span>
               )}
             </div>
 
             {job.description && (
-              <p className="mt-5 max-w-3xl text-md whitespace-pre-line text-white/70">
+              <p className="mt-5 max-w-3xl text-md whitespace-pre-line text-white/90">
                 {job.description}
               </p>
             )}

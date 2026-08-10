@@ -63,8 +63,8 @@ export function ActivityFeed({ entries, className }: ActivityFeedProps) {
 
             <div className="min-w-0 pt-0.5">
               <p className="text-md font-medium text-white">{entry.title}</p>
-              <p className="mt-0.5 text-sm text-white/60">{entry.description}</p>
-              <p className="mt-1 text-xs text-white/40">
+              <p className="mt-0.5 text-sm text-white/85">{entry.description}</p>
+              <p className="mt-1 text-xs text-white/65">
                 {formatRelative(entry.timestamp)}
               </p>
             </div>

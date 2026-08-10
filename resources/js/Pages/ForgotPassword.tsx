@@ -62,11 +62,11 @@ export default function ForgotPassword() {
               <MailCheck size={30} aria-hidden />
             </span>
 
-            <p className="text-md text-white/75">
+            <p className="text-md text-white">
               We sent a reset link to{' '}
               <span className="font-semibold break-all text-white">{sentTo}</span>.
             </p>
-            <p className="mt-2 text-sm text-white/50">
+            <p className="mt-2 text-sm text-white/75">
               The link expires in 30 minutes. Check your spam folder if it does not
               arrive.
             </p>
@@ -130,7 +130,7 @@ export default function ForgotPassword() {
               {processing ? 'Sending link…' : 'Send reset link'}
             </Button>
 
-            <p className="text-center text-sm text-white/45">
+            <p className="text-center text-sm text-white/70">
               Prototype only — no email is actually sent.
             </p>
           </motion.form>

@@ -68,7 +68,7 @@ export function ConfirmDialog({
         </span>
         <div>
           <h2 className="text-lg font-semibold text-white">{title}</h2>
-          {description && <p className="mt-2 text-md text-white/70">{description}</p>}
+          {description && <p className="mt-2 text-md text-white/90">{description}</p>}
         </div>
       </div>
     </Modal>

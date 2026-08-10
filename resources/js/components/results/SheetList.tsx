@@ -44,9 +44,9 @@ export function SheetList({ sheets, activeId, onSelect, className }: SheetListPr
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="text-md font-semibold text-white">{sheet.code}</span>
-                  <span className="text-xs text-white/40">{sheet.pageCount} pages</span>
+                  <span className="text-xs text-white/65">{sheet.pageCount} pages</span>
                 </span>
-                <span className="mt-0.5 block truncate text-sm text-white/60">
+                <span className="mt-0.5 block truncate text-sm text-white/85">
                   {sheet.title}
                 </span>
               </span>

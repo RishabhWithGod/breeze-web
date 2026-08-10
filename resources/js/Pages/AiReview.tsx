@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import {
+  Check,
   CheckCheck,
   Combine,
   Download,
-  FileJson,
   Lock,
   RotateCcw,
   Sparkles,
@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react'
 import {
+  AdvancedDetails,
   Alert,
   Badge,
   Button,
@@ -25,7 +26,13 @@ import {
   SelectField,
   TextInput,
 } from '@/components/common'
-import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import {
+  PageHeader,
+  PageTransition,
+  StepFooter,
+  StepWizard,
+  appLayout,
+} from '@/components/layout'
 import {
   ApprovalHistoryPanel,
   EngineWarnings,
@@ -161,6 +168,11 @@ export default function AiReview({
     <PageTransition>
       <Head title={`AI Review — ${result.projectName}`} />
 
+      <StepWizard
+        current="review"
+        hrefs={{ upload: ROUTES.upload, analysis: routeTo.processing(result.projectId) }}
+      />
+
       <PageHeader
         title="AI Review"
         subtitle={
@@ -175,14 +187,6 @@ export default function AiReview({
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <ButtonLink
-              href={result.originalJsonUrl}
-              variant="secondary"
-              size="sm"
-              leftIcon={Download}
-            >
-              Original AI JSON
-            </ButtonLink>
             {locked ? (
               <>
                 <ButtonLink
@@ -204,12 +208,12 @@ export default function AiReview({
             ) : (
               <Button
                 size="sm"
-                leftIcon={FileJson}
+                leftIcon={Check}
                 disabled={tally.approved === 0}
-                title="Generates final_response.json and its bill of quantities, creates the job and its estimate, then opens the job"
+                title="Builds the estimate and raises the job from the approved symbols"
                 onClick={() => router.post(routeTo.reviewFinalise(result.id))}
               >
-                Finalize review
+                Finish review
               </Button>
             )}
           </div>
@@ -228,9 +232,9 @@ export default function AiReview({
       )}
 
       {!locked && tally.approved > 0 && (
-        <Alert tone="info" className="mb-4">
-          Finalizing writes final_response.json, then creates the job and its estimate
-          from it — {tally.approvedCount} approved items across {tally.approved} symbols.
+        <Alert tone="info" className="mb-6">
+          Finishing this review builds the estimate and raises the job —{' '}
+          {tally.approvedCount} items across {tally.approved} approved symbols.
         </Alert>
       )}
 
@@ -245,14 +249,33 @@ export default function AiReview({
       {/* Raised by the engine about the drawing itself. */}
       <EngineWarnings warnings={result.warnings} className="mb-4" />
 
-      <ReviewStats tally={tally} className="mb-4" />
+      <ReviewStats tally={tally} className="mb-6" />
 
-      <PipelineStatus
-        stages={result.pipelineStatus}
-        processingTime={result.processingTime}
-        statistics={result.lifecycleStatistics}
-        className="mb-4"
-      />
+      {/*
+        How the engine ran is real information and occasionally settles an argument,
+        but it is not what the reviewer is here to do. One click away.
+      */}
+      <AdvancedDetails
+        label="How the AI read this drawing"
+        hint="Detector stages, processing time and crop statistics"
+        className="mb-6"
+      >
+        <PipelineStatus
+          stages={result.pipelineStatus}
+          processingTime={result.processingTime}
+          statistics={result.lifecycleStatistics}
+        />
+
+        <ButtonLink
+          href={result.originalJsonUrl}
+          variant="secondary"
+          size="sm"
+          leftIcon={Download}
+          className="mt-4"
+        >
+          Download the raw AI response
+        </ButtonLink>
+      </AdvancedDetails>
 
       <Card padding="md" className="mb-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -260,7 +283,7 @@ export default function AiReview({
             <SearchBox
               value={search}
               onValueChange={setSearch}
-              placeholder="Search symbol or crop id…"
+              placeholder="Search symbols…"
               aria-label="Search detections"
               containerClassName="sm:max-w-xs"
             />
@@ -406,6 +429,24 @@ export default function AiReview({
         />
         <ApprovalHistoryPanel entries={history} />
       </Card>
+
+      {/*
+        The way forward. A signed-off takeoff already has its summary, so the button
+        opens it; an open one has to be finished first, and the reason says so.
+      */}
+      <StepFooter
+        current="review"
+        continueLabel={locked ? 'Continue to Review Summary' : 'Finish review and continue'}
+        {...(locked ? { href: routeTo.finalSymbols(result.id) } : {})}
+        {...(!locked && tally.approved === 0
+          ? { blockedReason: 'Approve at least one symbol to continue.' }
+          : {})}
+        {...(!locked && tally.approved > 0
+          ? { onContinue: () => router.post(routeTo.reviewFinalise(result.id)) }
+          : {})}
+        backHref={routeTo.processing(result.projectId)}
+        backLabel="Back to Analysis"
+      />
     </PageTransition>
   )
 }

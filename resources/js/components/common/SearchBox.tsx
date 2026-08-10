@@ -29,7 +29,7 @@ export const SearchBox = forwardRef<HTMLInputElement, SearchBoxProps>(
         <Search
           size={18}
           aria-hidden
-          className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-white/55"
+          className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-white/80"
         />
         <input
           ref={ref}
@@ -39,7 +39,7 @@ export const SearchBox = forwardRef<HTMLInputElement, SearchBoxProps>(
           onChange={(event) => onValueChange(event.target.value)}
           className={cn(
             'w-full rounded-pill border border-transparent bg-surface-input py-2.5 pr-10 pl-11',
-            'text-md text-white placeholder:text-white/50',
+            'text-md text-white placeholder:text-white/75',
             'transition-colors duration-200 hover:bg-white/25',
             'focus:border-brand/60 focus:bg-white/25 focus:outline-none',
             '[&::-webkit-search-cancel-button]:hidden',
@@ -52,7 +52,7 @@ export const SearchBox = forwardRef<HTMLInputElement, SearchBoxProps>(
             type="button"
             onClick={() => onValueChange('')}
             aria-label="Clear search"
-            className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-white/60 transition-colors hover:bg-white/15 hover:text-white"
+            className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-white/85 transition-colors hover:bg-white/15 hover:text-white"
           >
             <X size={15} aria-hidden />
           </button>

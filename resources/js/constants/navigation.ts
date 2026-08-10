@@ -7,6 +7,7 @@ import {
   Coins,
   FileText,
   FolderClosed,
+  FolderKanban,
   Gauge,
   ReceiptText,
   Settings,
@@ -19,12 +20,15 @@ import type { NavItem } from '@/types'
 /**
  * The full product drawer, in the reference application's order.
  *
- * Dashboard, AI Takeoff, Estimates and Jobs are built. The rest resolve to
- * ModuleController, which renders an "in development" screen — real routes
+ * Dashboard, Projects, AI Takeoff, Estimates and Jobs are built. The rest resolve
+ * to ModuleController, which renders an "in development" screen — real routes
  * rather than dead links, so navigation never 404s.
  */
 export const SIDEBAR_ITEMS: readonly NavItem[] = [
   { label: 'Dashboard', href: ROUTES.home, icon: Gauge },
+  // Sits directly under Dashboard: a project is what every takeoff, estimate and
+  // job is raised against.
+  { label: 'Projects', href: ROUTES.projects, icon: FolderKanban },
   // Lands on the takeoff history, matching the reference product.
   { label: 'AI Takeoff', href: ROUTES.aiTakeoff, icon: Sparkles },
   { label: 'Estimates', href: ROUTES.estimates, icon: FileText },

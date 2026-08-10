@@ -54,7 +54,7 @@ export function Pagination({
     'inline-flex h-9 items-center justify-center border transition-colors disabled:cursor-not-allowed disabled:opacity-40',
     isLight
       ? 'border-hairline-strong bg-white/90 text-ocean-700 hover:bg-white'
-      : 'rounded-panel border-hairline text-white/75 hover:border-brand/60 hover:bg-white/10 hover:text-white',
+      : 'rounded-panel border-hairline text-white hover:border-brand/60 hover:bg-white/10 hover:text-white',
     withLabels ? 'gap-1 px-3 text-sm font-medium' : 'w-9',
   )
 
@@ -66,7 +66,7 @@ export function Pagination({
         className,
       )}
     >
-      {summary && <p className="text-sm text-white/55">{summary}</p>}
+      {summary && <p className="text-sm text-white/80">{summary}</p>}
 
       <div
         className={cn(
@@ -92,7 +92,7 @@ export function Pagination({
           value === 'gap' ? (
             <span
               key={`gap-${index}`}
-              className="px-1 text-sm text-white/40"
+              className="px-1 text-sm text-white/65"
               aria-hidden
             >
               …
@@ -112,7 +112,7 @@ export function Pagination({
                     : 'border-hairline-strong bg-white/90 text-ocean-700 hover:bg-white'
                   : value === page
                     ? 'border-brand bg-brand text-brand-ink'
-                    : 'border-hairline text-white/75 hover:border-brand/60 hover:bg-white/10 hover:text-white',
+                    : 'border-hairline text-white hover:border-brand/60 hover:bg-white/10 hover:text-white',
               )}
             >
               {value}

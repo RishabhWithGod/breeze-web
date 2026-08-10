@@ -61,19 +61,19 @@ export function ShiftDetailModal({ shift, onClose, onRemove }: ShiftDetailModalP
 
           <dl className="grid gap-4 sm:grid-cols-2">
             <div>
-              <dt className="text-sm text-white/50">Time</dt>
+              <dt className="text-sm text-white/75">Time</dt>
               <dd className="mt-0.5 font-semibold text-white">
                 {shift.startLabel} – {shift.endLabel}
               </dd>
             </div>
             <div>
-              <dt className="text-sm text-white/50">Length</dt>
+              <dt className="text-sm text-white/75">Length</dt>
               <dd className="mt-0.5 font-semibold text-white">
                 {shift.durationHours} hours
               </dd>
             </div>
             <div>
-              <dt className="text-sm text-white/50">Crew lead</dt>
+              <dt className="text-sm text-white/75">Crew lead</dt>
               <dd className="mt-0.5 font-semibold text-white">
                 {shift.member
                   ? `${shift.member.name}${shift.member.role ? ` — ${shift.member.role}` : ''}`
@@ -81,12 +81,12 @@ export function ShiftDetailModal({ shift, onClose, onRemove }: ShiftDetailModalP
               </dd>
             </div>
             <div>
-              <dt className="text-sm text-white/50">Client</dt>
+              <dt className="text-sm text-white/75">Client</dt>
               <dd className="mt-0.5 font-semibold text-white">{shift.client ?? '—'}</dd>
             </div>
             {shift.location && (
               <div className="sm:col-span-2">
-                <dt className="text-sm text-white/50">Location</dt>
+                <dt className="text-sm text-white/75">Location</dt>
                 <dd className="mt-0.5 font-semibold text-white">{shift.location}</dd>
               </div>
             )}
@@ -94,8 +94,8 @@ export function ShiftDetailModal({ shift, onClose, onRemove }: ShiftDetailModalP
 
           {shift.notes && (
             <div>
-              <p className="text-sm text-white/50">Notes</p>
-              <p className="mt-1 rounded-panel border border-hairline bg-white/6 p-3 text-md text-white/80">
+              <p className="text-sm text-white/75">Notes</p>
+              <p className="mt-1 rounded-panel border border-hairline bg-white/6 p-3 text-md text-white">
                 {shift.notes}
               </p>
             </div>

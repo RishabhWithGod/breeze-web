@@ -104,7 +104,7 @@ export function Table<T>({
                 <td
                   key={column.key}
                   className={cn(
-                    'text-md text-white/85 transition-colors group-hover:bg-white/12',
+                    'text-md text-white transition-colors group-hover:bg-white/12',
                     isLined
                       ? 'border-b border-hairline bg-white/3 group-last:border-b-0'
                       : 'border-y border-hairline bg-white/6 first:rounded-l-panel first:border-l last:rounded-r-panel last:border-r',

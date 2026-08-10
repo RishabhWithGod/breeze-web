@@ -247,7 +247,7 @@ export default function EstimateEdit({
               { label: `Tax (${form.data.tax_pct || 0}%)`, value: previewTax },
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between gap-3">
-                <dt className="text-md text-white/70">{row.label}</dt>
+                <dt className="text-md text-white/90">{row.label}</dt>
                 <dd className="text-md font-medium text-white/90">
                   {formatCurrency(row.value, 2)}
                 </dd>
@@ -270,7 +270,7 @@ export default function EstimateEdit({
           )}
 
           {totals.engineGrandTotal > 0 && (
-            <p className="mt-4 border-t border-hairline pt-4 text-sm text-white/55">
+            <p className="mt-4 border-t border-hairline pt-4 text-sm text-white/80">
               The AI engine priced {totals.engineLineCount} lines at{' '}
               {formatCurrency(totals.engineGrandTotal, 2)} before review.
             </p>

@@ -52,7 +52,7 @@ export function JobNotesPanel({ jobId, notes }: JobNotesPanelProps) {
       </form>
 
       {notes.length === 0 ? (
-        <p className="text-md text-white/50">No notes yet.</p>
+        <p className="text-md text-white/75">No notes yet.</p>
       ) : (
         <ul className="space-y-3">
           <AnimatePresence initial={false}>
@@ -72,11 +72,11 @@ export function JobNotesPanel({ jobId, notes }: JobNotesPanelProps) {
                     icon={Trash2}
                     label={`Delete note by ${note.author}`}
                     size="sm"
-                    className="shrink-0 text-white/45 hover:text-status-danger"
+                    className="shrink-0 text-white/70 hover:text-status-danger"
                     onClick={() => remove(note.id)}
                   />
                 </div>
-                <p className="mt-2 text-sm text-white/45">
+                <p className="mt-2 text-sm text-white/70">
                   {note.author} · {formatRelative(note.createdAt)}
                 </p>
               </motion.li>

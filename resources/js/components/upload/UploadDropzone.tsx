@@ -139,7 +139,7 @@ export function UploadDropzone({
             : 'Drag & drop files here'}
       </p>
 
-      <p className="mt-1 text-md text-white/55">or</p>
+      <p className="mt-1 text-md text-white/80">or</p>
 
       <Button
         type="button"
@@ -156,14 +156,14 @@ export function UploadDropzone({
         {SUPPORTED_FORMATS.map((format) => (
           <span
             key={format}
-            className="rounded-panel border border-hairline bg-white/8 px-3 py-1 text-xs font-semibold tracking-wider text-white/80"
+            className="rounded-panel border border-hairline bg-white/8 px-3 py-1 text-xs font-semibold tracking-wider text-white"
           >
             {format}
           </span>
         ))}
       </div>
 
-      <p className="mt-4 flex items-center justify-center gap-2 text-sm text-white/55">
+      <p className="mt-4 flex items-center justify-center gap-2 text-sm text-white/80">
         <ShieldCheck size={15} aria-hidden className="text-brand/80" />
         Up to {maxFiles} files · max {maxFileSizeMb} MB each
       </p>

@@ -39,7 +39,7 @@ export function SectionHeading({
     >
       <div className="min-w-0">
         <Heading className={cn('text-white', SIZES[as])}>{title}</Heading>
-        {subtitle && <p className="mt-2 text-base text-white/65">{subtitle}</p>}
+        {subtitle && <p className="mt-2 text-base text-white/90">{subtitle}</p>}
       </div>
       {actions && (
         <div className="flex flex-wrap items-center gap-3 lg:shrink-0">{actions}</div>

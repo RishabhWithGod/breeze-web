@@ -62,7 +62,7 @@ export default function EmptyState() {
                 >
                   <Icon size={20} aria-hidden className="mb-3 text-brand" />
                   <p className="text-md font-semibold text-white">{title}</p>
-                  <p className="mt-1 text-sm text-white/60">{body}</p>
+                  <p className="mt-1 text-sm text-white/85">{body}</p>
                 </div>
               ))}
             </div>
@@ -72,7 +72,7 @@ export default function EmptyState() {
 
       {/* Ghost placeholders hint at what the populated view will look like. */}
       <section className="mt-6" aria-label="Loading preview">
-        <p className="mb-4 text-sm tracking-wide text-white/40 uppercase">
+        <p className="mb-4 text-sm tracking-wide text-white/65 uppercase">
           Your dashboard will look like this
         </p>
         <div className="grid gap-5 opacity-60 lg:grid-cols-3">

@@ -54,8 +54,8 @@ export function IconListRow({ row, index = 0, className }: IconListRowProps) {
           ))}
         </p>
 
-        {row.detail && <p className="mt-0.5 text-md text-white/80">{row.detail}</p>}
-        {row.meta && <p className="mt-1.5 text-sm text-white/50">{row.meta}</p>}
+        {row.detail && <p className="mt-0.5 text-md text-white">{row.detail}</p>}
+        {row.meta && <p className="mt-1.5 text-sm text-white/75">{row.meta}</p>}
       </div>
     </motion.li>
   )

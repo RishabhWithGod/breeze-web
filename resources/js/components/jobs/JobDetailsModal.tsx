@@ -45,7 +45,7 @@ export function JobDetailsModal({ job, onClose }: JobDetailsModalProps) {
 
           <dl className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-panel border border-hairline bg-white/4 p-4">
-              <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+              <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                 <HardHat size={14} aria-hidden className="text-brand" />
                 Foreman
               </dt>
@@ -53,13 +53,13 @@ export function JobDetailsModal({ job, onClose }: JobDetailsModalProps) {
                 {job.foreman ? (
                   <ForemanBadge foreman={job.foreman} />
                 ) : (
-                  <span className="text-md text-white/45">Unassigned</span>
+                  <span className="text-md text-white/70">Unassigned</span>
                 )}
               </dd>
             </div>
 
             <div className="rounded-panel border border-hairline bg-white/4 p-4">
-              <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+              <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                 <Wallet size={14} aria-hidden className="text-brand" />
                 Budget
               </dt>
@@ -69,7 +69,7 @@ export function JobDetailsModal({ job, onClose }: JobDetailsModalProps) {
             </div>
 
             <div className="rounded-panel border border-hairline bg-white/4 p-4">
-              <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+              <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                 <CalendarDays size={14} aria-hidden className="text-brand" />
                 Start date
               </dt>
@@ -79,7 +79,7 @@ export function JobDetailsModal({ job, onClose }: JobDetailsModalProps) {
             </div>
 
             <div className="rounded-panel border border-hairline bg-white/4 p-4">
-              <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+              <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                 <CalendarDays size={14} aria-hidden className="text-brand" />
                 End date
               </dt>

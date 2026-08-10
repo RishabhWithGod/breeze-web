@@ -37,7 +37,7 @@ export function RecentUploadCard({ upload, index }: RecentUploadCardProps) {
       >
         {upload.name}
       </p>
-      <p className="mt-1 text-sm text-white/50">
+      <p className="mt-1 text-sm text-white/75">
         Uploaded {formatRelative(upload.uploadedAt)} · {formatFileSize(upload.sizeBytes)}
       </p>
 

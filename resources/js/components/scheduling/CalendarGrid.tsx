@@ -98,7 +98,7 @@ export function CalendarGrid({
                               ? 'grid size-6 place-items-center rounded-full bg-brand text-brand-ink'
                               : day.isCurrentPeriod
                                 ? 'text-white'
-                                : 'text-white/35',
+                                : 'text-white/60',
                           )}
                         >
                           {day.dayOfMonth}
@@ -111,7 +111,7 @@ export function CalendarGrid({
                           onClick={() => onAddOnDay(day.date)}
                           aria-label={`Assign a crew on ${day.label}`}
                           className={cn(
-                            'rounded-full p-1 text-white/50 opacity-0 transition',
+                            'rounded-full p-1 text-white/75 opacity-0 transition',
                             'hover:bg-brand/25 hover:text-white',
                             'group-hover/day:opacity-100 focus-visible:opacity-100 focus-visible:outline-none',
                           )}

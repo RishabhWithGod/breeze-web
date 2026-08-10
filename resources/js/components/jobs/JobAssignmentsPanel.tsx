@@ -86,13 +86,13 @@ export function JobAssignmentsPanel({
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-md font-medium text-white">{assignment.name}</p>
-                <p className="text-2xs text-white/50">
+                <p className="text-2xs text-white/75">
                   {assignment.roleLabel} ·{' '}
                   {formatDistanceToNow(new Date(assignment.assignedAt), { addSuffix: true })}
                   {assignment.assignedBy ? ` · by ${assignment.assignedBy}` : ''}
                 </p>
                 {assignment.notes && (
-                  <p className="mt-1 text-2xs text-white/60">{assignment.notes}</p>
+                  <p className="mt-1 text-2xs text-white/85">{assignment.notes}</p>
                 )}
               </div>
               <Badge tone="info" size="sm">
@@ -156,13 +156,13 @@ export function JobAssignmentsPanel({
 
       {past.length > 0 && (
         <div className="mt-5 border-t border-hairline pt-5">
-          <p className="mb-2 flex items-center gap-2 text-sm font-medium text-white/70">
+          <p className="mb-2 flex items-center gap-2 text-sm font-medium text-white/90">
             <History size={14} aria-hidden />
             Assignment history
           </p>
           <ul className="flex flex-col gap-1.5">
             {past.map((assignment) => (
-              <li key={assignment.id} className="text-2xs text-white/55">
+              <li key={assignment.id} className="text-2xs text-white/80">
                 {assignment.name} — {assignment.roleLabel}, released{' '}
                 {assignment.releasedAt
                   ? formatDistanceToNow(new Date(assignment.releasedAt), { addSuffix: true })

@@ -13,18 +13,18 @@ export const REVIEW_FILTERS: readonly { value: ReviewFilter; label: string }[] =
   { value: 'pending', label: 'Pending' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
-  { value: 'modified', label: 'Modified' },
-  { value: 'known', label: 'Known' },
-  { value: 'unknown', label: 'Unknown' },
-  // The engine's own signals.
-  { value: 'needs-review', label: 'Needs review' },
-  { value: 'ai-rejected', label: 'AI rejected' },
+  { value: 'modified', label: 'Edited' },
+  { value: 'known', label: 'Recognised' },
+  { value: 'unknown', label: 'Unrecognised' },
+  // The engine's own signals, in the reviewer's words.
+  { value: 'needs-review', label: 'Flagged' },
+  { value: 'ai-rejected', label: 'Discarded by AI' },
 ]
 
 export const REVIEW_SORT_OPTIONS: readonly SelectOption[] = [
-  { value: 'position', label: 'Detection order' },
-  { value: 'confidence-desc', label: 'Confidence: high to low' },
-  { value: 'confidence-asc', label: 'Confidence: low to high' },
+  { value: 'position', label: 'Drawing order' },
+  { value: 'confidence-desc', label: 'Best match first' },
+  { value: 'confidence-asc', label: 'Weakest match first' },
   { value: 'name-asc', label: 'Symbol name: A–Z' },
 ]
 

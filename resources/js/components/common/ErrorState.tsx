@@ -52,7 +52,7 @@ export function ErrorState({
       <h3 className="text-2xl font-semibold text-white">{title}</h3>
 
       {description && (
-        <p className="mt-3 max-w-xl text-md text-white/65">{description}</p>
+        <p className="mt-3 max-w-xl text-md text-white/90">{description}</p>
       )}
 
       {actions && (
@@ -63,10 +63,10 @@ export function ErrorState({
 
       {details && (
         <details className="mt-8 w-full max-w-2xl text-left">
-          <summary className="cursor-pointer text-sm text-white/55 transition-colors hover:text-brand">
+          <summary className="cursor-pointer text-sm text-white/80 transition-colors hover:text-brand">
             Technical details
           </summary>
-          <pre className="mt-3 overflow-x-auto rounded-panel border border-hairline bg-navy-950/50 p-4 font-mono text-xs text-white/70">
+          <pre className="mt-3 overflow-x-auto rounded-panel border border-hairline bg-navy-950/50 p-4 font-mono text-xs text-white/90">
             {details}
           </pre>
         </details>

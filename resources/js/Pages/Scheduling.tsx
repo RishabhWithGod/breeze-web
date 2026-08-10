@@ -290,7 +290,7 @@ export default function Scheduling({
               type="button"
               onClick={() => step(-1)}
               aria-label={view === 'month' ? 'Previous month' : 'Previous week'}
-              className="grid size-9 place-items-center rounded-panel border border-hairline text-white/75 transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
+              className="grid size-9 place-items-center rounded-panel border border-hairline text-white transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
             >
               <ChevronLeft size={17} aria-hidden />
             </button>
@@ -299,7 +299,7 @@ export default function Scheduling({
               type="button"
               onClick={() => step(1)}
               aria-label={view === 'month' ? 'Next month' : 'Next week'}
-              className="grid size-9 place-items-center rounded-panel border border-hairline text-white/75 transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
+              className="grid size-9 place-items-center rounded-panel border border-hairline text-white transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
             >
               <ChevronRight size={17} aria-hidden />
             </button>
@@ -316,7 +316,7 @@ export default function Scheduling({
                   'rounded-panel border px-4 py-1.5 text-md font-medium capitalize transition-colors',
                   view === option
                     ? 'border-brand bg-brand text-brand-ink'
-                    : 'border-hairline text-white/75 hover:border-brand/60 hover:bg-white/10 hover:text-white',
+                    : 'border-hairline text-white hover:border-brand/60 hover:bg-white/10 hover:text-white',
                 )}
               >
                 {option}
@@ -325,7 +325,7 @@ export default function Scheduling({
             <button
               type="button"
               onClick={() => goTo({ date: today })}
-              className="rounded-panel border border-hairline px-4 py-1.5 text-md font-medium text-white/75 transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
+              className="rounded-panel border border-hairline px-4 py-1.5 text-md font-medium text-white transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
             >
               Today
             </button>
@@ -340,7 +340,7 @@ export default function Scheduling({
           onAddOnDay={addOnDay}
         />
 
-        <p className="mt-4 text-sm text-white/55">
+        <p className="mt-4 text-sm text-white/80">
           {shiftCount === 0
             ? 'No crew booked in this period.'
             : `${shiftCount} ${shiftCount === 1 ? 'shift' : 'shifts'} · ${bookedHours} crew hours booked.`}

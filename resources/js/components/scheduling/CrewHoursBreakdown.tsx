@@ -49,7 +49,7 @@ export function CrewHoursBreakdown({ totals, className }: CrewHoursBreakdownProp
 
   if (total <= 0) {
     return (
-      <p className={cn('text-md text-white/55', className)}>
+      <p className={cn('text-md text-white/80', className)}>
         Nothing booked in this period, so there are no hours to split.
       </p>
     )
@@ -122,9 +122,9 @@ export function CrewHoursBreakdown({ totals, className }: CrewHoursBreakdownProp
                 className="size-3 shrink-0 rounded-xs"
                 style={{ backgroundColor: segment.colour }}
               />
-              <span className="truncate text-white/80">{segment.key}</span>
+              <span className="truncate text-white">{segment.key}</span>
             </span>
-            <span className="shrink-0 tabular-nums text-white/60">
+            <span className="shrink-0 tabular-nums text-white/85">
               <span className="font-semibold text-white">{segment.hours} h</span>
               <span className="ml-2">{segment.share}%</span>
             </span>

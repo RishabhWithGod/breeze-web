@@ -38,9 +38,9 @@ export function ProfileMenu() {
         </span>
         <span className="hidden text-left leading-tight lg:block">
           <span className="block text-md font-medium text-white">{user.name}</span>
-          <span className="block text-xs text-white/55">{user.role}</span>
+          <span className="block text-xs text-white/80">{user.role}</span>
         </span>
-        <ChevronDown size={16} aria-hidden className="hidden text-white/60 lg:block" />
+        <ChevronDown size={16} aria-hidden className="hidden text-white/85 lg:block" />
       </button>
 
       <AnimatePresence>
@@ -55,7 +55,7 @@ export function ProfileMenu() {
           >
             <div className="border-b border-hairline px-4 py-3">
               <p className="truncate text-md font-semibold text-white">{user.name}</p>
-              <p className="truncate text-xs text-white/55">{user.email}</p>
+              <p className="truncate text-xs text-white/80">{user.email}</p>
             </div>
 
             <ul className="p-2">
@@ -64,7 +64,7 @@ export function ProfileMenu() {
                   <button
                     type="button"
                     role="menuitem"
-                    className="flex w-full items-center gap-3 rounded-panel px-3 py-2.5 text-md text-white/85 transition-colors hover:bg-white/10 hover:text-brand"
+                    className="flex w-full items-center gap-3 rounded-panel px-3 py-2.5 text-md text-white transition-colors hover:bg-white/10 hover:text-brand"
                   >
                     <Icon size={17} aria-hidden />
                     {label}
@@ -77,7 +77,7 @@ export function ProfileMenu() {
                   type="button"
                   role="menuitem"
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-3 rounded-panel px-3 py-2.5 text-md text-white/85 transition-colors hover:bg-status-danger/15 hover:text-red-200"
+                  className="flex w-full items-center gap-3 rounded-panel px-3 py-2.5 text-md text-white transition-colors hover:bg-status-danger/15 hover:text-red-200"
                 >
                   <LogOut size={17} aria-hidden />
                   Logout

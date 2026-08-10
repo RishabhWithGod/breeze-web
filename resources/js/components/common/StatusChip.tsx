@@ -7,7 +7,7 @@ const TEXT_TONES: Record<Tone, string> = {
   warning: 'text-status-warning',
   danger: 'text-red-300',
   info: 'text-status-info',
-  neutral: 'text-white/70',
+  neutral: 'text-white/90',
 }
 
 export interface StatusChipProps {

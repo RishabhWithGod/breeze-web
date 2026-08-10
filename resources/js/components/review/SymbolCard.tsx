@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react'
 import {
   Check,
   Minus,
+  History,
   Pencil,
   Plus,
   RotateCcw,
@@ -15,19 +16,19 @@ import {
   Button,
   Card,
   Checkbox,
+  DetailRow,
   IconButton,
+  MoreMenu,
   StatusChip,
   TextArea,
   TextInput,
 } from '@/components/common'
 import { REVIEW_STATUS_LABEL, REVIEW_STATUS_TONE, routeTo } from '@/constants'
 import type { SymbolReviewRow } from '@/types'
-import { cn } from '@/utils'
-import { PipelineTrail } from './PipelineTrail'
-import { SourceBadges } from './SourceBadges'
+import { cn, formatRelative } from '@/utils'
 
 /** Which inline editor the card currently shows. */
-type CardMode = 'rename' | 'split' | 'notes' | null
+type CardMode = 'rename' | 'split' | 'notes' | 'history' | null
 
 export interface SymbolCardProps {
   resultId: number
@@ -41,10 +42,16 @@ export interface SymbolCardProps {
 }
 
 /**
- * One detected symbol, with every decision the reviewer can make on it.
+ * One counted symbol, with every decision the reviewer can make on it.
  *
- * Each action posts to its own endpoint and the page re-renders from the server,
- * so the card never shows a decision the database has not accepted.
+ * The card answers an estimator's question and nothing else: what is it, how many,
+ * and is that right. Everything describing *how the engine decided* — the crop id,
+ * the bounding box, which detectors fired, confidence, the pipeline trail — is real
+ * and occasionally settles an argument, so none of it is discarded; it moves behind
+ * "Advanced details" where it stops competing with the count.
+ *
+ * Each action posts to its own endpoint and the page re-renders from the server, so
+ * the card never shows a decision the database has not accepted.
  */
 export function SymbolCard({
   resultId,
@@ -92,7 +99,6 @@ export function SymbolCard({
     post(routeTo.symbolCount(resultId, row.id), { count: Math.max(0, next) })
   }, [countDraft, post, resultId, row.finalCount, row.id])
 
-  const bbox = row.bbox && row.bbox.length >= 4 ? row.bbox : null
   const isRejected = row.status === 'rejected'
 
   return (
@@ -102,20 +108,20 @@ export function SymbolCard({
       className={cn(
         'flex h-full flex-col overflow-hidden',
         selected && 'ring-1 ring-brand/70',
-        isRejected && 'opacity-80',
+        isRejected && 'opacity-75',
       )}
     >
-      {/* Crop preview */}
-      <div className="relative flex h-32 items-center justify-center border-b border-hairline bg-white/5">
+      {/* Symbol image */}
+      <div className="relative flex h-36 items-center justify-center border-b border-hairline bg-white/5">
         {row.cropUrl ? (
           <img
             src={row.cropUrl}
-            alt={`Detected ${row.name} on page ${row.page}`}
-            className="max-h-28 max-w-full object-contain"
+            alt={row.name}
+            className="max-h-32 max-w-full object-contain"
           />
         ) : (
-          <span className="px-4 text-center text-2xs text-white/45">
-            No crop image returned for this detection
+          <span className="px-4 text-center text-2xs text-white/65">
+            No image for this symbol
           </span>
         )}
 
@@ -129,139 +135,96 @@ export function SymbolCard({
           />
         </div>
 
+        {/*
+          Only states a reviewer acts on. The engine's own verdict, its category and
+          its provenance all moved into Advanced details.
+        */}
         <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
-          {/* The engine's own verdict, in its own words where it gave one. */}
-          <Badge tone={row.isKnown ? 'success' : 'warning'} size="sm">
-            {row.finalDecision || (row.isKnown ? 'Known Symbol' : 'Unknown Symbol')}
-          </Badge>
           {row.origin === 'needs_review' && (
-            <Badge tone="info" size="sm">
+            <Badge tone="warning" size="sm">
               Needs review
             </Badge>
           )}
-          {row.aiCategory === 'rejected' && (
-            <Badge tone="danger" size="sm">
-              AI rejected
-            </Badge>
-          )}
-          {isRejected && row.aiCategory !== 'rejected' && (
+          {isRejected && (
             <Badge tone="danger" size="sm">
               Rejected
             </Badge>
           )}
           {row.isModified && (
             <Badge tone="info" size="sm">
-              Modified
+              Edited
             </Badge>
           )}
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-4 p-5">
+        {/* Symbol name */}
         <div className="min-w-0">
-          <h3 className="truncate text-md font-semibold text-white" title={row.name}>
+          <h3 className="truncate text-lg font-semibold text-white" title={row.name}>
             {row.name}
           </h3>
-          {row.isRenamed && (
-            <p className="truncate text-2xs text-white/50">
-              AI called this “{row.aiName}”
-            </p>
-          )}
+          <div className="mt-1.5 flex items-center gap-2">
+            <StatusChip
+              tone={REVIEW_STATUS_TONE[row.status]}
+              label={REVIEW_STATUS_LABEL[row.status]}
+              className="text-2xs"
+            />
+            {row.isRenamed && (
+              <span className="truncate text-2xs text-white/70">
+                was “{row.aiName}”
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge tone="neutral" size="sm" className="font-mono">
-            {row.cropId ?? row.externalId ?? `#${row.id}`}
-          </Badge>
-          <SourceBadges sources={row.sources} />
-          <Badge tone="neutral" size="sm">
-            page {row.page}
-          </Badge>
-          <Badge tone="brand" size="sm">
-            conf {Math.round(row.confidence * 100)}%
-          </Badge>
-          {row.cropCount > 1 && (
-            <Badge tone="neutral" size="sm">
-              {row.cropCount} crops
-            </Badge>
-          )}
-        </div>
-
-        <p className="font-mono text-2xs text-white/45">
-          {bbox
-            ? `bbox [${bbox.map((value) => Math.round(value)).join(', ')}]`
-            : 'bbox not reported'}
-        </p>
-
-        {/* What corroborated the detection: legend, template, vector, vision. */}
-        {row.evidence.length > 0 && (
-          <p className="text-2xs text-white/55">
-            <span className="text-white/40">evidence </span>
-            {row.evidence.join(' · ')}
-          </p>
-        )}
-
-        {row.reason && (
-          <p className="rounded-panel bg-status-warning/10 px-3 py-2 text-2xs text-status-warning">
-            {row.reason}
-          </p>
-        )}
-
-        <PipelineTrail pipeline={row.pipeline} />
-
-        <div className="flex items-center justify-between gap-2">
-          <StatusChip
-            tone={REVIEW_STATUS_TONE[row.status]}
-            label={REVIEW_STATUS_LABEL[row.status]}
-            className="text-sm"
-          />
-          {row.finalCount !== row.aiCount && (
-            <span className="text-2xs text-white/50">AI said {row.aiCount}</span>
-          )}
-        </div>
-
-        {/* Count editing: steppers plus a directly editable field. */}
-        <div className="flex items-center gap-2">
-          <IconButton
-            variant="secondary"
-            size="sm"
-            icon={Minus}
-            label={`Decrease the count for ${row.name}`}
-            disabled={locked || row.finalCount <= 0}
-            onClick={() => step(-1)}
-          />
-          <label className="sr-only" htmlFor={`symbol-count-${row.id}`}>
-            Final count for {row.name}
+        {/* Quantity — the number the estimate is built from, so it leads. */}
+        <div>
+          <label
+            className="text-2xs tracking-wide text-white/75 uppercase"
+            htmlFor={`symbol-count-${row.id}`}
+          >
+            Quantity
           </label>
-          <TextInput
-            id={`symbol-count-${row.id}`}
-            type="number"
-            min={0}
-            inputMode="numeric"
-            value={countDraft ?? String(row.finalCount)}
-            disabled={locked}
-            onChange={(event) => setCountDraft(event.target.value)}
-            onBlur={commitCount}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                commitCount()
-              }
-            }}
-            className="h-9 py-0 text-center"
-          />
-          <IconButton
-            variant="secondary"
-            size="sm"
-            icon={Plus}
-            label={`Increase the count for ${row.name}`}
-            disabled={locked}
-            onClick={() => step(1)}
-          />
+          <div className="mt-1.5 flex items-center gap-2">
+            <IconButton
+              variant="secondary"
+              size="sm"
+              icon={Minus}
+              label={`Decrease the quantity of ${row.name}`}
+              disabled={locked || row.finalCount <= 0}
+              onClick={() => step(-1)}
+            />
+            <TextInput
+              id={`symbol-count-${row.id}`}
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={countDraft ?? String(row.finalCount)}
+              disabled={locked}
+              onChange={(event) => setCountDraft(event.target.value)}
+              onBlur={commitCount}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  commitCount()
+                }
+              }}
+              className="h-10 py-0 text-center text-base font-semibold"
+            />
+            <IconButton
+              variant="secondary"
+              size="sm"
+              icon={Plus}
+              label={`Increase the quantity of ${row.name}`}
+              disabled={locked}
+              onClick={() => step(1)}
+            />
+          </div>
         </div>
 
         {row.notes && mode !== 'notes' && (
-          <p className="rounded-panel bg-white/5 px-3 py-2 text-2xs text-white/70">
+          <p className="rounded-panel bg-white/5 px-3 py-2 text-2xs text-white/90">
             {row.notes}
           </p>
         )}
@@ -330,7 +293,7 @@ export function SymbolCard({
               max={row.finalCount}
               value={splitCount}
               onChange={(event) => setSplitCount(event.target.value)}
-              hint={`This detection is counted as ${row.finalCount}.`}
+              hint={`This symbol is counted as ${row.finalCount}.`}
             />
             <div className="flex gap-2">
               <Button type="submit" size="sm">
@@ -341,6 +304,36 @@ export function SymbolCard({
               </Button>
             </div>
           </form>
+        )}
+
+        {mode === 'history' && (
+          <div className="rounded-panel border border-hairline bg-white/5 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-2xs tracking-wide text-white/75 uppercase">History</p>
+              <Button variant="ghost" size="sm" onClick={() => setMode(null)}>
+                Close
+              </Button>
+            </div>
+            <dl className="divide-y divide-hairline">
+              <DetailRow label="AI reported">
+                {row.aiName} × {row.aiCount}
+              </DetailRow>
+              {row.isRenamed && <DetailRow label="Renamed to">{row.name}</DetailRow>}
+              {row.finalCount !== row.aiCount && (
+                <DetailRow label="Quantity changed to">{row.finalCount}</DetailRow>
+              )}
+              <DetailRow label="Decision">
+                {REVIEW_STATUS_LABEL[row.status]}
+              </DetailRow>
+              <DetailRow label="Reviewed">
+                {row.reviewedAt ? formatRelative(row.reviewedAt) : 'Not yet'}
+              </DetailRow>
+              {row.splitFromId && <DetailRow label="Split from">#{row.splitFromId}</DetailRow>}
+              {row.mergedIntoId && (
+                <DetailRow label="Merged into">#{row.mergedIntoId}</DetailRow>
+              )}
+            </dl>
+          </div>
         )}
 
         {mode === 'notes' && (
@@ -375,8 +368,8 @@ export function SymbolCard({
           </form>
         )}
 
-        {/* Decisions */}
-        <div className="mt-auto flex flex-wrap gap-2 pt-1">
+        {/* Two decisions on the surface; everything else behind More. */}
+        <div className="mt-auto grid grid-cols-3 gap-2 pt-1">
           {row.status === 'approved' ? (
             <Button
               variant="secondary"
@@ -398,7 +391,7 @@ export function SymbolCard({
             </Button>
           )}
 
-          {row.status === 'rejected' ? (
+          {isRejected ? (
             <Button
               variant="secondary"
               size="sm"
@@ -420,40 +413,42 @@ export function SymbolCard({
             </Button>
           )}
 
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={Pencil}
-            disabled={locked}
-            onClick={() => {
-              setRenameDraft(row.name)
-              setMode(mode === 'rename' ? null : 'rename')
-            }}
-          >
-            Rename
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={Scissors}
-            disabled={locked || row.finalCount <= 1}
-            onClick={() => setMode(mode === 'split' ? null : 'split')}
-          >
-            Split
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={StickyNote}
-            disabled={locked}
-            onClick={() => {
-              setNoteDraft(row.notes ?? '')
-              setMode(mode === 'notes' ? null : 'notes')
-            }}
-          >
-            Notes
-          </Button>
+          <MoreMenu
+            ariaLabel={`More actions for ${row.name}`}
+            items={[
+              {
+                label: 'Rename',
+                icon: Pencil,
+                disabled: locked,
+                onSelect: () => {
+                  setRenameDraft(row.name)
+                  setMode('rename')
+                },
+              },
+              {
+                label: 'Split',
+                icon: Scissors,
+                disabled: locked || row.finalCount <= 1,
+                onSelect: () => setMode('split'),
+              },
+              {
+                label: 'Notes',
+                icon: StickyNote,
+                disabled: locked,
+                onSelect: () => {
+                  setNoteDraft(row.notes ?? '')
+                  setMode('notes')
+                },
+              },
+              {
+                label: 'History',
+                icon: History,
+                onSelect: () => setMode('history'),
+              },
+            ]}
+          />
         </div>
+
       </div>
     </Card>
   )

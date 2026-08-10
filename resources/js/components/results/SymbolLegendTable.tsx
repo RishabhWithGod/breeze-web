@@ -96,7 +96,7 @@ export function SymbolLegendTable({ symbols }: SymbolLegendTableProps) {
       header: 'Unit',
       align: 'center',
       width: 'w-20',
-      render: (symbol) => <span className="text-white/60">{symbol.unit}</span>,
+      render: (symbol) => <span className="text-white/85">{symbol.unit}</span>,
     },
     {
       key: 'confidence',

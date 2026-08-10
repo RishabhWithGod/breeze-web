@@ -236,7 +236,7 @@ export default function DrawingDetails({
                     : 'Reviewed and signed off — ready to become a job'
                   : 'Waiting on review'}
               </h2>
-              <p className="mt-1 text-sm text-white/70">
+              <p className="mt-1 text-sm text-white/90">
                 {engine.isFinalised
                   ? 'The reviewed counts in final_response.json are what the job and estimate were built from.'
                   : `${engine.detectionCount} symbols are waiting for approve, reject, rename or a count change.`}
@@ -282,7 +282,7 @@ export default function DrawingDetails({
         <dl className="grid gap-4 sm:grid-cols-3 xl:grid-cols-4">
           {facts.map((fact) => (
             <div key={fact.label} className="min-w-0">
-              <dt className="text-2xs tracking-wide text-white/55 uppercase">
+              <dt className="text-2xs tracking-wide text-white/80 uppercase">
                 {fact.label}
               </dt>
               <dd className="mt-1 truncate text-md font-semibold text-white" title={fact.value}>
@@ -293,7 +293,7 @@ export default function DrawingDetails({
         </dl>
 
         {drawing.notes && (
-          <p className="mt-4 border-t border-hairline pt-4 text-sm text-white/70">
+          <p className="mt-4 border-t border-hairline pt-4 text-sm text-white/90">
             {drawing.notes}
           </p>
         )}
@@ -338,7 +338,7 @@ export default function DrawingDetails({
                 aria-label={`${drawing.drawingName ?? 'Drawing'} viewer`}
               >
                 <div className="p-6 text-center">
-                  <p className="text-md text-white/70">
+                  <p className="text-md text-white/90">
                     This browser cannot display the PDF inline.
                   </p>
                   <ButtonLink href={documentUrl} className="mt-4" leftIcon={Download}>
@@ -357,7 +357,7 @@ export default function DrawingDetails({
 
           {drawing.previewUrls.length > 0 && (
             <div className="mt-4">
-              <p className="mb-2 text-sm font-medium text-white/70">
+              <p className="mb-2 text-sm font-medium text-white/90">
                 Rendered pages ({drawing.previewUrls.length})
               </p>
               <ul className="flex gap-3 overflow-x-auto pb-2">
@@ -370,7 +370,7 @@ export default function DrawingDetails({
                         loading="lazy"
                         className="h-28 rounded-panel border border-hairline bg-white/5 object-cover"
                       />
-                      <span className="mt-1 block text-center text-2xs text-white/50">
+                      <span className="mt-1 block text-center text-2xs text-white/75">
                         Page {index + 1}
                       </span>
                     </a>
@@ -397,7 +397,7 @@ export default function DrawingDetails({
                     </Badge>
                   ))}
                   {symbolCounts.length === 0 && (
-                    <span className="text-sm text-white/50">
+                    <span className="text-sm text-white/75">
                       The engine counted nothing on this drawing.
                     </span>
                   )}
@@ -417,10 +417,10 @@ export default function DrawingDetails({
                     },
                   ].map((fact) => (
                     <div key={fact.label} className="min-w-0">
-                      <dt className="text-2xs tracking-wide text-white/55 uppercase">
+                      <dt className="text-2xs tracking-wide text-white/80 uppercase">
                         {fact.label}
                       </dt>
-                      <dd className="mt-0.5 truncate text-sm text-white/85" title={fact.value}>
+                      <dd className="mt-0.5 truncate text-sm text-white" title={fact.value}>
                         {fact.value}
                       </dd>
                     </div>
@@ -462,7 +462,7 @@ export default function DrawingDetails({
                           className={
                             index === 2
                               ? 'text-md font-semibold text-white'
-                              : 'text-md text-white/70'
+                              : 'text-md text-white/90'
                           }
                         >
                           {label as string}
@@ -479,7 +479,7 @@ export default function DrawingDetails({
                       </div>
                     ))}
                   </dl>
-                  <p className="mt-3 text-2xs text-white/45">
+                  <p className="mt-3 text-2xs text-white/70">
                     {engine.estimateTotals.line_count ?? 0} priced lines ·{' '}
                     {engine.estimateTotals.currency ?? 'USD'}
                   </p>

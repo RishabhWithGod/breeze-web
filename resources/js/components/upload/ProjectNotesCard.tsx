@@ -41,7 +41,7 @@ export function ProjectNotesCard({
       />
 
       <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="flex items-start gap-3 text-md text-white/70">
+        <p className="flex items-start gap-3 text-md text-white/90">
           <Info size={18} aria-hidden className="mt-0.5 shrink-0 text-brand" />
           Notes help our AI understand your project better.
         </p>

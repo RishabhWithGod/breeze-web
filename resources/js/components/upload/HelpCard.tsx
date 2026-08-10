@@ -19,7 +19,7 @@ export function HelpCard({ resource, index }: HelpCardProps) {
         <IconBubble icon={resource.icon} size="lg" />
         <div className="min-w-0">
           <p className="font-bold text-white">{resource.title}</p>
-          <p className="mt-1 text-md text-white/65">{resource.description}</p>
+          <p className="mt-1 text-md text-white/90">{resource.description}</p>
           <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand transition-colors group-hover:text-white">
             {resource.action}
             <ArrowRight

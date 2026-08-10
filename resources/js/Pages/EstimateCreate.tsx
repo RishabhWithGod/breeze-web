@@ -183,7 +183,7 @@ export default function EstimateCreate({ nextNumber, clients }: EstimateCreatePr
 
             <dl className="space-y-4">
               <div className="rounded-panel border border-hairline bg-white/4 p-4">
-                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                   <FileText size={14} aria-hidden className="text-brand" />
                   Estimate #
                 </dt>
@@ -193,27 +193,27 @@ export default function EstimateCreate({ nextNumber, clients }: EstimateCreatePr
               </div>
 
               <div className="rounded-panel border border-hairline bg-white/4 p-4">
-                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                   <Building2 size={14} aria-hidden className="text-brand" />
                   Client
                 </dt>
                 <dd className="mt-2 text-md text-white">
-                  {data.client.trim() || <span className="text-white/35">Not set</span>}
+                  {data.client.trim() || <span className="text-white/60">Not set</span>}
                 </dd>
               </div>
 
               <div className="rounded-panel border border-hairline bg-white/4 p-4">
-                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                   <FileText size={14} aria-hidden className="text-brand" />
                   Project
                 </dt>
                 <dd className="mt-2 text-md text-white">
-                  {data.project.trim() || <span className="text-white/35">Not set</span>}
+                  {data.project.trim() || <span className="text-white/60">Not set</span>}
                 </dd>
               </div>
 
               <div className="rounded-panel border border-hairline bg-white/4 p-4">
-                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                   <CalendarDays size={14} aria-hidden className="text-brand" />
                   Date
                 </dt>
@@ -221,13 +221,13 @@ export default function EstimateCreate({ nextNumber, clients }: EstimateCreatePr
                   {data.issued_on ? (
                     formatDate(data.issued_on)
                   ) : (
-                    <span className="text-white/35">Not set</span>
+                    <span className="text-white/60">Not set</span>
                   )}
                 </dd>
               </div>
 
               <div className="rounded-panel border border-hairline bg-white/4 p-4">
-                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/45 uppercase">
+                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                   <Wallet size={14} aria-hidden className="text-brand" />
                   Amount
                 </dt>
@@ -235,13 +235,13 @@ export default function EstimateCreate({ nextNumber, clients }: EstimateCreatePr
                   {hasAmount ? (
                     formatCurrency(amount, 2)
                   ) : (
-                    <span className="text-lg font-medium text-white/35">Not set</span>
+                    <span className="text-lg font-medium text-white/60">Not set</span>
                   )}
                 </dd>
               </div>
 
               <div className="rounded-panel border border-hairline bg-white/4 p-4">
-                <dt className="text-xs tracking-wide text-white/45 uppercase">Status</dt>
+                <dt className="text-xs tracking-wide text-white/70 uppercase">Status</dt>
                 <dd className="mt-2">
                   <StatusChip
                     tone={ESTIMATE_STATUS_TONE[data.status]}

@@ -135,7 +135,7 @@ export default function Results({ project }: ResultsProps) {
                   key={item.label}
                   className="rounded-panel border border-hairline bg-navy-950/30 p-3"
                 >
-                  <p className="text-xs tracking-wide text-white/45 uppercase">
+                  <p className="text-xs tracking-wide text-white/70 uppercase">
                     {item.label}
                   </p>
                   <p className="mt-1 truncate text-md font-semibold text-white">

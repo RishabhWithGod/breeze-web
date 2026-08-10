@@ -145,13 +145,13 @@ export default function History({ projects, filters, activity }: HistoryProps) {
       key: 'date',
       header: 'Date',
       render: (row) => (
-        <span className="whitespace-nowrap text-white/70">{formatDate(row.date)}</span>
+        <span className="whitespace-nowrap text-white/90">{formatDate(row.date)}</span>
       ),
     },
     {
       key: 'client',
       header: 'Client',
-      render: (row) => <span className="text-white/70">{row.client}</span>,
+      render: (row) => <span className="text-white/90">{row.client}</span>,
     },
     {
       key: 'status',
@@ -209,7 +209,7 @@ export default function History({ projects, filters, activity }: HistoryProps) {
             <h1 className="text-2xl font-bold text-white sm:text-3xl">
               AI Takeoff History
             </h1>
-            <p className="mt-1 text-md text-white/65">
+            <p className="mt-1 text-md text-white/90">
               View and manage your previous takeoff projects
             </p>
           </div>
@@ -241,7 +241,7 @@ export default function History({ projects, filters, activity }: HistoryProps) {
             <div className="flex items-center gap-3">
               <label
                 htmlFor="history-sort"
-                className="text-md font-medium whitespace-nowrap text-white/70"
+                className="text-md font-medium whitespace-nowrap text-white/90"
               >
                 Sort by:
               </label>

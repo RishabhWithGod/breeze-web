@@ -29,7 +29,7 @@ export function PipelineTrail({ pipeline, className }: PipelineTrailProps) {
                   passed ? 'bg-status-success' : 'bg-white/25',
                 )}
               />
-              <span className={cn('text-2xs', passed ? 'text-white/75' : 'text-white/35')}>
+              <span className={cn('text-2xs', passed ? 'text-white' : 'text-white/60')}>
                 {stage.label}
               </span>
               <span className="sr-only">{passed ? ' passed' : ' not reached'}</span>

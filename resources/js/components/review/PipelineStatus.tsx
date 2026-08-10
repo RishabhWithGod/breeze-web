@@ -74,7 +74,7 @@ export function PipelineStatus({
               <span className="text-md text-white">
                 {STAGE_LABEL[stage.stage] ?? stage.stage}
               </span>
-              <span className="text-2xs tracking-wide text-white/55 uppercase">
+              <span className="text-2xs tracking-wide text-white/80 uppercase">
                 {stage.status}
               </span>
             </li>
@@ -86,7 +86,7 @@ export function PipelineStatus({
         <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-hairline pt-4">
           {Object.entries(statistics).map(([label, value]) => (
             <div key={label} className="min-w-0">
-              <dt className="text-2xs tracking-wide text-white/50 uppercase">
+              <dt className="text-2xs tracking-wide text-white/75 uppercase">
                 {label.replace(/_/g, ' ')}
               </dt>
               <dd className="text-md font-semibold text-white">{value}</dd>

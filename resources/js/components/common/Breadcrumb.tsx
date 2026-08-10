@@ -15,7 +15,7 @@ export interface BreadcrumbProps {
 export function Breadcrumb({ items, showHome = true, className }: BreadcrumbProps) {
   return (
     <nav aria-label="Breadcrumb" className={cn('min-w-0', className)}>
-      <ol className="flex flex-wrap items-center gap-1.5 text-sm text-white/55">
+      <ol className="flex flex-wrap items-center gap-1.5 text-sm text-white/80">
         {showHome && (
           <li className="flex items-center gap-1.5">
             <Link

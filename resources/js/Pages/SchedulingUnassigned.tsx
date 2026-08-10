@@ -149,7 +149,7 @@ export default function SchedulingUnassigned({
           <div className="flex items-center gap-3">
             <label
               htmlFor="unassigned-sort"
-              className="shrink-0 text-md font-medium text-white/70"
+              className="shrink-0 text-md font-medium text-white/90"
             >
               Sort by:
             </label>

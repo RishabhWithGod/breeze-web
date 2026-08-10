@@ -39,7 +39,7 @@ export function RecentProjectsPanel({ projects, index }: RecentProjectsPanelProp
           </span>
           <div className="min-w-0">
             <p className="font-semibold text-white">{project.name}</p>
-            <p className="text-sm text-white/50">{project.client}</p>
+            <p className="text-sm text-white/75">{project.client}</p>
           </div>
         </div>
       ),
@@ -48,7 +48,7 @@ export function RecentProjectsPanel({ projects, index }: RecentProjectsPanelProp
       key: 'date',
       header: 'Date',
       render: (project) => (
-        <span className="whitespace-nowrap text-white/70">
+        <span className="whitespace-nowrap text-white/90">
           {formatDate(project.date)}
         </span>
       ),
@@ -87,7 +87,7 @@ export function RecentProjectsPanel({ projects, index }: RecentProjectsPanelProp
             tone={project.status === 'failed' ? 'danger' : 'brand'}
             className="min-w-0 flex-1"
           />
-          <span className="shrink-0 text-sm font-semibold tabular-nums text-white/80">
+          <span className="shrink-0 text-sm font-semibold tabular-nums text-white">
             {project.progress}%
           </span>
         </div>

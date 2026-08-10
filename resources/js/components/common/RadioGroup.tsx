@@ -55,7 +55,7 @@ export function RadioGroup({
               key={option.value}
               htmlFor={id}
               className={cn(
-                'group inline-flex cursor-pointer items-center gap-2.5 text-md text-white/85 select-none',
+                'group inline-flex cursor-pointer items-center gap-2.5 text-md text-white select-none',
                 disabled && 'cursor-not-allowed opacity-50',
               )}
             >

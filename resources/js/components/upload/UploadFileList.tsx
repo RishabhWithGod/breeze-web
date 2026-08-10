@@ -30,11 +30,11 @@ export function UploadFileList({
         <p className="flex items-center gap-2 text-md font-medium text-white">
           <Layers size={16} aria-hidden className="text-brand" />
           Selected files
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/70">
+          <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/90">
             {files.length}
           </span>
         </p>
-        <p className="text-sm text-white/50">{formatFileSize(totalSize)} total</p>
+        <p className="text-sm text-white/75">{formatFileSize(totalSize)} total</p>
       </div>
 
       <ul className="space-y-2">

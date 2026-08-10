@@ -55,14 +55,14 @@ export function ProjectSummaryCard({ project, index }: ProjectSummaryCardProps) 
           <h2 className="mt-3 text-2xl font-bold text-white sm:text-3xl">
             {project.name}
           </h2>
-          <p className="mt-2 text-md text-white/70">{project.drawingName}</p>
+          <p className="mt-2 text-md text-white/90">{project.drawingName}</p>
 
           <dl className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             {meta.map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-start gap-3">
                 <Icon size={17} aria-hidden className="mt-1 shrink-0 text-brand" />
                 <div className="min-w-0">
-                  <dt className="text-xs tracking-wide text-white/45 uppercase">
+                  <dt className="text-xs tracking-wide text-white/70 uppercase">
                     {label}
                   </dt>
                   <dd className="truncate text-md text-white">{value}</dd>
@@ -79,7 +79,7 @@ export function ProjectSummaryCard({ project, index }: ProjectSummaryCardProps) 
             </CircularProgress>
             <div>
               <p className="text-md font-semibold text-white">Overall confidence</p>
-              <p className="mt-1 text-sm text-white/60">
+              <p className="mt-1 text-sm text-white/85">
                 {project.symbols.length} symbol classes matched against the drawing
                 legend.
               </p>

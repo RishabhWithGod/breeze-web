@@ -209,14 +209,14 @@ export default function SchedulingAvailability({
                   'inline-flex items-center gap-2 rounded-panel border px-4 py-2 text-md font-medium transition-colors',
                   isActive
                     ? 'border-brand bg-brand text-brand-ink'
-                    : 'border-hairline text-white/75 hover:border-brand/60 hover:bg-white/10 hover:text-white',
+                    : 'border-hairline text-white hover:border-brand/60 hover:bg-white/10 hover:text-white',
                 )}
               >
                 {option.label}
                 <span
                   className={cn(
                     'rounded-full px-2 py-0.5 text-2xs font-semibold',
-                    isActive ? 'bg-navy-950/30 text-white' : 'bg-white/10 text-white/70',
+                    isActive ? 'bg-navy-950/30 text-white' : 'bg-white/10 text-white/90',
                   )}
                 >
                   {count}
@@ -231,7 +231,7 @@ export default function SchedulingAvailability({
             type="button"
             onClick={() => step(-1)}
             aria-label={view === 'month' ? 'Previous month' : 'Previous week'}
-            className="grid size-9 place-items-center rounded-panel border border-hairline text-white/75 transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
+            className="grid size-9 place-items-center rounded-panel border border-hairline text-white transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
           >
             <ChevronLeft size={17} aria-hidden />
           </button>
@@ -242,7 +242,7 @@ export default function SchedulingAvailability({
             type="button"
             onClick={() => step(1)}
             aria-label={view === 'month' ? 'Next month' : 'Next week'}
-            className="grid size-9 place-items-center rounded-panel border border-hairline text-white/75 transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
+            className="grid size-9 place-items-center rounded-panel border border-hairline text-white transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
           >
             <ChevronRight size={17} aria-hidden />
           </button>
@@ -257,7 +257,7 @@ export default function SchedulingAvailability({
                 'rounded-panel border px-3 py-1.5 text-md font-medium capitalize transition-colors',
                 view === option
                   ? 'border-brand bg-brand text-brand-ink'
-                  : 'border-hairline text-white/75 hover:border-brand/60 hover:bg-white/10 hover:text-white',
+                  : 'border-hairline text-white hover:border-brand/60 hover:bg-white/10 hover:text-white',
               )}
             >
               {option}
@@ -266,7 +266,7 @@ export default function SchedulingAvailability({
           <button
             type="button"
             onClick={() => goTo({ date: today })}
-            className="rounded-panel border border-hairline px-3 py-1.5 text-md font-medium text-white/75 transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
+            className="rounded-panel border border-hairline px-3 py-1.5 text-md font-medium text-white transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-white"
           >
             Today
           </button>
@@ -306,7 +306,7 @@ export default function SchedulingAvailability({
                                 {member.name}
                               </span>
                               {member.role && (
-                                <span className="block truncate text-sm text-white/55">
+                                <span className="block truncate text-sm text-white/80">
                                   {member.role}
                                 </span>
                               )}
@@ -324,7 +324,7 @@ export default function SchedulingAvailability({
                               <span className="block font-semibold text-white tabular-nums">
                                 {member.hours}/{member.capacity} h
                               </span>
-                              <span className="block text-xs text-white/50">
+                              <span className="block text-xs text-white/75">
                                 {member.shifts} {member.shifts === 1 ? 'shift' : 'shifts'}
                               </span>
                             </span>
@@ -347,7 +347,7 @@ export default function SchedulingAvailability({
                       {isOpen && (
                         <div className="border-t border-hairline p-4">
                           {shifts.length === 0 ? (
-                            <p className="text-md text-white/55">
+                            <p className="text-md text-white/80">
                               Nothing booked in this period.
                             </p>
                           ) : (
@@ -364,7 +364,7 @@ export default function SchedulingAvailability({
                                     >
                                       {shift.jobName}
                                     </Link>
-                                    <span className="block text-xs text-white/55">
+                                    <span className="block text-xs text-white/80">
                                       {shift.dayLabel} · {shift.startLabel} – {shift.endLabel}
                                     </span>
                                   </span>
@@ -413,7 +413,7 @@ export default function SchedulingAvailability({
                         <h3 className="text-lg font-semibold text-white">{crew.crew}</h3>
                         <span className="font-semibold text-white tabular-nums">
                           {crew.hours} h
-                          <span className="ml-2 text-sm font-normal text-white/55">
+                          <span className="ml-2 text-sm font-normal text-white/80">
                             {crew.share}% of booked
                           </span>
                         </span>
@@ -421,25 +421,25 @@ export default function SchedulingAvailability({
 
                       <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
                         <div>
-                          <dt className="text-sm text-white/50">Shifts</dt>
+                          <dt className="text-sm text-white/75">Shifts</dt>
                           <dd className="mt-0.5 font-semibold text-white tabular-nums">
                             {crew.shifts}
                           </dd>
                         </div>
                         <div>
-                          <dt className="text-sm text-white/50">People</dt>
+                          <dt className="text-sm text-white/75">People</dt>
                           <dd className="mt-0.5 font-semibold text-white tabular-nums">
                             {crew.members}
                           </dd>
                         </div>
                         <div>
-                          <dt className="text-sm text-white/50">Jobs</dt>
+                          <dt className="text-sm text-white/75">Jobs</dt>
                           <dd className="mt-0.5 font-semibold text-white tabular-nums">
                             {crew.jobs}
                           </dd>
                         </div>
                         <div>
-                          <dt className="text-sm text-white/50">Capacity</dt>
+                          <dt className="text-sm text-white/75">Capacity</dt>
                           <dd className="mt-0.5 font-semibold text-white tabular-nums">
                             {crew.capacity} h
                           </dd>
@@ -455,7 +455,7 @@ export default function SchedulingAvailability({
           {tab === 'conflicts' && (
             <Card padding="md">
               <h2 className="mb-2 text-xl font-semibold text-white">Double bookings</h2>
-              <p className="mb-5 text-md text-white/55">
+              <p className="mb-5 text-md text-white/80">
                 Two shifts whose times overlap for the same person on the same day. Two
                 bookings in one day are normal; these are the ones nobody can be at.
               </p>
@@ -483,7 +483,7 @@ export default function SchedulingAvailability({
                           <span className="font-semibold text-white">
                             {conflict.member?.name ?? 'Unnamed crew'}
                           </span>
-                          <span className="text-sm text-white/60">{conflict.dayLabel}</span>
+                          <span className="text-sm text-white/85">{conflict.dayLabel}</span>
                         </span>
                         <Badge tone="warning">
                           {conflict.overlapMinutes} min overlap
@@ -500,7 +500,7 @@ export default function SchedulingAvailability({
                             <span className="block truncate font-medium text-white">
                               {side.jobName}
                             </span>
-                            <span className="block text-xs text-white/60">
+                            <span className="block text-xs text-white/85">
                               {side.crew} · {side.startLabel} – {side.endLabel}
                             </span>
                           </Link>
@@ -525,7 +525,7 @@ export default function SchedulingAvailability({
             </div>
 
             {activity.length === 0 ? (
-              <p className="text-md text-white/55">
+              <p className="text-md text-white/80">
                 No crew has been booked or released yet.
               </p>
             ) : (
@@ -553,11 +553,11 @@ export default function SchedulingAvailability({
                       >
                         {entry.jobName}
                       </Link>
-                      <span className="block text-sm text-white/65">
+                      <span className="block text-sm text-white/90">
                         {entry.description}
                       </span>
                       {entry.at && (
-                        <span className="mt-0.5 block text-xs text-white/45">
+                        <span className="mt-0.5 block text-xs text-white/70">
                           {formatRelative(entry.at)}
                         </span>
                       )}
@@ -573,7 +573,7 @@ export default function SchedulingAvailability({
         <div className="space-y-6">
           <Card padding="md">
             <h2 className="mb-1 text-xl font-semibold text-white">Utilisation</h2>
-            <p className="mb-5 text-sm text-white/55">
+            <p className="mb-5 text-sm text-white/80">
               Booked against eight hours per working day.
             </p>
 
@@ -581,7 +581,7 @@ export default function SchedulingAvailability({
               {availability.map((member) => (
                 <li key={member.id}>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-md text-white/80">{member.name}</span>
+                    <span className="truncate text-md text-white">{member.name}</span>
                     <span
                       className={cn(
                         'shrink-0 text-md font-semibold tabular-nums',
@@ -609,7 +609,7 @@ export default function SchedulingAvailability({
 
           <Card padding="md">
             <h2 className="mb-1 text-xl font-semibold text-white">Hours by crew</h2>
-            <p className="mb-5 text-sm text-white/55">
+            <p className="mb-5 text-sm text-white/80">
               How {summary.bookedHours} booked hours are split.
             </p>
 
@@ -617,25 +617,25 @@ export default function SchedulingAvailability({
 
             <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-hairline pt-5">
               <div>
-                <dt className="text-sm text-white/50">Booked</dt>
+                <dt className="text-sm text-white/75">Booked</dt>
                 <dd className="mt-0.5 text-lg font-semibold text-white tabular-nums">
                   {summary.bookedHours} h
                 </dd>
               </div>
               <div>
-                <dt className="text-sm text-white/50">Available</dt>
+                <dt className="text-sm text-white/75">Available</dt>
                 <dd className="mt-0.5 text-lg font-semibold text-white tabular-nums">
                   {summary.availableHours} h
                 </dd>
               </div>
               <div>
-                <dt className="text-sm text-white/50">Crews</dt>
+                <dt className="text-sm text-white/75">Crews</dt>
                 <dd className="mt-0.5 text-lg font-semibold text-white tabular-nums">
                   {crews.length}
                 </dd>
               </div>
               <div>
-                <dt className="text-sm text-white/50">Unnamed shifts</dt>
+                <dt className="text-sm text-white/75">Unnamed shifts</dt>
                 <dd className="mt-0.5 text-lg font-semibold text-white tabular-nums">
                   {summary.unnamedShifts}
                 </dd>
@@ -655,7 +655,7 @@ export default function SchedulingAvailability({
                     <span className="block truncate font-semibold text-white">
                       {member.name}
                     </span>
-                    <span className="block truncate text-sm text-white/55">
+                    <span className="block truncate text-sm text-white/80">
                       {member.role ?? 'Crew'}
                     </span>
                   </span>

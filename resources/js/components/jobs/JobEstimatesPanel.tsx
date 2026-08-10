@@ -42,7 +42,7 @@ export function JobEstimatesPanel({ jobId, estimates }: JobEstimatesPanelProps) 
       </div>
 
       {estimates.length === 0 ? (
-        <p className="text-md text-white/50">No estimates raised for this job yet.</p>
+        <p className="text-md text-white/75">No estimates raised for this job yet.</p>
       ) : (
         <ul className="space-y-3">
           {estimates.map((estimate, index) => (
@@ -61,7 +61,7 @@ export function JobEstimatesPanel({ jobId, estimates }: JobEstimatesPanelProps) 
                   >
                     {estimate.number}
                   </Link>
-                  <p className="mt-0.5 truncate text-sm text-white/60">
+                  <p className="mt-0.5 truncate text-sm text-white/85">
                     {estimate.project} · {formatDate(estimate.date)}
                   </p>
                 </div>

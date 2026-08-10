@@ -65,7 +65,7 @@ export default function ModulePlaceholder({ module }: ModulePlaceholderProps) {
             <h2 className="mt-4 text-2xl font-bold text-white sm:text-3xl">
               {module.label} is on the roadmap
             </h2>
-            <p className="mt-3 max-w-2xl text-md text-white/70">
+            <p className="mt-3 max-w-2xl text-md text-white/90">
               {module.description} This module is part of the product but has not been
               built in this prototype yet — the four modules below are live and fully
               wired to the database.
@@ -93,7 +93,7 @@ export default function ModulePlaceholder({ module }: ModulePlaceholderProps) {
                   <live.icon size={17} aria-hidden className="text-brand" />
                   {live.label}
                 </span>
-                <span className="text-sm font-normal text-white/65">
+                <span className="text-sm font-normal text-white/90">
                   {live.description}
                 </span>
                 <span className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-brand">

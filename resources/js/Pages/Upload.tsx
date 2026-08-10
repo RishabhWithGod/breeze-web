@@ -10,7 +10,7 @@ import {
   CardHeader,
   ConfirmDialog,
 } from '@/components/common'
-import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { PageHeader, PageTransition, StepWizard, appLayout } from '@/components/layout'
 import {
   AiFeaturesCard,
   HelpCard,
@@ -123,6 +123,8 @@ export default function Upload({
   return (
     <PageTransition>
       <Head title="AI Takeoff Upload" />
+
+      <StepWizard current="upload" />
 
       <PageHeader
         title="AI Takeoff Upload"

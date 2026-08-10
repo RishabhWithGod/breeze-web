@@ -66,7 +66,7 @@ export function JobAttachmentsPanel({ jobId, attachments }: JobAttachmentsPanelP
             Choose file
           </Button>
 
-          <span className="min-w-0 flex-1 truncate text-sm text-white/60">
+          <span className="min-w-0 flex-1 truncate text-sm text-white/85">
             {selectedName ?? 'No file selected'}
           </span>
 
@@ -85,7 +85,7 @@ export function JobAttachmentsPanel({ jobId, attachments }: JobAttachmentsPanelP
       </form>
 
       {attachments.length === 0 ? (
-        <p className="text-md text-white/50">No attachments yet.</p>
+        <p className="text-md text-white/75">No attachments yet.</p>
       ) : (
         <ul className="space-y-3">
           <AnimatePresence initial={false}>
@@ -105,7 +105,7 @@ export function JobAttachmentsPanel({ jobId, attachments }: JobAttachmentsPanelP
                   <p className="truncate text-md font-medium text-white">
                     {attachment.name}
                   </p>
-                  <p className="mt-0.5 text-sm text-white/45">
+                  <p className="mt-0.5 text-sm text-white/70">
                     {formatFileSize(attachment.size)} · {attachment.uploadedBy} ·{' '}
                     {formatRelative(attachment.createdAt)}
                   </p>
@@ -113,7 +113,7 @@ export function JobAttachmentsPanel({ jobId, attachments }: JobAttachmentsPanelP
 
                 <a
                   href={attachment.downloadUrl}
-                  className="grid size-9 shrink-0 place-items-center rounded-panel text-white/60 transition-colors hover:bg-white/10 hover:text-brand"
+                  className="grid size-9 shrink-0 place-items-center rounded-panel text-white/85 transition-colors hover:bg-white/10 hover:text-brand"
                   aria-label={`Download ${attachment.name}`}
                 >
                   <Download size={16} aria-hidden />
@@ -123,7 +123,7 @@ export function JobAttachmentsPanel({ jobId, attachments }: JobAttachmentsPanelP
                   icon={Trash2}
                   label={`Delete ${attachment.name}`}
                   size="sm"
-                  className="shrink-0 text-white/45 hover:text-status-danger"
+                  className="shrink-0 text-white/70 hover:text-status-danger"
                   onClick={() => remove(attachment.id)}
                 />
               </motion.li>

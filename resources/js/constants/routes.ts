@@ -21,6 +21,10 @@ export const ROUTES = {
   history: '/ai-takeoff',
   /** Upload screen, reached from any "New Takeoff" action. */
   upload: '/ai-takeoff/upload',
+  /** Projects module: every project on record. */
+  projects: '/projects',
+  /** Where a project and its drawing PDFs are defined. */
+  projectCreate: '/projects/create',
   estimates: '/estimates',
   estimateCreate: '/estimates/create',
   jobs: '/jobs',
@@ -53,6 +57,12 @@ export const ROUTES = {
 
 /** Per-record URLs. */
 export const routeTo = {
+  project: (projectId: number) => `/projects/${projectId}`,
+  /** Adds drawing PDFs to a project. */
+  projectDocuments: (projectId: number) => `/projects/${projectId}/documents`,
+  projectDocument: (projectId: number, documentId: number) =>
+    `/projects/${projectId}/documents/${documentId}`,
+
   processing: (projectId: number) => `/processing/${projectId}`,
   processingCancel: (projectId: number) => `/processing/${projectId}/cancel`,
   processingRetry: (projectId: number) => `/processing/${projectId}/retry`,

@@ -15,7 +15,7 @@ const TONES: Record<Tone, string> = {
   warning: 'bg-status-warning/15 text-status-warning ring-status-warning/30',
   danger: 'bg-status-danger/18 text-red-300 ring-status-danger/35',
   info: 'bg-status-info/15 text-status-info ring-status-info/30',
-  neutral: 'bg-white/10 text-white/80 ring-hairline-strong',
+  neutral: 'bg-white/10 text-white ring-hairline-strong',
 }
 
 export interface IconBubbleProps {

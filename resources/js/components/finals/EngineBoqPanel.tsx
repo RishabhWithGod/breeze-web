@@ -25,7 +25,7 @@ export function EngineBoqPanel({ lines, subtotal, currency = 'USD' }: EngineBoqP
         <div className="min-w-0">
           <p className="truncate font-medium text-white">{row.item}</p>
           {row.description && (
-            <p className="truncate text-2xs text-white/50">{row.description}</p>
+            <p className="truncate text-2xs text-white/75">{row.description}</p>
           )}
         </div>
       ),
@@ -39,7 +39,7 @@ export function EngineBoqPanel({ lines, subtotal, currency = 'USD' }: EngineBoqP
             {row.matchedSymbol}
           </Badge>
         ) : (
-          <span className="text-2xs text-white/45">engine quantity</span>
+          <span className="text-2xs text-white/70">engine quantity</span>
         ),
     },
     {

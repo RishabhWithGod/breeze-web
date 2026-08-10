@@ -63,7 +63,7 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
           <div className="min-w-0">
             <h3 className="text-lg font-semibold text-white">{job.name}</h3>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-md font-medium">
-              <span className={TYPE_TEXT[job.jobType ?? ''] ?? 'text-white/70'}>
+              <span className={TYPE_TEXT[job.jobType ?? ''] ?? 'text-white/90'}>
                 {job.jobType
                   ? job.jobType.charAt(0).toUpperCase() + job.jobType.slice(1)
                   : 'Unclassified'}
@@ -80,19 +80,19 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
 
       <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <dt className="text-sm text-white/50">Client</dt>
+          <dt className="text-sm text-white/75">Client</dt>
           <dd className="mt-0.5 truncate text-md font-semibold text-white">
             {job.client ?? '—'}
           </dd>
         </div>
         <div>
-          <dt className="text-sm text-white/50">Location</dt>
+          <dt className="text-sm text-white/75">Location</dt>
           <dd className="mt-0.5 truncate text-md font-semibold text-white">
             {job.location ?? '—'}
           </dd>
         </div>
         <div>
-          <dt className="text-sm text-white/50">Estimated Hours</dt>
+          <dt className="text-sm text-white/75">Estimated Hours</dt>
           <dd className="mt-0.5 text-md font-semibold text-white">
             {job.estimatedHours === null
               ? '—'
@@ -102,7 +102,7 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
           </dd>
         </div>
         <div>
-          <dt className="text-sm text-white/50">Value</dt>
+          <dt className="text-sm text-white/75">Value</dt>
           <dd className="mt-0.5 text-md font-semibold text-white">
             {job.value === null ? '—' : formatCurrency(job.value, 2)}
           </dd>
@@ -111,12 +111,12 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
 
       {job.requiredSkills.length > 0 && (
         <div className="mt-5">
-          <p className="text-sm text-white/50">Required Skills</p>
+          <p className="text-sm text-white/75">Required Skills</p>
           <ul className="mt-1.5 flex flex-wrap gap-2">
             {job.requiredSkills.map((skill) => (
               <li
                 key={skill}
-                className="rounded-full border border-hairline bg-white/10 px-3 py-1 text-xs font-medium text-white/85"
+                className="rounded-full border border-hairline bg-white/10 px-3 py-1 text-xs font-medium text-white"
               >
                 {skill}
               </li>
@@ -126,7 +126,7 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
       )}
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-hairline pt-4">
-        <p className="flex items-center gap-2 text-sm text-white/55">
+        <p className="flex items-center gap-2 text-sm text-white/80">
           <CalendarDays size={14} aria-hidden />
           Created: {job.createdAt ? formatDate(job.createdAt) : 'Unknown'}
         </p>

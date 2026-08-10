@@ -10,7 +10,7 @@ export interface JobStatusHistoryProps {
 /** Every status transition, newest first, from the job_status_changes table. */
 export function JobStatusHistory({ history }: JobStatusHistoryProps) {
   if (history.length === 0) {
-    return <p className="text-md text-white/50">No status changes recorded yet.</p>
+    return <p className="text-md text-white/75">No status changes recorded yet.</p>
   }
 
   return (
@@ -27,10 +27,10 @@ export function JobStatusHistory({ history }: JobStatusHistoryProps) {
                 tone={JOB_STATUS_TONE[change.from]}
                 label={JOB_STATUS_LABEL[change.from]}
               />
-              <ArrowRight size={14} aria-hidden className="text-white/35" />
+              <ArrowRight size={14} aria-hidden className="text-white/60" />
             </>
           ) : (
-            <span className="text-sm text-white/45">Created as</span>
+            <span className="text-sm text-white/70">Created as</span>
           )}
 
           <StatusChip
@@ -39,7 +39,7 @@ export function JobStatusHistory({ history }: JobStatusHistoryProps) {
             label={JOB_STATUS_LABEL[change.to]}
           />
 
-          <span className="ml-auto text-sm text-white/45">
+          <span className="ml-auto text-sm text-white/70">
             {change.actor} · {formatDate(change.createdAt, 'MMM d, yyyy · h:mm a')}
           </span>
         </li>

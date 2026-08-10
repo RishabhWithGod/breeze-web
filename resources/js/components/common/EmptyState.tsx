@@ -63,7 +63,7 @@ export function EmptyState({
       </h3>
 
       {description && (
-        <p className="mt-3 max-w-lg text-md text-white/65">{description}</p>
+        <p className="mt-3 max-w-lg text-md text-white/90">{description}</p>
       )}
 
       {actions && (

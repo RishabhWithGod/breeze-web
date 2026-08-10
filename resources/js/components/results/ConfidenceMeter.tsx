@@ -16,7 +16,7 @@ const TEXT_TONES: Record<Tone, string> = {
   warning: 'text-status-warning',
   danger: 'text-red-300',
   info: 'text-status-info',
-  neutral: 'text-white/70',
+  neutral: 'text-white/90',
 }
 
 /** Quantised widths keep the meter styling in Tailwind rather than inline CSS. */
@@ -64,7 +64,7 @@ export function ConfidenceMeter({
         {formatPercent(value)}
       </span>
       {showLabel && (
-        <span className="hidden text-xs text-white/45 lg:inline">
+        <span className="hidden text-xs text-white/70 lg:inline">
           {confidenceLabel(value)}
         </span>
       )}

@@ -31,7 +31,7 @@ export function DrawingPreview({
   className,
 }: DrawingPreviewProps) {
   const toolButton =
-    'grid size-8 place-items-center rounded-panel border border-hairline bg-navy-950/50 text-white/75 ' +
+    'grid size-8 place-items-center rounded-panel border border-hairline bg-navy-950/50 text-white ' +
     'transition-colors hover:border-brand/60 hover:text-brand'
 
   return (
@@ -88,7 +88,7 @@ export function DrawingPreview({
             <ScanLine size={16} aria-hidden className="text-brand" />
             <span className="truncate">{sheetCode}</span>
           </p>
-          <p className="mt-0.5 truncate text-sm text-white/60">{title}</p>
+          <p className="mt-0.5 truncate text-sm text-white/85">{title}</p>
         </div>
         <Badge tone="brand" size="sm">
           Scale {scale}

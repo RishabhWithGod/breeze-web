@@ -61,12 +61,12 @@ export function ProcessingStepList({ stages, className }: ProcessingStepListProp
               <p
                 className={cn(
                   'text-md font-medium transition-colors',
-                  stage.status === 'pending' ? 'text-white/55' : 'text-white',
+                  stage.status === 'pending' ? 'text-white/80' : 'text-white',
                 )}
               >
                 {stage.label}
               </p>
-              <p className="mt-0.5 text-sm text-white/50">{stage.description}</p>
+              <p className="mt-0.5 text-sm text-white/75">{stage.description}</p>
             </div>
 
             <span className="sr-only">{stage.status}</span>

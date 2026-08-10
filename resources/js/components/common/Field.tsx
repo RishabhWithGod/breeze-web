@@ -11,7 +11,7 @@ import { cn } from '@/utils'
 
 const CONTROL_BASE =
   'w-full rounded-panel border border-transparent bg-surface-veil/50 px-4 py-2.5 text-md text-white ' +
-  'placeholder:text-white/50 transition-colors duration-200 ' +
+  'placeholder:text-white/75 transition-colors duration-200 ' +
   'hover:border-hairline-strong focus:border-brand focus:bg-white/25 focus:outline-none ' +
   'disabled:cursor-not-allowed disabled:opacity-50'
 
@@ -47,7 +47,7 @@ export function FieldShell({
               {label}
             </label>
           )}
-          {addon && <span className="text-xs text-white/50">{addon}</span>}
+          {addon && <span className="text-xs text-white/75">{addon}</span>}
         </div>
       )}
 
@@ -56,7 +56,7 @@ export function FieldShell({
       {error ? (
         <p className="mt-2 text-sm text-red-300">{error}</p>
       ) : (
-        hint && <p className="mt-2 text-sm text-white/50">{hint}</p>
+        hint && <p className="mt-2 text-sm text-white/75">{hint}</p>
       )}
     </div>
   )
@@ -89,7 +89,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
             <LeftIcon
               size={17}
               aria-hidden
-              className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-white/55"
+              className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-white/80"
             />
           )}
           <input
@@ -178,7 +178,7 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(
           <ChevronDown
             size={17}
             aria-hidden
-            className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-white/60"
+            className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-white/85"
           />
         </div>
       </FieldShell>

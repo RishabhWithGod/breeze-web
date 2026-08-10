@@ -48,7 +48,7 @@ export interface JobActivityTimelineProps {
 /** Vertical audit trail of everything that has happened to a job. */
 export function JobActivityTimeline({ activities, className }: JobActivityTimelineProps) {
   if (activities.length === 0) {
-    return <p className="text-md text-white/50">No activity recorded yet.</p>
+    return <p className="text-md text-white/75">No activity recorded yet.</p>
   }
 
   return (
@@ -78,7 +78,7 @@ export function JobActivityTimeline({ activities, className }: JobActivityTimeli
                 'relative grid size-8 shrink-0 place-items-center rounded-full bg-navy-950/60 ring-1 ring-hairline-strong',
               )}
             >
-              <Icon size={15} aria-hidden className="text-white/85" />
+              <Icon size={15} aria-hidden className="text-white" />
               <span
                 aria-hidden
                 className={cn(
@@ -90,7 +90,7 @@ export function JobActivityTimeline({ activities, className }: JobActivityTimeli
 
             <div className="min-w-0 flex-1 pt-1">
               <p className="text-md text-white">{activity.description}</p>
-              <p className="mt-0.5 text-sm text-white/45">
+              <p className="mt-0.5 text-sm text-white/70">
                 {activity.actor} · {formatRelative(activity.createdAt)}
               </p>
             </div>

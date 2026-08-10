@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import {
+  ArrowRight,
   Briefcase,
   Check,
   FileJson,
   FileSpreadsheet,
   FileText,
-  Map,
-  Receipt,
   Table2,
 } from 'lucide-react'
 import {
+  AdvancedDetails,
   Alert,
   Badge,
   Button,
@@ -21,16 +21,24 @@ import {
   SearchBox,
   SectionHeading,
   SelectField,
+  RecordCreatedCard,
   Table,
+  WorkflowProgress,
 } from '@/components/common'
 import {
   CircuitsPanel,
   EngineBoqPanel,
   EquipmentPanel,
   PanelSchedulesPanel,
+  ReviewSummaryPanel,
   WireSizesPanel,
 } from '@/components/finals'
-import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import {
+  appLayout,
+  PageHeader,
+  PageTransition,
+  StepFooter,
+} from '@/components/layout'
 import { ApprovalHistoryPanel, EngineWarnings, PipelineStatus } from '@/components/review'
 import { FINAL_SORT_OPTIONS, FINAL_SOURCE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import { useDebouncedValue } from '@/hooks'
@@ -50,7 +58,7 @@ import type {
   TableColumn,
   WireSizeRow,
 } from '@/types'
-import { formatCurrency, formatDate, formatNumber } from '@/utils'
+import { formatCurrency, formatDate } from '@/utils'
 
 interface FinalResultSummary {
   readonly id: number
@@ -235,33 +243,25 @@ export default function FinalSymbols({
       width: 'w-28',
       align: 'right',
       render: (row) => (
-        <span className="text-white/85">{Math.round(row.confidence * 100)}%</span>
+        <span className="text-white">{Math.round(row.confidence * 100)}%</span>
       ),
     },
   ]
 
-  const stats = [
-    { label: 'Symbol types', value: formatNumber(totals.symbolTypes) },
-    { label: 'Approved items', value: formatNumber(totals.items) },
-    { label: 'AI reported', value: formatNumber(totals.aiItems) },
-    { label: 'Rejected', value: formatNumber(totals.rejected) },
-    { label: 'Labor hours', value: formatNumber(Math.round(totals.laborHours)) },
-    { label: 'Material cost', value: formatCurrency(totals.materialCost) },
-  ]
 
   return (
     <PageTransition>
-      <Head title={`Final symbols — ${result.projectName}`} />
+      <Head title={`Review summary — ${result.projectName}`} />
 
       <PageHeader
-        title="Final symbol table"
-        subtitle={`Reviewed quantities for ${result.projectName}${
+        title="Review Summary"
+        subtitle={`What the review produced for ${result.projectName}${
           result.finalisedAt ? `, signed off ${formatDate(result.finalisedAt)}` : ''
         }.`}
         breadcrumbs={[
           { label: 'AI Takeoff', href: ROUTES.aiTakeoff },
           { label: result.projectName, href: routeTo.review(result.id) },
-          { label: 'Final symbols' },
+          { label: 'Review summary' },
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -271,39 +271,7 @@ export default function FinalSymbols({
               size="sm"
               leftIcon={Table2}
             >
-              Back to review
-            </ButtonLink>
-            <ButtonLink
-              href={routeTo.finalExport(result.id, 'json')}
-              variant="secondary"
-              size="sm"
-              leftIcon={FileJson}
-            >
-              JSON
-            </ButtonLink>
-            <ButtonLink
-              href={routeTo.finalExport(result.id, 'csv')}
-              variant="secondary"
-              size="sm"
-              leftIcon={FileText}
-            >
-              CSV
-            </ButtonLink>
-            <ButtonLink
-              href={routeTo.finalExport(result.id, 'xlsx')}
-              variant="secondary"
-              size="sm"
-              leftIcon={FileSpreadsheet}
-            >
-              Excel
-            </ButtonLink>
-            <ButtonLink
-              href={routeTo.finalAnnotatedPdf(result.id)}
-              variant="secondary"
-              size="sm"
-              leftIcon={Map}
-            >
-              Annotated PDF
+              Back to Review
             </ButtonLink>
           </div>
         }
@@ -322,82 +290,162 @@ export default function FinalSymbols({
 
       <EngineWarnings warnings={result.warnings} className="mb-4" />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        {stats.map((stat, index) => (
-          <Card key={stat.label} padding="sm" index={index} className="min-w-0">
-            <p className="truncate text-2xs tracking-wide text-white/55 uppercase">
-              {stat.label}
-            </p>
-            <p className="mt-1 text-2xl font-bold text-white">{stat.value}</p>
-          </Card>
-        ))}
-      </div>
+      {/* Where this takeoff is, before anything else on the page. */}
+      <WorkflowProgress
+        current={
+          result.workJobId
+            ? 'schedule'
+            : result.estimateId
+              ? 'job'
+              : result.isFinalised
+                ? 'estimate'
+                : 'review'
+        }
+        done={[
+          'analysis',
+          ...(result.isFinalised ? (['review'] as const) : []),
+          ...(result.estimateId ? (['estimate'] as const) : []),
+          ...(result.workJobId ? (['job'] as const) : []),
+        ]}
+        className="mb-6"
+      />
 
-      {/* Handoff: job first, then the estimate priced from the same document. */}
-      <Card padding="md" variant="spotlight" className="mb-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-white">
-              {result.isFinalised ? 'Carry this takeoff forward' : 'Finish the review first'}
-            </h2>
-            <p className="mt-1 text-sm text-white/70">
-              {result.isFinalised
-                ? 'The job and estimate are built from the reviewed counts in final_response.json, not from the AI response.'
-                : 'A job and estimate are built from final_response.json, which only exists once the review is signed off.'}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {!result.isFinalised && (
-              <ButtonLink href={routeTo.review(result.id)} leftIcon={Table2}>
-                Back to review
-              </ButtonLink>
-            )}
-            {result.workJobId ? (
-              <ButtonLink
-                href={routeTo.job(result.workJobId)}
-                variant="secondary"
-                size="sm"
-                leftIcon={Briefcase}
-              >
-                Open job: {result.workJobName}
+      {/*
+        What exists is stated as a fact, and the button is the step after it — not
+        the one already taken. The estimate leads because it is what the job is
+        priced from.
+      */}
+      {result.estimateId && (
+        <RecordCreatedCard
+          className="mb-4"
+          title="Estimate Created"
+          description={`Estimate ${result.estimateNumber} was built from your reviewed quantities.`}
+          facts={[
+            { label: 'Estimate Number', value: result.estimateNumber ?? '—' },
+            {
+              label: 'Amount',
+              value: formatCurrency(
+                result.engineEstimate.grand_total ?? totals.materialCost,
+                2,
+              ),
+            },
+          ]}
+          nextStep={result.workJobId ? 'Open the job' : 'Create the job'}
+          primary={
+            result.workJobId ? (
+              <ButtonLink href={routeTo.job(result.workJobId)} rightIcon={ArrowRight}>
+                Open Job
               </ButtonLink>
             ) : (
-              result.isFinalised && (
-                <Button
-                  size="sm"
-                  leftIcon={Briefcase}
-                  title="Creates the job from final_response.json and prices it from the engine's bill of quantities"
-                  onClick={() => router.post(routeTo.finalCreateJob(result.id))}
-                >
-                  Create job &amp; estimate
-                </Button>
-              )
-            )}
-
-            {result.estimateId ? (
+              <Button
+                rightIcon={ArrowRight}
+                onClick={() => router.post(routeTo.finalCreateJob(result.id))}
+              >
+                Create Job
+              </Button>
+            )
+          }
+          secondary={
+            <>
               <ButtonLink
                 href={routeTo.estimate(result.estimateId)}
                 variant="secondary"
                 size="sm"
-                leftIcon={Receipt}
               >
-                Open estimate {result.estimateNumber}
+                Open Estimate
               </ButtonLink>
-            ) : (
-              result.isFinalised && (
-                <Button
-                  size="sm"
-                  leftIcon={Receipt}
-                  onClick={() => router.post(routeTo.finalCreateEstimate(result.id))}
-                >
-                  Create estimate
-                </Button>
-              )
-            )}
-          </div>
+              <ButtonLink
+                href={routeTo.estimatePdf(result.estimateId)}
+                variant="secondary"
+                size="sm"
+                leftIcon={FileText}
+              >
+                Download PDF
+              </ButtonLink>
+            </>
+          }
+        />
+      )}
+
+      {result.workJobId && (
+        <RecordCreatedCard
+          className="mb-4"
+          title="Job Created"
+          description={`${result.workJobName} is on the board and ready to be staffed.`}
+          facts={[{ label: 'Job', value: result.workJobName ?? '—' }]}
+          nextStep="Assign the team"
+          primary={
+            <ButtonLink href={routeTo.job(result.workJobId)} rightIcon={ArrowRight}>
+              Assign Team
+            </ButtonLink>
+          }
+          secondary={
+            <ButtonLink
+              href={routeTo.job(result.workJobId)}
+              variant="secondary"
+              size="sm"
+              leftIcon={Briefcase}
+            >
+              Open Job
+            </ButtonLink>
+          }
+        />
+      )}
+
+
+      <ReviewSummaryPanel
+        projectName={result.projectName}
+        client={result.client}
+        drawingName={result.drawingName}
+        pageCount={result.pageCount}
+        totals={totals}
+        materials={boq.materials}
+        estimatedCost={result.engineEstimate.grand_total ?? totals.materialCost}
+        backHref={routeTo.review(result.id)}
+        continueLabel={
+          result.estimateId ? `Open estimate ${result.estimateNumber}` : 'Continue to Estimate'
+        }
+        onContinue={() =>
+          result.estimateId
+            ? router.visit(routeTo.estimate(result.estimateId))
+            : router.post(routeTo.finalCreateEstimate(result.id))
+        }
+        className="mb-8"
+      />
+
+      {/* The detail behind the summary. Present, but no longer the front page. */}
+      <AdvancedDetails
+        label="Takeoff detail and exports"
+        hint="Symbol table, engine data and the raw export files"
+        className="mb-6"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <ButtonLink
+            href={routeTo.finalExport(result.id, 'json')}
+            variant="secondary"
+            size="sm"
+            leftIcon={FileJson}
+          >
+            JSON
+          </ButtonLink>
+          <ButtonLink
+            href={routeTo.finalExport(result.id, 'csv')}
+            variant="secondary"
+            size="sm"
+            leftIcon={FileText}
+          >
+            CSV
+          </ButtonLink>
+          <ButtonLink
+            href={routeTo.finalExport(result.id, 'xlsx')}
+            variant="secondary"
+            size="sm"
+            leftIcon={FileSpreadsheet}
+          >
+            Excel
+          </ButtonLink>
         </div>
-      </Card>
+      </AdvancedDetails>
 
       <Card padding="lg">
         <SectionHeading
@@ -484,7 +532,7 @@ export default function FinalSymbols({
               >
                 <div className="min-w-0">
                   <p className="truncate text-md text-white">{line.symbol}</p>
-                  <p className="text-2xs text-white/50">
+                  <p className="text-2xs text-white/75">
                     {line.count} {line.unit} · {line.labor_hours} hrs
                     {!line.rate_matched && ' · default rate'}
                   </p>
@@ -517,7 +565,7 @@ export default function FinalSymbols({
               >
                 <div className="min-w-0">
                   <p className="truncate text-md text-white">{material.description}</p>
-                  <p className="text-2xs text-white/50">
+                  <p className="text-2xs text-white/75">
                     {material.quantity} {material.unit} @ {formatCurrency(material.unit_cost)}
                   </p>
                 </div>
@@ -567,6 +615,17 @@ export default function FinalSymbols({
         />
         <ApprovalHistoryPanel entries={history} />
       </Card>
+      <StepFooter
+        current="review"
+        continueLabel={
+          result.estimateId ? `Open estimate ${result.estimateNumber}` : 'Continue to Estimate'
+        }
+        {...(result.estimateId
+          ? { href: routeTo.estimate(result.estimateId) }
+          : { onContinue: () => router.post(routeTo.finalCreateEstimate(result.id)) })}
+        backHref={routeTo.review(result.id)}
+        backLabel="Back to Review"
+      />
     </PageTransition>
   )
 }

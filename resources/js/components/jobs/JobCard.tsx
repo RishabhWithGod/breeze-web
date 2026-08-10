@@ -50,26 +50,26 @@ export function JobCard({ job, index = 0, onView, onDelete, className }: JobCard
 
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div>
-          <dt className="text-white/45">Foreman</dt>
-          <dd className="mt-0.5 truncate text-white/85">
+          <dt className="text-white/70">Foreman</dt>
+          <dd className="mt-0.5 truncate text-white">
             {job.foreman?.name ?? 'Unassigned'}
           </dd>
         </div>
         <div>
-          <dt className="text-white/45">Budget</dt>
-          <dd className="mt-0.5 tabular-nums text-white/85">
+          <dt className="text-white/70">Budget</dt>
+          <dd className="mt-0.5 tabular-nums text-white">
             {job.budget === null ? '—' : formatCurrency(job.budget, 2)}
           </dd>
         </div>
         <div>
-          <dt className="text-white/45">Start date</dt>
-          <dd className="mt-0.5 text-white/85">
+          <dt className="text-white/70">Start date</dt>
+          <dd className="mt-0.5 text-white">
             {job.startDate ? formatDate(job.startDate) : '—'}
           </dd>
         </div>
         <div>
-          <dt className="text-white/45">End date</dt>
-          <dd className="mt-0.5 text-white/85">
+          <dt className="text-white/70">End date</dt>
+          <dd className="mt-0.5 text-white">
             {job.endDate ? formatDate(job.endDate) : '—'}
           </dd>
         </div>

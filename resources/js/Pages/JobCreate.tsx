@@ -94,7 +94,7 @@ export default function JobCreate({ foremen, clients }: JobCreateProps) {
         <div className="p-6 sm:p-8 xl:p-10">
           <header className="mb-8">
             <h1 className="text-3xl font-bold text-white sm:text-4xl">Create New Job</h1>
-            <p className="mt-2 text-md text-white/70">
+            <p className="mt-2 text-md text-white/90">
               Fill in the details below to create a new job in the system
             </p>
           </header>
@@ -252,7 +252,7 @@ export default function JobCreate({ foremen, clients }: JobCreateProps) {
         </span>
         <div className="min-w-0">
           <p className="text-md font-semibold text-brand">Pro Tip</p>
-          <p className="mt-1 text-md text-white/75">
+          <p className="mt-1 text-md text-white">
             You can also create a job from an existing estimate or by using our AI
             Takeoff feature to automatically generate job details from blueprints.
           </p>

@@ -259,7 +259,7 @@ export default function EstimateShow({
                 },
               ].map((field) => (
                 <div key={field.label} className="min-w-0">
-                  <dt className="text-2xs tracking-wide text-white/55 uppercase">
+                  <dt className="text-2xs tracking-wide text-white/80 uppercase">
                     {field.label}
                   </dt>
                   <dd className="mt-1 truncate text-md text-white" title={field.value}>
@@ -269,7 +269,7 @@ export default function EstimateShow({
               ))}
 
               <div className="min-w-0">
-                <dt className="text-2xs tracking-wide text-white/55 uppercase">Status</dt>
+                <dt className="text-2xs tracking-wide text-white/80 uppercase">Status</dt>
                 <dd className="mt-1">
                   <StatusChip
                     tone={ESTIMATE_STATUS_TONE[estimate.status as EstimateStatus] ?? 'neutral'}
@@ -283,7 +283,7 @@ export default function EstimateShow({
             </dl>
 
             {estimate.notes && (
-              <p className="mt-4 border-t border-hairline pt-4 text-sm text-white/70">
+              <p className="mt-4 border-t border-hairline pt-4 text-sm text-white/90">
                 {estimate.notes}
               </p>
             )}
@@ -306,7 +306,7 @@ export default function EstimateShow({
                 >
                   <dt
                     className={
-                      row.strong ? 'text-md font-semibold text-white' : 'text-md text-white/70'
+                      row.strong ? 'text-md font-semibold text-white' : 'text-md text-white/90'
                     }
                   >
                     {row.label}
@@ -324,7 +324,7 @@ export default function EstimateShow({
               ))}
             </dl>
 
-            <div className="mt-4 flex flex-col gap-1 border-t border-hairline pt-4 text-sm text-white/60">
+            <div className="mt-4 flex flex-col gap-1 border-t border-hairline pt-4 text-sm text-white/85">
               <p>
                 {totals.laborHours > 0 && <span>{totals.laborHours} labor hours · </span>}
                 raised {formatDate(estimate.createdAt)}

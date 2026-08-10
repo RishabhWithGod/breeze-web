@@ -151,7 +151,7 @@ export function EstimateItemsTable({
         <section key={group.category}>
           <div className="mb-2 flex items-center justify-between gap-3">
             <h4 className="text-md font-semibold text-white">{group.label}</h4>
-            <span className="text-sm text-white/60">
+            <span className="text-sm text-white/85">
               {formatCurrency(
                 group.rows.reduce((total, item) => total + item.total, 0),
                 2,
@@ -190,7 +190,7 @@ export function EstimateItemsTable({
                           </Badge>
                         )}
                       </p>
-                      <p className="text-2xs text-white/50">
+                      <p className="text-2xs text-white/75">
                         {item.quantity} {item.unit} @ {formatCurrency(item.unitCost, 2)}
                       </p>
                     </div>

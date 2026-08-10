@@ -45,7 +45,7 @@ export function PerformanceChart({
       {/* Title + legend key, mirroring the reference panel. */}
       <figcaption className="mb-5 text-center">
         <p className="text-md font-semibold text-white">{seriesLabel}</p>
-        <span className="mt-2 inline-flex items-center gap-2 text-sm text-white/70">
+        <span className="mt-2 inline-flex items-center gap-2 text-sm text-white/90">
           <span className="h-3 w-6 rounded-xs bg-brand-deep" aria-hidden />
           {seriesLabel}
         </span>
@@ -53,7 +53,7 @@ export function PerformanceChart({
 
       <div className="flex gap-3">
         {/* Y axis */}
-        <ul className="flex h-52 flex-col justify-between text-right text-xs tabular-nums text-white/45 sm:h-60">
+        <ul className="flex h-52 flex-col justify-between text-right text-xs tabular-nums text-white/70 sm:h-60">
           {ticks.map((tick) => (
             <li key={tick} className="leading-none">
               {tick}
@@ -129,7 +129,7 @@ export function PerformanceChart({
 
           {/* X axis — one label per bar, stepped down a size on narrow screens
               so all twelve stay aligned with their columns. */}
-          <ul className="mt-2 flex text-center text-2xs text-white/45 sm:text-xs">
+          <ul className="mt-2 flex text-center text-2xs text-white/70 sm:text-xs">
             {data.map((point) => (
               <li key={point.month} className="min-w-0 flex-1 truncate">
                 {point.month}

@@ -46,7 +46,7 @@ export function ShiftBlock({ shift, onSelect, onRemove, muted = false }: ShiftBl
         <span className="block truncate text-xs font-semibold text-white">
           {shift.jobName}
         </span>
-        <span className="mt-0.5 block truncate text-2xs text-white/65">
+        <span className="mt-0.5 block truncate text-2xs text-white/90">
           {shift.crew} · {shift.startLabel}
         </span>
 
@@ -55,7 +55,7 @@ export function ShiftBlock({ shift, onSelect, onRemove, muted = false }: ShiftBl
             <span className="grid size-5 shrink-0 place-items-center rounded-full bg-ocean-800 text-[9px] font-semibold text-white ring-1 ring-steel-600">
               {shift.member.initials}
             </span>
-            <span className="truncate text-2xs font-medium text-white/85">
+            <span className="truncate text-2xs font-medium text-white">
               {shift.member.name}
             </span>
           </span>
@@ -68,7 +68,7 @@ export function ShiftBlock({ shift, onSelect, onRemove, muted = false }: ShiftBl
         onClick={() => onRemove(shift)}
         aria-label={`Remove ${shift.crew} from ${shift.jobName} on ${shift.date}`}
         className={cn(
-          'absolute top-1.5 right-1.5 rounded-full p-1 text-white/60 opacity-0 transition',
+          'absolute top-1.5 right-1.5 rounded-full p-1 text-white/85 opacity-0 transition',
           'hover:bg-status-danger/25 hover:text-white',
           'group-hover/shift:opacity-100 focus-visible:opacity-100 focus-visible:outline-none',
         )}

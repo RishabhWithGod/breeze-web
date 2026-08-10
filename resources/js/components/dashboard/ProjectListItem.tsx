@@ -61,14 +61,14 @@ export function ProjectListItem({
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-md font-semibold text-white">{project.name}</p>
-            <p className="mt-0.5 truncate text-sm text-white/55">
+            <p className="mt-0.5 truncate text-sm text-white/80">
               {project.client} · {formatDate(project.date)}
             </p>
           </div>
 
           <div className="hidden shrink-0 text-right sm:block">
             <StatusChip tone={tone} label={label} pulse={project.status === 'processing'} />
-            <p className="mt-1 text-xs text-white/45">
+            <p className="mt-1 text-xs text-white/70">
               {typeof drawings === 'number'
                 ? `${drawings} drawings`
                 : `${formatNumber(project.items)} items`}
@@ -78,7 +78,7 @@ export function ProjectListItem({
           <ChevronRight
             size={18}
             aria-hidden
-            className="shrink-0 text-white/35 transition-transform group-hover:translate-x-1 group-hover:text-brand"
+            className="shrink-0 text-white/60 transition-transform group-hover:translate-x-1 group-hover:text-brand"
           />
         </div>
 

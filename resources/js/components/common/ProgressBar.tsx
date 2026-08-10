@@ -44,7 +44,7 @@ export function ProgressBar({
   return (
     <div className={cn('w-full', className)}>
       {(label || (showValue && size !== 'lg')) && (
-        <div className="mb-2 flex items-center justify-between text-sm text-white/70">
+        <div className="mb-2 flex items-center justify-between text-sm text-white/90">
           {label && <span>{label}</span>}
           {showValue && <span className="font-medium text-white">{clamped}%</span>}
         </div>

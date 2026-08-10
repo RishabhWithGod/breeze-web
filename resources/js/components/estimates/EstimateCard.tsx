@@ -41,7 +41,7 @@ export function EstimateCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-bold text-white">{estimate.number}</p>
-          <p className="mt-0.5 truncate text-sm text-white/60">{estimate.project}</p>
+          <p className="mt-0.5 truncate text-sm text-white/85">{estimate.project}</p>
         </div>
         <StatusChip
           hideDot
@@ -53,16 +53,16 @@ export function EstimateCard({
 
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div className="col-span-2">
-          <dt className="text-white/45">Client</dt>
-          <dd className="mt-0.5 truncate text-white/85">{estimate.client}</dd>
+          <dt className="text-white/70">Client</dt>
+          <dd className="mt-0.5 truncate text-white">{estimate.client}</dd>
         </div>
         <div>
-          <dt className="text-white/45">Date</dt>
-          <dd className="mt-0.5 text-white/85">{formatDate(estimate.date)}</dd>
+          <dt className="text-white/70">Date</dt>
+          <dd className="mt-0.5 text-white">{formatDate(estimate.date)}</dd>
         </div>
         <div>
-          <dt className="text-white/45">Amount</dt>
-          <dd className="mt-0.5 tabular-nums text-white/85">
+          <dt className="text-white/70">Amount</dt>
+          <dd className="mt-0.5 tabular-nums text-white">
             {formatCurrency(estimate.amount, 2)}
           </dd>
         </div>

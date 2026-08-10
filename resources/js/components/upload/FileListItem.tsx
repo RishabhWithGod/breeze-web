@@ -26,7 +26,7 @@ export function FileListItem({
   const isSuccess = file.status === 'success'
 
   const actionButton =
-    'grid size-8 place-items-center rounded-panel border border-hairline text-white/70 transition-colors ' +
+    'grid size-8 place-items-center rounded-panel border border-hairline text-white/90 transition-colors ' +
     'hover:border-brand/60 hover:bg-white/10 hover:text-brand disabled:cursor-not-allowed disabled:opacity-40'
 
   return (
@@ -71,7 +71,7 @@ export function FileListItem({
         ) : isUploading ? (
           <ProgressBar value={file.progress} size="sm" className="mt-2" />
         ) : (
-          <p className="mt-0.5 text-sm text-white/50">
+          <p className="mt-0.5 text-sm text-white/75">
             {formatFileSize(file.size)}
             {isSuccess && ' · ready for analysis'}
           </p>

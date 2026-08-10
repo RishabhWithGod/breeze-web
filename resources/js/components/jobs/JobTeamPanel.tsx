@@ -74,7 +74,7 @@ export function JobTeamPanel({ jobId, team, assignable }: JobTeamPanelProps) {
       </form>
 
       {team.length === 0 ? (
-        <p className="text-md text-white/50">No crew assigned yet.</p>
+        <p className="text-md text-white/75">No crew assigned yet.</p>
       ) : (
         <ul className="space-y-3">
           <AnimatePresence initial={false}>
@@ -94,14 +94,14 @@ export function JobTeamPanel({ jobId, team, assignable }: JobTeamPanelProps) {
                   <p className="truncate text-md font-semibold text-white">
                     {member.name}
                   </p>
-                  <p className="mt-0.5 truncate text-sm text-white/55">{member.role}</p>
+                  <p className="mt-0.5 truncate text-sm text-white/80">{member.role}</p>
                 </div>
 
                 <IconButton
                   icon={UserMinus}
                   label={`Remove ${member.name}`}
                   size="sm"
-                  className="shrink-0 text-white/45 hover:text-status-danger"
+                  className="shrink-0 text-white/70 hover:text-status-danger"
                   onClick={() => remove(member.id)}
                 />
               </motion.li>

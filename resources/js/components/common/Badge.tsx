@@ -9,7 +9,7 @@ const TONES: Record<Tone, string> = {
   warning: 'bg-status-warning/15 text-status-warning border-status-warning/40',
   danger: 'bg-status-danger/20 text-red-300 border-status-danger/50',
   info: 'bg-status-info/15 text-status-info border-status-info/40',
-  neutral: 'bg-white/10 text-white/75 border-hairline-strong',
+  neutral: 'bg-white/10 text-white border-hairline-strong',
 }
 
 export interface BadgeProps {

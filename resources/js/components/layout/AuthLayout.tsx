@@ -35,7 +35,7 @@ export function AuthLayout({ title, subtitle, footer, children }: AuthLayoutProp
             <span className="block text-brand">done by AI.</span>
           </h1>
 
-          <p className="mt-5 max-w-md text-base text-white/70">
+          <p className="mt-5 max-w-md text-base text-white/90">
             Upload a drawing set and {APP_NAME} counts every device, prices the
             material and estimates the labour — before your coffee goes cold.
           </p>
@@ -50,7 +50,7 @@ export function AuthLayout({ title, subtitle, footer, children }: AuthLayoutProp
                   duration: MOTION.base,
                   delay: 0.2 + index * MOTION.stagger,
                 }}
-                className="flex items-start gap-3 text-md text-white/80"
+                className="flex items-start gap-3 text-md text-white"
               >
                 <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-brand/20 text-brand">
                   <Check size={13} strokeWidth={3} aria-hidden />
@@ -60,7 +60,7 @@ export function AuthLayout({ title, subtitle, footer, children }: AuthLayoutProp
             ))}
           </ul>
 
-          <p className="mt-10 flex items-center gap-2 text-sm text-white/45">
+          <p className="mt-10 flex items-center gap-2 text-sm text-white/70">
             <ShieldCheck size={15} aria-hidden className="text-brand/80" />
             UI prototype — mock authentication, no data leaves your browser.
           </p>
@@ -79,13 +79,13 @@ export function AuthLayout({ title, subtitle, footer, children }: AuthLayoutProp
 
           <div className="rounded-card border border-hairline-strong grad-spotlight p-6 shadow-raised backdrop-blur-xl sm:p-8">
             <h2 className="text-2xl font-bold text-white">{title}</h2>
-            <p className="mt-2 text-md text-white/65">{subtitle}</p>
+            <p className="mt-2 text-md text-white/90">{subtitle}</p>
 
             <div className="mt-7">{children}</div>
           </div>
 
           {footer && (
-            <div className="mt-6 text-center text-md text-white/65">{footer}</div>
+            <div className="mt-6 text-center text-md text-white/90">{footer}</div>
           )}
         </motion.section>
       </div>

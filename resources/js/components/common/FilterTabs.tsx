@@ -44,7 +44,7 @@ export function FilterTabs<T extends string>({
                 ? 'text-white'
                 : solid
                   ? 'bg-white/25 text-white hover:bg-white/35'
-                  : 'text-white/70 hover:bg-white/15 hover:text-white',
+                  : 'text-white/90 hover:bg-white/15 hover:text-white',
             )}
           >
             {isActive && (
@@ -60,7 +60,7 @@ export function FilterTabs<T extends string>({
               <span
                 className={cn(
                   'relative rounded-full px-2 py-0.5 text-2xs font-semibold',
-                  isActive ? 'bg-navy-950/40 text-white' : 'bg-white/10 text-white/70',
+                  isActive ? 'bg-navy-950/40 text-white' : 'bg-white/10 text-white/90',
                 )}
               >
                 {count}

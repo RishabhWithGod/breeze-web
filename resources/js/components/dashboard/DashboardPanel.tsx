@@ -52,14 +52,14 @@ export function DashboardPanel({
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline grad-ocean-soft px-5 py-4 sm:px-6">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-white sm:text-xl">{title}</h2>
-          {subtitle && <p className="mt-0.5 text-sm text-white/60">{subtitle}</p>}
+          {subtitle && <p className="mt-0.5 text-sm text-white/85">{subtitle}</p>}
         </div>
 
         {actions ??
           (link && (
             <Link
               href={link.href}
-              className="group inline-flex shrink-0 items-center gap-1 text-sm font-medium text-white/80 transition-colors hover:text-brand"
+              className="group inline-flex shrink-0 items-center gap-1 text-sm font-medium text-white transition-colors hover:text-brand"
             >
               {link.label}
               <ChevronRight

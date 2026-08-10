@@ -89,7 +89,7 @@ export function Modal({
                     <h2 className="text-xl font-semibold text-white">{title}</h2>
                   )}
                   {description && (
-                    <p className="mt-1 text-md text-white/65">{description}</p>
+                    <p className="mt-1 text-md text-white/90">{description}</p>
                   )}
                 </div>
                 {!hideCloseButton && (
@@ -97,7 +97,7 @@ export function Modal({
                     type="button"
                     onClick={onClose}
                     aria-label="Close dialog"
-                    className="rounded-full p-1.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                    className="rounded-full p-1.5 text-white/90 transition-colors hover:bg-white/10 hover:text-white"
                   >
                     <X size={20} aria-hidden />
                   </button>
@@ -105,7 +105,7 @@ export function Modal({
               </div>
             )}
 
-            <div className="max-h-[70dvh] overflow-y-auto px-6 py-5 text-md text-white/80">
+            <div className="max-h-[70dvh] overflow-y-auto px-6 py-5 text-md text-white">
               {children}
             </div>
 

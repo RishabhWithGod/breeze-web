@@ -49,8 +49,8 @@ export function NotificationsMenu() {
                 const body = (
                   <>
                     <p className="text-md font-medium text-white">{notification.title}</p>
-                    <p className="mt-0.5 text-sm text-white/60">{notification.detail}</p>
-                    <p className="mt-1 text-xs text-white/40">
+                    <p className="mt-0.5 text-sm text-white/85">{notification.detail}</p>
+                    <p className="mt-1 text-xs text-white/65">
                       {formatRelative(notification.timestamp)}
                     </p>
                   </>

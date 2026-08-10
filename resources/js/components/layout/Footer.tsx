@@ -24,7 +24,7 @@ export function Footer({ className }: { className?: string }) {
           <p className="text-md font-semibold text-white">
             {APP_NAME} — AI Electrical Takeoff
           </p>
-          <p className="mt-1 text-sm text-white/50">
+          <p className="mt-1 text-sm text-white/75">
             © {year} {APP_NAME}. Every takeoff is reviewed by a person before it
             reaches a job or an estimate.
           </p>
@@ -36,7 +36,7 @@ export function Footer({ className }: { className?: string }) {
               <li key={link.label}>
                 <a
                   href={link.href}
-                  className="text-sm text-white/65 transition-colors hover:text-brand"
+                  className="text-sm text-white/90 transition-colors hover:text-brand"
                 >
                   {link.label}
                 </a>
@@ -51,7 +51,7 @@ export function Footer({ className }: { className?: string }) {
               <a
                 href="#"
                 aria-label={label}
-                className="grid size-9 place-items-center rounded-full border border-hairline text-white/70 transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-brand"
+                className="grid size-9 place-items-center rounded-full border border-hairline text-white/90 transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-brand"
               >
                 <Icon size={16} aria-hidden />
               </a>

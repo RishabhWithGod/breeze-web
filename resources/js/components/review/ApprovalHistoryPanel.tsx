@@ -37,8 +37,8 @@ export function ApprovalHistoryPanel({ entries, className }: ApprovalHistoryPane
             )}
           />
           <div className="min-w-0 flex-1">
-            <p className="text-sm text-white/85">{entry.description}</p>
-            <p className="mt-0.5 text-2xs text-white/45">
+            <p className="text-sm text-white">{entry.description}</p>
+            <p className="mt-0.5 text-2xs text-white/70">
               {entry.actor ? `${entry.actor} · ` : ''}
               {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })}
               {entry.from && entry.to ? ` · ${entry.from} → ${entry.to}` : ''}

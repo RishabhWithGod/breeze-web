@@ -15,12 +15,31 @@ class Project extends Model
 
     public const STATUSES = ['completed', 'converted', 'draft', 'failed', 'processing'];
 
+    /** Same taxonomy as a job, so a converted project keeps its type. */
+    public const TYPES = ['residential', 'commercial', 'industrial'];
+
+    /** Offered by the Create Project form; `discipline` itself is free text. */
+    public const DISCIPLINES = [
+        'Electrical',
+        'Mechanical',
+        'Plumbing',
+        'Fire Protection',
+        'Low Voltage',
+        'Structural',
+    ];
+
+    /** How the Projects list can be ordered. */
+    public const SORTS = ['recent', 'oldest', 'name-asc', 'due-asc', 'documents-desc'];
+
     protected $fillable = [
         'user_id',
         'name',
+        'code',
         'client',
+        'location',
         'drawing_name',
         'discipline',
+        'project_type',
         'status',
         'review_status',
         'items_count',
@@ -28,6 +47,7 @@ class Project extends Model
         'overall_confidence',
         'notes',
         'started_at',
+        'due_date',
         'completed_at',
     ];
 
@@ -38,6 +58,7 @@ class Project extends Model
             'page_count' => 'integer',
             'overall_confidence' => 'float',
             'started_at' => 'datetime',
+            'due_date' => 'date',
             'completed_at' => 'datetime',
         ];
     }
@@ -114,7 +135,7 @@ class Project extends Model
         return $this->symbols()->exists();
     }
 
-    /** Matches a project name or its client. */
+    /** Matches a project name, its client, its number or its site. */
     public function scopeSearch(Builder $query, ?string $term): Builder
     {
         if (blank($term)) {
@@ -123,6 +144,25 @@ class Project extends Model
 
         return $query->where(fn (Builder $query) => $query
             ->where('name', 'like', "%{$term}%")
-            ->orWhere('client', 'like', "%{$term}%"));
+            ->orWhere('client', 'like', "%{$term}%")
+            ->orWhere('code', 'like', "%{$term}%")
+            ->orWhere('location', 'like', "%{$term}%"));
+    }
+
+    /**
+     * Ordering for the Projects list.
+     *
+     * `due-asc` puts dated projects first — a project with no due date is not
+     * "due soonest", so it sorts to the back rather than to the front.
+     */
+    public function scopeSorted(Builder $query, string $sort): Builder
+    {
+        return match ($sort) {
+            'oldest' => $query->oldest(),
+            'name-asc' => $query->orderBy('name'),
+            'due-asc' => $query->orderByRaw('due_date is null')->orderBy('due_date'),
+            'documents-desc' => $query->orderByDesc('uploads_count'),
+            default => $query->latest(),
+        };
     }
 }

@@ -28,7 +28,7 @@ export function Loader({
       role="status"
       aria-live="polite"
       className={cn(
-        'flex flex-col items-center justify-center gap-3 text-white/70',
+        'flex flex-col items-center justify-center gap-3 text-white/90',
         fullHeight && 'min-h-64 w-full',
         className,
       )}

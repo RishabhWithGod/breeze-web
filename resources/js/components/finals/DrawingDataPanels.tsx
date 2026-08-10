@@ -35,7 +35,7 @@ export function WireSizesPanel({ wireSizes }: WireSizesPanelProps) {
       key: 'context',
       header: 'Read from',
       render: (row) => (
-        <span className="text-white/70">{row.context || '—'}</span>
+        <span className="text-white/90">{row.context || '—'}</span>
       ),
     },
     {
@@ -108,7 +108,7 @@ export function PanelSchedulesPanel({ schedules }: PanelSchedulesPanelProps) {
               </div>
 
               {schedule.rawHeaders.length > 0 && (
-                <p className="mb-2 font-mono text-2xs text-white/45">
+                <p className="mb-2 font-mono text-2xs text-white/70">
                   {schedule.rawHeaders.join(' · ')}
                 </p>
               )}
@@ -119,7 +119,7 @@ export function PanelSchedulesPanel({ schedules }: PanelSchedulesPanelProps) {
                   {schedule.rows.slice(0, 12).map((row, rowIndex) => (
                     <li
                       key={rowIndex}
-                      className="rounded-panel bg-white/5 px-3 py-2 font-mono text-2xs text-white/75"
+                      className="rounded-panel bg-white/5 px-3 py-2 font-mono text-2xs text-white"
                     >
                       {Object.entries(row)
                         .map(([key, value]) => `${key}: ${String(value ?? '')}`)
@@ -130,7 +130,7 @@ export function PanelSchedulesPanel({ schedules }: PanelSchedulesPanelProps) {
               </div>
 
               {schedule.rows.length > 12 && (
-                <p className="mt-2 text-2xs text-white/45">
+                <p className="mt-2 text-2xs text-white/70">
                   {schedule.rows.length - 12} more rows in the stored response.
                 </p>
               )}

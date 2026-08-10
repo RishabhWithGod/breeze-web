@@ -9,7 +9,7 @@ import {
   ProgressBar,
   StatusChip,
 } from '@/components/common'
-import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { PageHeader, PageTransition, StepWizard, appLayout } from '@/components/layout'
 import { ProcessingStepList, ProcessingVisual } from '@/components/processing'
 import { ROUTES, routeTo } from '@/constants'
 import { useDisclosure } from '@/hooks'
@@ -181,6 +181,8 @@ export default function Processing({
     <PageTransition>
       <Head title="AI Takeoff Processing" />
 
+      <StepWizard current="analysis" hrefs={{ upload: ROUTES.upload }} />
+
       <PageHeader
         title="AI Takeoff Processing"
         subtitle={
@@ -245,7 +247,7 @@ export default function Processing({
             </p>
           </div>
 
-          <p className="mx-auto mt-4 max-w-xl text-md text-white/70">
+          <p className="mx-auto mt-4 max-w-xl text-md text-white/90">
             {isDone
               ? 'Every detected symbol is waiting for review. Nothing reaches an estimate until you approve it.'
               : isFailed
@@ -256,7 +258,7 @@ export default function Processing({
           </p>
 
           {(run.runId || run.processingTime) && (
-            <p className="mt-2 font-mono text-2xs text-white/40">
+            <p className="mt-2 font-mono text-2xs text-white/65">
               {run.runId ? `engine run ${run.runId}` : ''}
               {run.runId && run.processingTime ? ' · ' : ''}
               {run.processingTime ? `${run.processingTime.toFixed(1)}s` : ''}
@@ -345,13 +347,13 @@ export default function Processing({
 
           <div className="mt-6 grid grid-cols-2 gap-3 border-t border-hairline pt-5">
             <div className="rounded-panel bg-navy-950/35 p-3">
-              <p className="text-xs tracking-wide text-white/45 uppercase">Reported</p>
+              <p className="text-xs tracking-wide text-white/70 uppercase">Reported</p>
               <p className="mt-1 text-lg font-semibold text-white tabular-nums">
                 {run.progress}%
               </p>
             </div>
             <div className="rounded-panel bg-navy-950/35 p-3">
-              <p className="text-xs tracking-wide text-white/45 uppercase">Stage</p>
+              <p className="text-xs tracking-wide text-white/70 uppercase">Stage</p>
               <p className="mt-1 truncate text-lg font-semibold text-white">
                 {run.stageLabel ?? '—'}
               </p>

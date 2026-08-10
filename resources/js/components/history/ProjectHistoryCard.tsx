@@ -47,7 +47,7 @@ export function ProjectHistoryCard({
 
         <div className="min-w-0 flex-1">
           <p className="font-bold text-white">{project.name}</p>
-          <p className="mt-0.5 truncate text-sm text-white/55">{project.client}</p>
+          <p className="mt-0.5 truncate text-sm text-white/80">{project.client}</p>
         </div>
 
         <StatusChip
@@ -60,12 +60,12 @@ export function ProjectHistoryCard({
 
       <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <div className="flex gap-2">
-          <dt className="text-white/45">Date</dt>
-          <dd className="text-white/80">{formatDate(project.date)}</dd>
+          <dt className="text-white/70">Date</dt>
+          <dd className="text-white">{formatDate(project.date)}</dd>
         </div>
         <div className="flex gap-2">
-          <dt className="text-white/45">Items</dt>
-          <dd className="tabular-nums text-white/80">{formatNumber(project.items)}</dd>
+          <dt className="text-white/70">Items</dt>
+          <dd className="tabular-nums text-white">{formatNumber(project.items)}</dd>
         </div>
       </dl>
 

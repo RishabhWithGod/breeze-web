@@ -87,7 +87,7 @@ export function CardHeader({ title, subtitle, actions, className }: CardHeaderPr
     >
       <div className="min-w-0">
         <h3 className="text-xl font-semibold text-white">{title}</h3>
-        {subtitle && <p className="mt-1 text-md text-white/60">{subtitle}</p>}
+        {subtitle && <p className="mt-1 text-md text-white/85">{subtitle}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-3">{actions}</div>}
     </div>
@@ -101,7 +101,7 @@ export function CardBody({
   className?: string
   children: ReactNode
 }) {
-  return <div className={cn('text-md text-white/75', className)}>{children}</div>
+  return <div className={cn('text-md text-white', className)}>{children}</div>
 }
 
 export function CardFooter({

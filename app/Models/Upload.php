@@ -13,6 +13,7 @@ class Upload extends Model
         'user_id',
         'project_id',
         'name',
+        'title',
         'format',
         'page_count',
         'size_bytes',
@@ -31,6 +32,12 @@ class Upload extends Model
             'page_count' => 'integer',
             'preview_paths' => 'array',
         ];
+    }
+
+    /** What the drawing is called on screen: its given title, else the file name. */
+    public function label(): string
+    {
+        return filled($this->title) ? $this->title : $this->name;
     }
 
     /** Maps a file extension onto the badge shown on the upload tile. */

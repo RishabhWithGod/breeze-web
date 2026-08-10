@@ -23,6 +23,33 @@ export const HISTORY_SORT_OPTIONS = [
 export type HistorySort = (typeof HISTORY_SORT_OPTIONS)[number]['value']
 
 /* -------------------------------------------------------------------------- */
+/*  Projects                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** Mirrors Project::STATUSES, plus the "all" pseudo-filter. */
+export const PROJECT_STATUS_FILTERS = [
+  { label: 'All Projects', value: 'all' },
+  { label: 'Draft', value: 'draft' },
+  { label: 'Processing', value: 'processing' },
+  { label: 'Completed', value: 'completed' },
+  { label: 'Converted', value: 'converted' },
+  { label: 'Failed', value: 'failed' },
+] as const
+
+export type ProjectStatusFilter = (typeof PROJECT_STATUS_FILTERS)[number]['value']
+
+/** Mirrors Project::SORTS. */
+export const PROJECT_SORT_OPTIONS = [
+  { label: 'Recently added', value: 'recent' },
+  { label: 'Oldest first', value: 'oldest' },
+  { label: 'Name (A–Z)', value: 'name-asc' },
+  { label: 'Due date (Soonest)', value: 'due-asc' },
+  { label: 'Drawings (Most)', value: 'documents-desc' },
+] as const
+
+export type ProjectSort = (typeof PROJECT_SORT_OPTIONS)[number]['value']
+
+/* -------------------------------------------------------------------------- */
 /*  Jobs                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -74,6 +101,12 @@ export const JOB_TYPE_OPTIONS = [
   { label: 'Commercial', value: 'commercial' },
   { label: 'Industrial', value: 'industrial' },
 ] as const
+
+/**
+ * A project carries the same type taxonomy as the job raised from it — declared
+ * here rather than duplicated, so the two can never drift.
+ */
+export const PROJECT_TYPE_OPTIONS: readonly SelectOption[] = JOB_TYPE_OPTIONS
 
 export type JobStatusFilter = (typeof JOB_STATUS_FILTERS)[number]['value']
 

@@ -49,9 +49,9 @@ export function UnassignedJobCard({ job, onAssign, index = 0 }: UnassignedJobCar
         </span>
       </div>
 
-      <dl className="mt-3 space-y-1 text-sm text-white/65">
+      <dl className="mt-3 space-y-1 text-sm text-white/90">
         <div className="flex items-center gap-2">
-          <Clock size={13} aria-hidden className="text-white/45" />
+          <Clock size={13} aria-hidden className="text-white/70" />
           <dt className="sr-only">Duration</dt>
           <dd>
             {job.estimatedHours === null
@@ -60,7 +60,7 @@ export function UnassignedJobCard({ job, onAssign, index = 0 }: UnassignedJobCar
           </dd>
         </div>
         <div className="flex items-center gap-2">
-          <User size={13} aria-hidden className="text-white/45" />
+          <User size={13} aria-hidden className="text-white/70" />
           <dt className="sr-only">Client</dt>
           <dd className="truncate">Client: {job.client ?? 'Unassigned'}</dd>
         </div>

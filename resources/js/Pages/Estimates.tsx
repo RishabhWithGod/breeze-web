@@ -190,18 +190,18 @@ export default function Estimates({
     {
       key: 'client',
       header: 'Client',
-      render: (estimate) => <span className="text-white/85">{estimate.client}</span>,
+      render: (estimate) => <span className="text-white">{estimate.client}</span>,
     },
     {
       key: 'project',
       header: 'Project',
-      render: (estimate) => <span className="text-white/85">{estimate.project}</span>,
+      render: (estimate) => <span className="text-white">{estimate.project}</span>,
     },
     {
       key: 'date',
       header: 'Date',
       render: (estimate) => (
-        <span className="whitespace-nowrap text-white/70">
+        <span className="whitespace-nowrap text-white/90">
           {formatDate(estimate.date)}
         </span>
       ),
@@ -373,7 +373,7 @@ export default function Estimates({
 
           {/* View / Filters toggle */}
           <div className="my-5 flex items-center justify-end gap-3">
-            <span className="text-md text-white/70">View:</span>
+            <span className="text-md text-white/90">View:</span>
             <Button
               size="sm"
               variant={filterBar.isOpen ? 'primary' : 'secondary'}

@@ -18,6 +18,8 @@ use App\Http\Controllers\JobTaskController;
 use App\Http\Controllers\JobTeamController;
 use App\Http\Controllers\ModuleController;
 use App\Http\Controllers\ProcessingController;
+use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectDocumentController;
 use App\Http\Controllers\ResultsController;
 use App\Http\Controllers\SchedulingController;
 use App\Http\Controllers\StatePageController;
@@ -114,6 +116,24 @@ Route::middleware('auth')->group(function () {
     Route::get('takeoffs/{result}/annotated.pdf', [FinalTakeoffController::class, 'annotated'])->name('finals.annotated');
     Route::post('takeoffs/{result}/job', [FinalTakeoffController::class, 'storeJob'])->name('finals.job');
     Route::post('takeoffs/{result}/estimate', [FinalTakeoffController::class, 'storeEstimate'])->name('finals.estimate');
+
+    /*
+    | Projects — the record a takeoff, an estimate and a job all hang off, with
+    | the drawing PDFs defined against it. `create` is declared before `{project}`
+    | so it is never read as an id.
+    */
+    Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
+    Route::get('projects/create', [ProjectController::class, 'create'])->name('projects.create');
+    Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');
+    Route::get('projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
+    Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
+
+    Route::post('projects/{project}/documents', [ProjectDocumentController::class, 'store'])
+        ->name('projects.documents.store');
+    Route::get('projects/{project}/documents/{document}', [ProjectDocumentController::class, 'show'])
+        ->name('projects.documents.show');
+    Route::delete('projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy'])
+        ->name('projects.documents.destroy');
 
     Route::get('results', [ResultsController::class, 'latest'])->name('results.latest');
     Route::get('results/{project}', [ResultsController::class, 'show'])->name('results.show');
