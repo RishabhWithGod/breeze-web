@@ -49,7 +49,23 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#a5b4fc,#fb7185,#fdba74\" \"PHP_CLI_SERVER_WORKERS=4 php artisan serve --port=8001\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,queue2,logs,vite --kill-others"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" --names=server,queue,vite --kill-signal=SIGTERM --restart-tries=-1 --restart-after=2000 \"php artisan serve --port=8001 --no-reload\" \"php artisan queue:work --tries=1 --timeout=0\" \"npm run dev\""
+        ],
+        "dev:logs": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan pail --timeout=0"
+        ],
+        "dev:all": [
+            "Composer\\Config::disableProcessTimeout",
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74,#fb7185\" --names=server,queue,vite,logs --kill-signal=SIGTERM --restart-tries=-1 --restart-after=2000 \"php artisan serve --port=8001 --no-reload\" \"php artisan queue:work --tries=1 --timeout=0\" \"npm run dev\" \"php artisan pail --timeout=0 || true\""
+        ],
+        "dev:server": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan serve --port=8001 --no-reload"
+        ],
+        "dev:queue": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan queue:work --tries=1 --timeout=0"
         ],
         "test": [
             "@php artisan config:clear --ansi",
