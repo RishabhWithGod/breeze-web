@@ -42,14 +42,19 @@ class DashboardTest extends TestCase
         $this->seed(DemoDataSeeder::class);
         $user = User::where('email', 'demo@breeze.ai')->firstOrFail();
 
+        // `seedNotifications()` fires the app's real Notification classes
+        // against seeded data rather than writing fake rows — in a fresh
+        // seed that's a job-cost overrun and a paid invoice for this user
+        // (the job-assigned and document-shared notifications go to Jordan,
+        // and no AiResult exists in a fresh seed for a takeoff notification).
         $this->actingAs($user)
             ->get('/home')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('auth.user.name', 'Alex Morgan')
                 ->where('auth.user.initials', 'AM')
                 ->where('auth.user.role', 'Project Manager')
-                ->has('notifications', 5)
-                ->where('unreadNotificationCount', 5));
+                ->has('notifications', 2)
+                ->where('unreadNotificationCount', 2));
     }
 
     public function test_feed_rows_carry_an_icon_key_the_client_can_resolve(): void

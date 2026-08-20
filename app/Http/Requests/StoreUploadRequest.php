@@ -34,7 +34,9 @@ class StoreUploadRequest extends FormRequest
 
         return [
             'files.required' => 'Add at least one supported drawing file before running a takeoff.',
-            'files.max' => "Only {$limits['max_files']} files can be queued at once.",
+            'files.max' => $limits['max_files'] === 1
+                ? 'Only one file can be queued at a time.'
+                : "Only {$limits['max_files']} files can be queued at once.",
             'files.*.max' => 'Each file must be under '.UploadLimits::effectiveMb().' MB.'
                 .(UploadLimits::phpHint() === null ? '' : ' '.UploadLimits::phpHint()),
             // A file over PHP's own limit arrives empty, which fails `file`.

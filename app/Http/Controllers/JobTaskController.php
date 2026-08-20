@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\JobTaskCompleted;
 use App\Models\Job;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
@@ -204,6 +205,7 @@ class JobTaskController extends Controller
         );
 
         $this->notifier->taskChanged($task, TaskScheduleChanged::COMPLETED, except: $request->user());
+        JobTaskCompleted::dispatch($task, $request->user());
 
         return back()->with(
             'success',

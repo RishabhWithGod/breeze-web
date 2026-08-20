@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Job;
 use App\Models\JobAssignment;
 use App\Models\TeamMember;
+use App\Notifications\JobAssigned;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -69,6 +70,10 @@ class JobAssignmentController extends Controller
             to: $name,
             meta: ['job_id' => $job->id, 'role' => $assignment->role],
         );
+
+        if ($assignment->user_id && $assignment->user_id !== $request->user()->id) {
+            $assignment->user->notify(new JobAssigned($assignment));
+        }
 
         return back()->with('success', "{$name} assigned as {$assignment->roleLabel()}.");
     }

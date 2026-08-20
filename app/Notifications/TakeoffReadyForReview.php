@@ -29,14 +29,22 @@ class TakeoffReadyForReview extends Notification
             ->line('Nothing reaches an estimate until you approve it.');
     }
 
-    /** @return array<string, string|null> */
+    /** @return array<string, mixed> */
     public function toAppNotification(object $notifiable): array
     {
+        $reviewUrl = route('reviews.show', $this->result, absolute: false);
+
         return [
             'type' => 'takeoff-ready',
-            'title' => 'AI takeoff ready for review',
+            'title' => 'AI Takeoff Complete',
             'detail' => "{$this->result->detection_count} symbols detected in {$this->result->project->name}",
-            'link' => route('reviews.show', $this->result, absolute: false),
+            'link' => $reviewUrl,
+            'data' => [
+                'actions' => [
+                    ['label' => 'Review Takeoff', 'href' => $reviewUrl],
+                    ['label' => 'View History', 'href' => route('takeoffs.index', absolute: false)],
+                ],
+            ],
         ];
     }
 }

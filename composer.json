@@ -49,7 +49,7 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" --names=server,queue,vite --kill-signal=SIGTERM --restart-tries=-1 --restart-after=2000 \"php artisan serve --port=8001 --no-reload\" \"php artisan queue:work --tries=1 --timeout=0\" \"npm run dev\""
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" --names=server,queue,vite --kill-signal=SIGTERM --restart-tries=-1 --restart-after=2000 \"cd public && php -d upload_max_filesize=512M -d post_max_size=2G -d memory_limit=512M -d max_execution_time=300 -S 127.0.0.1:8001 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php\" \"php artisan queue:work --tries=1 --timeout=0\" \"npm run dev\""
         ],
         "dev:logs": [
             "Composer\\Config::disableProcessTimeout",
@@ -57,11 +57,11 @@
         ],
         "dev:all": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74,#fb7185\" --names=server,queue,vite,logs --kill-signal=SIGTERM --restart-tries=-1 --restart-after=2000 \"php artisan serve --port=8001 --no-reload\" \"php artisan queue:work --tries=1 --timeout=0\" \"npm run dev\" \"php artisan pail --timeout=0 || true\""
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74,#fb7185\" --names=server,queue,vite,logs --kill-signal=SIGTERM --restart-tries=-1 --restart-after=2000 \"cd public && php -d upload_max_filesize=512M -d post_max_size=2G -d memory_limit=512M -d max_execution_time=300 -S 127.0.0.1:8001 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php\" \"php artisan queue:work --tries=1 --timeout=0\" \"npm run dev\" \"php artisan pail --timeout=0 || true\""
         ],
         "dev:server": [
             "Composer\\Config::disableProcessTimeout",
-            "@php artisan serve --port=8001 --no-reload"
+            "cd public && php -d upload_max_filesize=512M -d post_max_size=2G -d memory_limit=512M -d max_execution_time=300 -S 127.0.0.1:8001 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
         ],
         "dev:queue": [
             "Composer\\Config::disableProcessTimeout",

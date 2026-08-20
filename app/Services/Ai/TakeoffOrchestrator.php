@@ -167,6 +167,7 @@ class TakeoffOrchestrator
                 'project_id' => $project->id,
                 'upload_id' => $aiJob->upload_id,
                 'project_name' => $normalised['project_name'],
+                'run_id' => $normalised['run_id'],
                 'original_payload' => $payload,
                 'model_version' => $engineVersion,
                 'page_count' => $normalised['pages'],
@@ -422,7 +423,13 @@ class TakeoffOrchestrator
         }
 
         try {
-            $run = $this->lifecycle->resolve($result->project_name ?: $result->project->name);
+            // The engine's own run id, carried through from the upload response, is
+            // the reliable path — it needs no shared filesystem and cannot mismatch.
+            // Directory-based guessing is only a fallback for a run ingested before
+            // this was captured.
+            $run = $result->run_id !== null
+                ? ['run_id' => $result->run_id, 'lifecycle' => null]
+                : $this->lifecycle->resolve($result->project_name ?: $result->project->name);
 
             if ($run === null) {
                 Log::info('No lifecycle run matched this analysis; cards will have no crop images.', [
@@ -433,7 +440,9 @@ class TakeoffOrchestrator
                 return;
             }
 
-            $enriched = $this->lifecycle->attach($result, $run['lifecycle']);
+            $lifecycleDocument = $run['lifecycle'] ?? $this->lifecycle->fetch($run['run_id']);
+
+            $enriched = $this->lifecycle->attach($result, $lifecycleDocument);
 
             $result->recordHistory(
                 'lifecycle_attached',

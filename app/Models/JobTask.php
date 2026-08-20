@@ -179,6 +179,12 @@ class JobTask extends Model
         return $this->hasMany(JobTaskComment::class)->oldest('id');
     }
 
+    /** @return HasMany<TimeEntry, $this> */
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class, 'job_task_id');
+    }
+
     /* ------------------------------------------------------------------ Scopes */
 
     public function scopeOpen(Builder $query): Builder

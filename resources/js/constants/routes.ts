@@ -44,20 +44,49 @@ export const ROUTES = {
   /** Where a booking is created, updated or removed. */
   schedules: '/scheduling/schedules',
 
-  // Drawer modules awaiting implementation — served by ModuleController.
-  timeTracking: '/time-tracking',
-  billing: '/billing',
+  /**
+   * Time Tracking lands on the entries list (Time Log Viewer) — active timer,
+   * filters, weekly summary and every logged entry, all on one screen.
+   * Kept as its own key, distinct from `timeEntries`, since call sites read
+   * it as "this module's home" rather than "the entries list specifically" —
+   * the two currently share a value, the same alias pattern `history` uses
+   * for `aiTakeoff`.
+   */
+  timeTracking: '/time-tracking/entries',
+  timeTrackingWeek: '/time-tracking/week',
+  timeTrackingReports: '/time-tracking/reports',
+  timeTrackingSettings: '/time-tracking/settings',
+  timeEntries: '/time-tracking/entries',
+
+  /** Billing lands on the invoices list — its only real screen so far. */
+  billing: '/invoices',
+  invoices: '/invoices',
+  invoiceCreate: '/invoices/create',
+
+  /** Job Costing lands on the cross-job dashboard; each job's own detail screen is `routeTo.jobCosting`. */
   jobCosting: '/job-costing',
+
   documents: '/documents',
+  documentsCreate: '/documents/create',
+
   notifications: '/notifications',
+  notificationsReadAll: '/notifications/read-all',
+
   settings: '/settings',
   security: '/security',
+  twoFactorChallenge: '/two-factor-challenge',
+  twoFactorChallengeResend: '/two-factor-challenge/resend',
   breezeBucks: '/breeze-bucks',
+  breezeBucksRewards: '/breeze-bucks/rewards',
+  breezeBucksHistory: '/breeze-bucks/history',
+  breezeBucksAwardForm: '/breeze-bucks/award',
 } as const
 
 /** Per-record URLs. */
 export const routeTo = {
   project: (projectId: number) => `/projects/${projectId}`,
+  /** Starts an AI takeoff run against the project's drawing already on file. */
+  projectTakeoffStart: (projectId: number) => `/projects/${projectId}/takeoff`,
   /** Adds drawing PDFs to a project. */
   projectDocuments: (projectId: number) => `/projects/${projectId}/documents`,
   projectDocument: (projectId: number, documentId: number) =>
@@ -139,4 +168,85 @@ export const routeTo = {
   finalAnnotatedPdf: (resultId: number) => `/takeoffs/${resultId}/annotated.pdf`,
   finalCreateJob: (resultId: number) => `/takeoffs/${resultId}/job`,
   finalCreateEstimate: (resultId: number) => `/takeoffs/${resultId}/estimate`,
+
+  // Time Tracking
+  /** Create is its own route (`entries/create`); this is the show/update/destroy URL. */
+  timeEntryCreate: () => `/time-tracking/entries/create`,
+  timeEntry: (entryId: number) => `/time-tracking/entries/${entryId}`,
+  timeEntryEdit: (entryId: number) => `/time-tracking/entries/${entryId}/edit`,
+  timeEntrySubmit: (entryId: number) => `/time-tracking/entries/${entryId}/submit`,
+  timeEntryApprove: (entryId: number) => `/time-tracking/entries/${entryId}/approve`,
+  timeEntryReject: (entryId: number) => `/time-tracking/entries/${entryId}/reject`,
+  timeEntryReopen: (entryId: number) => `/time-tracking/entries/${entryId}/reopen`,
+  timeEntriesExport: (format: 'csv' | 'xlsx') => `/time-tracking/entries/export/${format}`,
+  jobTimeEntryTasks: (jobId: number) => `/time-tracking/jobs/${jobId}/tasks`,
+  timeTrackingReportsExport: (format: 'csv' | 'xlsx') =>
+    `/time-tracking/reports/export/${format}`,
+
+  timerStart: '/time-tracking/timer/start',
+  timerPause: '/time-tracking/timer/pause',
+  timerResume: '/time-tracking/timer/resume',
+  timerStop: '/time-tracking/timer/stop',
+  timerDiscard: '/time-tracking/timer/discard',
+
+  // Billing
+  /** The show/update/destroy URL. */
+  invoice: (invoiceId: number) => `/invoices/${invoiceId}`,
+  invoiceEdit: (invoiceId: number) => `/invoices/${invoiceId}/edit`,
+  invoiceRestore: (invoiceId: number) => `/invoices/${invoiceId}/restore`,
+  invoiceItems: (invoiceId: number) => `/invoices/${invoiceId}/items`,
+  invoiceItem: (invoiceId: number, itemId: number) => `/invoices/${invoiceId}/items/${itemId}`,
+  invoiceSend: (invoiceId: number) => `/invoices/${invoiceId}/send`,
+  invoiceMarkPaid: (invoiceId: number) => `/invoices/${invoiceId}/mark-paid`,
+  invoicePdf: (invoiceId: number) => `/invoices/${invoiceId}/pdf`,
+
+  // Job Costing
+  jobCostingExport: (format: 'csv' | 'xlsx') => `/job-costing/export/${format}`,
+  jobCosting: (jobId: number) => `/jobs/${jobId}/costing`,
+  jobCostEntries: (jobId: number) => `/jobs/${jobId}/costing/entries`,
+  jobCostEntry: (jobId: number, entryId: number) => `/jobs/${jobId}/costing/entries/${entryId}`,
+
+  // Documents
+  document: (documentId: number) => `/documents/${documentId}`,
+  documentPreview: (documentId: number) => `/documents/${documentId}/preview`,
+  documentDownload: (documentId: number) => `/documents/${documentId}/download`,
+  documentHistory: (documentId: number) => `/documents/${documentId}/history`,
+  documentVersions: (documentId: number) => `/documents/${documentId}/versions`,
+  documentFavorite: (documentId: number) => `/documents/${documentId}/favorite`,
+  documentArchive: (documentId: number) => `/documents/${documentId}/archive`,
+  documentRestore: (documentId: number) => `/documents/${documentId}/restore`,
+  documentShare: (documentId: number) => `/documents/${documentId}/share`,
+  documentFoldersStore: '/document-folders',
+  documentImportUpload: '/documents/import-upload',
+
+  // Notifications
+  notificationRead: (notificationId: number) => `/notifications/${notificationId}/read`,
+
+  // Payment Settings
+  paymentProcessorConnect: (processorId: number) => `/settings/payment/processors/${processorId}/connect`,
+  paymentProcessorTest: (processorId: number) => `/settings/payment/processors/${processorId}/test`,
+  paymentProcessorDisconnect: (processorId: number) => `/settings/payment/processors/${processorId}`,
+  paymentMethodsStore: '/settings/payment/methods',
+  paymentMethodDefault: (methodId: number) => `/settings/payment/methods/${methodId}/default`,
+  paymentMethodDestroy: (methodId: number) => `/settings/payment/methods/${methodId}`,
+  billingSettingsUpdate: '/settings/payment/billing',
+
+  securityTwoFactorChallenge: '/security/2fa/challenge',
+  securityTwoFactorConfirm: '/security/2fa/confirm',
+  securityTwoFactorDisable: '/security/2fa/disable',
+  securityRecoveryCodes: '/security/2fa/recovery-codes',
+  securityMethodUpdate: '/security/method',
+  securityEmailChallenge: '/security/email/challenge',
+  securityEmailConfirm: '/security/email/confirm',
+  securityPhoneChallenge: '/security/phone/challenge',
+  securityPhoneConfirm: '/security/phone/confirm',
+  securityPasswordUpdate: '/security/password',
+  securityNotificationUpdate: (eventType: string) => `/security/notifications/${eventType}`,
+
+  breezeBucksRedeem: (rewardId: number) => `/breeze-bucks/rewards/${rewardId}/redeem`,
+  breezeBucksRewardsStore: '/breeze-bucks/rewards',
+  breezeBucksRewardUpdate: (rewardId: number) => `/breeze-bucks/rewards/${rewardId}`,
+  breezeBucksRewardDestroy: (rewardId: number) => `/breeze-bucks/rewards/${rewardId}`,
+  breezeBucksAward: '/breeze-bucks/award',
+  breezeBucksAdjust: '/breeze-bucks/adjust',
 } as const

@@ -13,8 +13,10 @@ return [
     */
 
     'uploads' => [
-        'max_files' => 8,
-        'max_file_size_mb' => 100,
+        // One drawing at a time — kept as a single setting so the AI Takeoff
+        // upload screen and the project PDF picker can never disagree about it.
+        'max_files' => 1,
+        'max_file_size_mb' => (int) env('TAKEOFF_MAX_FILE_SIZE_MB', 500),
         'extensions' => ['pdf', 'dwg', 'dxf', 'bim', 'ifc', 'rvt'],
         'disk' => 'local',
         'directory' => 'uploads',

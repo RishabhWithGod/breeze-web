@@ -10,7 +10,9 @@ use Illuminate\Notifications\Notification;
  * the app shell.
  *
  * A notification opts in by implementing `toAppNotification()` and returning
- * `['title' => ..., 'detail' => ..., 'link' => ..., 'type' => ...]`.
+ * `['title' => ..., 'detail' => ..., 'link' => ..., 'type' => ..., 'data' => [...]]`.
+ * `data.actions` (a list of `{label, href}`) is optional — a class that omits
+ * it just gets one action in the Notification Center, generated from `link`.
  */
 class AppNotificationChannel
 {
@@ -33,6 +35,7 @@ class AppNotificationChannel
             'title' => $payload['title'],
             'detail' => $payload['detail'] ?? '',
             'link' => $payload['link'] ?? null,
+            'data' => $payload['data'] ?? null,
         ]);
     }
 }

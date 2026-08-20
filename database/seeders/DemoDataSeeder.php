@@ -2,17 +2,33 @@
 
 namespace Database\Seeders;
 
-use App\Models\AppNotification;
+use App\Models\AiResult;
+use App\Models\Document;
 use App\Models\Estimate;
+use App\Models\EstimateItem;
 use App\Models\FeedItem;
 use App\Models\Foreman;
+use App\Models\Invoice;
 use App\Models\Job;
+use App\Models\JobAssignment;
+use App\Models\JobCostEntry;
+use App\Models\PaymentTransaction;
 use App\Models\PerformancePoint;
 use App\Models\Project;
 use App\Models\TeamMember;
+use App\Models\TimeEntry;
+use App\Models\Upload;
 use App\Models\User;
+use App\Notifications\DocumentShared;
+use App\Notifications\InvoiceStatusChanged;
+use App\Notifications\JobAssigned;
+use App\Notifications\JobCostOverrun;
+use App\Notifications\TakeoffReadyForReview;
+use App\Services\JobCosting\JobCostSummary;
+use App\Services\TimeTracking\TeamMemberResolver;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Seeds the workspace the UI was designed against.
@@ -31,6 +47,10 @@ class DemoDataSeeder extends Seeder
         $this->seedJobs();
         $this->seedEstimates();
         $this->seedJobModule($user);
+        $this->seedTimeEntries($user);
+        $this->seedInvoices($user);
+        $this->seedJobCosting();
+        $this->seedDocuments($user);
         $projects = $this->seedProjects($user);
         $this->seedTakeoffResults($projects['Westside Commercial Complex']);
         $this->seedUploads($user);
@@ -166,6 +186,377 @@ class DemoDataSeeder extends Seeder
                 'updated_at' => $job->created_at->addHours(4),
             ]);
         }
+    }
+
+    /**
+     * A few real logged blocks of time against the first job's own tasks, one
+     * in each stage of the approval lifecycle — the Time Log Viewer should
+     * never be empty on a fresh install.
+     */
+    private function seedTimeEntries(User $user): void
+    {
+        $job = Job::orderBy('id')->first();
+        $tasks = $job->tasks()->orderBy('position')->take(3)->get();
+        $teamMember = app(TeamMemberResolver::class)->resolveFor($user);
+
+        // Draft — logged today, not yet submitted.
+        $draft = TimeEntry::create([
+            'job_id' => $job->id,
+            'job_task_id' => $tasks->get(0)?->id,
+            'user_id' => $user->id,
+            'team_member_id' => $teamMember->id,
+            'date' => now()->toDateString(),
+            'start_time' => '08:00:00',
+            'end_time' => '12:00:00',
+            'break_minutes' => 0,
+            'hours' => 4,
+            'regular_hours' => 4,
+            'overtime_hours' => 0,
+            'billable' => true,
+            'source' => 'manual',
+            'status' => TimeEntry::STATUS_DRAFT,
+        ]);
+        $draft->recordInitialStatus();
+
+        // Submitted — awaiting a manager's review.
+        $submitted = TimeEntry::create([
+            'job_id' => $job->id,
+            'job_task_id' => $tasks->get(1)?->id,
+            'user_id' => $user->id,
+            'team_member_id' => $teamMember->id,
+            'date' => now()->subDays(2)->toDateString(),
+            'start_time' => '08:00:00',
+            'end_time' => '17:30:00',
+            'break_minutes' => 30,
+            'hours' => 9,
+            'regular_hours' => 8,
+            'overtime_hours' => 1,
+            'billable' => true,
+            'source' => 'manual',
+            'status' => TimeEntry::STATUS_SUBMITTED,
+        ]);
+        $submitted->recordInitialStatus();
+        $submitted->submitted_at = now()->subDays(2)->setTime(17, 45);
+        $submitted->save();
+        $submitted->recordActivity('submitted', 'Submitted for approval.');
+
+        // Approved — already counts toward the job's actual/billable hours.
+        $approved = TimeEntry::create([
+            'job_id' => $job->id,
+            'job_task_id' => $tasks->get(2)?->id,
+            'user_id' => $user->id,
+            'team_member_id' => $teamMember->id,
+            'date' => now()->subDays(4)->toDateString(),
+            'start_time' => '08:00:00',
+            'end_time' => '16:00:00',
+            'break_minutes' => 30,
+            'hours' => 7.5,
+            'regular_hours' => 7.5,
+            'overtime_hours' => 0,
+            'billable' => true,
+            'source' => 'manual',
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+        $approved->recordInitialStatus();
+        $approved->submitted_at = now()->subDays(4)->setTime(16, 15);
+        $approved->approved_at = now()->subDays(3)->setTime(9, 0);
+        $approved->approved_by = $user->id;
+        $approved->save();
+        $approved->recordActivity('submitted', 'Submitted for approval.');
+        $approved->recordActivity('approved', "Approved by {$user->name}.");
+
+        // Rejected — sent back with a reason, editable again.
+        $rejected = TimeEntry::create([
+            'job_id' => $job->id,
+            'job_task_id' => $tasks->get(1)?->id,
+            'user_id' => $user->id,
+            'team_member_id' => $teamMember->id,
+            'date' => now()->subDays(6)->toDateString(),
+            'start_time' => '08:00:00',
+            'end_time' => '16:00:00',
+            'break_minutes' => 30,
+            'hours' => 7.5,
+            'regular_hours' => 7.5,
+            'overtime_hours' => 0,
+            'billable' => false,
+            'source' => 'manual',
+            'status' => TimeEntry::STATUS_REJECTED,
+        ]);
+        $rejected->recordInitialStatus();
+        $rejection = 'Hours look high for this task — please double check against the schedule.';
+        $rejected->submitted_at = now()->subDays(6)->setTime(16, 15);
+        $rejected->rejected_at = now()->subDays(5)->setTime(9, 0);
+        $rejected->rejected_by = $user->id;
+        $rejected->rejection_reason = $rejection;
+        $rejected->save();
+        $rejected->recordActivity('submitted', 'Submitted for approval.');
+        $rejected->recordActivity('rejected', "Rejected by {$user->name}: {$rejection}");
+    }
+
+    /**
+     * A few real client invoices, one in each stage of the real workflow —
+     * the Invoices screen should never be empty on a fresh install.
+     */
+    private function seedInvoices(User $user): void
+    {
+        $jobs = Job::whereNotNull('client')->orderBy('id')->take(4)->get();
+
+        // Paid — sent, then actually marked paid, so "Paid This Month" and
+        // "Average Days to Pay" have a real fact to compute from.
+        $paid = Invoice::create([
+            'invoice_number' => Invoice::nextNumber(),
+            'job_id' => $jobs[0]->id,
+            'client' => $jobs[0]->client,
+            'invoice_date' => now()->subDays(20)->toDateString(),
+            'due_date' => now()->subDays(6)->toDateString(),
+            'tax_pct' => 8.25,
+            'status' => Invoice::STATUS_DRAFT,
+            'created_by' => $user->id,
+        ]);
+        $paid->items()->create([
+            'description' => 'Electrical panel upgrade — labor and materials',
+            'quantity' => 1, 'unit_price' => 12450, 'total' => 12450, 'position' => 1,
+        ]);
+        $paid->recalculateTotals();
+        $paid->update(['status' => Invoice::STATUS_SENT, 'sent_at' => now()->subDays(20)]);
+        $paid->update(['status' => Invoice::STATUS_PAID, 'paid_amount' => $paid->total, 'paid_at' => now()->subDays(8)]);
+        PaymentTransaction::create([
+            'invoice_id' => $paid->id,
+            'amount' => $paid->total,
+            'status' => PaymentTransaction::STATUS_COMPLETED,
+            'client' => $paid->client,
+            'description' => "Invoice {$paid->invoice_number} marked paid",
+            'occurred_at' => $paid->paid_at,
+            'recorded_by' => $user->id,
+        ]);
+
+        // Overdue — sent, due date already passed, still unpaid. Status stays
+        // "sent" in the database; "overdue" is derived, never stored.
+        $overdue = Invoice::create([
+            'invoice_number' => Invoice::nextNumber(),
+            'job_id' => $jobs[1]->id,
+            'client' => $jobs[1]->client,
+            'invoice_date' => now()->subDays(30)->toDateString(),
+            'due_date' => now()->subDays(9)->toDateString(),
+            'tax_pct' => 8.25,
+            'status' => Invoice::STATUS_DRAFT,
+            'created_by' => $user->id,
+        ]);
+        $overdue->items()->create([
+            'description' => 'Emergency generator tie-in',
+            'quantity' => 1, 'unit_price' => 6245, 'total' => 6245, 'position' => 1,
+        ]);
+        $overdue->recalculateTotals();
+        $overdue->update(['status' => Invoice::STATUS_SENT, 'sent_at' => now()->subDays(30)]);
+
+        // Pending — sent, due date still ahead.
+        $pending = Invoice::create([
+            'invoice_number' => Invoice::nextNumber(),
+            'job_id' => $jobs[2]->id,
+            'client' => $jobs[2]->client,
+            'invoice_date' => now()->subDays(5)->toDateString(),
+            'due_date' => now()->addDays(10)->toDateString(),
+            'tax_pct' => 8.25,
+            'status' => Invoice::STATUS_DRAFT,
+            'created_by' => $user->id,
+        ]);
+        $pending->items()->create([
+            'description' => 'LED lighting retrofit — phase 1',
+            'quantity' => 1, 'unit_price' => 8900, 'total' => 8900, 'position' => 1,
+        ]);
+        $pending->recalculateTotals();
+        $pending->update(['status' => Invoice::STATUS_SENT, 'sent_at' => now()->subDays(5)]);
+
+        // Draft — not yet sent.
+        $draft = Invoice::create([
+            'invoice_number' => Invoice::nextNumber(),
+            'job_id' => $jobs[3]->id,
+            'client' => $jobs[3]->client,
+            'invoice_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'tax_pct' => 8.25,
+            'status' => Invoice::STATUS_DRAFT,
+            'created_by' => $user->id,
+        ]);
+        $draft->items()->create([
+            'description' => 'Site survey and scope confirmation',
+            'quantity' => 1, 'unit_price' => 1200, 'total' => 1200, 'position' => 1,
+        ]);
+        $draft->recalculateTotals();
+    }
+
+    /**
+     * Real priced line items on the first job's estimate, plus real actual
+     * material/equipment costs recorded against it — enough for the Job
+     * Costing dashboard to show a genuine material-cost overrun, a real
+     * profit, and a real margin, without any of it being invented.
+     */
+    private function seedJobCosting(): void
+    {
+        $job = Job::orderBy('id')->first();
+        $estimate = $job->estimates()->first();
+
+        if ($estimate === null) {
+            return;
+        }
+
+        EstimateItem::create([
+            'estimate_id' => $estimate->id, 'category' => 'material', 'description' => 'Panelboards and breakers',
+            'unit' => 'ea', 'quantity' => 1, 'unit_cost' => 4200, 'total' => 4200, 'source' => 'manual', 'position' => 1,
+        ]);
+        EstimateItem::create([
+            'estimate_id' => $estimate->id, 'category' => 'fixture', 'description' => 'LED fixtures',
+            'unit' => 'ea', 'quantity' => 40, 'unit_cost' => 65, 'total' => 2600, 'source' => 'manual', 'position' => 2,
+        ]);
+        EstimateItem::create([
+            'estimate_id' => $estimate->id, 'category' => 'labor', 'description' => 'Install labor',
+            'unit' => 'hr', 'quantity' => 80, 'unit_cost' => 65, 'total' => 5200, 'source' => 'manual', 'position' => 3,
+        ]);
+        EstimateItem::create([
+            'estimate_id' => $estimate->id, 'category' => 'equipment', 'description' => 'Lift rental',
+            'unit' => 'day', 'quantity' => 3, 'unit_cost' => 350, 'total' => 1050, 'source' => 'manual', 'position' => 4,
+        ]);
+        $estimate->recalculateTotals();
+
+        // Real deliveries, priced slightly above what was estimated — the
+        // material-cost overrun the dashboard's alert card is meant to show.
+        JobCostEntry::create([
+            'job_id' => $job->id, 'category' => JobCostEntry::CATEGORY_MATERIAL,
+            'description' => 'Panelboards (delivered)', 'quantity' => 1, 'unit_cost' => 4650, 'amount' => 4650,
+            'incurred_on' => now()->subDays(10)->toDateString(),
+        ]);
+        JobCostEntry::create([
+            'job_id' => $job->id, 'category' => JobCostEntry::CATEGORY_MATERIAL,
+            'description' => 'LED fixtures (delivered)', 'quantity' => 40, 'unit_cost' => 68, 'amount' => 2720,
+            'incurred_on' => now()->subDays(6)->toDateString(),
+        ]);
+        JobCostEntry::create([
+            'job_id' => $job->id, 'category' => JobCostEntry::CATEGORY_EQUIPMENT,
+            'description' => 'Lift rental (actual)', 'quantity' => 4, 'unit_cost' => 350, 'amount' => 1400,
+            'incurred_on' => now()->subDays(4)->toDateString(),
+        ]);
+    }
+
+    /** A real version family, a favorite, a shared file, a private contract and one importable AI Takeoff drawing. */
+    private function seedDocuments(User $user): void
+    {
+        $jobs = Job::orderBy('id')->take(2)->get();
+        $primaryJob = $jobs->first();
+        $secondJob = $jobs->last();
+        $estimate = $primaryJob?->estimates()->first();
+
+        $jordan = User::updateOrCreate(
+            ['email' => 'jordan.estimator@breeze.ai'],
+            ['name' => 'Jordan Lee', 'role' => 'Estimator', 'password' => 'breeze123', 'email_verified_at' => now()],
+        );
+
+        $disk = Storage::disk(config('documents.disk'));
+
+        // A real version family: v1 superseded by v2, so History has something real to show.
+        $v1Path = 'documents/seed-riverside-electrical-plans-v1.pdf';
+        $disk->put($v1Path, $this->seedPdfBytes('Riverside Complex - Electrical Plans v1.0'));
+        $v1 = Document::create([
+            'name' => 'Riverside Complex - Electrical Plans',
+            'original_filename' => 'riverside-electrical-plans-v1.pdf',
+            'storage_path' => $v1Path,
+            'mime_type' => 'application/pdf',
+            'extension' => 'pdf',
+            'file_size' => $disk->size($v1Path),
+            'document_type' => 'Blueprint',
+            'job_id' => $primaryJob?->id,
+            'estimate_id' => $estimate?->id,
+            'uploaded_by' => $user->id,
+            'visibility' => Document::VISIBILITY_TEAM,
+            'version' => 1,
+            'is_latest' => false,
+        ]);
+
+        $v2Path = 'documents/seed-riverside-electrical-plans-v2.pdf';
+        $disk->put($v2Path, $this->seedPdfBytes('Riverside Complex - Electrical Plans v2.3'));
+        Document::create([
+            'name' => 'Riverside Complex - Electrical Plans',
+            'original_filename' => 'riverside-electrical-plans-v2.pdf',
+            'storage_path' => $v2Path,
+            'mime_type' => 'application/pdf',
+            'extension' => 'pdf',
+            'file_size' => $disk->size($v2Path),
+            'document_type' => 'Blueprint',
+            'job_id' => $primaryJob?->id,
+            'estimate_id' => $estimate?->id,
+            'uploaded_by' => $user->id,
+            'visibility' => Document::VISIBILITY_TEAM,
+            'version' => 2,
+            'version_root_id' => $v1->id,
+            'is_latest' => true,
+        ]);
+
+        // Favorited, so the Favorites tab has a real row from the start.
+        $panelSchedulePath = 'documents/seed-panel-schedule.pdf';
+        $disk->put($panelSchedulePath, $this->seedPdfBytes('Panel Schedule - Riverside'));
+        $panelSchedule = Document::create([
+            'name' => 'Panel Schedule - Riverside',
+            'original_filename' => 'panel-schedule.pdf',
+            'storage_path' => $panelSchedulePath,
+            'mime_type' => 'application/pdf',
+            'extension' => 'pdf',
+            'file_size' => $disk->size($panelSchedulePath),
+            'document_type' => 'Schedule',
+            'job_id' => $primaryJob?->id,
+            'uploaded_by' => $user->id,
+            'visibility' => Document::VISIBILITY_TEAM,
+            'version' => 1,
+            'is_latest' => true,
+        ]);
+        $panelSchedule->favoritedBy()->attach($user->id);
+
+        // A private contract, then shared with Jordan — Shared with Me has a real row too.
+        $contractPath = 'documents/seed-client-contract.pdf';
+        $disk->put($contractPath, $this->seedPdfBytes('Client Contract - Signed'));
+        $contract = Document::create([
+            'name' => 'Client Contract - Signed',
+            'original_filename' => 'client-contract.pdf',
+            'storage_path' => $contractPath,
+            'mime_type' => 'application/pdf',
+            'extension' => 'pdf',
+            'file_size' => $disk->size($contractPath),
+            'document_type' => 'Contract',
+            'job_id' => $secondJob?->id,
+            'uploaded_by' => $user->id,
+            'visibility' => Document::VISIBILITY_PRIVATE,
+            'version' => 1,
+            'is_latest' => true,
+        ]);
+        $contract->shares()->create([
+            'shared_with_user_id' => $jordan->id,
+            'shared_by_user_id' => $user->id,
+            'permission' => 'view',
+        ]);
+
+        // An AI Takeoff drawing with a real file on disk, left unregistered — the
+        // "Import from AI Takeoff" picker has a real candidate from the start.
+        $project = Project::first();
+        if ($project !== null) {
+            $drawingPath = 'uploads/seed-westside-panel-plan.pdf';
+            $disk->put($drawingPath, $this->seedPdfBytes('Westside Panel Plan'));
+            Upload::create([
+                'user_id' => $user->id,
+                'project_id' => $project->id,
+                'name' => 'Westside_Panel_Plan.pdf',
+                'format' => 'PDF',
+                'size_bytes' => $disk->size($drawingPath),
+                'path' => $drawingPath,
+                'status' => 'completed',
+            ]);
+        }
+    }
+
+    /** A minimal but genuinely valid single-page PDF, so preview/download open real bytes. */
+    private function seedPdfBytes(string $title): string
+    {
+        return "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+            ."2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+            ."3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\n"
+            ."trailer<</Root 1 0 R>>\n% {$title}\n";
     }
 
     private function seedJobs(): void
@@ -462,26 +853,48 @@ class DemoDataSeeder extends Seeder
         }
     }
 
+    /**
+     * Every row here comes from firing the app's own Notification classes
+     * against entities this seeder already created for real — never a
+     * hand-typed title/detail string standing in for one.
+     */
     private function seedNotifications(User $user): void
     {
-        $notifications = [
-            ['Site Visit — Oakwood Medical', 'Oct 3, 2026 • 9:00 AM', '2026-08-03T07:00:00Z'],
-            ['Takeoff ready for review', 'Westside Commercial Complex • 848 items', '2026-08-03T06:20:00Z'],
-            ['Estimate approved', 'Lakeside Residences Tower A', '2026-08-02T18:44:00Z'],
-            ['New comment from Dana Wu', '“Can you confirm the panel schedule?”', '2026-08-02T15:12:00Z'],
-            ['Invoice #4821 paid', 'Horizon Builders Inc. • $12,400', '2026-08-01T11:03:00Z'],
-        ];
+        $jordan = User::where('email', 'jordan.estimator@breeze.ai')->first();
+        $job = Job::orderBy('id')->first();
 
-        foreach ($notifications as [$title, $detail, $createdAt]) {
-            $at = Carbon::parse($createdAt);
+        if ($job !== null) {
+            $overrun = app(JobCostSummary::class)->for($job);
 
-            $notification = AppNotification::create([
-                'user_id' => $user->id,
-                'title' => $title,
-                'detail' => $detail,
-            ]);
+            if ($overrun['isOverBudget']) {
+                $user->notify(new JobCostOverrun($job, $overrun['overrunReason'], $overrun['overrunAmount'], $overrun['overrunPct']));
+            }
 
-            $notification->forceFill(['created_at' => $at, 'updated_at' => $at])->save();
+            if ($jordan !== null && $job->activeAssignments()->where('role', JobAssignment::ROLE_ESTIMATOR)->doesntExist()) {
+                $assignment = $job->assignments()->create([
+                    'user_id' => $jordan->id,
+                    'role' => JobAssignment::ROLE_ESTIMATOR,
+                    'name' => $jordan->name,
+                    'assigned_by' => $user->id,
+                    'assigned_at' => now(),
+                ]);
+                $jordan->notify(new JobAssigned($assignment));
+            }
+        }
+
+        $paidInvoice = Invoice::where('status', Invoice::STATUS_PAID)->first();
+        if ($paidInvoice !== null) {
+            $user->notify(new InvoiceStatusChanged($paidInvoice, InvoiceStatusChanged::PAID));
+        }
+
+        $contract = Document::where('name', 'Client Contract - Signed')->first();
+        if ($contract !== null && $jordan !== null) {
+            $jordan->notify(new DocumentShared($contract, $user));
+        }
+
+        $aiResult = AiResult::with('project')->whereHas('project')->latest('id')->first();
+        if ($aiResult !== null) {
+            $user->notify(new TakeoffReadyForReview($aiResult));
         }
     }
 

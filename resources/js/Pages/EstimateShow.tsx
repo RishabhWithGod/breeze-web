@@ -25,9 +25,11 @@ import {
 } from '@/components/finals'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ApprovalHistoryPanel } from '@/components/review'
+import { JobDocumentsPanel } from '@/components/documents'
 import { ROUTES, routeTo } from '@/constants'
 import type {
   ApprovalHistoryEntry,
+  Document,
   EquipmentRow,
   EstimateItemRow,
   EstimateStatus,
@@ -81,6 +83,8 @@ export interface EstimateShowProps {
     panelSchedules: readonly PanelScheduleRow[]
   }
   history: readonly ApprovalHistoryEntry[]
+  documents: readonly Document[]
+  documentsCount: number
 }
 
 /**
@@ -97,6 +101,8 @@ export default function EstimateShow({
   categories,
   drawingData,
   history,
+  documents,
+  documentsCount,
 }: EstimateShowProps) {
   const { flash } = usePage<SharedPageProps>().props
 
@@ -363,6 +369,16 @@ export default function EstimateShow({
               <ApprovalHistoryPanel entries={history} />
             </Card>
           )}
+
+          <Card padding="lg">
+            <SectionHeading as="h3" title="Documents" subtitle={`${documentsCount} filed against this estimate`} />
+            <JobDocumentsPanel
+              viewAllHref={`${ROUTES.documents}?estimate_id=${estimate.id}`}
+              documents={documents}
+              totalCount={documentsCount}
+              emptyLabel="No documents filed against this estimate yet."
+            />
+          </Card>
         </div>
       </div>
 

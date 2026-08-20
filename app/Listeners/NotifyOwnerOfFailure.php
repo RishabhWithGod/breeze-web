@@ -15,13 +15,15 @@ class NotifyOwnerOfFailure implements ShouldHandleEventsAfterCommit
     public function handle(TakeoffFailed $event): void
     {
         $project = $event->aiJob->project;
+        $link = route('processing.show', $project, absolute: false);
 
         AppNotification::create([
             'user_id' => $event->aiJob->user_id,
             'type' => 'takeoff-failed',
             'title' => 'AI takeoff failed',
             'detail' => "{$project->name}: {$event->reason}",
-            'link' => route('processing.show', $project, absolute: false),
+            'link' => $link,
+            'data' => ['actions' => [['label' => 'View Project', 'href' => $link]]],
         ]);
     }
 }

@@ -17,11 +17,14 @@ use Throwable;
  * detector, stage trail, final decision and crop images live — everything a review
  * card shows beyond the aggregated counts. All of it is read over HTTP.
  *
- * The one thing the upload response does not return is its own `run_id`, so it has
- * to be resolved: newest run directory whose lifecycle `project_name` matches the
- * drawing just analysed. That needs a shared filesystem, which is why it is
- * optional — without it ingest still completes from the upload response alone and
- * cards simply carry no crop image.
+ * The upload response carries its own `run_id` (`AiResponseNormaliser` reads it
+ * onto `ai_results.run_id`), which is the normal path: `fetch()` asks the engine
+ * for that exact run directly, no shared filesystem involved. `resolve()` below —
+ * newest run directory whose lifecycle `project_name` matches the drawing just
+ * analysed — is only a fallback for a run ingested before that was captured, and
+ * needs a shared filesystem with the engine, which is why it stays optional:
+ * without it, ingest still completes from the upload response alone and cards
+ * simply carry no crop image.
  */
 class LifecycleReader
 {

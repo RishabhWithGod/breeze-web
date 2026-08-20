@@ -79,8 +79,10 @@ class ProjectTest extends TestCase
                 ->has('disciplines'));
     }
 
-    public function test_a_project_is_created_with_its_labelled_pdfs(): void
+    public function test_a_project_is_created_with_its_labelled_pdf(): void
     {
+        // One PDF per request — `takeoff.uploads.max_files` is 1, so a project's
+        // drawing set is built by adding one PDF at a time, not in a batch.
         $response = $this->actingAs($this->user)->post('/projects', [
             'name' => 'Harborview Data Hall',
             'code' => 'PRJ-2041',
@@ -90,11 +92,8 @@ class ProjectTest extends TestCase
             'project_type' => 'commercial',
             'due_date' => '2026-09-01',
             'notes' => 'Revision C only.',
-            'documents' => [
-                UploadedFile::fake()->create('E-101.pdf', 120, 'application/pdf'),
-                UploadedFile::fake()->create('E-102.pdf', 90, 'application/pdf'),
-            ],
-            'document_titles' => ['Ground floor lighting', ''],
+            'documents' => [UploadedFile::fake()->create('E-101.pdf', 120, 'application/pdf')],
+            'document_titles' => ['Ground floor lighting'],
         ]);
 
         $project = Project::query()->where('name', 'Harborview Data Hall')->sole();
@@ -108,22 +107,53 @@ class ProjectTest extends TestCase
         // The drawing a takeoff would run against, mirrored onto the project.
         $this->assertSame('E-101.pdf', $project->drawing_name);
 
+        $document = $project->uploads()->sole();
+        $this->assertSame('Ground floor lighting', $document->title);
+
+        $disk = Storage::disk(config('takeoff.uploads.disk'));
+        $this->assertTrue($disk->exists($document->path));
+
+        $this->assertDatabaseHas('project_activities', [
+            'project_id' => $project->id,
+            'title' => 'Project created',
+        ]);
+    }
+
+    public function test_only_one_pdf_can_be_submitted_at_a_time(): void
+    {
+        $this->actingAs($this->user)
+            ->post('/projects', [
+                'name' => 'Harborview Data Hall',
+                'client' => 'Vertex Infrastructure',
+                'documents' => [
+                    UploadedFile::fake()->create('E-101.pdf', 60, 'application/pdf'),
+                    UploadedFile::fake()->create('E-102.pdf', 60, 'application/pdf'),
+                ],
+            ])
+            ->assertSessionHasErrors('documents');
+
+        $this->assertDatabaseCount('projects', 0);
+    }
+
+    public function test_a_second_pdf_is_added_to_a_project_in_its_own_request(): void
+    {
+        $project = $this->makeProject(['name' => 'Harborview Data Hall']);
+
+        $this->actingAs($this->user)->post(route('projects.documents.store', $project), [
+            'documents' => [UploadedFile::fake()->create('E-101.pdf', 120, 'application/pdf')],
+            'document_titles' => ['Ground floor lighting'],
+        ]);
+
+        $this->actingAs($this->user)->post(route('projects.documents.store', $project), [
+            'documents' => [UploadedFile::fake()->create('E-102.pdf', 90, 'application/pdf')],
+        ]);
+
         $documents = $project->uploads()->oldest()->get();
         $this->assertCount(2, $documents);
         $this->assertSame('Ground floor lighting', $documents[0]->title);
         // No label given, so the file names itself.
         $this->assertNull($documents[1]->title);
         $this->assertSame('E-102.pdf', $documents[1]->label());
-
-        $disk = Storage::disk(config('takeoff.uploads.disk'));
-        foreach ($documents as $document) {
-            $this->assertTrue($disk->exists($document->path));
-        }
-
-        $this->assertDatabaseHas('project_activities', [
-            'project_id' => $project->id,
-            'title' => 'Project created',
-        ]);
     }
 
     public function test_a_project_can_be_created_before_any_drawing_exists(): void
@@ -184,10 +214,10 @@ class ProjectTest extends TestCase
         $project = $this->makeProject();
 
         $this->actingAs($this->user)->post(route('projects.documents.store', $project), [
-            'documents' => [
-                UploadedFile::fake()->create('E-101.pdf', 60, 'application/pdf'),
-                UploadedFile::fake()->create('E-102.pdf', 60, 'application/pdf'),
-            ],
+            'documents' => [UploadedFile::fake()->create('E-101.pdf', 60, 'application/pdf')],
+        ]);
+        $this->actingAs($this->user)->post(route('projects.documents.store', $project), [
+            'documents' => [UploadedFile::fake()->create('E-102.pdf', 60, 'application/pdf')],
         ]);
 
         $documents = $project->uploads()->oldest()->get();

@@ -1,4 +1,4 @@
-import { format, formatDistanceToNow, parseISO } from 'date-fns'
+import { format, formatDistanceToNow, isToday, isYesterday, parseISO } from 'date-fns'
 
 const FILE_SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const
 
@@ -22,6 +22,14 @@ export function formatDate(iso: string, pattern = 'MMM d, yyyy'): string {
 /** "2026-08-01T10:00:00Z" → "about 2 hours ago" */
 export function formatRelative(iso: string): string {
   return `${formatDistanceToNow(parseISO(iso))} ago`
+}
+
+/** "Today, 2:15 PM" / "Yesterday, 9:02 AM" / "Aug 1, 2026, 9:02 AM" */
+export function formatModified(iso: string): string {
+  const date = parseISO(iso)
+  if (isToday(date)) return `Today, ${format(date, 'h:mm a')}`
+  if (isYesterday(date)) return `Yesterday, ${format(date, 'h:mm a')}`
+  return format(date, 'MMM d, yyyy, h:mm a')
 }
 
 /** 0.947 → "95%" */
@@ -50,6 +58,25 @@ export function formatDuration(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   return `${minutes}m ${String(seconds).padStart(2, '0')}s`
+}
+
+/** 9258 → "02:34:18" — the running-timer clock face. */
+export function formatClock(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.round(totalSeconds))
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = seconds % 60
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${pad(hours)}:${pad(minutes)}:${pad(secs)}`
+}
+
+/** 3.25 → "3h 15m" */
+export function formatHours(hours: number): string {
+  const wholeHours = Math.floor(hours)
+  const minutes = Math.round((hours - wholeHours) * 60)
+  if (wholeHours === 0) return `${minutes}m`
+  if (minutes === 0) return `${wholeHours}h`
+  return `${wholeHours}h ${minutes}m`
 }
 
 /** "Office_Building_Plans.pdf" → "PDF" */

@@ -70,6 +70,12 @@ class Upload extends Model
         return $this->hasMany(AiJob::class);
     }
 
+    /** Documents-module rows that point at this same drawing, rather than duplicating it. */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
+
     /** Preview of the given 1-indexed page, when one was rendered. */
     public function previewFor(int $page): ?string
     {

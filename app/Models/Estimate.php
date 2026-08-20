@@ -71,6 +71,18 @@ class Estimate extends Model
         return $this->hasMany(EstimateItem::class)->orderBy('category')->orderBy('position');
     }
 
+    /** Invoices raised from this estimate, when Billing has converted it. */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    /** @return HasMany<Document, $this> */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class)->latest('updated_at');
+    }
+
     /**
      * The takeoff this estimate was generated from, when it came from one.
      *

@@ -72,8 +72,16 @@ export default function ProjectShow({
   const [rejected, setRejected] = useState<readonly RejectedUploadFile[]>([])
   const [pendingDelete, setPendingDelete] = useState<ProjectDocument | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
+  const [startingTakeoff, setStartingTakeoff] = useState(false)
   const deleteDialog = useDisclosure()
   const deleteProjectDialog = useDisclosure()
+
+  const startTakeoff = () => {
+    router.post(routeTo.projectTakeoffStart(project.id), {}, {
+      onStart: () => setStartingTakeoff(true),
+      onFinish: () => setStartingTakeoff(false),
+    })
+  }
 
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
@@ -174,9 +182,20 @@ export default function ProjectShow({
                 View takeoff
               </ButtonLink>
             ) : (
-              <ButtonLink href={ROUTES.upload} variant="secondary" leftIcon={Sparkles}>
+              <Button
+                variant="secondary"
+                leftIcon={Sparkles}
+                onClick={startTakeoff}
+                isLoading={startingTakeoff}
+                disabled={documents.length === 0}
+                title={
+                  documents.length === 0
+                    ? 'Add a drawing PDF before running a takeoff'
+                    : undefined
+                }
+              >
                 Run AI Takeoff
-              </ButtonLink>
+              </Button>
             )}
             <Button
               variant="white"

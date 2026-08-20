@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreJobRequest;
 use App\Http\Requests\UpdateJobRequest;
 use App\Http\Resources\ApprovalHistoryResource;
+use App\Http\Resources\DocumentResource;
 use App\Http\Resources\FeedItemResource;
 use App\Http\Resources\JobDetailResource;
 use App\Http\Resources\JobResource;
@@ -13,6 +14,9 @@ use App\Models\FeedItem;
 use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\TeamMember;
+use App\Models\TimeEntry;
+use App\Services\JobCosting\JobCostSummary;
+use App\Services\TimeTracking\JobLaborSummary;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -22,6 +26,11 @@ use Inertia\Response;
 
 class JobController extends Controller
 {
+    public function __construct(
+        private readonly JobLaborSummary $laborSummary,
+        private readonly JobCostSummary $costSummary,
+    ) {}
+
     public function index(Request $request): Response
     {
         $filters = $request->validate([
@@ -124,7 +133,7 @@ class JobController extends Controller
     }
 
     /** Job detail screen. */
-    public function show(Job $job): Response
+    public function show(Request $request, Job $job): Response
     {
         $job->load([
             'foreman',
@@ -156,6 +165,14 @@ class JobController extends Controller
                     $job->aiResult->history()->with('actor')->take(25)->get()
                 )->resolve()
                 : [],
+            // Live labor totals — never a stored duplicate of the time entries
+            // they summarise.
+            'timeTracking' => $this->laborSummary->for($job),
+            'canViewTimeCosts' => (bool) $request->user()->can('viewJobCosts', TimeEntry::class),
+            'jobCosting' => $this->costSummary->for($job),
+            'documents' => $job->documents()->where('is_archived', false)->with('uploader')->take(5)->get()
+                ->map(fn ($document) => (new DocumentResource($document))->resolve()),
+            'documentsCount' => $job->documents()->where('is_archived', false)->count(),
         ]);
     }
 

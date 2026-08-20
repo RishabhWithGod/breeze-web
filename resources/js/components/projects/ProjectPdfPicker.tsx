@@ -61,7 +61,8 @@ export function ProjectPdfPicker({
 
       const overflow = accepted.slice(remaining).map((file) => ({
         name: file.name,
-        reason: `Only ${maxFiles} PDFs can be added`,
+        reason:
+          maxFiles === 1 ? 'Only one PDF can be added at a time' : `Only ${maxFiles} PDFs can be added`,
       }))
 
       const refused = rejections.map((rejection) => ({
@@ -81,6 +82,7 @@ export function ProjectPdfPicker({
     onDrop,
     accept: PDF_ACCEPT,
     maxSize: maxFileSizeMb * 1024 * 1024,
+    multiple: maxFiles > 1,
     disabled: disabled || remaining === 0,
     noClick: true,
     noKeyboard: true,
@@ -108,7 +110,10 @@ export function ProjectPdfPicker({
                 : 'border-brand bg-white/4 hover:bg-white/8',
         )}
       >
-        <input {...getInputProps()} aria-label="Choose drawing PDFs" />
+        <input
+          {...getInputProps()}
+          aria-label={maxFiles === 1 ? 'Choose a drawing PDF' : 'Choose drawing PDFs'}
+        />
 
         <span
           className={cn(
@@ -127,8 +132,12 @@ export function ProjectPdfPicker({
           {isRejecting
             ? 'Only PDF drawings can be added'
             : isDragActive
-              ? 'Drop the PDFs here'
-              : 'Drag & drop the project PDFs'}
+              ? maxFiles === 1
+                ? 'Drop the PDF here'
+                : 'Drop the PDFs here'
+              : maxFiles === 1
+                ? 'Drag & drop the project PDF'
+                : 'Drag & drop the project PDFs'}
         </p>
 
         <Button
@@ -138,13 +147,17 @@ export function ProjectPdfPicker({
           onClick={open}
           className="mt-3"
         >
-          Browse PDFs
+          {maxFiles === 1 ? 'Browse PDF' : 'Browse PDFs'}
         </Button>
 
         <p className="mt-4 text-sm text-white/80">
           {remaining === 0
-            ? `All ${maxFiles} slots used`
-            : `${remaining} of ${maxFiles} remaining · max ${maxFileSizeMb} MB each`}
+            ? maxFiles === 1
+              ? 'A PDF is already added — remove it to choose another'
+              : `All ${maxFiles} slots used`
+            : maxFiles === 1
+              ? 'One PDF at a time'
+              : `${remaining} of ${maxFiles} remaining`}
         </p>
       </div>
 

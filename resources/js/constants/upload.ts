@@ -8,9 +8,9 @@ import type { SupportedFormat } from '@/types'
  * dropzone can reject an obviously bad file without a round trip. The Upload
  * page also receives the live limits as props — prefer those where available.
  */
-export const MAX_FILE_SIZE_MB = 100
+export const MAX_FILE_SIZE_MB = 500
 export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-export const MAX_FILES = 8
+export const MAX_FILES = 1
 
 export const SUPPORTED_FORMATS: readonly SupportedFormat[] = ['PDF', 'CAD', 'DWG', 'BIM']
 

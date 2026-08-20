@@ -1,0 +1,15 @@
+# Raises PHP's own upload ceiling for Apache + mod_php deployments (PHP-FPM
+# deployments should instead use public/.user.ini, already checked in beside
+# this file). Without this, PHP silently truncates any upload past its own
+# upload_max_filesize/post_max_size regardless of what config/takeoff.php
+# claims — see App\Support\UploadLimits.
+#
+# post_max_size is set well above upload_max_filesize so it never becomes the
+# binding constraint on its own — up to takeoff.uploads.max_files (8) PDFs can
+# be picked in one request.
+<IfModule mod_php.c>
+    php_value upload_max_filesize 512M
+    php_value post_max_size 2G
+    php_value memory_limit 512M
+    php_value max_execution_time 300
+</IfModule>

@@ -42,8 +42,10 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
 
+            // The bell shows a recent slice; the full, paginated, filterable
+            // history lives at the Notification Center (`NotificationController::index`).
             'notifications' => fn () => $user
-                ? NotificationResource::collection($user->appNotifications()->latest()->get())->resolve()
+                ? NotificationResource::collection($user->appNotifications()->latest()->latest('id')->take(8)->get())->resolve()
                 : [],
 
             'unreadNotificationCount' => fn () => $user
@@ -58,6 +60,12 @@ class HandleInertiaRequests extends Middleware
                  * Undo even when the delete happened somewhere else.
                  */
                 'restoreJobId' => $request->session()->get('restore_job_id'),
+                /**
+                 * Plaintext 2FA recovery codes, shown exactly once right after
+                 * they are generated — never persisted anywhere as plaintext,
+                 * never re-shown on a later request.
+                 */
+                'recoveryCodes' => $request->session()->get('recoveryCodes'),
             ],
         ];
     }

@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useDropzone, type FileRejection } from 'react-dropzone'
+import { useDropzone, type Accept, type FileRejection } from 'react-dropzone'
 import { motion } from 'framer-motion'
 import { CloudUpload, FileWarning, ShieldCheck, UploadCloud } from 'lucide-react'
 import { Button } from '@/components/common'
@@ -18,6 +18,10 @@ export interface UploadDropzoneProps {
   /** Live limits from the server; falls back to the mirrored constants. */
   maxFiles?: number
   maxFileSizeMb?: number
+  /** Overrides which MIME/extensions are accepted; defaults to the AI Takeoff set. */
+  accept?: Accept
+  /** Overrides the format badges shown below the dropzone. */
+  supportedFormats?: readonly string[]
   /** Blocks interaction while an upload is in flight. */
   disabled?: boolean
   /** Renders the invalid styling (used when the parent reports a form error). */
@@ -36,6 +40,8 @@ export function UploadDropzone({
   onFilesRejected,
   maxFiles = MAX_FILES,
   maxFileSizeMb = MAX_FILE_SIZE_MB,
+  accept = DROPZONE_ACCEPT,
+  supportedFormats = SUPPORTED_FORMATS,
   disabled = false,
   hasError = false,
   isSuccess = false,
@@ -63,9 +69,10 @@ export function UploadDropzone({
 
   const { getRootProps, getInputProps, isDragActive, isDragReject, open } = useDropzone({
     onDrop,
-    accept: DROPZONE_ACCEPT,
+    accept,
     maxSize,
     maxFiles,
+    multiple: maxFiles > 1,
     disabled,
     noClick: true,
     noKeyboard: true,
@@ -153,7 +160,7 @@ export function UploadDropzone({
       </Button>
 
       <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-        {SUPPORTED_FORMATS.map((format) => (
+        {supportedFormats.map((format) => (
           <span
             key={format}
             className="rounded-panel border border-hairline bg-white/8 px-3 py-1 text-xs font-semibold tracking-wider text-white"
@@ -165,7 +172,7 @@ export function UploadDropzone({
 
       <p className="mt-4 flex items-center justify-center gap-2 text-sm text-white/80">
         <ShieldCheck size={15} aria-hidden className="text-brand/80" />
-        Up to {maxFiles} files · max {maxFileSizeMb} MB each
+        {maxFiles === 1 ? 'One file at a time' : `Up to ${maxFiles} files`}
       </p>
     </div>
   )

@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ApprovalHistoryResource;
+use App\Http\Resources\DocumentResource;
 use App\Http\Resources\EstimateItemResource;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
+use App\Models\JobAssignment;
+use App\Notifications\EstimateStatusChanged;
 use App\Services\Export\EstimatePdfWriter;
 use App\Services\Takeoff\EstimateBuilder;
 use Illuminate\Http\RedirectResponse;
@@ -71,6 +74,9 @@ class EstimateDetailController extends Controller
                     'label' => EstimateItem::CATEGORY_LABELS[$category],
                 ]),
             'statuses' => Estimate::STATUSES,
+            'documents' => $estimate->documents()->where('is_archived', false)->with('uploader')->take(5)->get()
+                ->map(fn ($document) => (new DocumentResource($document))->resolve()),
+            'documentsCount' => $estimate->documents()->where('is_archived', false)->count(),
 
             /*
              * Read off the same drawing but not priced by the engine: wire runs are
@@ -160,6 +166,7 @@ class EstimateDetailController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        $previousStatus = $estimate->status;
         $estimate->update($validated);
         $estimate->recalculateTotals();
 
@@ -169,9 +176,35 @@ class EstimateDetailController extends Controller
             to: '$'.number_format((float) $estimate->fresh()->grand_total, 2),
         );
 
+        if ($previousStatus !== $estimate->status
+            && in_array($estimate->status, [EstimateStatusChanged::APPROVED, EstimateStatusChanged::REJECTED], true)) {
+            $this->notifyOfStatusChange($request, $estimate);
+        }
+
         return redirect()
             ->route('estimates.show', $estimate)
             ->with('success', "Estimate {$estimate->number} updated.");
+    }
+
+    /**
+     * Mirrors `NotifyManagerOfEstimate`'s recipient resolution — the job's
+     * Project Manager, falling back to the takeoff owner when there isn't
+     * one — excluding whoever just made the change themselves.
+     */
+    private function notifyOfStatusChange(Request $request, Estimate $estimate): void
+    {
+        $manager = $estimate->job
+            ?->activeAssignments()
+            ->where('role', JobAssignment::ROLE_PROJECT_MANAGER)
+            ->with('user')
+            ->first()
+            ?->user;
+
+        $recipient = $manager ?? $estimate->takeoffProject?->user;
+
+        if ($recipient && $recipient->id !== $request->user()->id) {
+            $recipient->notify(new EstimateStatusChanged($estimate, $estimate->status));
+        }
     }
 
     public function storeItem(Request $request, Estimate $estimate): RedirectResponse

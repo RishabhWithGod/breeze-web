@@ -31,16 +31,18 @@ class ReviewCompleted extends Notification
             ->line('The approved quantities are ready to estimate.');
     }
 
-    /** @return array<string, string|null> */
+    /** @return array<string, mixed> */
     public function toAppNotification(object $notifiable): array
     {
         $tally = $this->result->reviewTally();
+        $link = route('finals.show', $this->result, absolute: false);
 
         return [
             'type' => 'review-completed',
             'title' => 'Takeoff review completed',
             'detail' => "{$this->result->project->name}: {$tally['approvedCount']} approved items ready to estimate",
-            'link' => route('finals.show', $this->result, absolute: false),
+            'link' => $link,
+            'data' => ['actions' => [['label' => 'View Final Takeoff', 'href' => $link]]],
         ];
     }
 }

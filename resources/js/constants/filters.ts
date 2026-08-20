@@ -154,3 +154,29 @@ export const ESTIMATE_SORT_OPTIONS = [
 ] as const
 
 export type EstimateSort = (typeof ESTIMATE_SORT_OPTIONS)[number]['value']
+
+/* -------------------------------------------------------------------------- */
+/*  Invoices                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** Mirrors Invoice::DISPLAY_STATUSES, plus the "all" pseudo-filter. */
+export const INVOICE_STATUS_FILTERS = [
+  { label: 'All Statuses', value: 'all' },
+  { label: 'Draft', value: 'draft' },
+  { label: 'Pending', value: 'sent' },
+  { label: 'Paid', value: 'paid' },
+  { label: 'Overdue', value: 'overdue' },
+] as const
+
+export type InvoiceStatusFilter = (typeof INVOICE_STATUS_FILTERS)[number]['value']
+
+/** Mirrors Invoice::SORTS. */
+export const INVOICE_SORT_OPTIONS = [
+  { label: 'Date (Newest)', value: 'date-desc' },
+  { label: 'Date (Oldest)', value: 'date-asc' },
+  { label: 'Amount (Highest)', value: 'amount-desc' },
+  { label: 'Amount (Lowest)', value: 'amount-asc' },
+  { label: 'Invoice # (A–Z)', value: 'number-asc' },
+] as const
+
+export type InvoiceSort = (typeof INVOICE_SORT_OPTIONS)[number]['value']

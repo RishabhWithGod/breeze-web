@@ -150,6 +150,18 @@ class Job extends Model
         return $this->hasMany(Estimate::class)->latest('issued_on');
     }
 
+    /** @return HasMany<Invoice, $this> */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class)->latest('invoice_date');
+    }
+
+    /** Real actual material/equipment/other costs logged against this job. */
+    public function costEntries(): HasMany
+    {
+        return $this->hasMany(JobCostEntry::class)->latest('incurred_on');
+    }
+
     /** Crew shifts on the scheduling calendar, earliest first. */
     public function crewShifts(): HasMany
     {
@@ -197,6 +209,18 @@ class Job extends Model
     public function statusChanges(): HasMany
     {
         return $this->hasMany(JobStatusChange::class)->latest()->latest('id');
+    }
+
+    /** @return HasMany<TimeEntry, $this> */
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class);
+    }
+
+    /** @return HasMany<Document, $this> */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class)->latest('updated_at');
     }
 
     /* ------------------------------------------------------------------ Scopes */

@@ -29,14 +29,17 @@ class EstimateReady extends Notification
             ->line('Every line, rate and percentage is still editable.');
     }
 
-    /** @return array<string, string|null> */
+    /** @return array<string, mixed> */
     public function toAppNotification(object $notifiable): array
     {
+        $link = route('estimates.show', $this->estimate, absolute: false);
+
         return [
             'type' => 'estimate-ready',
             'title' => "Estimate {$this->estimate->number} created",
             'detail' => $this->estimate->project.' — $'.number_format((float) $this->estimate->grand_total, 2),
-            'link' => route('estimates.show', $this->estimate, absolute: false),
+            'link' => $link,
+            'data' => ['actions' => [['label' => 'View Estimate', 'href' => $link]]],
         ];
     }
 }

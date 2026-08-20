@@ -34,6 +34,7 @@ class AiResponseNormaliser
      * @param  array<string, mixed>  $payload
      * @return array{
      *     project_name: ?string,
+     *     run_id: ?string,
      *     pages: int,
      *     symbol_counts: array<string, int>,
      *     cards: list<array<string, mixed>>,
@@ -62,6 +63,9 @@ class AiResponseNormaliser
 
         return [
             'project_name' => $this->string($payload['project_name'] ?? null),
+            // Carried straight through so crop lookups can ask the engine for this
+            // exact run instead of guessing which local debug directory matches it.
+            'run_id' => $this->string($payload['run_id'] ?? null),
             'pages' => max(0, (int) ($payload['pages'] ?? 0)),
             'symbol_counts' => $this->symbolCounts($payload),
             'cards' => $cards,

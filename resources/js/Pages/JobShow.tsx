@@ -38,11 +38,17 @@ import {
 } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ApprovalHistoryPanel } from '@/components/review'
+import { JobCostingSummary } from '@/components/jobCosting'
+import { JobDocumentsPanel } from '@/components/documents'
+import { JobTimeTrackingSummary } from '@/components/timeTracking'
 import { JOB_STATUS_OPTIONS, ROUTES, routeTo } from '@/constants'
 import { useDisclosure } from '@/hooks'
 import type {
   ApprovalHistoryEntry,
+  Document,
+  JobCostRow,
   JobDetail,
+  JobLaborSummary,
   JobStatus,
   JobTeamMember,
   SharedPageProps,
@@ -63,6 +69,11 @@ export interface JobShowProps {
   crew: readonly JobTeamMember[]
   /** The takeoff's audit trail, when the job came from one. */
   takeoffHistory: readonly ApprovalHistoryEntry[]
+  timeTracking: JobLaborSummary
+  canViewTimeCosts: boolean
+  jobCosting: JobCostRow
+  documents: readonly Document[]
+  documentsCount: number
 }
 
 /**
@@ -76,6 +87,11 @@ export default function JobShow({
   assignableMembers,
   crew,
   takeoffHistory,
+  timeTracking,
+  canViewTimeCosts,
+  jobCosting,
+  documents,
+  documentsCount,
 }: JobShowProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
@@ -255,6 +271,20 @@ export default function JobShow({
         <JobAssignmentsPanel jobId={job.id} assignments={job.assignments} members={crew} />
       </div>
 
+      {/* ============================================= Time Tracking ========= */}
+      <div className="mt-6">
+        <JobTimeTrackingSummary
+          jobId={job.id}
+          summary={timeTracking}
+          canViewCosts={canViewTimeCosts}
+        />
+      </div>
+
+      {/* =============================================== Job Costing ========== */}
+      <div className="mt-6">
+        <JobCostingSummary jobId={job.id} summary={jobCosting} canViewCosts={canViewTimeCosts} />
+      </div>
+
       {/* ============================================ Team + estimates ======= */}
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card padding="lg">
@@ -289,6 +319,17 @@ export default function JobShow({
           <JobAttachmentsPanel jobId={job.id} attachments={job.attachments} />
         </Card>
       </div>
+
+      {/* =================================================== Documents ======== */}
+      <Card padding="lg" className="mt-6">
+        <SectionHeading title="Documents" subtitle={`${documentsCount} filed against this job`} />
+        <JobDocumentsPanel
+          viewAllHref={`${ROUTES.documents}?job_id=${job.id}`}
+          documents={documents}
+          totalCount={documentsCount}
+          emptyLabel="No documents filed against this job yet."
+        />
+      </Card>
 
       {/* The reasoning behind the job's numbers, not just the numbers. */}
       {takeoffHistory.length > 0 && (

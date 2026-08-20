@@ -68,6 +68,17 @@ export function SymbolCard({
   const [noteDraft, setNoteDraft] = useState(row.notes ?? '')
   const [splitName, setSplitName] = useState('')
   const [splitCount, setSplitCount] = useState('1')
+  // A URL that exists but 404s/CORS-fails is a different state than having no
+  // URL at all — the reviewer should be told the image broke, not that the
+  // symbol has none. Reset during render (not an effect) when the server hands
+  // us a different URL to try, e.g. once a backfilled crop lands.
+  const [imageFailed, setImageFailed] = useState(false)
+  const [lastCropUrl, setLastCropUrl] = useState(row.cropUrl)
+
+  if (row.cropUrl !== lastCropUrl) {
+    setLastCropUrl(row.cropUrl)
+    setImageFailed(false)
+  }
 
   const post = useCallback(
     (url: string, data: Record<string, string | number | null> = {}, onDone?: () => void) => {
@@ -113,15 +124,23 @@ export function SymbolCard({
     >
       {/* Symbol image */}
       <div className="relative flex h-36 items-center justify-center border-b border-hairline bg-white/5">
-        {row.cropUrl ? (
+        {row.cropUrl && !imageFailed ? (
           <img
             src={row.cropUrl}
             alt={row.name}
             className="max-h-32 max-w-full object-contain"
+            onError={() => {
+              if (import.meta.env.DEV) {
+                console.error(
+                  `Symbol crop failed to load for "${row.name}" (review #${row.id}): ${row.cropUrl}`,
+                )
+              }
+              setImageFailed(true)
+            }}
           />
         ) : (
           <span className="px-4 text-center text-2xs text-white/65">
-            No image for this symbol
+            {row.cropUrl ? 'Image failed to load' : 'No image for this symbol'}
           </span>
         )}
 

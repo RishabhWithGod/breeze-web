@@ -48,7 +48,9 @@ trait DefinesProjectDocuments
 
         return [
             'documents.required' => 'Add at least one PDF.',
-            'documents.max' => "Only {$maxFiles} PDFs can be added at once.",
+            'documents.max' => $maxFiles === 1
+                ? 'Only one PDF can be added at a time.'
+                : "Only {$maxFiles} PDFs can be added at once.",
             'documents.*.max' => 'Each PDF must be under '.UploadLimits::effectiveMb().' MB.'
                 .(UploadLimits::phpHint() === null ? '' : ' '.UploadLimits::phpHint()),
             // A file over PHP's own limit arrives empty, which fails `file`.

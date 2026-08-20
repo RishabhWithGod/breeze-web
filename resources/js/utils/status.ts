@@ -1,4 +1,4 @@
-import type { EstimateStatus, JobStatus, JobType, TakeoffStatus, Tone } from '@/types'
+import type { EstimateStatus, InvoiceStatus, JobStatus, JobType, TakeoffStatus, Tone } from '@/types'
 
 /**
  * Single source of truth for the dot/marker colour of each tone. Shared by
@@ -68,6 +68,25 @@ export const ESTIMATE_STATUS_LABEL: Record<EstimateStatus, string> = {
   sent: 'Sent',
   approved: 'Approved',
   rejected: 'Rejected',
+}
+
+export const INVOICE_STATUS_TONE: Record<InvoiceStatus, Tone> = {
+  draft: 'neutral',
+  sent: 'warning',
+  paid: 'success',
+  overdue: 'danger',
+}
+
+/**
+ * `sent` reads as "Pending" to match the reference screen — the workflow
+ * action really is "sent", but what it means to a client reading the list is
+ * that payment is pending, so that is the word shown.
+ */
+export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
+  draft: 'Draft',
+  sent: 'Pending',
+  paid: 'Paid',
+  overdue: 'Overdue',
 }
 
 /** Confidence buckets shared by the legend table and confidence meters. */

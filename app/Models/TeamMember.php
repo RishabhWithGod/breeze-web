@@ -3,11 +3,21 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TeamMember extends Model
 {
-    protected $fillable = ['name', 'initials', 'role'];
+    protected $fillable = ['user_id', 'name', 'initials', 'role', 'billable_rate', 'cost_rate'];
+
+    protected function casts(): array
+    {
+        return [
+            'billable_rate' => 'decimal:2',
+            'cost_rate' => 'decimal:2',
+        ];
+    }
 
     /** @return BelongsToMany<Job, $this> */
     public function jobs(): BelongsToMany
@@ -15,5 +25,24 @@ class TeamMember extends Model
         return $this->belongsToMany(Job::class, 'job_team_member')
             ->withPivot('role_on_job')
             ->withTimestamps();
+    }
+
+    /**
+     * The account that signs in as this person, when one is linked.
+     *
+     * Not every crew record has one — a name-only entry that has never logged
+     * in has no `User` row to point at.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /** @return HasMany<TimeEntry, $this> */
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class);
     }
 }

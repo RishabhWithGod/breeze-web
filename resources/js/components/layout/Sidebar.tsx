@@ -30,6 +30,10 @@ function isItemActive(item: NavItem, pathname: string): boolean {
   if (item.href === ROUTES.aiTakeoff) {
     return TAKEOFF_PREFIXES.some((prefix) => pathname.startsWith(prefix))
   }
+  // The item links straight to the entries list (the module's landing
+  // screen), but the module also covers /week, /reports and /settings —
+  // all of those should still light up "Time Tracking" in the sidebar.
+  if (item.href === ROUTES.timeTracking) return pathname.startsWith('/time-tracking')
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
 }
 

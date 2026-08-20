@@ -20,9 +20,8 @@ import type { NavItem } from '@/types'
 /**
  * The full product drawer, in the reference application's order.
  *
- * Dashboard, Projects, AI Takeoff, Estimates and Jobs are built. The rest resolve
- * to ModuleController, which renders an "in development" screen — real routes
- * rather than dead links, so navigation never 404s.
+ * Only Breeze Bucks still resolves to ModuleController's "in development"
+ * screen — every other item is a real, built module.
  */
 export const SIDEBAR_ITEMS: readonly NavItem[] = [
   { label: 'Dashboard', href: ROUTES.home, icon: Gauge },

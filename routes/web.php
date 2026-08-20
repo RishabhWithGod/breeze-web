@@ -2,29 +2,43 @@
 
 use App\Http\Controllers\AiReviewController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\BreezeBucksController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
+use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\DocumentFolderController;
 use App\Http\Controllers\DrawingDetailsController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\EstimateDetailController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\InvoiceDetailController;
 use App\Http\Controllers\FinalTakeoffController;
 use App\Http\Controllers\JobAssignmentController;
 use App\Http\Controllers\JobAttachmentController;
 use App\Http\Controllers\JobController;
+use App\Http\Controllers\JobCostingController;
 use App\Http\Controllers\JobEstimateController;
 use App\Http\Controllers\JobNoteController;
 use App\Http\Controllers\JobScheduleController;
 use App\Http\Controllers\JobTaskController;
 use App\Http\Controllers\JobTeamController;
-use App\Http\Controllers\ModuleController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PaymentSettingsController;
 use App\Http\Controllers\ProcessingController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectDocumentController;
 use App\Http\Controllers\ResultsController;
 use App\Http\Controllers\SchedulingController;
+use App\Http\Controllers\SecuritySettingsController;
 use App\Http\Controllers\StatePageController;
 use App\Http\Controllers\SymbolReviewController;
 use App\Http\Controllers\TakeoffHistoryController;
+use App\Http\Controllers\TimeEntryController;
+use App\Http\Controllers\TimerController;
+use App\Http\Controllers\TimeTrackingController;
+use App\Http\Controllers\TimeTrackingReportController;
+use App\Http\Controllers\TimeTrackingSettingController;
 use App\Http\Controllers\UploadController;
 use Illuminate\Support\Facades\Route;
 
@@ -40,6 +54,13 @@ Route::middleware('guest')->group(function () {
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])->name('password.request');
     Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])->name('password.email');
+
+    // The login-time 2FA challenge — reached only via a pending marker set by
+    // a real credential check in `LoginRequest::authenticate()`, not by a
+    // full session yet, so it lives under `guest` rather than `auth`.
+    Route::get('two-factor-challenge', [TwoFactorChallengeController::class, 'create'])->name('two-factor.challenge.create');
+    Route::post('two-factor-challenge', [TwoFactorChallengeController::class, 'store'])->name('two-factor.challenge.store');
+    Route::post('two-factor-challenge/resend', [TwoFactorChallengeController::class, 'resend'])->name('two-factor.challenge.resend');
 });
 
 /*
@@ -128,6 +149,10 @@ Route::middleware('auth')->group(function () {
     Route::get('projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
     Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 
+    // Starts the first AI takeoff run against the project's drawing already on
+    // record — no separate upload step.
+    Route::post('projects/{project}/takeoff', [ProcessingController::class, 'start'])->name('projects.takeoff.start');
+
     Route::post('projects/{project}/documents', [ProjectDocumentController::class, 'store'])
         ->name('projects.documents.store');
     Route::get('projects/{project}/documents/{document}', [ProjectDocumentController::class, 'show'])
@@ -153,6 +178,27 @@ Route::middleware('auth')->group(function () {
     Route::delete('estimates/{estimate}/items/{item}', [EstimateDetailController::class, 'destroyItem'])->name('estimates.items.destroy');
     Route::get('estimates/{estimate}/pdf', [EstimateDetailController::class, 'pdf'])->name('estimates.pdf');
     Route::get('estimates/{estimate}/export/csv', [EstimateDetailController::class, 'exportCsv'])->name('estimates.export.csv');
+
+    // `/billing` is a real, non-redirecting alias of the Invoices list — the
+    // same pattern `/time-tracking` uses for its own entries list — so the
+    // sidebar's old placeholder link never 404s.
+    Route::get('billing', [InvoiceController::class, 'index'])->name('billing.index');
+    Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+    Route::get('invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+    Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+    Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
+    Route::post('invoices/{invoice}/restore', [InvoiceController::class, 'restore'])->name('invoices.restore');
+
+    // Invoice detail: header fields, editable line items, the send/paid workflow and exports.
+    Route::get('invoices/{invoice}', [InvoiceDetailController::class, 'show'])->name('invoices.show');
+    Route::get('invoices/{invoice}/edit', [InvoiceDetailController::class, 'edit'])->name('invoices.edit');
+    Route::put('invoices/{invoice}', [InvoiceDetailController::class, 'update'])->name('invoices.update');
+    Route::post('invoices/{invoice}/items', [InvoiceDetailController::class, 'storeItem'])->name('invoices.items.store');
+    Route::put('invoices/{invoice}/items/{item}', [InvoiceDetailController::class, 'updateItem'])->name('invoices.items.update');
+    Route::delete('invoices/{invoice}/items/{item}', [InvoiceDetailController::class, 'destroyItem'])->name('invoices.items.destroy');
+    Route::post('invoices/{invoice}/send', [InvoiceDetailController::class, 'send'])->name('invoices.send');
+    Route::post('invoices/{invoice}/mark-paid', [InvoiceDetailController::class, 'markPaid'])->name('invoices.mark-paid');
+    Route::get('invoices/{invoice}/pdf', [InvoiceDetailController::class, 'pdf'])->name('invoices.pdf');
 
     /*
     | Job management. `create` and `bulk` are declared before `{job}` so they are
@@ -183,6 +229,35 @@ Route::middleware('auth')->group(function () {
     Route::put('jobs/{job}/schedule', [JobScheduleController::class, 'update'])->name('jobs.schedule.update');
     Route::post('jobs/{job}/schedule/tasks', [JobTaskController::class, 'store'])->name('jobs.tasks.store');
     Route::post('jobs/{job}/schedule/reorder', [JobTaskController::class, 'reorder'])->name('jobs.tasks.reorder');
+
+    // Job Costing: the dashboard across all jobs, and one job's own detail screen.
+    Route::get('job-costing', [JobCostingController::class, 'index'])->name('job-costing.index');
+    Route::get('job-costing/export/{format}', [JobCostingController::class, 'export'])->name('job-costing.export');
+    Route::get('jobs/{job}/costing', [JobCostingController::class, 'show'])->name('job-costing.show');
+    Route::post('jobs/{job}/costing/entries', [JobCostingController::class, 'storeCostEntry'])->name('job-costing.entries.store');
+    Route::delete('jobs/{job}/costing/entries/{entry}', [JobCostingController::class, 'destroyCostEntry'])->name('job-costing.entries.destroy');
+
+    // Documents: drawings, specs and other files, filed against jobs/estimates/folders.
+    Route::get('documents', [DocumentController::class, 'index'])->name('documents.index');
+    Route::get('documents/create', [DocumentController::class, 'create'])->name('documents.create');
+    Route::post('documents', [DocumentController::class, 'store'])->name('documents.store');
+    Route::post('documents/import-upload', [DocumentController::class, 'importFromUpload'])->name('documents.import-upload');
+    Route::get('documents/{document}/preview', [DocumentController::class, 'preview'])->name('documents.preview');
+    Route::get('documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
+    Route::get('documents/{document}/history', [DocumentController::class, 'history'])->name('documents.history');
+    Route::post('documents/{document}/versions', [DocumentController::class, 'storeVersion'])->name('documents.versions.store');
+    Route::post('documents/{document}/favorite', [DocumentController::class, 'favorite'])->name('documents.favorite');
+    Route::post('documents/{document}/archive', [DocumentController::class, 'archive'])->name('documents.archive');
+    Route::post('documents/{document}/restore', [DocumentController::class, 'restore'])->name('documents.restore');
+    Route::post('documents/{document}/share', [DocumentController::class, 'share'])->name('documents.share');
+    Route::delete('documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+
+    Route::post('document-folders', [DocumentFolderController::class, 'store'])->name('document-folders.store');
+
+    // Notification Center: reads/writes the same `app_notifications` table the header bell does.
+    Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
 
     Route::put('schedule-tasks/{task}', [JobTaskController::class, 'update'])->name('tasks.update');
     Route::delete('schedule-tasks/{task}', [JobTaskController::class, 'destroy'])->name('tasks.destroy');
@@ -239,15 +314,94 @@ Route::middleware('auth')->group(function () {
         Route::delete('schedules/{schedule}', [SchedulingController::class, 'destroy'])->name('scheduling.destroy');
     });
 
+    /*
+    | Time Tracking — the entries list (the module's landing screen, active
+    | timer included), the week view, reports and settings. Sits above the
+    | module catch-all so `/time-tracking` resolves here, the same way
+    | Scheduling does.
+    |
+    | The bare `/time-tracking` path renders the same entries list as
+    | `/time-tracking/entries` — kept as a real, non-redirecting alias (the
+    | same pattern `ROUTES.history`/`ROUTES.aiTakeoff` use on the frontend) so
+    | an old bookmark or link never 404s.
+    */
+    Route::prefix('time-tracking')->group(function () {
+        Route::get('/', [TimeEntryController::class, 'index'])->name('time-tracking.index');
+        Route::get('week', [TimeTrackingController::class, 'week'])->name('time-tracking.week');
+        Route::get('reports', [TimeTrackingReportController::class, 'index'])->name('time-tracking.reports');
+        Route::get('reports/export/{format}', [TimeTrackingReportController::class, 'export'])->name('time-tracking.reports.export');
+        Route::get('settings', [TimeTrackingSettingController::class, 'edit'])->name('time-tracking.settings.edit');
+        Route::put('settings', [TimeTrackingSettingController::class, 'update'])->name('time-tracking.settings.update');
+
+        Route::get('entries', [TimeEntryController::class, 'index'])->name('time-entries.index');
+        // Must precede the `entries/{entry}` show route below — both are one
+        // literal segment, and Laravel matches route declarations in order.
+        Route::get('entries/create', [TimeEntryController::class, 'create'])->name('time-entries.create');
+        Route::get('entries/export/{format}', [TimeEntryController::class, 'export'])->name('time-entries.export');
+        Route::post('entries', [TimeEntryController::class, 'store'])->name('time-entries.store');
+        Route::get('entries/{entry}', [TimeEntryController::class, 'show'])->name('time-entries.show');
+        Route::get('entries/{entry}/edit', [TimeEntryController::class, 'edit'])->name('time-entries.edit');
+        Route::put('entries/{entry}', [TimeEntryController::class, 'update'])->name('time-entries.update');
+        Route::delete('entries/{entry}', [TimeEntryController::class, 'destroy'])->name('time-entries.destroy');
+        Route::post('entries/{entry}/submit', [TimeEntryController::class, 'submit'])->name('time-entries.submit');
+        Route::post('entries/{entry}/approve', [TimeEntryController::class, 'approve'])->name('time-entries.approve');
+        Route::post('entries/{entry}/reject', [TimeEntryController::class, 'reject'])->name('time-entries.reject');
+        Route::post('entries/{entry}/reopen', [TimeEntryController::class, 'reopen'])->name('time-entries.reopen');
+        Route::get('jobs/{job}/tasks', [TimeEntryController::class, 'jobTasks'])->name('time-entries.job-tasks');
+
+        Route::post('timer/start', [TimerController::class, 'start'])->name('timer.start');
+        Route::post('timer/pause', [TimerController::class, 'pause'])->name('timer.pause');
+        Route::post('timer/resume', [TimerController::class, 'resume'])->name('timer.resume');
+        Route::post('timer/stop', [TimerController::class, 'stop'])->name('timer.stop');
+        Route::post('timer/discard', [TimerController::class, 'discard'])->name('timer.discard');
+    });
+
     Route::get('empty', [StatePageController::class, 'empty'])->name('states.empty');
     Route::get('error', [StatePageController::class, 'error'])->name('states.error');
 
-    /*
-    | Sidebar modules that ship in the drawer but are not built yet. Declared
-    | last so a real route always wins over this catch-all, and constrained to
-    | the known slugs so unknown paths still 404.
-    */
-    Route::get('{module}', [ModuleController::class, 'show'])
-        ->whereIn('module', array_keys(ModuleController::MODULES))
-        ->name('modules.show');
+    // Payment Settings: processors, saved methods, billing defaults and the real transaction history.
+    Route::get('settings', [PaymentSettingsController::class, 'index'])->name('settings.payment.index');
+    Route::prefix('settings/payment')->name('settings.payment.')->group(function () {
+        Route::post('processors/{processor}/connect', [PaymentSettingsController::class, 'connectProcessor'])->name('processors.connect');
+        Route::post('processors/{processor}/test', [PaymentSettingsController::class, 'testProcessor'])->name('processors.test');
+        Route::delete('processors/{processor}', [PaymentSettingsController::class, 'disconnectProcessor'])->name('processors.disconnect');
+        Route::post('methods', [PaymentSettingsController::class, 'storePaymentMethod'])->name('methods.store');
+        Route::patch('methods/{method}/default', [PaymentSettingsController::class, 'setDefaultPaymentMethod'])->name('methods.default');
+        Route::delete('methods/{method}', [PaymentSettingsController::class, 'destroyPaymentMethod'])->name('methods.destroy');
+        Route::put('billing', [PaymentSettingsController::class, 'updateBillingSettings'])->name('billing.update');
+    });
+
+    // Security Settings: 2FA enrollment, authentication method, email/phone
+    // verification, per-event notification preferences, and the audit log.
+    Route::get('security', [SecuritySettingsController::class, 'index'])->name('security.index');
+    Route::prefix('security')->name('security.')->group(function () {
+        Route::post('2fa/challenge', [SecuritySettingsController::class, 'sendTwoFactorChallenge'])->name('2fa.challenge');
+        Route::post('2fa/confirm', [SecuritySettingsController::class, 'confirmTwoFactor'])->name('2fa.confirm');
+        Route::post('2fa/disable', [SecuritySettingsController::class, 'disableTwoFactor'])->name('2fa.disable');
+        Route::post('2fa/recovery-codes', [SecuritySettingsController::class, 'regenerateRecoveryCodes'])->name('2fa.recovery-codes');
+        Route::put('method', [SecuritySettingsController::class, 'updateMethod'])->name('method.update');
+        Route::post('email/challenge', [SecuritySettingsController::class, 'sendEmailChallenge'])->name('email.challenge');
+        Route::post('email/confirm', [SecuritySettingsController::class, 'confirmEmail'])->name('email.confirm');
+        Route::post('phone/challenge', [SecuritySettingsController::class, 'sendPhoneChallenge'])->name('phone.challenge');
+        Route::post('phone/confirm', [SecuritySettingsController::class, 'confirmPhone'])->name('phone.confirm');
+        Route::put('password', [SecuritySettingsController::class, 'updatePassword'])->name('password.update');
+        Route::put('notifications/{eventType}', [SecuritySettingsController::class, 'updateNotificationPreference'])->name('notifications.update');
+    });
+
+    // Breeze Bucks: the real, ledger-derived balance, reward catalog and
+    // redemption, plus manager/admin awards, adjustments and catalog upkeep.
+    // Rewards Catalog, History and Award Bonus are each their own real
+    // screen — not popups — reached from the landing page's action buttons.
+    Route::get('breeze-bucks', [BreezeBucksController::class, 'index'])->name('breeze-bucks.index');
+    Route::prefix('breeze-bucks')->name('breeze-bucks.')->group(function () {
+        Route::get('rewards', [BreezeBucksController::class, 'rewards'])->name('rewards.index');
+        Route::post('rewards/{reward}/redeem', [BreezeBucksController::class, 'redeem'])->name('rewards.redeem');
+        Route::post('rewards', [BreezeBucksController::class, 'storeReward'])->name('rewards.store');
+        Route::put('rewards/{reward}', [BreezeBucksController::class, 'updateReward'])->name('rewards.update');
+        Route::delete('rewards/{reward}', [BreezeBucksController::class, 'destroyReward'])->name('rewards.destroy');
+        Route::get('history', [BreezeBucksController::class, 'history'])->name('history.index');
+        Route::get('award', [BreezeBucksController::class, 'awardForm'])->name('award.form');
+        Route::post('award', [BreezeBucksController::class, 'award'])->name('award');
+        Route::post('adjust', [BreezeBucksController::class, 'adjust'])->name('adjust');
+    });
 });

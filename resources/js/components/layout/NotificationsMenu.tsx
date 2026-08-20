@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bell } from 'lucide-react'
+import { ROUTES, routeTo } from '@/constants'
 import { useClickOutside, useDisclosure } from '@/hooks'
 import type { SharedPageProps } from '@/types'
 import { formatRelative } from '@/utils'
@@ -45,10 +46,22 @@ export function NotificationsMenu() {
             </div>
 
             <ul className="max-h-80 overflow-y-auto p-2">
+              {notifications.length === 0 && (
+                <li className="px-3 py-6 text-center text-sm text-white/70">No notifications yet.</li>
+              )}
               {notifications.map((notification) => {
+                const destination = notification.actions[0]?.href ?? notification.link
+
                 const body = (
                   <>
-                    <p className="text-md font-medium text-white">{notification.title}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={notification.unread ? 'text-md font-semibold text-white' : 'text-md font-medium text-white/85'}>
+                        {notification.title}
+                      </p>
+                      {notification.unread && (
+                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-brand" aria-label="Unread" />
+                      )}
+                    </div>
                     <p className="mt-0.5 text-sm text-white/85">{notification.detail}</p>
                     <p className="mt-1 text-xs text-white/65">
                       {formatRelative(notification.timestamp)}
@@ -60,9 +73,11 @@ export function NotificationsMenu() {
 
                 return (
                   <li key={notification.id}>
-                    {notification.link ? (
+                    {destination ? (
                       <Link
-                        href={notification.link}
+                        href={routeTo.notificationRead(notification.id)}
+                        method="post"
+                        data={{ redirect: destination }}
                         role="menuitem"
                         className={rowClass}
                         onClick={close}
@@ -80,12 +95,13 @@ export function NotificationsMenu() {
             </ul>
 
             <div className="border-t border-hairline px-4 py-3 text-center">
-              <button
-                type="button"
+              <Link
+                href={ROUTES.notifications}
+                onClick={close}
                 className="text-sm text-brand transition-colors hover:text-white"
               >
                 View all notifications
-              </button>
+              </Link>
             </div>
           </motion.div>
         )}

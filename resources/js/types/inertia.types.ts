@@ -15,6 +15,8 @@ export interface FlashMessages {
   readonly warning: string | null
   /** Id of a just-deleted job, so any screen can offer Undo. */
   readonly restoreJobId: number | null
+  /** Plaintext 2FA recovery codes, present for exactly one response. */
+  readonly recoveryCodes: readonly string[] | null
 }
 
 /** Props present on every page. */

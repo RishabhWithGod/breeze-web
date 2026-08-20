@@ -122,4 +122,9 @@ export const HISTORY_TONE: Record<string, Tone> = {
   estimate_line_removed: 'danger',
   assignment_added: 'info',
   assignment_released: 'neutral',
+
+  // Time entry activity trail (`TimeEntryActivity::type`).
+  created: 'brand',
+  submitted: 'info',
+  locked: 'neutral',
 }

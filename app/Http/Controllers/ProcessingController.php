@@ -203,6 +203,50 @@ class ProcessingController extends Controller
         return back()->with('warning', 'The takeoff run was cancelled.');
     }
 
+    /**
+     * Starts the first run for a project's drawing.
+     *
+     * The same shape as `restart()` below, for a project that has never been
+     * analysed yet — the drawing is already on record (added on the Projects
+     * screen), so nothing here asks the user to pick it again.
+     */
+    public function start(Request $request, Project $project, TakeoffOrchestrator $orchestrator): RedirectResponse
+    {
+        $this->authorize('view', $project);
+
+        if (! $orchestrator->configured()) {
+            return back()->with('warning', 'The AI takeoff service is not configured.');
+        }
+
+        $upload = $project->primaryUpload;
+
+        if (! $upload) {
+            return back()->with('warning', 'Add a drawing PDF before running an AI takeoff.');
+        }
+
+        $existing = $project->latestAiJob;
+
+        // Already running (or a double click just fired this twice) — send the
+        // user to watch the run rather than starting a second one.
+        if ($existing && ! $existing->isFinished()) {
+            return redirect()->route('processing.show', $project);
+        }
+
+        $project->update([
+            'status' => 'processing',
+            'review_status' => 'none',
+            'completed_at' => null,
+            'started_at' => now(),
+        ]);
+        $project->uploads()->update(['status' => 'processing']);
+
+        $aiJob = $orchestrator->open($project, $upload, $request->user());
+        RenderDrawingPreviews::dispatch($upload->id);
+        ProcessTakeoffRun::dispatch($aiJob->id);
+
+        return redirect()->route('processing.show', $project)->with('success', 'The drawing was submitted for analysis.');
+    }
+
     /** Submits the same drawing again as a fresh run. */
     public function restart(Request $request, Project $project, TakeoffOrchestrator $orchestrator): RedirectResponse
     {

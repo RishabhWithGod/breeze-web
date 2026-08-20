@@ -67,14 +67,22 @@ class TaskScheduleChanged extends Notification
             ->line('Dates and assignments are always live on the schedule.');
     }
 
-    /** @return array<string, string|null> */
+    /** @return array<string, mixed> */
     public function toAppNotification(object $notifiable): array
     {
+        $taskUrl = $this->url(absolute: false);
+        $jobUrl = route('jobs.show', $this->task->job_id, absolute: false);
+
         return [
             'type' => "task-{$this->reason}",
             'title' => "{$this->headline()}: {$this->task->title}",
             'detail' => $this->sentence(),
-            'link' => $this->url(absolute: false),
+            'link' => $taskUrl,
+            'data' => [
+                'actions' => $this->reason === self::ASSIGNED
+                    ? [['label' => 'View Task', 'href' => $taskUrl], ['label' => 'View Job', 'href' => $jobUrl]]
+                    : [['label' => 'View Schedule', 'href' => $taskUrl], ['label' => 'View Job', 'href' => $jobUrl]],
+            ],
         ];
     }
 

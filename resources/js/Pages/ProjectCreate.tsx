@@ -271,7 +271,11 @@ export default function ProjectCreate({
         <Card padding="lg" index={1}>
           <CardHeader
             title="Drawing PDFs"
-            subtitle={`Up to ${limits.maxFiles} PDFs, max ${limits.maxFileSizeMb} MB each. Label each one so the set reads clearly later.`}
+            subtitle={
+              limits.maxFiles === 1
+                ? 'Add one drawing PDF, and label it so it reads clearly later.'
+                : `Up to ${limits.maxFiles} PDFs. Label each one so the set reads clearly later.`
+            }
           />
 
           <ProjectPdfPicker
