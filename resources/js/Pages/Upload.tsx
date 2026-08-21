@@ -15,6 +15,7 @@ import {
   AiFeaturesCard,
   HelpCard,
   ProjectNotesCard,
+  ProjectPickerCard,
   RecentUploadCard,
   UploadDropzone,
   UploadFileList,
@@ -27,9 +28,11 @@ import type {
   RejectedUploadFile,
   SharedPageProps,
   UploadLimits,
+  UploadTargetProject,
 } from '@/types'
 
 export interface UploadProps {
+  projects: readonly UploadTargetProject[]
   recentUploads: readonly RecentUpload[]
   limits: UploadLimits
   /** False when AI_API_BASE_URL is unset — a run cannot be started. */
@@ -49,6 +52,7 @@ export interface UploadProps {
  * the server stores them, opens a takeoff run and redirects to its progress.
  */
 export default function Upload({
+  projects,
   recentUploads,
   limits,
   aiConfigured,
@@ -92,6 +96,7 @@ export default function Upload({
     files,
     rejected,
     notes,
+    projectId,
     isSubmitting,
     formError,
     addFiles,
@@ -100,6 +105,7 @@ export default function Upload({
     setRejected,
     clearRejected,
     setNotes,
+    setProjectId,
     setFormError,
     reset,
   } = useUploadStore()
@@ -147,8 +153,15 @@ export default function Upload({
         }
       />
 
+      <ProjectPickerCard
+        projects={projects}
+        value={projectId}
+        onChange={setProjectId}
+        {...(errors['project_id'] ? { error: errors['project_id'] } : {})}
+      />
+
       {/* Upload + context grid */}
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card padding="lg" className="flex flex-col justify-center">
           <div className="space-y-4">
             <AnimatePresence initial={false}>

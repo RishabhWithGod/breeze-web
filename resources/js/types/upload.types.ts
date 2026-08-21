@@ -33,6 +33,13 @@ export interface RecentUpload {
   readonly status: 'completed' | 'processing' | 'failed'
 }
 
+/** A project the upload screen can attach a takeoff run to. */
+export interface UploadTargetProject {
+  readonly id: number
+  readonly name: string
+  readonly client: string
+}
+
 /** Upload limits, mirrored from config/takeoff.php as page props. */
 export interface UploadLimits {
   readonly maxFiles: number

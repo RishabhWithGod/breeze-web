@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ScheduleChanged;
 use App\Http\Resources\CrewShiftResource;
 use App\Http\Resources\JobTaskResource;
 use App\Models\CrewShift;
@@ -168,13 +169,13 @@ class JobScheduleController extends Controller
             'ends_on' => $schedule->ends_on?->toDateString(),
         ];
 
-        $job->recordActivity(
-            'schedule_updated',
-            $before === $after
-                ? 'Schedule settings updated'
-                : "Schedule window moved to {$after['starts_on']} – {$after['ends_on']}",
-            ['before' => $before, 'after' => $after],
-        );
+        $description = $before === $after
+            ? 'Schedule settings updated'
+            : "Schedule window moved to {$after['starts_on']} – {$after['ends_on']}";
+
+        $job->recordActivity('schedule_updated', $description, ['before' => $before, 'after' => $after]);
+
+        event(new ScheduleChanged($job->id, 'schedule_updated', $description));
 
         return back()->with('success', 'The schedule was updated.');
     }

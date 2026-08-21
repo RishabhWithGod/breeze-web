@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\JobTaskCompleted;
+use App\Events\ScheduleChanged;
 use App\Models\Job;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
@@ -10,6 +10,7 @@ use App\Models\JobTaskDependency;
 use App\Models\TeamMember;
 use App\Notifications\TaskScheduleChanged;
 use App\Policies\JobSchedulePolicy;
+use App\Services\Scheduling\JobTaskWorkflowService;
 use App\Services\Scheduling\ScheduleBuilder;
 use App\Services\Scheduling\ScheduleNotifier;
 use App\Services\Scheduling\ScheduleProgress;
@@ -36,6 +37,7 @@ class JobTaskController extends Controller
         private readonly ScheduleBuilder $builder,
         private readonly ScheduleNotifier $notifier,
         private readonly JobSchedulePolicy $policy,
+        private readonly JobTaskWorkflowService $workflow,
     ) {}
 
     public function store(Request $request, Job $job): RedirectResponse
@@ -185,27 +187,7 @@ class JobTaskController extends Controller
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
 
-        $task->forceFill([
-            'status' => JobTask::STATUS_COMPLETED,
-            'completion_pct' => 100,
-            'completed_at' => now(),
-            'actual_hours' => $data['actual_hours'] ?? $task->actual_hours,
-            'notes' => $data['notes'] ?? $task->notes,
-        ])->save();
-
-        $schedule = $task->schedule;
-        $unblocked = $this->builder->markReady($schedule);
-
-        $this->settle(
-            $schedule,
-            $task->job,
-            'task_completed',
-            "Task completed: {$task->title}"
-                .($unblocked > 0 ? ", unblocking {$unblocked} ".str('task')->plural($unblocked) : ''),
-        );
-
-        $this->notifier->taskChanged($task, TaskScheduleChanged::COMPLETED, except: $request->user());
-        JobTaskCompleted::dispatch($task, $request->user());
+        ['unblocked' => $unblocked] = $this->workflow->complete($task, $request->user(), $data);
 
         return back()->with(
             'success',
@@ -563,5 +545,9 @@ class JobTaskController extends Controller
         }
 
         $job?->recordActivity($type, $description);
+
+        if ($schedule !== null && $job !== null) {
+            event(new ScheduleChanged($job->id, $type, $description));
+        }
     }
 }

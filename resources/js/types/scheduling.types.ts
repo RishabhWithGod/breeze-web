@@ -411,3 +411,42 @@ export interface ScheduleAbilities {
   readonly deleteTask: boolean
   readonly comment: boolean
 }
+
+/** Mirrors `JobScheduleController::show()` field-for-field — the whole per-job schedule screen in one payload. */
+export interface JobScheduleProps {
+  job: {
+    readonly id: number
+    readonly name: string
+    readonly client: string | null
+    readonly location: string | null
+    readonly status: string
+    readonly priority: TaskPriority
+    readonly jobType: string | null
+    readonly budget: number | null
+    readonly foreman: { readonly name: string; readonly initials: string } | null
+  }
+  schedule: JobScheduleState
+  tasks: readonly ScheduleTask[]
+  progress: ScheduleProgressState
+  timeline: ScheduleTimelineState
+  calendar: ScheduleCalendarState
+  crewShifts: readonly JobShift[]
+  upcoming: readonly UpcomingTask[]
+  delays: readonly DelayedTask[]
+  dependencies: ScheduleDependencyState
+  resources: readonly ScheduleResource[]
+  milestones: readonly ScheduleMilestone[]
+  criticalPath: readonly number[]
+  activity: readonly ScheduleActivityEntry[]
+  members: readonly CrewMember[]
+  options: {
+    readonly statuses: readonly TaskStatus[]
+    readonly priorities: readonly TaskPriority[]
+    readonly categories: readonly string[]
+    readonly roles: readonly string[]
+    readonly dependencyTypes: readonly DependencyType[]
+    readonly scheduleStatuses: readonly ScheduleState[]
+  }
+  can: ScheduleAbilities
+  today: string
+}

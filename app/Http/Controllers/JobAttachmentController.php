@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class JobAttachmentController extends Controller
@@ -16,9 +17,16 @@ class JobAttachmentController extends Controller
     public function store(Request $request, Job $job): RedirectResponse
     {
         $validated = $request->validate([
-            'file' => ['required', 'file', 'max:20480'],
+            // Same allowlist Documents uses (content-sniffed by
+            // `Rule::file()->extensions()`, not the client-supplied
+            // filename) — a job attachment is exactly the same kind of
+            // business file, so it gets the same restriction rather than
+            // accepting anything under a size cap alone.
+            'file' => ['required', Rule::file()->extensions(config('documents.extensions')), 'max:20480'],
         ], [
             'file.required' => 'Choose a file to upload',
+            'file.extensions' => 'Unsupported file type — accepted types are '
+                .implode(', ', array_map(fn (string $ext) => ".{$ext}", config('documents.extensions'))),
             'file.max' => 'Files must be 20 MB or smaller',
         ]);
 

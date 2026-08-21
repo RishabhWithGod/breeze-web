@@ -291,6 +291,46 @@ class DocumentTest extends TestCase
         Storage::disk('local')->assertExists($upload->path);
     }
 
+    /** A takeoff drawing belongs to whoever ran it — importing someone else's by id is not just a UI omission. */
+    public function test_a_user_cannot_import_someone_elses_ai_takeoff_upload(): void
+    {
+        Storage::disk('local')->put('uploads/someone-elses-plans.pdf', 'pdf-bytes');
+        $upload = Upload::create([
+            'user_id' => $this->manager->id,
+            'name' => 'Someone Elses Plans.pdf',
+            'format' => 'PDF',
+            'size_bytes' => 9,
+            'path' => 'uploads/someone-elses-plans.pdf',
+            'status' => 'complete',
+        ]);
+
+        $this->actingAs($this->electrician)->post('/documents/import-upload', [
+            'upload_id' => $upload->id,
+            'document_type' => 'Electrical Drawing',
+            'visibility' => 'team',
+        ])->assertForbidden();
+
+        $this->assertSame(0, Document::count());
+    }
+
+    /** The import picker itself must never list another user's upload as an option. */
+    public function test_the_importable_uploads_list_only_shows_this_users_own_uploads(): void
+    {
+        Storage::disk('local')->put('uploads/managers-plans.pdf', 'pdf-bytes');
+        Upload::create([
+            'user_id' => $this->manager->id,
+            'name' => 'Managers Plans.pdf',
+            'format' => 'PDF',
+            'size_bytes' => 9,
+            'path' => 'uploads/managers-plans.pdf',
+            'status' => 'complete',
+        ]);
+
+        $this->actingAs($this->electrician)
+            ->get('/documents/create')
+            ->assertInertia(fn (Assert $page) => $page->has('importableUploads', 0));
+    }
+
     private function makeJob(array $attributes = []): Job
     {
         return Job::create([

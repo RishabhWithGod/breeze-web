@@ -118,6 +118,7 @@ the run rather than producing an empty takeoff.
 | Uploads         | React Dropzone → real multipart POST               |
 | Client state    | Zustand (upload queue + UI chrome only)            |
 | Utilities       | clsx + tailwind-merge, date-fns                    |
+| Realtime        | Laravel Reverb + Echo — see [`docs/realtime.md`](docs/realtime.md) |
 
 There is no client-side router, no Axios and no React Query: Laravel owns
 routing and every page receives its data as Inertia props.

@@ -144,6 +144,36 @@ class JobCostSummary
     }
 
     /**
+     * Nulls every dollar-denominated field on a `for()` row — the one place
+     * that shape's redaction rule lives, so every controller sending this
+     * row to a role without `viewJobCosts` reuses it rather than
+     * re-deciding which keys are sensitive. Hours, status, and the overrun
+     * reason/percentage stay: this codebase treats those as not sensitive on
+     * their own, only the dollar amounts are.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    public static function redact(array $row): array
+    {
+        foreach ([
+            'estimatedLaborCost', 'actualLaborCost', 'laborCostVariance',
+            'estimatedMaterialCost', 'actualMaterialCost', 'materialCostVariance',
+            'estimatedEquipmentCost', 'actualEquipmentCost', 'equipmentCostVariance',
+            'estimatedOtherCost', 'actualOtherCost', 'otherCostVariance',
+            'estimatedTotalCost', 'actualTotalCost', 'totalCostVariance', 'totalCostVariancePct',
+            'revenue', 'billed', 'paid', 'outstanding', 'unbilled',
+            'profit', 'marginPct', 'overrunAmount',
+        ] as $key) {
+            if (array_key_exists($key, $row)) {
+                $row[$key] = null;
+            }
+        }
+
+        return $row;
+    }
+
+    /**
      * The single worst-overrun reason for this job, if any — labor hours,
      * labor cost, material cost, or the total. Checked in that order since a
      * labor-hours overrun is usually the earliest signal a PM can act on.

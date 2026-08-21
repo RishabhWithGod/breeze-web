@@ -40,7 +40,7 @@ export function JobTimeTrackingSummary({
           value={formatHours(summary.overtimeHours)}
           tone={summary.overtimeHours > 0 ? 'text-status-warning' : undefined}
         />
-        {canViewCosts && <Stat label="Labor Cost" value={formatCurrency(summary.laborCost, 0)} />}
+        {canViewCosts && summary.laborCost !== null && <Stat label="Labor Cost" value={formatCurrency(summary.laborCost, 0)} />}
       </dl>
 
       {summary.estimatedHours > 0 && (

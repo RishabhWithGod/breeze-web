@@ -15,6 +15,7 @@ use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
+use App\Services\Activity\FeedItemRecorder;
 use App\Services\JobCosting\JobCostSummary;
 use App\Services\TimeTracking\JobLaborSummary;
 use Illuminate\Http\RedirectResponse;
@@ -29,6 +30,7 @@ class JobController extends Controller
     public function __construct(
         private readonly JobLaborSummary $laborSummary,
         private readonly JobCostSummary $costSummary,
+        private readonly FeedItemRecorder $activity,
     ) {}
 
     public function index(Request $request): Response
@@ -112,6 +114,10 @@ class JobController extends Controller
         $job->recordInitialStatus();
         $job->recordActivity('created', $isDraft ? 'Job saved as a draft' : 'Job created');
 
+        if (! $isDraft) {
+            $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "New job created: {$job->name}", 'briefcase', 'lilac');
+        }
+
         // "Create estimate for this job" — a real linked estimate, not a flag.
         if (! empty($data['create_estimate'])) {
             $estimate = $this->makeEstimateFor($job);
@@ -147,6 +153,10 @@ class JobController extends Controller
             'aiResult',
         ]);
 
+        $canViewTimeCosts = (bool) $request->user()->can('viewJobCosts', TimeEntry::class);
+        $timeTracking = $this->laborSummary->for($job);
+        $jobCosting = $this->costSummary->for($job);
+
         return Inertia::render('JobShow', [
             // `resolve()` strips the resource's `data` wrapper — Inertia props are
             // consumed directly by the page component.
@@ -166,10 +176,14 @@ class JobController extends Controller
                 )->resolve()
                 : [],
             // Live labor totals — never a stored duplicate of the time entries
-            // they summarise.
-            'timeTracking' => $this->laborSummary->for($job),
-            'canViewTimeCosts' => (bool) $request->user()->can('viewJobCosts', TimeEntry::class),
-            'jobCosting' => $this->costSummary->for($job),
+            // they summarise. `laborCost`/`billableAmount` are dollar figures,
+            // so they're nulled out below for a role without `viewJobCosts` —
+            // the same rule the Job Costing dashboard applies.
+            'timeTracking' => $canViewTimeCosts
+                ? $timeTracking
+                : [...$timeTracking, 'laborCost' => null, 'billableAmount' => null],
+            'canViewTimeCosts' => $canViewTimeCosts,
+            'jobCosting' => $canViewTimeCosts ? $jobCosting : JobCostSummary::redact($jobCosting),
             'documents' => $job->documents()->where('is_archived', false)->with('uploader')->take(5)->get()
                 ->map(fn ($document) => (new DocumentResource($document))->resolve()),
             'documentsCount' => $job->documents()->where('is_archived', false)->count(),

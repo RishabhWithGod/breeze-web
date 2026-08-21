@@ -26,7 +26,7 @@ import {
   WireSizesPanel,
 } from '@/components/finals'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ApprovalHistoryPanel, EngineWarnings, PipelineStatus } from '@/components/review'
+import { ApprovalHistoryPanel, PipelineStatus } from '@/components/review'
 import { ROUTES, routeTo } from '@/constants'
 import type {
   ApprovalHistoryEntry,
@@ -221,8 +221,6 @@ export default function DrawingDetails({
           </div>
         }
       />
-
-      {engine && <EngineWarnings warnings={engine.warnings} className="mb-4" />}
 
       {/* Where this drawing is in the workflow, and the one action that moves it on. */}
       {engine && (

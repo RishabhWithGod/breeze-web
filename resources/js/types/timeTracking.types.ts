@@ -236,8 +236,8 @@ export interface JobLaborSummary {
   readonly remainingHours: number
   readonly billableHours: number
   readonly overtimeHours: number
-  readonly laborCost: number
-  readonly billableAmount: number
+  readonly laborCost: number | null
+  readonly billableAmount: number | null
   readonly pendingApprovalHours: number
   readonly estimateLaborHours: number | null
   readonly estimateVarianceHours: number | null

@@ -14,7 +14,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,6 +22,14 @@ class UploadController extends Controller
     public function create(Request $request, TakeoffOrchestrator $orchestrator): Response
     {
         return Inertia::render('Upload', [
+            'projects' => $request->user()->projects()
+                ->orderByDesc('created_at')
+                ->get(['id', 'name', 'client'])
+                ->map(fn ($project) => [
+                    'id' => $project->id,
+                    'name' => $project->name,
+                    'client' => $project->client,
+                ]),
             'recentUploads' => UploadResource::collection(
                 $request->user()->uploads()->latest()->take(3)->get()
             )->resolve(),
@@ -88,14 +95,14 @@ class UploadController extends Controller
         $fileSaveMs = 0.0;
 
         [$project, $primaryUpload] = DB::transaction(function () use ($request, $files, $disk, $directory, &$bytes, &$fileSaveMs) {
-            $project = $request->user()->projects()->create([
-                'name' => $this->projectNameFrom($files[0]->getClientOriginalName()),
-                'client' => 'Unassigned',
+            $project = $request->user()->projects()->findOrFail($request->integer('project_id'));
+
+            $project->update([
                 'drawing_name' => $files[0]->getClientOriginalName(),
                 'status' => 'processing',
                 'review_status' => 'none',
                 'notes' => $request->input('notes'),
-                'started_at' => now(),
+                'started_at' => $project->started_at ?? now(),
             ]);
 
             $uploads = [];
@@ -148,15 +155,5 @@ class UploadController extends Controller
         ]);
 
         return redirect()->route('processing.show', $project);
-    }
-
-    /** "Office_Building_Plans.pdf" → "Office Building Plans" */
-    private function projectNameFrom(string $fileName): string
-    {
-        return Str::of(pathinfo($fileName, PATHINFO_FILENAME))
-            ->replace(['_', '-'], ' ')
-            ->squish()
-            ->title()
-            ->value();
     }
 }

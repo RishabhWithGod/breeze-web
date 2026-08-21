@@ -211,6 +211,96 @@ class JobCostingTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->component('JobCosting'));
     }
 
+    /**
+     * The dashboard is open to view, but dollar figures are not — the
+     * backend must null every cost field it sends, not merely rely on the
+     * frontend to hide them. Every field checked here is a real key
+     * `JobCostSummary::for()` returns.
+     */
+    public function test_a_non_manager_receives_no_dollar_figures_on_the_dashboard(): void
+    {
+        $job = $this->makeJob();
+        $this->makeTask($job, estimatedHours: 10);
+        $this->makeTimeEntry($job, $this->electrician, 5, TimeEntry::STATUS_APPROVED, 500);
+        JobCostEntry::create([
+            'job_id' => $job->id, 'category' => 'material', 'description' => 'Panel',
+            'amount' => 500, 'incurred_on' => now()->toDateString(), 'recorded_by' => $this->manager->id,
+        ]);
+
+        $this->actingAs($this->electrician)
+            ->get('/job-costing')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('canViewCosts', false)
+                ->where('laborTotals.estimatedCost', null)
+                ->where('laborTotals.actualCost', null)
+                ->where('materialTotals.estimatedCost', null)
+                ->where('materialTotals.actualCost', null)
+                ->where('profitLoss.revenue', null)
+                ->where('profitLoss.profit', null)
+                ->where('profitLoss.marginPct', null)
+                ->where('topProfitable.0.estimatedLaborCost', null)
+                ->where('topProfitable.0.actualTotalCost', null)
+                ->where('topProfitable.0.profit', null)
+                ->where('topProfitable.0.revenue', null));
+    }
+
+    public function test_a_manager_receives_the_real_dollar_figures_on_the_dashboard(): void
+    {
+        $job = $this->makeJob();
+        $this->makeTimeEntry($job, $this->electrician, 5, TimeEntry::STATUS_APPROVED, 500);
+
+        $this->actingAs($this->manager)
+            ->get('/job-costing')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('canViewCosts', true)
+                ->where('laborTotals.actualCost', 500));
+    }
+
+    /** The same rule applies to the per-job detail screen, not just the dashboard. */
+    public function test_a_non_manager_receives_no_dollar_figures_on_the_job_detail_screen(): void
+    {
+        $job = $this->makeJob();
+        $this->makeTimeEntry($job, $this->electrician, 5, TimeEntry::STATUS_APPROVED, 500);
+        JobCostEntry::create([
+            'job_id' => $job->id, 'category' => 'material', 'description' => 'Panel',
+            'amount' => 500, 'incurred_on' => now()->toDateString(), 'recorded_by' => $this->manager->id,
+        ]);
+
+        $this->actingAs($this->electrician)
+            ->get("/jobs/{$job->id}/costing")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('canViewCosts', false)
+                ->where('summary.actualLaborCost', null)
+                ->where('summary.revenue', null)
+                ->where('summary.profit', null)
+                ->where('laborRows.0.laborCost', null)
+                ->where('costEntries.0.amount', null));
+    }
+
+    /** And to the Job Detail page's own embedded cost widgets. */
+    public function test_a_non_manager_receives_no_dollar_figures_on_job_detail(): void
+    {
+        $job = $this->makeJob();
+        $this->makeTimeEntry($job, $this->electrician, 5, TimeEntry::STATUS_APPROVED, 500);
+
+        $this->actingAs($this->electrician)
+            ->get("/jobs/{$job->id}")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('canViewTimeCosts', false)
+                ->where('timeTracking.laborCost', null)
+                ->where('timeTracking.billableAmount', null)
+                ->where('jobCosting.actualLaborCost', null)
+                ->where('jobCosting.profit', null));
+    }
+
+    /** Exporting is still a view of cost data — same gate, not a bypass. */
+    public function test_a_non_manager_cannot_export_the_cost_report(): void
+    {
+        $this->actingAs($this->electrician)
+            ->get('/job-costing/export/csv')
+            ->assertForbidden();
+    }
+
     public function test_only_a_manager_can_log_an_actual_cost_entry(): void
     {
         $job = $this->makeJob();

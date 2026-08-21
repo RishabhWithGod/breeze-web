@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import {
@@ -42,7 +42,7 @@ import { JobCostingSummary } from '@/components/jobCosting'
 import { JobDocumentsPanel } from '@/components/documents'
 import { JobTimeTrackingSummary } from '@/components/timeTracking'
 import { JOB_STATUS_OPTIONS, ROUTES, routeTo } from '@/constants'
-import { useDisclosure } from '@/hooks'
+import { useDisclosure, useEchoConnectionState, usePrivateChannel } from '@/hooks'
 import type {
   ApprovalHistoryEntry,
   Document,
@@ -105,6 +105,25 @@ export default function JobShow({
   const changeStatus = (status: JobStatus) => {
     router.post(routeTo.jobStatus(job.id), { status }, { preserveScroll: true })
   }
+
+  // Status, staffing and time-entry activity all live inside the `job`,
+  // `timeTracking` and `jobCosting` props — one small partial reload covers
+  // whichever of those a realtime event on this job just changed, without
+  // touching scroll position, open modals, or the delete-confirmation dialog.
+  const resync = useCallback(() => {
+    router.reload({ only: ['job', 'timeTracking', 'jobCosting'] })
+  }, [])
+
+  usePrivateChannel(`job.${job.id}`, {
+    'job.status-changed': resync,
+    'job.assignment-changed': resync,
+    'schedule.changed': resync,
+    'time-entry.logged': resync,
+    'time-entry.approved': resync,
+    'time-entry.rejected': resync,
+  })
+
+  useEchoConnectionState(resync)
 
   return (
     <PageTransition>

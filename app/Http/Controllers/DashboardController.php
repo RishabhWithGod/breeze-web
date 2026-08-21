@@ -5,13 +5,15 @@ namespace App\Http\Controllers;
 use App\Http\Resources\FeedItemResource;
 use App\Models\FeedItem;
 use App\Models\Job;
-use App\Models\PerformancePoint;
 use App\Models\Project;
+use App\Services\Dashboard\JobPerformanceCalculator;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    public function __construct(private readonly JobPerformanceCalculator $performance) {}
+
     public function index(): Response
     {
         return Inertia::render('Home', [
@@ -29,9 +31,7 @@ class DashboardController extends Controller
             'schedule' => FeedItemResource::collection(
                 FeedItem::scope(FeedItem::DASHBOARD_SCHEDULE)->get()
             )->resolve(),
-            'performance' => PerformancePoint::orderBy('position')
-                ->get(['month', 'value'])
-                ->all(),
+            'performance' => $this->performance->series(),
         ]);
     }
 

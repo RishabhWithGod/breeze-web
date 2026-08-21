@@ -6,8 +6,10 @@ use App\Http\Requests\StoreProjectRequest;
 use App\Http\Resources\ProjectActivityResource;
 use App\Http\Resources\ProjectDocumentResource;
 use App\Http\Resources\ProjectListResource;
+use App\Models\FeedItem;
 use App\Models\Job;
 use App\Models\Project;
+use App\Services\Activity\FeedItemRecorder;
 use App\Services\Takeoff\ProjectDocumentStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,7 +28,10 @@ use Inertia\Response;
  */
 class ProjectController extends Controller
 {
-    public function __construct(private readonly ProjectDocumentStore $documents) {}
+    public function __construct(
+        private readonly ProjectDocumentStore $documents,
+        private readonly FeedItemRecorder $activity,
+    ) {}
 
     /** Search, status filter, sort and pagination all run in the database. */
     public function index(Request $request): Response
@@ -119,6 +124,8 @@ class ProjectController extends Controller
 
             return $project;
         });
+
+        $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "New project created: {$project->name}", 'briefcase', 'lilac');
 
         return redirect()
             ->route('projects.show', $project)

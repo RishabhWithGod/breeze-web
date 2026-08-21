@@ -145,6 +145,40 @@ class TimerTest extends TestCase
         $this->assertSame(TimerSession::STATUS_RUNNING, TimerSession::sole()->status);
     }
 
+    /**
+     * The running timer is a shared prop, not something only the Time
+     * Tracking page knows about — visiting any other screen must still see
+     * it, which is what lets the header widget survive navigation.
+     */
+    public function test_the_running_timer_is_visible_as_a_shared_prop_on_any_page(): void
+    {
+        $job = $this->makeJob();
+        $this->actingAs($this->user)->post('/time-tracking/timer/start', ['job_id' => $job->id]);
+
+        $this->actingAs($this->user)->get('/home')
+            ->assertInertia(fn ($page) => $page
+                ->where('activeTimer.jobId', $job->id)
+                ->where('activeTimer.jobName', $job->name)
+                ->where('activeTimer.status', TimerSession::STATUS_RUNNING));
+    }
+
+    public function test_a_user_with_no_running_timer_sees_a_null_shared_prop(): void
+    {
+        $this->actingAs($this->user)->get('/home')
+            ->assertInertia(fn ($page) => $page->where('activeTimer', null));
+    }
+
+    /** One user's timer must never leak into another user's shared props. */
+    public function test_the_shared_timer_prop_is_scoped_to_the_signed_in_user(): void
+    {
+        $job = $this->makeJob();
+        $this->actingAs($this->user)->post('/time-tracking/timer/start', ['job_id' => $job->id]);
+
+        $other = User::factory()->create();
+        $this->actingAs($other)->get('/home')
+            ->assertInertia(fn ($page) => $page->where('activeTimer', null));
+    }
+
     private function makeJob(array $attributes = []): Job
     {
         return Job::create([

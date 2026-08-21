@@ -39,7 +39,7 @@ import {
   PageTransition,
   StepFooter,
 } from '@/components/layout'
-import { ApprovalHistoryPanel, EngineWarnings, PipelineStatus } from '@/components/review'
+import { ApprovalHistoryPanel, PipelineStatus } from '@/components/review'
 import { FINAL_SORT_OPTIONS, FINAL_SOURCE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import { useDebouncedValue } from '@/hooks'
 import type {
@@ -287,8 +287,6 @@ export default function FinalSymbols({
           {flash.success}
         </Alert>
       )}
-
-      <EngineWarnings warnings={result.warnings} className="mb-4" />
 
       {/* Where this takeoff is, before anything else on the page. */}
       <WorkflowProgress

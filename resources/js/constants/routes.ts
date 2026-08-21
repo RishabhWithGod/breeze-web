@@ -8,6 +8,7 @@ export const ROUTES = {
   // Public
   login: '/login',
   logout: '/logout',
+  signup: '/signup',
   forgotPassword: '/forgot-password',
 
   // Protected
@@ -117,6 +118,21 @@ export const routeTo = {
   jobEstimates: (jobId: number) => `/jobs/${jobId}/estimates`,
   jobEstimateConvert: (jobId: number, estimateId: number) =>
     `/jobs/${jobId}/estimates/${estimateId}/convert`,
+
+  jobSchedule: (jobId: number) => `/jobs/${jobId}/schedule`,
+  jobTasksStore: (jobId: number) => `/jobs/${jobId}/schedule/tasks`,
+  jobTasksReorder: (jobId: number) => `/jobs/${jobId}/schedule/reorder`,
+  scheduleTask: (taskId: number) => `/schedule-tasks/${taskId}`,
+  scheduleTaskComplete: (taskId: number) => `/schedule-tasks/${taskId}/complete`,
+  scheduleTaskDelay: (taskId: number) => `/schedule-tasks/${taskId}/delay`,
+  scheduleTaskMove: (taskId: number) => `/schedule-tasks/${taskId}/move`,
+  scheduleTaskAssign: (taskId: number) => `/schedule-tasks/${taskId}/assignments`,
+  scheduleTaskUnassign: (taskId: number, assignmentId: number) =>
+    `/schedule-tasks/${taskId}/assignments/${assignmentId}`,
+  scheduleTaskDependencyStore: (taskId: number) => `/schedule-tasks/${taskId}/dependencies`,
+  scheduleTaskDependencyDestroy: (taskId: number, dependencyId: number) =>
+    `/schedule-tasks/${taskId}/dependencies/${dependencyId}`,
+  scheduleTaskComment: (taskId: number) => `/schedule-tasks/${taskId}/comments`,
   estimate: (estimateId: number) => `/estimates/${estimateId}`,
   estimateRestore: (estimateId: number) => `/estimates/${estimateId}/restore`,
   estimateEdit: (estimateId: number) => `/estimates/${estimateId}/edit`,

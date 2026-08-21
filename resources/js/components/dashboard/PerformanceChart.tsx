@@ -88,8 +88,12 @@ export function PerformanceChart({
 
               <g clipPath={`url(#${clipId})`}>
                 {data.map((point, index) => {
-                  const height = (point.value / AXIS_MAX) * VIEW_HEIGHT
+                  const hasData = point.value !== null
+                  const height = ((point.value ?? 0) / AXIS_MAX) * VIEW_HEIGHT
                   const x = index * slot + (slot - BAR_WIDTH) / 2
+                  const label = hasData
+                    ? `${point.month}: ${point.value}% (${point.count} completed)`
+                    : `${point.month}: no jobs completed`
 
                   return (
                     <g key={point.month} className="group/bar">
@@ -116,9 +120,12 @@ export function PerformanceChart({
                           delay: index * 0.05,
                           ease: [0.16, 1, 0.3, 1],
                         }}
-                        className="fill-brand-deep transition-colors group-hover/bar:fill-brand"
+                        className={cn(
+                          'transition-colors group-hover/bar:fill-brand',
+                          hasData ? 'fill-brand-deep' : 'fill-white/10',
+                        )}
                       >
-                        <title>{`${point.month}: ${point.value}`}</title>
+                        <title>{label}</title>
                       </motion.rect>
                     </g>
                   )
@@ -152,7 +159,7 @@ export function PerformanceChart({
           {data.map((point) => (
             <tr key={point.month}>
               <th scope="row">{point.month}</th>
-              <td>{point.value}</td>
+              <td>{point.value === null ? 'No jobs completed' : `${point.value}%`}</td>
             </tr>
           ))}
         </tbody>

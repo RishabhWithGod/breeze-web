@@ -2,6 +2,7 @@
 
 namespace App\Notifications\Channels;
 
+use App\Events\NotificationCreated;
 use App\Models\AppNotification;
 use Illuminate\Notifications\Notification;
 
@@ -29,7 +30,7 @@ class AppNotificationChannel
             return null;
         }
 
-        return AppNotification::create([
+        $notification = AppNotification::create([
             'user_id' => $userId,
             'type' => $payload['type'] ?? 'general',
             'title' => $payload['title'],
@@ -37,5 +38,9 @@ class AppNotificationChannel
             'link' => $payload['link'] ?? null,
             'data' => $payload['data'] ?? null,
         ]);
+
+        event(new NotificationCreated($notification));
+
+        return $notification;
     }
 }

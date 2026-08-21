@@ -5,7 +5,12 @@
  * computed twice: every number is exactly what the backend service returned.
  */
 
-/** One job's full costing row — the dashboard's table rows and rankings, and the detail screen's summary. */
+/**
+ * One job's full costing row — the dashboard's table rows and rankings, and
+ * the detail screen's summary. Every dollar-denominated field is nullable:
+ * the backend sends `null` in place of a real figure for a role without
+ * `viewJobCosts` — never the real number left for the frontend to hide.
+ */
 export interface JobCostRow {
   readonly jobId: number
   readonly jobName: string
@@ -17,39 +22,39 @@ export interface JobCostRow {
   readonly estimatedLaborHours: number
   readonly actualLaborHours: number
   readonly laborHoursVariance: number
-  readonly estimatedLaborCost: number
-  readonly actualLaborCost: number
-  readonly laborCostVariance: number
+  readonly estimatedLaborCost: number | null
+  readonly actualLaborCost: number | null
+  readonly laborCostVariance: number | null
 
-  readonly estimatedMaterialCost: number
-  readonly actualMaterialCost: number
-  readonly materialCostVariance: number
+  readonly estimatedMaterialCost: number | null
+  readonly actualMaterialCost: number | null
+  readonly materialCostVariance: number | null
 
-  readonly estimatedEquipmentCost: number
-  readonly actualEquipmentCost: number
-  readonly equipmentCostVariance: number
+  readonly estimatedEquipmentCost: number | null
+  readonly actualEquipmentCost: number | null
+  readonly equipmentCostVariance: number | null
 
-  readonly estimatedOtherCost: number
-  readonly actualOtherCost: number
-  readonly otherCostVariance: number
+  readonly estimatedOtherCost: number | null
+  readonly actualOtherCost: number | null
+  readonly otherCostVariance: number | null
 
-  readonly estimatedTotalCost: number
-  readonly actualTotalCost: number
-  readonly totalCostVariance: number
+  readonly estimatedTotalCost: number | null
+  readonly actualTotalCost: number | null
+  readonly totalCostVariance: number | null
   readonly totalCostVariancePct: number | null
 
-  readonly revenue: number
-  readonly billed: number
-  readonly paid: number
-  readonly outstanding: number
-  readonly unbilled: number
+  readonly revenue: number | null
+  readonly billed: number | null
+  readonly paid: number | null
+  readonly outstanding: number | null
+  readonly unbilled: number | null
 
-  readonly profit: number
+  readonly profit: number | null
   readonly marginPct: number | null
 
   readonly isOverBudget: boolean
   readonly overrunReason: string | null
-  readonly overrunAmount: number
+  readonly overrunAmount: number | null
   readonly overrunPct: number | null
 }
 
@@ -85,17 +90,17 @@ export interface JobCostingDashboardProps {
   laborTotals: {
     readonly estimatedHours: number
     readonly actualHours: number
-    readonly estimatedCost: number
-    readonly actualCost: number
+    readonly estimatedCost: number | null
+    readonly actualCost: number | null
   }
   materialTotals: {
-    readonly estimatedCost: number
-    readonly actualCost: number
+    readonly estimatedCost: number | null
+    readonly actualCost: number | null
   }
   profitLoss: {
-    readonly revenue: number
-    readonly totalCost: number
-    readonly profit: number
+    readonly revenue: number | null
+    readonly totalCost: number | null
+    readonly profit: number | null
     readonly marginPct: number | null
   }
   overrunAlerts: readonly JobCostRow[]
@@ -117,7 +122,7 @@ export interface JobCostingLaborRow {
   readonly overtimeHours: number
   readonly billableHours: number
   readonly laborRate: number | null
-  readonly laborCost: number
+  readonly laborCost: number | null
 }
 
 /** One logged actual material/equipment/other cost. */
@@ -127,7 +132,7 @@ export interface JobCostEntryRow {
   readonly description: string
   readonly quantity: number | null
   readonly unitCost: number | null
-  readonly amount: number
+  readonly amount: number | null
   readonly incurredOn: string
   readonly recordedBy: string | null
 }
@@ -137,7 +142,7 @@ export interface JobCostingEstimatedItemRow {
   readonly category: string
   readonly description: string
   readonly quantity: number
-  readonly cost: number
+  readonly cost: number | null
 }
 
 export interface JobCostingScheduleInfo {

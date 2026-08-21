@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Http\Requests\UpdateInvoiceRequest;
 use App\Http\Resources\InvoiceItemResource;
 use App\Models\Estimate;
+use App\Models\FeedItem;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Job;
 use App\Models\PaymentTransaction;
 use App\Notifications\InvoiceStatusChanged;
 use App\Policies\InvoicePolicy;
+use App\Services\Activity\FeedItemRecorder;
 use App\Services\Export\InvoicePdfWriter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +34,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class InvoiceDetailController extends Controller
 {
+    public function __construct(private readonly FeedItemRecorder $activity) {}
+
     public function show(Request $request, Invoice $invoice): Response
     {
         $this->authorize('view', $invoice);
@@ -144,6 +148,7 @@ class InvoiceDetailController extends Controller
 
         $invoice->update(['status' => Invoice::STATUS_SENT, 'sent_at' => now()]);
         $this->notifyCreator($request, $invoice, InvoiceStatusChanged::SENT);
+        $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "Invoice {$invoice->invoice_number} sent to {$invoice->client}", 'file-text', 'lilac');
 
         return back()->with('success', "{$invoice->invoice_number} was sent.");
     }
@@ -174,6 +179,7 @@ class InvoiceDetailController extends Controller
         ]);
 
         $this->notifyCreator($request, $invoice, InvoiceStatusChanged::PAID);
+        $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "Invoice {$invoice->invoice_number} marked paid", 'file-text', 'butter');
 
         return back()->with('success', "{$invoice->invoice_number} was marked paid.");
     }

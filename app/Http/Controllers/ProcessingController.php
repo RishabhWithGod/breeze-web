@@ -8,6 +8,7 @@ use App\Jobs\ProcessTakeoffRun;
 use App\Jobs\RenderDrawingPreviews;
 use App\Models\AiJob;
 use App\Models\Project;
+use App\Services\Ai\AiRunStatePresenter;
 use App\Services\Ai\TakeoffOrchestrator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -164,7 +165,7 @@ class ProcessingController extends Controller
     /** The parts of a run a watching browser cares about, as one comparable string. */
     private function signature(AiJob $aiJob): string
     {
-        return $aiJob->status.'|'.$aiJob->progress.'|'.$aiJob->stage;
+        return AiRunStatePresenter::signature($aiJob);
     }
 
     /** Queues the analysis again on request, for a run that never started. */
@@ -292,57 +293,14 @@ class ProcessingController extends Controller
     }
 
     /**
-     * Current state of the run, in the shape the processing screen consumes.
+     * Current state of the run, in the shape the processing screen consumes
+     * — the same shape `AiTakeoffStatusChanged` broadcasts, so a polled
+     * response and a pushed event are interchangeable to the frontend.
      *
      * @return array<string, mixed>
      */
     private function runState(?AiJob $aiJob): array
     {
-        if (! $aiJob) {
-            return [
-                'status' => 'missing',
-                'progress' => 0,
-                'stage' => null,
-                'stageLabel' => null,
-                'error' => 'No analysis has been requested for this drawing yet.',
-                'reviewUrl' => null,
-                'finished' => true,
-                'runId' => null,
-                'processingTime' => null,
-                'pipelineStatus' => [],
-                'warnings' => [],
-                'awaitingWorker' => false,
-                'signature' => '',
-            ];
-        }
-
-        $result = $aiJob->result;
-
-        return [
-            'id' => $aiJob->id,
-            'status' => $aiJob->status,
-            'progress' => $aiJob->progress,
-            'stage' => $aiJob->stage,
-            'stageLabel' => $aiJob->stage_label,
-            'error' => $aiJob->error_message,
-            // The engine's own run identifier, once resolved.
-            'runId' => $result?->run_id,
-            'submittedAt' => $aiJob->submitted_at?->toISOString(),
-            'completedAt' => $aiJob->completed_at?->toISOString(),
-            'finished' => $aiJob->isFinished(),
-            'reviewUrl' => $result ? route('reviews.show', $result, absolute: false) : null,
-            // True while the run is queued but nothing has claimed it, so the screen
-            // can say so instead of spinning silently.
-            'awaitingWorker' => $aiJob->status === AiJob::STATUS_QUEUED
-                && blank($aiJob->external_id)
-                && $aiJob->created_at->lt(now()->subSeconds(10)),
-            // Facts from the engine, shown as soon as the response lands.
-            // Handed back on the next poll so the request can wait for a change
-            // rather than re-reporting what the browser already has.
-            'signature' => $this->signature($aiJob),
-            'processingTime' => $result?->processing_time,
-            'pipelineStatus' => $result?->pipelineStages() ?? [],
-            'warnings' => $result?->warnings ?? [],
-        ];
+        return AiRunStatePresenter::present($aiJob);
     }
 }

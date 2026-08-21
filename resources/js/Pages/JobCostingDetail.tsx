@@ -83,11 +83,14 @@ export default function JobCostingDetail({
     router.delete(routeTo.jobCostEntry(job.id, entry.id), { preserveScroll: true })
   }
 
+  // Only ever rendered behind `canViewCosts` below, where the backend
+  // guarantees these are real numbers, never null — the `?? 0` is just to
+  // satisfy the nullable type these fields carry for the restricted case.
   const breakdown = [
-    { label: 'Labor', estimated: summary.estimatedLaborCost, actual: summary.actualLaborCost, variance: summary.laborCostVariance },
-    { label: 'Materials', estimated: summary.estimatedMaterialCost, actual: summary.actualMaterialCost, variance: summary.materialCostVariance },
-    { label: 'Equipment', estimated: summary.estimatedEquipmentCost, actual: summary.actualEquipmentCost, variance: summary.equipmentCostVariance },
-    { label: 'Other', estimated: summary.estimatedOtherCost, actual: summary.actualOtherCost, variance: summary.otherCostVariance },
+    { label: 'Labor', estimated: summary.estimatedLaborCost ?? 0, actual: summary.actualLaborCost ?? 0, variance: summary.laborCostVariance ?? 0 },
+    { label: 'Materials', estimated: summary.estimatedMaterialCost ?? 0, actual: summary.actualMaterialCost ?? 0, variance: summary.materialCostVariance ?? 0 },
+    { label: 'Equipment', estimated: summary.estimatedEquipmentCost ?? 0, actual: summary.actualEquipmentCost ?? 0, variance: summary.equipmentCostVariance ?? 0 },
+    { label: 'Other', estimated: summary.estimatedOtherCost ?? 0, actual: summary.actualOtherCost ?? 0, variance: summary.otherCostVariance ?? 0 },
   ]
 
   const laborColumns: TableColumn<JobCostingLaborRow>[] = [
@@ -99,7 +102,7 @@ export default function JobCostingDetail({
     { key: 'billable', header: 'Billable Hours', align: 'right', render: (row) => formatHours(row.billableHours) },
     ...(canViewCosts ? [
       { key: 'rate', header: 'Labor Rate', align: 'right' as const, render: (row: JobCostingLaborRow) => row.laborRate !== null ? `${formatCurrency(row.laborRate, 2)}/hr` : '—' },
-      { key: 'cost', header: 'Labor Cost', align: 'right' as const, render: (row: JobCostingLaborRow) => formatCurrency(row.laborCost, 2) },
+      { key: 'cost', header: 'Labor Cost', align: 'right' as const, render: (row: JobCostingLaborRow) => row.laborCost !== null ? formatCurrency(row.laborCost, 2) : '—' },
     ] : []),
   ]
 
@@ -108,7 +111,7 @@ export default function JobCostingDetail({
     { key: 'category', header: 'Category', render: (row) => <Badge>{JOB_COST_ENTRY_CATEGORY_LABEL[row.category]}</Badge> },
     { key: 'description', header: 'Description', render: (row) => <span className="text-white">{row.description}</span> },
     { key: 'quantity', header: 'Qty', align: 'right', render: (row) => row.quantity ?? '—' },
-    { key: 'amount', header: 'Amount', align: 'right', render: (row) => formatCurrency(row.amount, 2) },
+    ...(canViewCosts ? [{ key: 'amount', header: 'Amount', align: 'right' as const, render: (row: JobCostEntryRow) => formatCurrency(row.amount ?? 0, 2) }] : []),
     { key: 'recordedBy', header: 'Recorded By', render: (row) => row.recordedBy ?? '—' },
     ...(can.manage ? [{
       key: 'actions', header: '', render: (row: JobCostEntryRow) => (
@@ -147,7 +150,7 @@ export default function JobCostingDetail({
         )}
       </AnimatePresence>
 
-      {canViewCosts ? (
+      {canViewCosts && summary.estimatedTotalCost !== null && summary.actualTotalCost !== null && summary.totalCostVariance !== null && summary.profit !== null ? (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <Stat label="Estimated Cost" value={formatCurrency(summary.estimatedTotalCost, 0)} />
           <Stat label="Actual Cost" value={formatCurrency(summary.actualTotalCost, 0)} />
@@ -256,7 +259,7 @@ export default function JobCostingDetail({
               {estimatedItems.map((item, index) => (
                 <li key={index} className="flex items-center justify-between rounded-panel bg-white/5 px-3 py-2 text-md">
                   <span className="text-white/90">{item.description}</span>
-                  <span className="text-white/70">{item.quantity} · {formatCurrency(item.cost, 2)}</span>
+                  <span className="text-white/70">{item.quantity}{canViewCosts && item.cost !== null ? ` · ${formatCurrency(item.cost, 2)}` : ''}</span>
                 </li>
               ))}
             </ul>
@@ -272,7 +275,9 @@ export default function JobCostingDetail({
             title="Estimate Comparison"
             actions={summary.estimateId ? <ButtonLink href={routeTo.estimate(summary.estimateId)} variant="secondary" size="sm">Open Estimate</ButtonLink> : undefined}
           />
-          {summary.estimateId ? (
+          {!canViewCosts ? (
+            <p className="text-md text-white/70">Cost figures are restricted. Only a Project Manager, Admin or Owner can see this comparison.</p>
+          ) : summary.estimateId && summary.estimatedLaborCost !== null && summary.estimatedMaterialCost !== null && summary.estimatedTotalCost !== null && summary.actualLaborCost !== null && summary.actualMaterialCost !== null && summary.actualTotalCost !== null && summary.totalCostVariance !== null ? (
             <dl className="grid grid-cols-2 gap-4">
               <Field label="Estimate" value={summary.estimateNumber ?? '—'} />
               <Field label="Estimated Labor" value={formatCurrency(summary.estimatedLaborCost, 2)} />
@@ -294,7 +299,7 @@ export default function JobCostingDetail({
             title="Billing"
             actions={<ButtonLink href={`${ROUTES.invoices}?job=${job.id}`} variant="secondary" size="sm">View Invoices</ButtonLink>}
           />
-          {canViewCosts ? (
+          {canViewCosts && summary.revenue !== null && summary.billed !== null && summary.paid !== null && summary.outstanding !== null && summary.unbilled !== null ? (
             <dl className="grid grid-cols-2 gap-4">
               <Field label="Revenue" value={formatCurrency(summary.revenue, 2)} />
               <Field label="Billed" value={formatCurrency(summary.billed, 2)} />

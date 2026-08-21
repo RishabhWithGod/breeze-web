@@ -2,6 +2,7 @@
 
 namespace App\Services\TimeTracking;
 
+use App\Events\TimerStateChanged;
 use App\Models\Job;
 use App\Models\JobTask;
 use App\Models\TimeEntry;
@@ -42,7 +43,7 @@ class TimerService
         ?string $description,
         bool $billable,
     ): TimerSession {
-        return DB::transaction(function () use ($user, $job, $task, $taskLabel, $description, $billable) {
+        $session = DB::transaction(function () use ($user, $job, $task, $taskLabel, $description, $billable) {
             $existing = TimerSession::where('user_id', $user->id)->lockForUpdate()->first();
 
             if ($existing !== null) {
@@ -66,6 +67,10 @@ class TimerService
                 'billable' => $billable,
             ]);
         });
+
+        event(new TimerStateChanged($user->id, 'started', $session));
+
+        return $session;
     }
 
     public function pause(TimerSession $session): TimerSession
@@ -79,6 +84,8 @@ class TimerService
             'paused_at' => now(),
             'status' => TimerSession::STATUS_PAUSED,
         ]);
+
+        event(new TimerStateChanged($session->user_id, 'paused', $session));
 
         return $session;
     }
@@ -94,6 +101,8 @@ class TimerService
             'paused_at' => null,
             'status' => TimerSession::STATUS_RUNNING,
         ]);
+
+        event(new TimerStateChanged($session->user_id, 'resumed', $session));
 
         return $session;
     }
@@ -141,14 +150,20 @@ class TimerService
         $entry->recordInitialStatus();
         $entry->recordActivity('created', 'Time entry created by stopping a timer.', ['seconds' => $seconds]);
 
+        $userId = $session->user_id;
         $session->delete();
+
+        event(new TimerStateChanged($userId, 'stopped', null));
 
         return $entry;
     }
 
     public function discard(TimerSession $session): void
     {
+        $userId = $session->user_id;
         $session->delete();
+
+        event(new TimerStateChanged($userId, 'discarded', null));
     }
 
     public function elapsedSeconds(TimerSession $session): int

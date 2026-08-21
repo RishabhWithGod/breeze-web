@@ -7,6 +7,8 @@ interface UploadState {
   files: UploadFile[]
   rejected: RejectedUploadFile[]
   notes: string
+  /** The project this run will be attached to; null until one is chosen. */
+  projectId: number | null
   /** Set while the mock upload timer is running — disables the dropzone. */
   isSubmitting: boolean
   /** Form-level error shown above the dropzone. */
@@ -24,6 +26,7 @@ interface UploadActions {
   clearRejected: () => void
   setNotes: (notes: string) => void
   clearNotes: () => void
+  setProjectId: (projectId: number | null) => void
   setSubmitting: (isSubmitting: boolean) => void
   setFormError: (message: string | null) => void
   reset: () => void
@@ -33,6 +36,7 @@ const initialState: UploadState = {
   files: [],
   rejected: [],
   notes: '',
+  projectId: null,
   isSubmitting: false,
   formError: null,
 }
@@ -96,6 +100,7 @@ export const useUploadStore = create<UploadState & UploadActions>()((set) => ({
   clearRejected: () => set({ rejected: [] }),
   setNotes: (notes) => set({ notes }),
   clearNotes: () => set({ notes: '' }),
+  setProjectId: (projectId) => set({ projectId }),
   setSubmitting: (isSubmitting) => set({ isSubmitting }),
   setFormError: (formError) => set({ formError }),
   reset: () => set({ ...initialState }),

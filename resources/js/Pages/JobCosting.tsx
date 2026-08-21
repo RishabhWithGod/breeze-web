@@ -73,16 +73,25 @@ export default function JobCosting({
     router.get(ROUTES.jobCosting, {}, { preserveScroll: true })
   }, [filters])
 
-  const laborRows = [
-    { label: 'Estimated', value: laborTotals.estimatedCost, barClassName: 'bg-brand-deep' },
-    { label: 'Actual', value: laborTotals.actualCost, barClassName: laborTotals.actualCost > laborTotals.estimatedCost ? 'bg-status-danger' : 'bg-status-success' },
-  ]
+  const laborRows =
+    canViewCosts && laborTotals.estimatedCost !== null && laborTotals.actualCost !== null
+      ? [
+          { label: 'Estimated', value: laborTotals.estimatedCost, barClassName: 'bg-brand-deep' },
+          { label: 'Actual', value: laborTotals.actualCost, barClassName: laborTotals.actualCost > laborTotals.estimatedCost ? 'bg-status-danger' : 'bg-status-success' },
+        ]
+      : []
 
   const laborVarianceHours = laborTotals.actualHours - laborTotals.estimatedHours
   const laborVariancePct = laborTotals.estimatedHours > 0 ? (laborVarianceHours / laborTotals.estimatedHours) * 100 : null
 
-  const materialVariance = materialTotals.actualCost - materialTotals.estimatedCost
-  const materialVariancePct = materialTotals.estimatedCost > 0 ? (materialVariance / materialTotals.estimatedCost) * 100 : null
+  const materialVariance =
+    canViewCosts && materialTotals.actualCost !== null && materialTotals.estimatedCost !== null
+      ? materialTotals.actualCost - materialTotals.estimatedCost
+      : null
+  const materialVariancePct =
+    materialVariance !== null && materialTotals.estimatedCost && materialTotals.estimatedCost > 0
+      ? (materialVariance / materialTotals.estimatedCost) * 100
+      : null
 
   return (
     <PageTransition>
@@ -187,41 +196,57 @@ export default function JobCosting({
       <div className="grid gap-6 xl:grid-cols-2">
         <Card padding="lg">
           <SectionHeading as="h3" title="Estimated vs Actual Labor" />
-          <ComparisonBarChart rows={laborRows} formatValue={(v) => formatCurrency(v, 0)} />
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <StatBlock label="Total Estimated" value={formatHours(laborTotals.estimatedHours)} detail={formatCurrency(laborTotals.estimatedCost, 2)} />
-            <StatBlock
-              label="Total Actual"
-              value={formatHours(laborTotals.actualHours)}
-              detail={formatCurrency(laborTotals.actualCost, 2)}
-              note={laborVariancePct !== null ? `${laborVarianceHours >= 0 ? '+' : ''}${formatHours(laborVarianceHours)} · ${laborVarianceHours >= 0 ? '+' : ''}${laborVariancePct.toFixed(1)}%` : undefined}
-              noteTone={laborVarianceHours > 0 ? 'danger' : 'success'}
-            />
-          </div>
+          {canViewCosts && laborTotals.estimatedCost !== null && laborTotals.actualCost !== null ? (
+            <>
+              <ComparisonBarChart rows={laborRows} formatValue={(v) => formatCurrency(v, 0)} />
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <StatBlock label="Total Estimated" value={formatHours(laborTotals.estimatedHours)} detail={formatCurrency(laborTotals.estimatedCost, 2)} />
+                <StatBlock
+                  label="Total Actual"
+                  value={formatHours(laborTotals.actualHours)}
+                  detail={formatCurrency(laborTotals.actualCost, 2)}
+                  note={laborVariancePct !== null ? `${laborVarianceHours >= 0 ? '+' : ''}${formatHours(laborVarianceHours)} · ${laborVarianceHours >= 0 ? '+' : ''}${laborVariancePct.toFixed(1)}%` : undefined}
+                  noteTone={laborVarianceHours > 0 ? 'danger' : 'success'}
+                />
+              </div>
+            </>
+          ) : (
+            <EmptyState title="Cost figures are restricted" description="Only a Project Manager, Admin or Owner can see labor cost totals. Hours worked, shown below, are not restricted." />
+          )}
+          {!canViewCosts && (
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <StatBlock label="Estimated Hours" value={formatHours(laborTotals.estimatedHours)} />
+              <StatBlock label="Actual Hours" value={formatHours(laborTotals.actualHours)} />
+            </div>
+          )}
         </Card>
 
         <Card padding="lg">
           <SectionHeading as="h3" title="Estimated vs Actual Materials" />
-          {materialTotals.estimatedCost === 0 && materialTotals.actualCost === 0 ? (
+          {!canViewCosts ? (
+            <EmptyState title="Cost figures are restricted" description="Only a Project Manager, Admin or Owner can see material cost totals." />
+          ) : materialTotals.estimatedCost === 0 && materialTotals.actualCost === 0 ? (
             <EmptyState title="No material costing data yet" description="Log an estimate with material lines, or record an actual material cost on a job, to see this chart." />
           ) : (
-            <DonutChart
-              segments={[
-                { label: 'Estimated', value: materialTotals.estimatedCost, tone: 'info' },
-                { label: 'Actual', value: materialTotals.actualCost, tone: materialTotals.actualCost > materialTotals.estimatedCost ? 'danger' : 'success' },
-              ]}
-            />
+            <>
+              <DonutChart
+                segments={[
+                  { label: 'Estimated', value: materialTotals.estimatedCost ?? 0, tone: 'info' },
+                  { label: 'Actual', value: materialTotals.actualCost ?? 0, tone: (materialTotals.actualCost ?? 0) > (materialTotals.estimatedCost ?? 0) ? 'danger' : 'success' },
+                ]}
+              />
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <StatBlock label="Total Estimated" value={formatCurrency(materialTotals.estimatedCost ?? 0, 2)} detail={`Across ${jobCount} jobs`} />
+                <StatBlock
+                  label="Total Actual"
+                  value={formatCurrency(materialTotals.actualCost ?? 0, 2)}
+                  detail={`Across ${jobCount} jobs`}
+                  note={materialVariancePct !== null ? `${Math.abs(materialVariancePct).toFixed(1)}% ${materialVariancePct >= 0 ? 'over' : 'under'} budget` : undefined}
+                  noteTone={(materialVariance ?? 0) > 0 ? 'danger' : 'success'}
+                />
+              </div>
+            </>
           )}
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <StatBlock label="Total Estimated" value={formatCurrency(materialTotals.estimatedCost, 2)} detail={`Across ${jobCount} jobs`} />
-            <StatBlock
-              label="Total Actual"
-              value={formatCurrency(materialTotals.actualCost, 2)}
-              detail={`Across ${jobCount} jobs`}
-              note={materialVariancePct !== null ? `${Math.abs(materialVariancePct).toFixed(1)}% ${materialVariancePct >= 0 ? 'over' : 'under'} budget` : undefined}
-              noteTone={materialVariance > 0 ? 'danger' : 'success'}
-            />
-          </div>
         </Card>
       </div>
 
@@ -229,7 +254,7 @@ export default function JobCosting({
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card padding="lg">
           <SectionHeading as="h3" title="Profit/Loss" />
-          {canViewCosts ? (
+          {canViewCosts && profitLoss.revenue !== null && profitLoss.profit !== null ? (
             <>
               <TrendLineChart
                 points={[
@@ -277,7 +302,7 @@ export default function JobCosting({
                       {JOB_COSTING_OVERRUN_LABEL[row.overrunReason ?? ''] ?? 'Exceeding budget'}
                       {row.overrunPct !== null && ` by ${row.overrunPct}%`}
                     </p>
-                    {canViewCosts && (
+                    {canViewCosts && row.overrunAmount !== null && (
                       <p className="mt-0.5 text-sm font-medium text-status-danger">
                         {formatCurrency(row.overrunAmount, 2)} over budget
                       </p>
@@ -389,7 +414,8 @@ function RankingRow({
   canViewCosts: boolean
   tone: 'success' | 'danger'
 }) {
-  const progress = row.revenue > 0 ? Math.min(100, Math.max(0, (row.profit / row.revenue) * 100)) : 0
+  const showFinancials = canViewCosts && row.revenue !== null && row.profit !== null
+  const progress = showFinancials && row.revenue! > 0 ? Math.min(100, Math.max(0, (row.profit! / row.revenue!) * 100)) : 0
 
   return (
     <li>
@@ -405,10 +431,10 @@ function RankingRow({
             </span>
           )}
         </div>
-        {canViewCosts && (
+        {showFinancials && (
           <div className="mt-2 flex items-center gap-3">
             <ProgressBar value={Math.abs(progress)} tone={tone} size="sm" className="flex-1" />
-            <span className="shrink-0 text-sm font-medium text-white/90">{formatCurrency(row.profit, 0)}</span>
+            <span className="shrink-0 text-sm font-medium text-white/90">{formatCurrency(row.profit!, 0)}</span>
           </div>
         )}
       </ButtonLink>

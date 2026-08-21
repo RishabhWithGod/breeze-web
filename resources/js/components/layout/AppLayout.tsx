@@ -4,6 +4,7 @@ import { useUiStore } from '@/store'
 import { cn } from '@/utils'
 import { Footer } from './Footer'
 import { Navbar } from './Navbar'
+import { RealtimeUserSync } from './RealtimeUserSync'
 import { Sidebar } from './Sidebar'
 
 /**
@@ -19,6 +20,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh pt-navbar">
+      <RealtimeUserSync />
       <Navbar />
       <Sidebar />
 

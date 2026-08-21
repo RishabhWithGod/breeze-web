@@ -37,6 +37,8 @@ export interface DashboardSummary {
 
 export interface MonthlyPoint {
   readonly month: string
-  /** Indexed score, 0–100. */
-  readonly value: number
+  /** On-time completion rate, 0–100. Null when nothing completed that month. */
+  readonly value: number | null
+  /** Jobs completed that month — the denominator behind `value`. */
+  readonly count: number
 }

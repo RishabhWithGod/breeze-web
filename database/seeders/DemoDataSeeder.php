@@ -13,7 +13,6 @@ use App\Models\Job;
 use App\Models\JobAssignment;
 use App\Models\JobCostEntry;
 use App\Models\PaymentTransaction;
-use App\Models\PerformancePoint;
 use App\Models\Project;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
@@ -56,7 +55,6 @@ class DemoDataSeeder extends Seeder
         $this->seedUploads($user);
         $this->seedNotifications($user);
         $this->seedFeedItems();
-        $this->seedPerformance();
     }
 
     private function seedDemoUser(): User
@@ -952,22 +950,4 @@ class DemoDataSeeder extends Seeder
         }
     }
 
-    private function seedPerformance(): void
-    {
-        $series = [
-            'Jan' => 65, 'Feb' => 71, 'Mar' => 58, 'Apr' => 80,
-            'May' => 75, 'Jun' => 90, 'Jul' => 85, 'Aug' => 78,
-            'Sep' => 82, 'Oct' => 88, 'Nov' => 92, 'Dec' => 95,
-        ];
-
-        $position = 0;
-
-        foreach ($series as $month => $value) {
-            PerformancePoint::create([
-                'month' => $month,
-                'value' => $value,
-                'position' => $position++,
-            ]);
-        }
-    }
 }

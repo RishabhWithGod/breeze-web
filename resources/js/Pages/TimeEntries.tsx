@@ -7,6 +7,7 @@ import {
   Download,
   Eye,
   Pencil,
+  Play,
   Plus,
   SearchX,
   Send,
@@ -30,7 +31,7 @@ import {
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { TeamWeekSummary } from '@/components/timeTracking'
+import { StartTimerModal, TeamWeekSummary } from '@/components/timeTracking'
 import {
   BILLABLE_FILTERS,
   ROUTES,
@@ -88,7 +89,7 @@ export default function TimeEntries({
   taskTypes,
   can,
 }: TimeEntriesProps) {
-  const { flash, auth } = usePage<SharedPageProps>().props
+  const { flash, auth, activeTimer } = usePage<SharedPageProps>().props
 
   const [query, setQuery] = useState(filters.search)
   const [draft, setDraft] = useState(filters)
@@ -99,6 +100,7 @@ export default function TimeEntries({
 
   const rejectDialog = useDisclosure()
   const deleteDialog = useDisclosure()
+  const startTimer = useDisclosure()
   const debouncedQuery = useDebouncedValue(query)
 
   const flashed = flash.warning ?? flash.success ?? null
@@ -336,6 +338,11 @@ export default function TimeEntries({
             >
               Export
             </Button>
+            {!activeTimer && jobs.length > 0 && (
+              <Button variant="secondary" leftIcon={Play} onClick={startTimer.open}>
+                Start Timer
+              </Button>
+            )}
             <ButtonLink leftIcon={Plus} href={routeTo.timeEntryCreate()}>
               Add Time Entry
             </ButtonLink>
@@ -547,6 +554,8 @@ export default function TimeEntries({
           autoFocus
         />
       </Modal>
+
+      <StartTimerModal isOpen={startTimer.isOpen} onClose={startTimer.close} jobs={jobs} />
     </PageTransition>
   )
 }

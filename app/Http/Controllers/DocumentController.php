@@ -8,12 +8,14 @@ use App\Http\Resources\DocumentResource;
 use App\Models\Document;
 use App\Models\DocumentFolder;
 use App\Models\DocumentShare;
+use App\Models\FeedItem;
 use App\Models\Job;
 use App\Models\Upload;
 use App\Models\User;
 use App\Notifications\DocumentShared;
 use App\Notifications\DocumentVersionUploaded;
 use App\Policies\DocumentPolicy;
+use App\Services\Activity\FeedItemRecorder;
 use App\Services\Documents\DocumentStore;
 use App\Support\UploadLimits;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,7 +33,10 @@ class DocumentController extends Controller
 {
     private const TABS = ['all', 'recent', 'shared', 'favorites', 'archived'];
 
-    public function __construct(private readonly DocumentStore $documents) {}
+    public function __construct(
+        private readonly DocumentStore $documents,
+        private readonly FeedItemRecorder $activity,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -129,8 +134,14 @@ class DocumentController extends Controller
             ]),
             'folders' => DocumentFolder::query()->orderBy('name')->get(['id', 'name', 'parent_id', 'job_id']),
             'maxFileSizeMb' => UploadLimits::effectiveMb(),
-            // Drawings AI Takeoff already has on file — importable without a second upload of the same bytes.
+            // Drawings AI Takeoff already has on file — importable without a
+            // second upload of the same bytes. Scoped to this user's own
+            // uploads only: a takeoff project (and the upload behind it)
+            // belongs to whoever ran it (`ProjectPolicy::view`), so the
+            // picker must never surface — or `importFromUpload()` accept —
+            // someone else's drawing.
             'importableUploads' => Upload::query()
+                ->where('user_id', Auth::id())
                 ->whereNotNull('path')
                 ->whereDoesntHave('documents')
                 ->with('project')
@@ -165,6 +176,8 @@ class DocumentController extends Controller
 
         $document->recordActivity('uploaded', "“{$document->name}” was uploaded");
 
+        $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "Document uploaded: {$document->name}", 'file-text', 'lilac');
+
         return redirect()->route('documents.index')->with('success', "“{$document->name}” was uploaded.");
     }
 
@@ -188,6 +201,11 @@ class DocumentController extends Controller
         ]);
 
         $upload = Upload::findOrFail($data['upload_id']);
+        // Mirrors `ProjectPolicy::view()` — the drawing belongs to whoever
+        // ran the takeoff it came from. Hiding another user's upload from
+        // the picker isn't enough on its own; the id is a small sequential
+        // integer, so the server has to refuse it directly too.
+        abort_unless($upload->user_id === $request->user()->id, 403);
         abort_if(blank($upload->path), 404, 'That drawing has no file on disk to import.');
 
         $document = Document::create([

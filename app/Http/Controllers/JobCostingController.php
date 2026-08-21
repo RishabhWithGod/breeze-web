@@ -48,12 +48,12 @@ class JobCostingController extends Controller
         $laborTotals = [
             'estimatedHours' => round($rows->sum('estimatedLaborHours'), 2),
             'actualHours' => round($rows->sum('actualLaborHours'), 2),
-            'estimatedCost' => round($rows->sum('estimatedLaborCost'), 2),
-            'actualCost' => round($rows->sum('actualLaborCost'), 2),
+            'estimatedCost' => $canViewCosts ? round($rows->sum('estimatedLaborCost'), 2) : null,
+            'actualCost' => $canViewCosts ? round($rows->sum('actualLaborCost'), 2) : null,
         ];
         $materialTotals = [
-            'estimatedCost' => round($rows->sum('estimatedMaterialCost'), 2),
-            'actualCost' => round($rows->sum('actualMaterialCost'), 2),
+            'estimatedCost' => $canViewCosts ? round($rows->sum('estimatedMaterialCost'), 2) : null,
+            'actualCost' => $canViewCosts ? round($rows->sum('actualMaterialCost'), 2) : null,
         ];
 
         $revenue = round($rows->sum('revenue'), 2);
@@ -70,16 +70,19 @@ class JobCostingController extends Controller
             'canViewCosts' => $canViewCosts,
             'laborTotals' => $laborTotals,
             'materialTotals' => $materialTotals,
-            'profitLoss' => [
+            'profitLoss' => $canViewCosts ? [
                 'revenue' => $revenue,
                 'totalCost' => $totalCost,
                 'profit' => $profit,
                 'marginPct' => $revenue > 0 ? round($profit / $revenue * 100, 1) : null,
-            ],
-            'overrunAlerts' => $overrunRows->sortByDesc('overrunAmount')->take(10)->values(),
+            ] : ['revenue' => null, 'totalCost' => null, 'profit' => null, 'marginPct' => null],
+            'overrunAlerts' => $overrunRows->sortByDesc('overrunAmount')->take(10)->values()
+                ->map(fn (array $row) => $canViewCosts ? $row : JobCostSummary::redact($row)),
             'jobsByStatus' => $jobsByStatus,
-            'topProfitable' => $rows->sortByDesc('profit')->take(5)->values(),
-            'leastProfitable' => $rows->sortBy('profit')->take(5)->values(),
+            'topProfitable' => $rows->sortByDesc('profit')->take(5)->values()
+                ->map(fn (array $row) => $canViewCosts ? $row : JobCostSummary::redact($row)),
+            'leastProfitable' => $rows->sortBy('profit')->take(5)->values()
+                ->map(fn (array $row) => $canViewCosts ? $row : JobCostSummary::redact($row)),
             'jobCount' => $jobs->count(),
             'clients' => Job::query()->whereNotNull('client')->distinct()->orderBy('client')->pluck('client'),
             'jobs' => Job::query()->active()->orderBy('name')->get(['id', 'name', 'client']),
@@ -90,6 +93,8 @@ class JobCostingController extends Controller
     public function export(Request $request, string $format): StreamedResponse|BinaryFileResponse
     {
         abort_unless(in_array($format, ['csv', 'xlsx'], true), 404);
+        // Exporting is still a view of cost figures — same gate as the dashboard.
+        abort_unless($request->user()->can('viewJobCosts', TimeEntry::class), 403);
 
         $filters = $this->filters($request);
         $jobs = $this->filteredJobs($filters);
@@ -166,9 +171,15 @@ class JobCostingController extends Controller
                 'category' => $item->category,
                 'description' => $item->description,
                 'quantity' => (float) $item->quantity,
-                'cost' => (float) $item->total,
+                'cost' => $canViewCosts ? (float) $item->total : null,
             ])->values()
             : collect();
+
+        if (! $canViewCosts) {
+            $summary = JobCostSummary::redact($summary);
+            $laborRows = $laborRows->map(fn (array $row) => [...$row, 'laborRate' => null, 'laborCost' => null]);
+            $costEntries = $costEntries->map(fn (array $entry) => [...$entry, 'unitCost' => null, 'amount' => null]);
+        }
 
         $hasSchedule = $job->schedule !== null;
 

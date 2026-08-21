@@ -14,6 +14,11 @@ class StoreUploadRequest extends FormRequest
         $limits = config('takeoff.uploads');
 
         return [
+            'project_id' => [
+                'required',
+                'integer',
+                Rule::exists('projects', 'id')->where('user_id', $this->user()->id),
+            ],
             'files' => ['required', 'array', 'min:1', 'max:'.$limits['max_files']],
             'files.*' => [
                 'required',
@@ -33,6 +38,8 @@ class StoreUploadRequest extends FormRequest
         $limits = config('takeoff.uploads');
 
         return [
+            'project_id.required' => 'Select a project before running a takeoff.',
+            'project_id.exists' => 'That project could not be found.',
             'files.required' => 'Add at least one supported drawing file before running a takeoff.',
             'files.max' => $limits['max_files'] === 1
                 ? 'Only one file can be queued at a time.'

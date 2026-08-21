@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Head, Link, useForm } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { Eye, EyeOff } from 'lucide-react'
 import { Alert } from '@/components/common'
 import { BrandWordmark } from '@/components/layout'
 import { MOTION, ROUTES } from '@/constants'
@@ -34,6 +36,7 @@ export default function Login({ rememberedEmail }: LoginProps) {
     password: '',
     remember: Boolean(rememberedEmail),
   })
+  const [showPassword, setShowPassword] = useState(false)
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -111,16 +114,28 @@ export default function Login({ rememberedEmail }: LoginProps) {
           >
             Password
           </label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            aria-invalid={Boolean(errors.password) || undefined}
-            disabled={processing}
-            value={data.password}
-            onChange={(event) => setData('password', event.target.value)}
-            className={`mt-2 ${FIELD}`}
-          />
+          <div className="relative mt-2">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              aria-invalid={Boolean(errors.password) || undefined}
+              disabled={processing}
+              value={data.password}
+              onChange={(event) => setData('password', event.target.value)}
+              className={`${FIELD} pr-11`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((visible) => !visible)}
+              disabled={processing}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-navy-950/60 transition-colors hover:text-navy-950 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {showPassword ? <EyeOff size={19} aria-hidden /> : <Eye size={19} aria-hidden />}
+            </button>
+          </div>
           {errors.password && (
             <p className="mt-2 text-sm text-red-300">{errors.password}</p>
           )}
@@ -183,8 +198,9 @@ export default function Login({ rememberedEmail }: LoginProps) {
 
         <p className="mt-6 text-center text-lg font-bold text-white">
           Don&apos;t have an account?{' '}
-          {/* No self-service registration exists, so this reads as brand copy. */}
-          <span className="text-brand">Sign Up</span>
+          <Link href={ROUTES.signup} className="text-brand transition-colors hover:text-white">
+            Sign Up
+          </Link>
         </p>
       </motion.div>
     </div>

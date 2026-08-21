@@ -11,16 +11,12 @@ use App\Models\Job;
 use App\Models\JobTask;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
-use App\Models\TimeTrackingSetting;
 use App\Policies\TimeEntryPolicy;
 use App\Services\Export\TimesheetExporter;
 use App\Services\TimeTracking\JobLaborSummary;
-use App\Services\TimeTracking\OvertimeCalculator;
-use App\Services\TimeTracking\LaborCostCalculator;
 use App\Services\TimeTracking\TaskActualHoursRecalculator;
-use App\Services\TimeTracking\TeamMemberResolver;
 use App\Services\TimeTracking\TeamTimesheetBuilder;
-use App\Services\TimeTracking\TimeEntryCalculator;
+use App\Services\TimeTracking\TimeEntryWriteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,7 +24,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response as ResponseFactory;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -46,14 +41,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class TimeEntryController extends Controller
 {
     public function __construct(
-        private readonly TeamMemberResolver $resolver,
-        private readonly TimeEntryCalculator $calculator,
-        private readonly OvertimeCalculator $overtime,
-        private readonly LaborCostCalculator $cost,
         private readonly TaskActualHoursRecalculator $taskHours,
         private readonly TeamTimesheetBuilder $weekBuilder,
         private readonly TimesheetExporter $exporter,
         private readonly JobLaborSummary $laborSummary,
+        private readonly TimeEntryWriteService $writer,
     ) {}
 
     public function index(Request $request): Response
@@ -455,81 +447,6 @@ class TimeEntryController extends Controller
             'billable' => ['nullable', 'boolean'],
         ]);
 
-        $job = Job::findOrFail($data['job_id']);
-        $task = ! empty($data['job_task_id']) ? JobTask::findOrFail($data['job_task_id']) : null;
-
-        if ($task !== null && $task->job_id !== $job->id) {
-            throw ValidationException::withMessages([
-                'job_task_id' => 'That task does not belong to the selected job.',
-            ]);
-        }
-
-        $breakMinutes = (int) ($data['break_minutes'] ?? 0);
-
-        /*
-         * A timer stores start/end to the second; the form's native time
-         * inputs only round-trip to the minute. Re-saving an entry without
-         * actually touching its times must not resend a lower-precision
-         * value that can collide (a sub-minute entry would otherwise fail
-         * "end after start" on every subsequent edit) — so only recompute
-         * when the minute-level value the user submitted actually differs
-         * from what is already stored.
-         */
-        $timesUnchanged = ! $isNew
-            && filled($data['start_time'] ?? null)
-            && filled($data['end_time'] ?? null)
-            && $data['start_time'] === substr((string) $entry->start_time, 0, 5)
-            && $data['end_time'] === substr((string) $entry->end_time, 0, 5)
-            && $breakMinutes === $entry->break_minutes;
-
-        if ($timesUnchanged) {
-            $hours = (float) $entry->hours;
-        } elseif (filled($data['start_time'] ?? null) && filled($data['end_time'] ?? null)) {
-            $hours = $this->calculator->fromTimes($data['date'], $data['start_time'], $data['end_time'], $breakMinutes);
-        } elseif (isset($data['hours'])) {
-            $hours = (float) $data['hours'];
-            $this->calculator->assertHoursValid($hours);
-        } else {
-            throw ValidationException::withMessages([
-                'hours' => 'Enter either a start and end time, or the hours worked.',
-            ]);
-        }
-
-        $teamMember = $isNew ? $this->resolver->resolveFor($request->user()) : $entry->teamMember;
-
-        $entry->fill([
-            'job_id' => $job->id,
-            'job_task_id' => $task?->id,
-            'user_id' => $isNew ? $request->user()->id : $entry->user_id,
-            'team_member_id' => $teamMember?->id,
-            'date' => $data['date'],
-            // Keep the stored (second-precision) value when the times were
-            // not actually changed; otherwise take the new minute-level input.
-            'start_time' => $timesUnchanged ? $entry->start_time : ($data['start_time'] ?? null),
-            'end_time' => $timesUnchanged ? $entry->end_time : ($data['end_time'] ?? null),
-            'break_minutes' => $breakMinutes,
-            'hours' => $hours,
-            'task_label' => $task ? null : ($data['task_label'] ?? null),
-            'description' => $data['description'] ?? null,
-            'billable' => (bool) ($data['billable'] ?? true),
-            'source' => $isNew ? TimeEntry::SOURCE_MANUAL : $entry->source,
-            'status' => $isNew ? TimeEntry::STATUS_DRAFT : $entry->status,
-        ]);
-        $entry->save();
-        $entry->load('teamMember');
-
-        $settings = TimeTrackingSetting::current();
-        $entry->fill($this->overtime->splitForEntry($entry, $settings));
-        $this->cost->apply($entry, $settings);
-        $entry->save();
-
-        if ($isNew) {
-            $entry->recordInitialStatus();
-            $entry->recordActivity('created', 'Time entry logged.');
-        } else {
-            $entry->recordActivity('edited', 'Time entry updated.');
-        }
-
-        return $entry;
+        return $this->writer->save($data, $request->user(), $entry);
     }
 }

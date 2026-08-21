@@ -18,13 +18,25 @@ export function useFileUpload(): {
   const [isUploading, setIsUploading] = useState(false)
 
   const startUpload = useCallback(() => {
-    const { files, notes, setFileStatus, setFileProgress, setSubmitting, setFormError } =
-      useUploadStore.getState()
+    const {
+      files,
+      notes,
+      projectId,
+      setFileStatus,
+      setFileProgress,
+      setSubmitting,
+      setFormError,
+    } = useUploadStore.getState()
 
     const targets = files.filter((file) => file.status !== 'error')
 
     if (targets.length === 0) {
       setFormError('Add at least one supported drawing file before running a takeoff.')
+      return
+    }
+
+    if (projectId === null) {
+      setFormError('Select a project before running a takeoff.')
       return
     }
 
@@ -35,6 +47,7 @@ export function useFileUpload(): {
     router.post(
       ROUTES.upload,
       {
+        project_id: projectId,
         files: targets.map((file) => file.source),
         notes,
       },
@@ -53,7 +66,7 @@ export function useFileUpload(): {
             const message = errors[`files.${index}`] ?? errors['files']
             setFileStatus(file.id, message ? 'error' : 'ready', 0)
           })
-          setFormError(errors['files'] ?? errors['notes'] ?? null)
+          setFormError(errors['project_id'] ?? errors['files'] ?? errors['notes'] ?? null)
         },
         onFinish: () => {
           setIsUploading(false)

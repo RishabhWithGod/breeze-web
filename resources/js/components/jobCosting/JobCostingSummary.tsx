@@ -24,7 +24,7 @@ export function JobCostingSummary({ jobId, summary, canViewCosts }: JobCostingSu
         }
       />
 
-      {canViewCosts ? (
+      {canViewCosts && summary.estimatedTotalCost !== null && summary.actualTotalCost !== null && summary.totalCostVariance !== null && summary.profit !== null ? (
         <>
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Stat label="Estimated Cost" value={formatCurrency(summary.estimatedTotalCost, 0)} />

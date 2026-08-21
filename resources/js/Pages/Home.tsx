@@ -83,8 +83,8 @@ export default function Home({
 
       {/* ====================================== Performance + schedule ======= */}
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <DashboardPanel title="Monthly Performance">
-          <PerformanceChart data={performance} seriesLabel="Monthly Performance" />
+        <DashboardPanel title="On-Time Job Completion">
+          <PerformanceChart data={performance} seriesLabel="On-Time Completion Rate" />
         </DashboardPanel>
 
         <DashboardPanel title="Upcoming Schedule" index={1}>

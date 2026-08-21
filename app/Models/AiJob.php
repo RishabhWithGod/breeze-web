@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\AiTakeoffStatusChanged;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -14,6 +15,26 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 class AiJob extends Model
 {
+    /**
+     * Broadcasts on every status transition, from whichever of this model's
+     * several writers (`TakeoffOrchestrator`, `markProgress()`, `markFailed()`)
+     * caused it — a single hook here means a future writer gets realtime
+     * status for free, rather than every call site having to remember to
+     * dispatch the event itself.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (self $aiJob) {
+            event(new AiTakeoffStatusChanged($aiJob));
+        });
+
+        static::updated(function (self $aiJob) {
+            if ($aiJob->wasChanged('status')) {
+                event(new AiTakeoffStatusChanged($aiJob));
+            }
+        });
+    }
+
     public const STATUS_QUEUED = 'queued';
 
     public const STATUS_UPLOADING = 'uploading';

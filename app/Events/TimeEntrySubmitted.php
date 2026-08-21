@@ -3,13 +3,38 @@
 namespace App\Events;
 
 use App\Models\TimeEntry;
+use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /** An employee submitted a time entry for approval. */
-class TimeEntrySubmitted
+class TimeEntrySubmitted implements ShouldBroadcast, ShouldDispatchAfterCommit
 {
     use Dispatchable, SerializesModels;
 
     public function __construct(public readonly TimeEntry $entry) {}
+
+    public function broadcastOn(): array
+    {
+        return [new PrivateChannel("job.{$this->entry->job_id}")];
+    }
+
+    public function broadcastAs(): string
+    {
+        return 'time-entry.submitted';
+    }
+
+    /** @return array<string, mixed> */
+    public function broadcastWith(): array
+    {
+        return [
+            'jobId' => $this->entry->job_id,
+            'entryId' => $this->entry->id,
+            'userId' => $this->entry->user_id,
+            'status' => $this->entry->status,
+            'hours' => (float) $this->entry->hours,
+        ];
+    }
 }

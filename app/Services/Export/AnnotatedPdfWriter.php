@@ -81,11 +81,26 @@ class AnnotatedPdfWriter
         $source = $this->store->absolutePath($upload->path);
         $decompressed = tempnam(sys_get_temp_dir(), 'annot_').'.pdf';
 
-        $qpdf = Process::timeout(20)->run([
-            'qpdf', '--stream-data=uncompress', '--object-streams=disable', $source, $decompressed,
-        ]);
+        // `qpdf` uncompressing is an optimization for FPDI's parser, not a
+        // requirement — a missing binary throws before `run()` even
+        // returns a result to check `->successful()` on, so that has to
+        // be caught here too, exactly like a non-zero exit: fall back to
+        // the untouched source and let FPDI's own import attempt (already
+        // wrapped below) decide whether it can be read at all.
+        try {
+            $qpdf = Process::timeout(20)->run([
+                'qpdf', '--stream-data=uncompress', '--object-streams=disable', $source, $decompressed,
+            ]);
+            $qpdfSucceeded = $qpdf->successful();
+        } catch (Throwable $e) {
+            Log::info('qpdf is unavailable; annotating the original PDF without pre-decompression', [
+                'ai_result_id' => $result->id,
+                'error' => $e->getMessage(),
+            ]);
+            $qpdfSucceeded = false;
+        }
 
-        $candidate = ($qpdf->successful() && filesize($decompressed) > 0) ? $decompressed : $source;
+        $candidate = ($qpdfSucceeded && filesize($decompressed) > 0) ? $decompressed : $source;
 
         try {
             $pageCount = $pdf->setSourceFile($candidate);

@@ -12,7 +12,12 @@ import {
 import { PageHeader, PageTransition, StepWizard, appLayout } from '@/components/layout'
 import { ProcessingStepList, ProcessingVisual } from '@/components/processing'
 import { ROUTES, routeTo } from '@/constants'
-import { useDisclosure } from '@/hooks'
+import {
+  useCreepingProgress,
+  useDisclosure,
+  useEchoConnectionState,
+  usePrivateChannel,
+} from '@/hooks'
 import { useUploadStore } from '@/store'
 import type {
   ProcessingStage,
@@ -66,8 +71,11 @@ function stageStatesFor(
  * Live view of a run in flight.
  *
  * Progress is polled from Laravel, which holds whatever the AI service last
- * reported — nothing here is simulated. When the response has been ingested the
- * screen moves on to the AI Review screen automatically.
+ * reported. The engine only reports a handful of milestones with a long real
+ * gap between them, so what's displayed is smoothed between those points by
+ * `useCreepingProgress` rather than sitting frozen; it still never claims to
+ * be further along than the server has actually confirmed. When the response
+ * has been ingested the screen moves on to the AI Review screen automatically.
  */
 export default function Processing({
   project,
@@ -81,6 +89,32 @@ export default function Processing({
   const [run, setRun] = useState<RunState>(initialRun)
   // Guards against a second navigation while the first is in flight.
   const navigated = useRef(false)
+
+  /**
+   * The realtime path: `AiTakeoffStatusChanged` broadcasts the exact same
+   * shape `AiRunStatePresenter` builds for the long-poll response below, so
+   * a pushed event can be applied to `run` directly — no separate payload
+   * shape to keep in sync. This is the primary path; the long-poll chain
+   * below still runs underneath it as the fallback for a connection that
+   * never opens or drops, and a stale/duplicate push that repeats the same
+   * state is harmless since React only re-renders on an actual change.
+   */
+  usePrivateChannel(!run.finished ? `project.${project.id}` : null, {
+    'ai-takeoff.status-changed': (payload) => setRun(payload as unknown as RunState),
+  })
+
+  useEchoConnectionState(
+    !run.finished
+      ? () => {
+          void fetch(`${routeTo.processingStatus(project.id)}?since=`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+          })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((next) => next && setRun(next as RunState))
+        }
+      : undefined,
+  )
 
   /**
    * Watches the run.
@@ -174,7 +208,8 @@ export default function Processing({
   const isCancelled = run.status === 'cancelled'
   const isDone = run.status === 'succeeded'
   const isRunning = !isFailed && !isCancelled && !isDone
-  const stageStates = stageStatesFor(stages, run.progress, run.status)
+  const displayProgress = useCreepingProgress(run.progress, isRunning)
+  const stageStates = stageStatesFor(stages, displayProgress, run.status)
   const reachedIndex = stageStates.findIndex((stage) => stage.status === 'active')
 
   return (
@@ -223,7 +258,7 @@ export default function Processing({
           </h2>
 
           <ProgressBar
-            value={run.progress}
+            value={displayProgress}
             size="lg"
             showValue
             tone={isFailed || isCancelled ? 'danger' : isDone ? 'success' : 'brand'}
@@ -349,7 +384,7 @@ export default function Processing({
             <div className="rounded-panel bg-navy-950/35 p-3">
               <p className="text-xs tracking-wide text-white/70 uppercase">Reported</p>
               <p className="mt-1 text-lg font-semibold text-white tabular-nums">
-                {run.progress}%
+                {displayProgress}%
               </p>
             </div>
             <div className="rounded-panel bg-navy-950/35 p-3">

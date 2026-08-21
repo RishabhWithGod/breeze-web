@@ -35,7 +35,6 @@ import {
 } from '@/components/layout'
 import {
   ApprovalHistoryPanel,
-  EngineWarnings,
   PipelineStatus,
   ReviewStats,
   SymbolCard,
@@ -245,9 +244,6 @@ export default function AiReview({
           review to change any decision.
         </Alert>
       )}
-
-      {/* Raised by the engine about the drawing itself. */}
-      <EngineWarnings warnings={result.warnings} className="mb-4" />
 
       <ReviewStats tally={tally} className="mb-6" />
 

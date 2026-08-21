@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\JobAssignmentChanged;
 use App\Models\Job;
 use App\Models\JobAssignment;
 use App\Models\TeamMember;
@@ -75,6 +76,8 @@ class JobAssignmentController extends Controller
             $assignment->user->notify(new JobAssigned($assignment));
         }
 
+        event(new JobAssignmentChanged($assignment, 'assigned'));
+
         return back()->with('success', "{$name} assigned as {$assignment->roleLabel()}.");
     }
 
@@ -101,6 +104,8 @@ class JobAssignmentController extends Controller
             from: $assignment->name,
             meta: ['job_id' => $job->id, 'role' => $assignment->role],
         );
+
+        event(new JobAssignmentChanged($assignment, 'released'));
 
         return back()->with('warning', "{$assignment->name} released from {$assignment->roleLabel()}.");
     }

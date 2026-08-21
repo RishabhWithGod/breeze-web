@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\JobStatusChanged;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -347,6 +348,8 @@ class Job extends Model
             'from_status' => $from,
             'to_status' => $status,
         ]);
+
+        event(new JobStatusChanged($this, $from, $status));
 
         $this->recordActivity(
             'status_changed',

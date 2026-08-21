@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AiReviewController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\BreezeBucksController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\EstimateDetailController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceDetailController;
 use App\Http\Controllers\FinalTakeoffController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\JobAssignmentController;
 use App\Http\Controllers\JobAttachmentController;
 use App\Http\Controllers\JobController;
@@ -44,6 +46,15 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
+| Health checks — unauthenticated, no session/CSRF concerns either way.
+|--------------------------------------------------------------------------
+*/
+
+Route::get('health/live', [HealthController::class, 'live'])->name('health.live');
+Route::get('health/ready', [HealthController::class, 'ready'])->name('health.ready');
+
+/*
+|--------------------------------------------------------------------------
 | Public routes
 |--------------------------------------------------------------------------
 */
@@ -52,15 +63,24 @@ Route::middleware('guest')->group(function () {
     Route::get('login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
+    Route::get('signup', [RegisteredUserController::class, 'create'])->name('signup');
+    Route::post('signup', [RegisteredUserController::class, 'store']);
+
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])->name('password.request');
-    Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])->name('password.email');
+    Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+        ->middleware('throttle:password-reset')
+        ->name('password.email');
 
     // The login-time 2FA challenge — reached only via a pending marker set by
     // a real credential check in `LoginRequest::authenticate()`, not by a
     // full session yet, so it lives under `guest` rather than `auth`.
     Route::get('two-factor-challenge', [TwoFactorChallengeController::class, 'create'])->name('two-factor.challenge.create');
-    Route::post('two-factor-challenge', [TwoFactorChallengeController::class, 'store'])->name('two-factor.challenge.store');
-    Route::post('two-factor-challenge/resend', [TwoFactorChallengeController::class, 'resend'])->name('two-factor.challenge.resend');
+    Route::post('two-factor-challenge', [TwoFactorChallengeController::class, 'store'])
+        ->middleware('throttle:two-factor')
+        ->name('two-factor.challenge.store');
+    Route::post('two-factor-challenge/resend', [TwoFactorChallengeController::class, 'resend'])
+        ->middleware('throttle:two-factor')
+        ->name('two-factor.challenge.resend');
 });
 
 /*
@@ -80,7 +100,9 @@ Route::middleware('auth')->group(function () {
     Route::prefix('ai-takeoff')->group(function () {
         Route::get('/', [TakeoffHistoryController::class, 'index'])->name('takeoffs.index');
         Route::get('upload', [UploadController::class, 'create'])->name('uploads.create');
-        Route::post('upload', [UploadController::class, 'store'])->name('uploads.store');
+        Route::post('upload', [UploadController::class, 'store'])
+            ->middleware('throttle:ai-processing')
+            ->name('uploads.store');
         // Polled by the upload screen; never blocks a render.
         Route::get('engine-status', [UploadController::class, 'engineStatus'])->name('ai.engine-status');
     });
@@ -91,9 +113,13 @@ Route::middleware('auth')->group(function () {
     Route::get('processing/{project}', [ProcessingController::class, 'show'])->name('processing.show');
     // Polled by the processing screen; also nudges a stalled run forward.
     Route::get('processing/{project}/status', [ProcessingController::class, 'status'])->name('processing.status');
-    Route::post('processing/{project}/retry', [ProcessingController::class, 'retry'])->name('processing.retry');
+    Route::post('processing/{project}/retry', [ProcessingController::class, 'retry'])
+        ->middleware('throttle:ai-processing')
+        ->name('processing.retry');
     Route::post('processing/{project}/cancel', [ProcessingController::class, 'cancel'])->name('processing.cancel');
-    Route::post('processing/{project}/restart', [ProcessingController::class, 'restart'])->name('processing.restart');
+    Route::post('processing/{project}/restart', [ProcessingController::class, 'restart'])
+        ->middleware('throttle:ai-processing')
+        ->name('processing.restart');
 
     /*
     | AI Review — every detection the model returned, and the decisions that
@@ -151,7 +177,9 @@ Route::middleware('auth')->group(function () {
 
     // Starts the first AI takeoff run against the project's drawing already on
     // record — no separate upload step.
-    Route::post('projects/{project}/takeoff', [ProcessingController::class, 'start'])->name('projects.takeoff.start');
+    Route::post('projects/{project}/takeoff', [ProcessingController::class, 'start'])
+        ->middleware('throttle:ai-processing')
+        ->name('projects.takeoff.start');
 
     Route::post('projects/{project}/documents', [ProjectDocumentController::class, 'store'])
         ->name('projects.documents.store');

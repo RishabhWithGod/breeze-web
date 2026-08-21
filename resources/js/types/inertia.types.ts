@@ -19,12 +19,30 @@ export interface FlashMessages {
   readonly recoveryCodes: readonly string[] | null
 }
 
+/**
+ * The one timer a user may have running, visible from any page — never
+ * trusted for its elapsed time alone; `startedAt`/`accumulatedSeconds` are
+ * what a client re-derives the live count from between page loads.
+ */
+export interface ActiveTimer {
+  readonly id: number
+  readonly jobId: number
+  readonly jobName: string
+  readonly taskLabel: string | null
+  readonly status: 'running' | 'paused'
+  readonly startedAt: string
+  readonly accumulatedSeconds: number
+  readonly elapsedSeconds: number
+  readonly billable: boolean
+}
+
 /** Props present on every page. */
 export interface SharedPageProps {
   readonly appName: string
   readonly auth: { readonly user: AuthUser | null }
   readonly notifications: readonly AppNotification[]
   readonly unreadNotificationCount: number
+  readonly activeTimer: ActiveTimer | null
   readonly flash: FlashMessages
   readonly errors: Record<string, string>
   /** Set by Inertia on every response. */
