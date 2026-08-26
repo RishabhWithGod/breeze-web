@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Head, Link, useForm } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
 import { Alert } from '@/components/common'
 import { BrandWordmark } from '@/components/layout'
 import { MOTION, ROUTES } from '@/constants'
@@ -17,11 +17,12 @@ export interface LoginProps {
   rememberedEmail: string | null
 }
 
-/** Light-filled control, as the sign-in screen renders its two fields. */
+/** Light-filled control, as the sign-in screen renders its two fields. Left
+ *  padding clears the leading icon every field on this screen carries. */
 const FIELD =
-  'w-full rounded-md border border-transparent bg-[#eef1fa] px-4 py-2.5 text-[1.0625rem] ' +
-  'text-navy-950 placeholder:text-navy-950/45 transition-shadow duration-200 ' +
-  'focus:outline-none focus:ring-2 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-60'
+  'w-full rounded-lg border border-transparent bg-[#eef1fa] py-2.5 pr-4 pl-11 text-[1.0625rem] ' +
+  'text-navy-950 placeholder:text-navy-950/45 shadow-[inset_0_1px_2px_rgb(3_10_25/0.08)] transition-shadow duration-200 ' +
+  'focus:border-brand/60 focus:outline-none focus:ring-2 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-60'
 
 /**
  * Sign-in against Laravel's session guard.
@@ -45,7 +46,7 @@ export default function Login({ rememberedEmail }: LoginProps) {
   }
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center px-4 py-12 sm:px-6 sm:py-16">
+    <div className="relative flex min-h-dvh flex-col items-center justify-center px-4 py-12 sm:px-6 sm:py-16">
       <Head title="Sign in" />
 
       {/*
@@ -58,13 +59,21 @@ export default function Login({ rememberedEmail }: LoginProps) {
         className="pointer-events-none fixed inset-0 z-0 bg-[linear-gradient(135deg,rgb(26_86_190/0.5)_0%,rgb(16_56_140/0.32)_42%,rgb(8_20_54/0.12)_75%)]"
       />
 
+      {/* A soft brand-colored glow seated behind the card — the one purely
+          decorative touch on this screen, giving the form a focal point
+          instead of sitting flat against the backdrop. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 left-1/2 z-0 size-125 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/20 blur-[110px]"
+      />
+
       <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: MOTION.slow, ease: [0.22, 1, 0.36, 1] }}
         className="relative z-10 w-full max-w-3xl"
       >
-        <div className="flex justify-center">
+        <div className="flex justify-center drop-shadow-[0_0_24px_rgb(51_227_255/0.35)]">
           <BrandWordmark />
         </div>
 
@@ -78,7 +87,7 @@ export default function Login({ rememberedEmail }: LoginProps) {
         <form
           onSubmit={submit}
           noValidate
-          className="mt-8 rounded-xl border border-hairline grad-spotlight p-5 shadow-raised backdrop-blur-xl sm:p-6"
+          className="mt-8 rounded-2xl border border-hairline-strong grad-spotlight p-5 shadow-glow backdrop-blur-xl sm:p-6"
         >
           <AnimatePresence initial={false}>
             {errors.email && (
@@ -97,16 +106,23 @@ export default function Login({ rememberedEmail }: LoginProps) {
           <label htmlFor="email" className="block text-lg font-medium text-white">
             Email
           </label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            aria-invalid={Boolean(errors.email) || undefined}
-            disabled={processing}
-            value={data.email}
-            onChange={(event) => setData('email', event.target.value)}
-            className={`mt-2 ${FIELD}`}
-          />
+          <div className="relative mt-2">
+            <Mail
+              aria-hidden
+              size={19}
+              className="pointer-events-none absolute inset-y-0 left-4 my-auto text-navy-950/45"
+            />
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              aria-invalid={Boolean(errors.email) || undefined}
+              disabled={processing}
+              value={data.email}
+              onChange={(event) => setData('email', event.target.value)}
+              className={FIELD}
+            />
+          </div>
 
           <label
             htmlFor="password"
@@ -115,6 +131,11 @@ export default function Login({ rememberedEmail }: LoginProps) {
             Password
           </label>
           <div className="relative mt-2">
+            <Lock
+              aria-hidden
+              size={19}
+              className="pointer-events-none absolute inset-y-0 left-4 my-auto text-navy-950/45"
+            />
             <input
               id="password"
               type={showPassword ? 'text' : 'password'}
@@ -190,7 +211,7 @@ export default function Login({ rememberedEmail }: LoginProps) {
           <button
             type="submit"
             disabled={processing}
-            className="mt-6 w-full rounded-md bg-brand py-3 text-lg font-bold text-brand-ink transition-colors duration-200 hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-6 w-full rounded-lg bg-linear-to-b from-brand-soft to-brand py-3 text-lg font-bold text-brand-ink shadow-[0_6px_20px_-6px_rgb(51_227_255/0.6)] transition-all duration-200 hover:shadow-[0_8px_26px_-6px_rgb(51_227_255/0.8)] hover:brightness-105 active:brightness-95 focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-70 disabled:shadow-none disabled:hover:brightness-100"
           >
             {processing ? 'Signing In…' : 'Sign In'}
           </button>

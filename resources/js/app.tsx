@@ -4,10 +4,10 @@ import { StrictMode } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import './styles/index.css'
 
-const APP_NAME = import.meta.env['VITE_APP_NAME'] ?? 'Breeze'
+const APP_NAME = import.meta.env['VITE_APP_NAME'] ?? 'Breeze AI'
 
 void createInertiaApp({
-  title: (title) => (title ? `${title} — ${APP_NAME}` : `${APP_NAME} — AI Electrical Takeoff`),
+  title: (title) => (title ? `${title} — ${APP_NAME}` : APP_NAME),
 
   resolve: (name) =>
     resolvePageComponent(

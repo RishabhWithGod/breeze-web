@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -36,7 +36,7 @@ import {
   type InvoiceSort,
   type InvoiceStatusFilter,
 } from '@/constants'
-import { useDebouncedValue, useDisclosure } from '@/hooks'
+import { useDisclosure } from '@/hooks'
 import type {
   Invoice,
   InvoiceAbilities,
@@ -90,7 +90,6 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
 
   const filterBar = useDisclosure()
   const deleteDialog = useDisclosure()
-  const debouncedQuery = useDebouncedValue(query)
 
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
@@ -133,11 +132,6 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
     },
     [],
   )
-
-  useEffect(() => {
-    if (debouncedQuery === filters.search) return
-    applyFilters({ search: debouncedQuery })
-  }, [debouncedQuery, filters.search, applyFilters])
 
   const resetFilters = useCallback(() => {
     const cleared: InvoiceFilters = {
@@ -353,6 +347,7 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
               <SearchBox
                 value={query}
                 onValueChange={setQuery}
+                onSearch={(value) => applyFilters({ search: value })}
                 placeholder="Search invoice # or client…"
                 aria-label="Search invoices"
                 className="max-w-sm"

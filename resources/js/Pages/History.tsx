@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import { FileText, Plus, SearchX, Undo2 } from 'lucide-react'
@@ -26,7 +26,7 @@ import {
   type HistoryFilter,
   type HistorySort,
 } from '@/constants'
-import { useDebouncedValue, useDisclosure } from '@/hooks'
+import { useDisclosure } from '@/hooks'
 import type {
   FeedItem,
   Paginated,
@@ -68,7 +68,6 @@ export default function History({ projects, filters, activity }: HistoryProps) {
   const [lastDeletedId, setLastDeletedId] = useState<number | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
-  const debouncedQuery = useDebouncedValue(query)
 
   // The notice is derived from the flash rather than mirrored into state, so it
   // needs no effect and can't fall out of step with the last response.
@@ -87,12 +86,6 @@ export default function History({ projects, filters, activity }: HistoryProps) {
     },
     [filters],
   )
-
-  // Search is debounced so typing doesn't fire a request per keystroke.
-  useEffect(() => {
-    if (debouncedQuery === filters.search) return
-    applyFilters({ search: debouncedQuery })
-  }, [debouncedQuery, filters.search, applyFilters])
 
   const handleDeleteConfirmed = useCallback(() => {
     if (!pendingDelete) return
@@ -218,6 +211,7 @@ export default function History({ projects, filters, activity }: HistoryProps) {
             <SearchBox
               value={query}
               onValueChange={setQuery}
+              onSearch={(value) => applyFilters({ search: value })}
               placeholder="Search projects..."
               containerClassName="sm:w-72"
               aria-label="Search projects"

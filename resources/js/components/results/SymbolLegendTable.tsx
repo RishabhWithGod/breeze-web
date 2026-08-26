@@ -8,7 +8,7 @@ import {
   SearchBox,
   Table,
 } from '@/components/common'
-import { useDebouncedValue, usePagination } from '@/hooks'
+import { usePagination } from '@/hooks'
 import type { DetectedSymbol, TableColumn } from '@/types'
 import { formatNumber } from '@/utils'
 import { ConfidenceMeter } from './ConfidenceMeter'
@@ -31,11 +31,13 @@ export interface SymbolLegendTableProps {
 /** Searchable, filterable, paginated legend of every detected symbol. */
 export function SymbolLegendTable({ symbols }: SymbolLegendTableProps) {
   const [query, setQuery] = useState('')
+  // The term actually being filtered on — only updated when a search is
+  // submitted (Enter or the search button), not on every keystroke.
+  const [submittedQuery, setSubmittedQuery] = useState('')
   const [category, setCategory] = useState<CategoryFilter>('all')
-  const debouncedQuery = useDebouncedValue(query)
 
   const filtered = useMemo(() => {
-    const needle = debouncedQuery.trim().toLowerCase()
+    const needle = submittedQuery.trim().toLowerCase()
 
     return symbols.filter((symbol) => {
       const matchesCategory = category === 'all' || symbol.category === category
@@ -45,7 +47,7 @@ export function SymbolLegendTable({ symbols }: SymbolLegendTableProps) {
         symbol.code.toLowerCase().includes(needle)
       return matchesCategory && matchesQuery
     })
-  }, [symbols, category, debouncedQuery])
+  }, [symbols, category, submittedQuery])
 
   const { page, pageCount, pageItems, rangeStart, rangeEnd, total, setPage } =
     usePagination(filtered, 6)
@@ -118,6 +120,7 @@ export function SymbolLegendTable({ symbols }: SymbolLegendTableProps) {
         <SearchBox
           value={query}
           onValueChange={setQuery}
+          onSearch={setSubmittedQuery}
           placeholder="Search symbols…"
           containerClassName="xl:max-w-xs"
           aria-label="Search detected symbols"

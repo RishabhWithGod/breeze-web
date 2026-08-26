@@ -28,6 +28,22 @@ class SymbolReview extends Model
 
     public const ORIGIN_NEEDS_REVIEW = 'needs_review';
 
+    /** Placed directly by a reviewer on the drawing, not returned by the engine. */
+    public const ORIGIN_MANUAL = 'manual';
+
+    /**
+     * Per-occurrence provenance, inside the `occurrences` array — distinct
+     * from the row-level `origin` constants above, which describe where the
+     * *card* came from. An occurrence missing this key predates it (Phase 1
+     * data) and is treated as `OCCURRENCE_ORIGIN_AI`, which is always true
+     * for that vintage of data.
+     */
+    public const OCCURRENCE_ORIGIN_AI = 'ai';
+
+    public const OCCURRENCE_ORIGIN_MANUAL = 'manual';
+
+    public const OCCURRENCE_ORIGIN_DUPLICATE = 'duplicate';
+
     /** The engine's own verdict, before a person looks at it. */
     public const CATEGORY_KNOWN = 'known';
 
@@ -49,6 +65,7 @@ class SymbolReview extends Model
         'page',
         'confidence',
         'bbox',
+        'occurrences',
         'source_template',
         'source_vector',
         'source_vision',
@@ -83,6 +100,7 @@ class SymbolReview extends Model
             'page' => 'integer',
             'confidence' => 'float',
             'bbox' => 'array',
+            'occurrences' => 'array',
             'pipeline' => 'array',
             'evidence' => 'array',
             'stages' => 'array',
@@ -147,6 +165,34 @@ class SymbolReview extends Model
     public function countsTowardsFinal(): bool
     {
         return $this->status === self::STATUS_APPROVED && $this->merged_into_id === null;
+    }
+
+    /**
+     * The real pages this symbol is counted on. A row with per-occurrence
+     * detail reports every distinct page an *approved* occurrence sits on —
+     * the same set `final_count` is drawn from — since a symbol type can
+     * legitimately span several pages and the row's own `page` column can no
+     * longer hold that (it stays null for exactly this reason). A row
+     * without occurrences (needs-review, manual, or pre-backfill data) falls
+     * back to its own single `page`, when it has one.
+     *
+     * @return list<int>
+     */
+    public function pageNumbers(): array
+    {
+        if (is_array($this->occurrences) && $this->occurrences !== []) {
+            return collect($this->occurrences)
+                ->where('status', self::STATUS_APPROVED)
+                ->pluck('page')
+                ->filter(fn ($page) => $page !== null)
+                ->map(fn ($page) => (int) $page)
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        }
+
+        return $this->page !== null ? [(int) $this->page] : [];
     }
 
     /** Flagged by the engine as needing a human, rather than counted outright. */

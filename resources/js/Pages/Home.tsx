@@ -4,23 +4,20 @@ import { ButtonLink } from '@/components/common'
 import {
   DashboardPanel,
   IconListRow,
-  PerformanceChart,
   StatMedallionCard,
 } from '@/components/dashboard'
 import { appLayout, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
-import type { DashboardSummary, FeedItem, MonthlyPoint } from '@/types'
+import type { DashboardSummary, FeedItem } from '@/types'
 
 export interface HomeProps {
   summary: readonly DashboardSummary[]
-  activity: readonly FeedItem[]
   /**
    * Rows for the dashboard's Notifications panel. Deliberately not called
    * `notifications` — that is a shared prop belonging to the header bell.
    */
   notificationFeed: readonly FeedItem[]
   schedule: readonly FeedItem[]
-  performance: readonly MonthlyPoint[]
 }
 
 /**
@@ -31,10 +28,8 @@ export interface HomeProps {
  */
 export default function Home({
   summary,
-  activity,
   notificationFeed,
   schedule,
-  performance,
 }: HomeProps) {
   return (
     <PageTransition>
@@ -58,11 +53,11 @@ export default function Home({
         </div>
       </section>
 
-      {/* =================================== Activity + notifications ======== */}
+      {/* ==================================== Schedule + notifications ======= */}
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <DashboardPanel title="Recent Activity" bodyClassName="max-h-96 overflow-y-auto">
+        <DashboardPanel title="Upcoming Schedule" bodyClassName="max-h-96 overflow-y-auto">
           <ul className="space-y-4">
-            {activity.map((row, index) => (
+            {schedule.map((row, index) => (
               <IconListRow key={row.id} row={row} index={index} />
             ))}
           </ul>
@@ -76,21 +71,6 @@ export default function Home({
         >
           <ul className="space-y-4">
             {notificationFeed.map((row, index) => (
-              <IconListRow key={row.id} row={row} index={index} />
-            ))}
-          </ul>
-        </DashboardPanel>
-      </div>
-
-      {/* ====================================== Performance + schedule ======= */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <DashboardPanel title="On-Time Job Completion">
-          <PerformanceChart data={performance} seriesLabel="On-Time Completion Rate" />
-        </DashboardPanel>
-
-        <DashboardPanel title="Upcoming Schedule" index={1} bodyClassName="max-h-96 overflow-y-auto">
-          <ul className="space-y-4">
-            {schedule.map((row, index) => (
               <IconListRow key={row.id} row={row} index={index} />
             ))}
           </ul>

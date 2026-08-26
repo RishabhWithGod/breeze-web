@@ -149,6 +149,37 @@ class LifecycleReader
         return count($matched);
     }
 
+    /**
+     * The engine's real per-page raster dimensions for a run, keyed by page
+     * number — the only reliable source for mapping a bbox onto a drawing
+     * page. Returns an empty array (never a guess) when the engine has
+     * nothing recorded for this run, e.g. its debug artefacts have expired.
+     *
+     * @return array<int, array{width: float, height: float}>
+     */
+    public function pageSizes(string $runId): array
+    {
+        if (! $this->enabled()) {
+            return [];
+        }
+
+        try {
+            $info = $this->client->pageInfo($runId);
+        } catch (AiApiException) {
+            return [];
+        }
+
+        if (($info['available'] ?? false) !== true || ! is_array($info['sizes'] ?? null)) {
+            return [];
+        }
+
+        return collect($info['sizes'])
+            ->mapWithKeys(fn ($size, $page) => is_array($size) && ($size['w'] ?? 0) > 0 && ($size['h'] ?? 0) > 0
+                ? [(int) $page => ['width' => (float) $size['w'], 'height' => (float) $size['h']]]
+                : [])
+            ->all();
+    }
+
     /* ------------------------------------------------------------- internals */
 
     /**

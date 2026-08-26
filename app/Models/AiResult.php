@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Ai\LifecycleReader;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -35,6 +36,7 @@ class AiResult extends Model
         'final_path',
         'model_version',
         'page_count',
+        'page_sizes',
         'detection_count',
         'overall_confidence',
         'processing_time',
@@ -57,6 +59,7 @@ class AiResult extends Model
             'original_payload' => 'array',
             'final_payload' => 'array',
             'page_count' => 'integer',
+            'page_sizes' => 'array',
             'detection_count' => 'integer',
             'overall_confidence' => 'float',
             'processing_time' => 'float',
@@ -235,6 +238,37 @@ class AiResult extends Model
             'description' => Str::limit($description, 1000, preserveWords: false),
             'meta' => $meta === [] ? null : $meta,
         ]);
+    }
+
+    /**
+     * The engine's own page dimensions, needed to map a box's pixel
+     * coordinates onto the rendered page — as a percentage, so the overlay
+     * never has to measure the `<img>` itself.
+     *
+     * Sourced from `page_sizes` — the engine's own page-info endpoint,
+     * fetched and persisted by {@see LifecycleReader::pageSizes()}
+     * — the only place real per-page raster dimensions are ever available.
+     * The upload response itself never carries them (`original_payload.pages`
+     * is just a page count for this engine version). A page this run has no
+     * confirmed size for is simply absent from the result: nothing here
+     * invents a dimension, so an absent page renders no boxes rather than
+     * ones placed against a guessed frame.
+     *
+     * @return array<int, array{width: float, height: float}>
+     */
+    public function pageDimensions(): array
+    {
+        $sizes = $this->page_sizes ?? [];
+
+        return collect(is_array($sizes) ? $sizes : [])
+            ->mapWithKeys(fn ($size, $page) => is_array($size)
+                ? [(int) $page => [
+                    'width' => (float) ($size['width'] ?? 0),
+                    'height' => (float) ($size['height'] ?? 0),
+                ]]
+                : [])
+            ->filter(fn (array $size) => $size['width'] > 0 && $size['height'] > 0)
+            ->all();
     }
 
     /** Moves a pending review into "in-review" the first time it is touched. */

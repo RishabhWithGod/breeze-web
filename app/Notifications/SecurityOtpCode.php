@@ -28,7 +28,7 @@ class SecurityOtpCode extends Notification
         // notifiable with no `name` property — so the greeting can't
         // personalize by name.
         return (new MailMessage)
-            ->subject('Your Breeze verification code')
+            ->subject('Your Breeze AI verification code')
             ->greeting('Hi,')
             ->line($this->sentence())
             ->line("Verification code: {$this->code}")

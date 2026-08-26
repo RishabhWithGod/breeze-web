@@ -18,7 +18,7 @@
       rel="stylesheet"
     />
 
-    <title inertia>{{ config('app.name') }} — AI Electrical Takeoff</title>
+    <title inertia>{{ config('app.name') }}</title>
 
     @viteReactRefresh
     @vite('resources/js/app.tsx')

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Menu, Search, X } from 'lucide-react'
-import { SearchBox } from '@/components/common'
+import { Menu, X } from 'lucide-react'
 import { useUiStore } from '@/store'
 import { cn } from '@/utils'
 import { Logo } from './Logo'
@@ -13,9 +12,8 @@ import { TimerIndicator } from './TimerIndicator'
  * the reference's `scrolled-fixed-top` behaviour.
  */
 export function Navbar() {
-  const [query, setQuery] = useState('')
   const [isScrolled, setIsScrolled] = useState(false)
-  const { toggleSidebar, isSidebarOpen, isSearchOpen, setSearchOpen } = useUiStore()
+  const { toggleSidebar, isSidebarOpen } = useUiStore()
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 8)
@@ -46,44 +44,12 @@ export function Navbar() {
 
         <Logo className="shrink-0" />
 
-        <div className="hidden flex-1 justify-center md:flex">
-          <SearchBox
-            value={query}
-            onValueChange={setQuery}
-            placeholder="Search jobs, estimates, documents…"
-            containerClassName="max-w-xl"
-            aria-label="Global search"
-          />
-        </div>
-
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
-          <button
-            type="button"
-            onClick={() => setSearchOpen(!isSearchOpen)}
-            aria-label="Toggle search"
-            aria-expanded={isSearchOpen}
-            className="grid size-10 place-items-center rounded-full text-white transition-colors hover:bg-white/10 hover:text-brand md:hidden"
-          >
-            <Search size={20} aria-hidden />
-          </button>
-
           <TimerIndicator />
           <NotificationsMenu />
           <ProfileMenu />
         </div>
       </div>
-
-      {/* Collapsible search row for small screens. */}
-      {isSearchOpen && (
-        <div className="glass-strong border-t border-hairline px-4 py-3 md:hidden">
-          <SearchBox
-            value={query}
-            onValueChange={setQuery}
-            placeholder="Search jobs, estimates, documents…"
-            aria-label="Global search"
-          />
-        </div>
-      )}
     </header>
   )
 }

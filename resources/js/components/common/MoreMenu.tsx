@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { MoreHorizontal, type LucideIcon } from 'lucide-react'
 import { cn } from '@/utils'
@@ -41,14 +42,25 @@ export function MoreMenu({
   className,
 }: MoreMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
+  // Computed from the trigger's real screen position, not CSS — the menu is
+  // portalled straight to `document.body` (see below) so it's never clipped
+  // by a card's own `overflow-hidden`, no matter how close to its edge the
+  // trigger sits. `top` and `right`/`left` are the menu's own final pixel
+  // position — deliberately not a CSS `transform` offset, since a
+  // `motion.div` manages `transform` itself for its enter/exit animation and
+  // would silently drop one passed through `style`.
+  const [anchor, setAnchor] = useState<{ top: number; left?: number; right?: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!isOpen) return undefined
 
     const onPointerDown = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setIsOpen(false)
+      const target = event.target as Node
+      if (containerRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setIsOpen(false)
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -67,6 +79,23 @@ export function MoreMenu({
     }
   }, [isOpen])
 
+  const open = () => {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    // The menu hasn't rendered yet, so its height isn't measurable — this
+    // over-estimates on purpose (real row height is closer to 36px), which
+    // only ever costs a little extra headroom when placing it above.
+    const estimatedHeight = items.length * 40 + 16
+    const placeAbove = rect.bottom + estimatedHeight + 8 > window.innerHeight
+
+    setAnchor({
+      top: placeAbove ? rect.top - 6 - estimatedHeight : rect.bottom + 6,
+      ...(align === 'right' ? { right: window.innerWidth - rect.right } : { left: rect.left }),
+    })
+    setIsOpen(true)
+  }
+
   return (
     <div ref={containerRef} className={cn('relative', className)}>
       <button
@@ -76,7 +105,7 @@ export function MoreMenu({
         aria-expanded={isOpen}
         aria-label={label ? undefined : ariaLabel}
         disabled={disabled}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => (isOpen ? setIsOpen(false) : open())}
         className={cn(
           'inline-flex w-full items-center justify-center gap-2 rounded-panel border border-hairline-strong',
           'glass-strong px-3 py-1.5 text-sm font-medium text-white transition-colors',
@@ -88,45 +117,46 @@ export function MoreMenu({
         {label && <MoreHorizontal size={14} aria-hidden />}
       </button>
 
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            role="menu"
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.14 }}
-            className={cn(
-              'absolute z-50 mt-1.5 min-w-44 overflow-hidden rounded-panel border border-hairline-strong',
-              'bg-navy-900 shadow-raised',
-              align === 'right' ? 'right-0' : 'left-0',
-            )}
-          >
-            {items.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                disabled={item.disabled}
-                onClick={() => {
-                  setIsOpen(false)
-                  item.onSelect()
-                }}
-                className={cn(
-                  'flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors',
-                  'disabled:cursor-not-allowed disabled:opacity-40',
-                  item.destructive
-                    ? 'text-red-300 hover:bg-status-danger/15'
-                    : 'text-white hover:bg-white/10 hover:text-white',
-                )}
-              >
-                {item.icon && <item.icon size={14} aria-hidden className="shrink-0" />}
-                {item.label}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {createPortal(
+        <AnimatePresence>
+          {isOpen && anchor && (
+            <motion.div
+              ref={menuRef}
+              role="menu"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.14 }}
+              style={anchor}
+              className="fixed z-50 min-w-44 overflow-hidden rounded-panel border border-hairline-strong bg-navy-900 shadow-raised"
+            >
+              {items.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="menuitem"
+                  disabled={item.disabled}
+                  onClick={() => {
+                    setIsOpen(false)
+                    item.onSelect()
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors',
+                    'disabled:cursor-not-allowed disabled:opacity-40',
+                    item.destructive
+                      ? 'text-red-300 hover:bg-status-danger/15'
+                      : 'text-white hover:bg-white/10 hover:text-white',
+                  )}
+                >
+                  {item.icon && <item.icon size={14} aria-hidden className="shrink-0" />}
+                  {item.label}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   )
 }

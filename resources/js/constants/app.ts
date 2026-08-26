@@ -1,5 +1,4 @@
-export const APP_NAME = 'Breeze'
-export const APP_TAGLINE = 'AI Electrical Takeoff'
+export const APP_NAME = 'Breeze AI'
 
 /** Shared page-transition + entrance timings (seconds). */
 export const MOTION = {

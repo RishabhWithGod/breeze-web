@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ApprovalHistoryResource;
+use App\Http\Resources\SymbolOverlayResource;
 use App\Http\Resources\SymbolReviewResource;
 use App\Jobs\BackfillTakeoffCrops;
 use App\Models\AiResult;
@@ -89,6 +90,12 @@ class AiReviewController extends Controller
                 'lifecycleStatistics' => $result->lifecycle_statistics,
             ],
             'symbols' => SymbolReviewResource::collection($reviews),
+            // Unpaginated and unfiltered by the grid's own search/status — the
+            // drawing overlay always shows every occurrence on the active page.
+            'overlaySymbols' => SymbolOverlayResource::collection(
+                $result->reviews()->visible()->get()
+            )->resolve(),
+            'pageDimensions' => $result->pageDimensions(),
             'tally' => $result->reviewTally(),
             'pages' => $result->reviews()
                 ->visible()

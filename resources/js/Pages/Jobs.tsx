@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -30,7 +30,6 @@ import {
   StatusDot,
   Table,
 } from '@/components/common'
-import { DashboardPanel, IconListRow } from '@/components/dashboard'
 import { ForemanBadge, JobCard } from '@/components/jobs'
 import { appLayout, PageTransition } from '@/components/layout'
 import {
@@ -47,9 +46,8 @@ import {
   type JobTypeFilter,
   type JobView,
 } from '@/constants'
-import { useDebouncedValue, useDisclosure } from '@/hooks'
+import { useDisclosure } from '@/hooks'
 import type {
-  FeedItem,
   Job,
   JobForeman,
   Paginated,
@@ -94,7 +92,6 @@ export interface JobsProps {
   filters: JobFilters
   foremen: readonly JobForeman[]
   counts: { active: number; archived: number }
-  activity: readonly FeedItem[]
 }
 
 /**
@@ -103,7 +100,7 @@ export interface JobsProps {
  * Search, filters, sorting and pagination all run in the database against
  * query-string state. Row actions and bulk actions go through JobController.
  */
-export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsProps) {
+export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   const [query, setQuery] = useState(filters.search)
@@ -121,7 +118,6 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
    * change (and makes a filtered view shareable).
    */
   const isFiltersOpen = filters.panel === 'open'
-  const debouncedQuery = useDebouncedValue(query)
 
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
@@ -163,11 +159,6 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
     },
     [],
   )
-
-  useEffect(() => {
-    if (debouncedQuery === filters.search) return
-    applyFilters({ search: debouncedQuery })
-  }, [debouncedQuery, filters.search, applyFilters])
 
   const rows = jobs.data
   const { meta } = jobs
@@ -454,8 +445,11 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
               >
                 <div className="mb-6 grid gap-4 rounded-panel border border-hairline bg-white/4 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
                   <SearchBox
+                    id="job-search"
+                    label="Search"
                     value={query}
                     onValueChange={setQuery}
+                    onSearch={(value) => applyFilters({ search: value })}
                     placeholder="Search jobs, clients, locations…"
                     aria-label="Search jobs"
                   />
@@ -492,18 +486,27 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
             )}
           </AnimatePresence>
 
-          {/* Sort */}
-          <div className="mb-5 flex flex-wrap items-center justify-end gap-3">
-            <label htmlFor="job-sort" className="text-md text-white/90">
+          {/* Sort — the dropdown is wrapped in its own sized container rather
+              than sizing it through `SelectField`'s own `className` (which
+              only narrows the inner `<select>`, not the wrapper the chevron
+              icon is positioned against): otherwise the chevron floats out
+              at the wrapper's full flex-row width instead of sitting on the
+              visible control, and — since that same unconstrained wrapper
+              reports `width: 100%` — this row's `flex-wrap` was pushing the
+              label and the dropdown onto separate lines instead of keeping
+              them together. */}
+          <div className="mb-5 flex items-center justify-end gap-3">
+            <label htmlFor="job-sort" className="text-md whitespace-nowrap text-white/90">
               Sort by:
             </label>
-            <SelectField
-              id="job-sort"
-              options={SORT_OPTIONS}
-              value={filters.sort}
-              onChange={(event) => applyFilters({ sort: event.target.value as JobSort })}
-              className="w-56"
-            />
+            <div className="w-56">
+              <SelectField
+                id="job-sort"
+                options={SORT_OPTIONS}
+                value={filters.sort}
+                onChange={(event) => applyFilters({ sort: event.target.value as JobSort })}
+              />
+            </div>
           </div>
 
           {/* Bulk action bar */}
@@ -657,15 +660,6 @@ export default function Jobs({ jobs, filters, foremen, counts, activity }: JobsP
           />
         </div>
       </section>
-
-      {/* ============================================ Recent activity ======== */}
-      <DashboardPanel title="Recent Activity" className="mt-6" index={1}>
-        <ul className="space-y-4">
-          {activity.map((row, index) => (
-            <IconListRow key={row.id} row={row} index={index} />
-          ))}
-        </ul>
-      </DashboardPanel>
 
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}

@@ -259,7 +259,14 @@ class FinalJsonBuilder
                 'source_vector' => $group->contains->source_vector,
                 'source_vision' => $group->contains->source_vision,
                 'source_ocr' => $group->contains->source_ocr,
-                'pages' => $group->pluck('page')->unique()->sort()->values()->all(),
+                // Real pages, not the row's own (possibly null, possibly
+                // stale) `page` column — a symbol type can span several
+                // pages, and `pageNumbers()` reads that from occurrences.
+                'pages' => $group->flatMap(fn (SymbolReview $review) => $review->pageNumbers())
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all(),
                 'review_ids' => $group->pluck('id')->all(),
                 'was_modified' => $group->filter->isModified()->isNotEmpty(),
                 'was_renamed' => $group->filter->isRenamed()->isNotEmpty(),

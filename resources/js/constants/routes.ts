@@ -173,6 +173,16 @@ export const routeTo = {
     `/reviews/${resultId}/symbols/${reviewId}/note`,
   symbolSplit: (resultId: number, reviewId: number) =>
     `/reviews/${resultId}/symbols/${reviewId}/split`,
+  symbolOccurrence: (resultId: number, reviewId: number, key: string) =>
+    `/reviews/${resultId}/symbols/${reviewId}/occurrences/${key}`,
+  symbolOccurrenceMove: (resultId: number, reviewId: number, key: string) =>
+    `/reviews/${resultId}/symbols/${reviewId}/occurrences/${key}/move`,
+  symbolOccurrenceDuplicate: (resultId: number, reviewId: number, key: string) =>
+    `/reviews/${resultId}/symbols/${reviewId}/occurrences/${key}/duplicate`,
+  symbolOccurrenceDelete: (resultId: number, reviewId: number, key: string) =>
+    `/reviews/${resultId}/symbols/${reviewId}/occurrences/${key}`,
+  symbolManualAdd: (resultId: number) => `/reviews/${resultId}/symbols/manual`,
+  reviewUndo: (resultId: number) => `/reviews/${resultId}/undo`,
 
   /** The drawing itself: the PDF plus everything the engine read off it. */
   drawingDetails: (projectId: number) => `/takeoffs/${projectId}/pdf`,

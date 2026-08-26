@@ -22,7 +22,7 @@ export function Footer({ className }: { className?: string }) {
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-md font-semibold text-white">
-            {APP_NAME} — AI Electrical Takeoff
+            {APP_NAME}
           </p>
           <p className="mt-1 text-sm text-white/75">
             © {year} {APP_NAME}. Every takeoff is reviewed by a person before it

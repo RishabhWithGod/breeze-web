@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -46,7 +46,7 @@ import {
   ROUTES,
   routeTo,
 } from '@/constants'
-import { useDebouncedValue, useDisclosure } from '@/hooks'
+import { useDisclosure } from '@/hooks'
 import type {
   Document,
   DocumentAbilities,
@@ -101,14 +101,12 @@ export default function Documents({
   const [activeDocument, setActiveDocument] = useState<Document | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Document | null>(null)
 
-  const filterBar = useDisclosure(true)
+  const filterBar = useDisclosure(false)
   const folderModal = useDisclosure()
   const historyModal = useDisclosure()
   const shareModal = useDisclosure()
   const versionModal = useDisclosure()
   const deleteDialog = useDisclosure()
-
-  const debouncedQuery = useDebouncedValue(query)
 
   const notice = flash.success ?? flash.warning ?? null
   const displayNotice = notice === dismissed ? null : notice
@@ -139,11 +137,6 @@ export default function Documents({
       replace: true,
     })
   }, [])
-
-  useEffect(() => {
-    if (debouncedQuery === filters.search) return
-    applyFilters({ search: debouncedQuery })
-  }, [debouncedQuery, filters.search, applyFilters])
 
   const resetFilters = useCallback(() => {
     setQuery('')
@@ -334,6 +327,7 @@ export default function Documents({
               <SearchBox
                 value={query}
                 onValueChange={setQuery}
+                onSearch={(value) => applyFilters({ search: value })}
                 placeholder="Search Documents…"
                 aria-label="Search documents"
                 className="max-w-sm"

@@ -53,6 +53,14 @@ return [
         'lifecycle' => env('AI_API_LIFECYCLE_PATH', 'api/debug/lifecycle/:run'),
         'lifecycle_image' => env('AI_API_LIFECYCLE_IMAGE_PATH', 'api/debug/lifecycle/:run/image/:image'),
         'review_image' => env('AI_API_REVIEW_IMAGE_PATH', 'api/review/image/:run/:image'),
+
+        /*
+         * The engine's own per-page raster size (in the exact pixel space its
+         * detections are reported in) and the DPI it rendered at. This is the
+         * only reliable source for mapping a bbox onto a drawing page — the
+         * upload response itself carries no page dimensions.
+         */
+        'page_info' => env('AI_API_PAGE_INFO_PATH', 'api/review/page-info/:run'),
     ],
 
     /*

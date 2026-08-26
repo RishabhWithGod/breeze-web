@@ -42,7 +42,7 @@ export default function EmptyState() {
           icon={FolderOpen}
           size="lg"
           title="No takeoffs yet"
-          description="Upload your first set of electrical drawings and Breeze will detect symbols, count devices and estimate material and labour for you."
+          description="Upload your first set of electrical drawings and Breeze AI will detect symbols, count devices and estimate material and labour for you."
           actions={
             <>
               <ButtonLink href={ROUTES.upload} leftIcon={Upload}>

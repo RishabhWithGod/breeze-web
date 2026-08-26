@@ -195,9 +195,47 @@ class AiResponseNormaliser
                 'sources' => $this->sources($item['sources'] ?? []),
                 'evidence' => $this->labels($item['evidence'] ?? []),
                 'detection_source' => $this->labels($item['sources'] ?? [])[0] ?? null,
+                'occurrences' => $this->occurrences($item['detections'] ?? []),
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * One element per physical detection the engine found for a symbol, so the
+     * drawing overlay can draw (and a reviewer can individually approve or
+     * reject) every occurrence rather than just the aggregate count.
+     *
+     * @param  mixed  $raw
+     * @return ?list<array<string, mixed>>
+     */
+    private function occurrences($raw): ?array
+    {
+        if (! is_array($raw) || $raw === []) {
+            return null;
+        }
+
+        $occurrences = collect($raw)
+            ->filter(fn ($item) => is_array($item) && is_array($item['bbox'] ?? null))
+            ->map(fn (array $item) => [
+                'key' => $this->string($item['id'] ?? null) ?? (string) Str::uuid(),
+                'bbox' => [
+                    (float) ($item['bbox']['x'] ?? 0),
+                    (float) ($item['bbox']['y'] ?? 0),
+                    (float) ($item['bbox']['w'] ?? 0),
+                    (float) ($item['bbox']['h'] ?? 0),
+                ],
+                'page' => isset($item['page']) ? (int) $item['page'] : null,
+                'confidence' => $this->confidence($item['confidence'] ?? 0),
+                // Independent of the engine's own detection status: every
+                // occurrence starts approved, same as the card it belongs to.
+                'status' => SymbolReview::STATUS_APPROVED,
+                'origin' => SymbolReview::OCCURRENCE_ORIGIN_AI,
+            ])
+            ->values()
+            ->all();
+
+        return $occurrences === [] ? null : $occurrences;
     }
 
     /**

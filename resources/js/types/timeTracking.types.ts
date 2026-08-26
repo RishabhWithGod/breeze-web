@@ -189,21 +189,6 @@ export interface TimeTrackingTaskOption {
   readonly status: string
 }
 
-/** One person's row on the team weekly timesheet grid. */
-export interface TeamWeekRow {
-  readonly person: { readonly id: number; readonly name: string }
-  readonly days: readonly number[]
-  readonly total: number
-}
-
-export interface TeamWeekSummaryState {
-  readonly weekStart: string
-  readonly weekEnd: string
-  readonly days: readonly { readonly date: string; readonly label: string }[]
-  readonly rows: readonly TeamWeekRow[]
-  readonly total: number
-}
-
 /** One day of the weekly timesheet grid. */
 export interface TimesheetDay {
   readonly date: string

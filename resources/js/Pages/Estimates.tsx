@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { SearchX, SlidersHorizontal, Undo2 } from 'lucide-react'
@@ -27,7 +27,7 @@ import {
   type EstimateSort,
   type EstimateStatusFilter,
 } from '@/constants'
-import { useDebouncedValue, useDisclosure } from '@/hooks'
+import { useDisclosure } from '@/hooks'
 import type {
   Estimate,
   FeedItem,
@@ -92,7 +92,6 @@ export default function Estimates({
   const filterBar = useDisclosure(true)
   const moreFilters = useDisclosure()
   const deleteDialog = useDisclosure()
-  const debouncedQuery = useDebouncedValue(query)
 
   // Derived from the flash rather than mirrored into state. Undo is offered only
   // while the delete's own warning is the current message.
@@ -137,10 +136,6 @@ export default function Estimates({
     [],
   )
 
-  useEffect(() => {
-    if (debouncedQuery === filters.search) return
-    applyFilters({ search: debouncedQuery })
-  }, [debouncedQuery, filters.search, applyFilters])
 
   const requestDelete = useCallback(
     (estimate: Estimate) => {
@@ -326,8 +321,11 @@ export default function Estimates({
                     >
                       <div className="mt-4 grid gap-4 rounded-panel border border-hairline bg-white/4 p-4 sm:grid-cols-2">
                         <SearchBox
+                          id="estimate-search"
+                          label="Search"
                           value={query}
                           onValueChange={setQuery}
+                          onSearch={(value) => applyFilters({ search: value })}
                           placeholder="Search estimate #, client or project..."
                           aria-label="Search estimates"
                         />

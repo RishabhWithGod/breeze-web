@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { CalendarDays, SearchX } from 'lucide-react'
 import {
@@ -20,7 +20,6 @@ import {
   type SchedulingSort,
   type SchedulingTypeFilter,
 } from '@/constants'
-import { useDebouncedValue } from '@/hooks'
 import type {
   CrewMember,
   Paginated,
@@ -64,8 +63,6 @@ export default function SchedulingUnassigned({
   const [query, setQuery] = useState(filters.search)
   const [scheduling, setScheduling] = useState<SchedulableJob | null>(null)
 
-  const debouncedQuery = useDebouncedValue(query, 300)
-
   /** Every filter change is one visit, with the whole filter set carried over. */
   const apply = useCallback(
     (next: Partial<UnassignedFilters & { page: number }>) => {
@@ -83,18 +80,6 @@ export default function SchedulingUnassigned({
     [filters.search, filters.type, filters.sort],
   )
 
-  /*
-   * Typing drives a debounced visit. Guarded on the value already in the URL so
-   * the effect cannot re-fire on the response it just caused.
-   */
-  useEffect(() => {
-    if (debouncedQuery === filters.search) return
-
-    apply({ search: debouncedQuery })
-    // `apply` is stable per filter set; re-running on it would loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery])
-
   const isFiltered = filters.search !== '' || filters.type !== 'all'
 
   return (
@@ -109,6 +94,7 @@ export default function SchedulingUnassigned({
             <SearchBox
               value={query}
               onValueChange={setQuery}
+              onSearch={(value) => apply({ search: value })}
               placeholder="Search projects..."
               containerClassName="w-full sm:w-72"
               aria-label="Search unassigned jobs"

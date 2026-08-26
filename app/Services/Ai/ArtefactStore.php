@@ -89,7 +89,27 @@ class ArtefactStore
 
         $binary = (string) config('ai.storage.pdftoppm');
         $source = $this->absolutePath($upload->path);
-        $directory = $this->directoryFor($upload->project).'/previews';
+
+        /*
+         * Scoped per upload, not just per project — `directoryFor()` alone
+         * is keyed by project, and every upload a project has ever had
+         * would otherwise render into the exact same `previews/page-N.png`
+         * paths. Since `Upload::preview_paths` stores those paths verbatim,
+         * two uploads for the same project used to silently stomp on each
+         * other: whichever rendered most recently "won", and every older
+         * upload's `preview_paths` pointed at files that now belonged to a
+         * different PDF. Nesting under the upload's own id makes each
+         * upload's previews permanently distinct.
+         */
+        $directory = $this->directoryFor($upload->project)."/previews/{$upload->id}";
+
+        // Still clear before rendering — a retried render of this SAME
+        // upload must not leave a stale file behind if the page count
+        // changed, and `pdftoppm` zero-pads page numbers to however many
+        // digits the count needs (`page-1.png` for ≤9 pages, `page-01.png`
+        // for ≥10), so a shrinking retry could otherwise leave an
+        // orphaned, wrongly-padded leftover in the listing.
+        $this->disk()->deleteDirectory($directory);
         $this->disk()->makeDirectory($directory);
         $prefix = $this->absolutePath($directory).'/page';
 
@@ -111,9 +131,12 @@ class ArtefactStore
             return $result;
         }
 
+        // Sorted by the actual page number, not the filename string — even
+        // within one clean run this keeps page 10 after page 9 rather than
+        // between page 1 and page 2.
         $previews = collect($this->disk()->files($directory))
             ->filter(fn (string $file) => str_ends_with($file, '.png'))
-            ->sort()
+            ->sortBy(fn (string $file) => (int) preg_replace('/\D/', '', basename($file)) ?: 0)
             ->values();
 
         $result['previews'] = $previews->all();

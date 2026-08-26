@@ -2,21 +2,21 @@
 
 use App\Http\Controllers\AiReviewController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
-use App\Http\Controllers\Auth\RegisteredUserController;
-use App\Http\Controllers\BreezeBucksController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
+use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
+use App\Http\Controllers\BreezeBucksController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFolderController;
 use App\Http\Controllers\DrawingDetailsController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\EstimateDetailController;
-use App\Http\Controllers\InvoiceController;
-use App\Http\Controllers\InvoiceDetailController;
 use App\Http\Controllers\FinalTakeoffController;
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\InvoiceDetailController;
 use App\Http\Controllers\JobAssignmentController;
 use App\Http\Controllers\JobAttachmentController;
 use App\Http\Controllers\JobController;
@@ -152,6 +152,12 @@ Route::middleware('auth')->group(function () {
     Route::post('reviews/{result}/symbols/{review}/rename', [SymbolReviewController::class, 'rename'])->name('reviews.rename');
     Route::post('reviews/{result}/symbols/{review}/note', [SymbolReviewController::class, 'note'])->name('reviews.note');
     Route::post('reviews/{result}/symbols/{review}/split', [SymbolReviewController::class, 'split'])->name('reviews.split');
+    Route::post('reviews/{result}/symbols/{review}/occurrences/{key}', [SymbolReviewController::class, 'occurrence'])->name('reviews.occurrence');
+    Route::post('reviews/{result}/symbols/{review}/occurrences/{key}/move', [SymbolReviewController::class, 'moveOccurrence'])->name('reviews.occurrenceMove');
+    Route::post('reviews/{result}/symbols/{review}/occurrences/{key}/duplicate', [SymbolReviewController::class, 'duplicateOccurrence'])->name('reviews.occurrenceDuplicate');
+    Route::delete('reviews/{result}/symbols/{review}/occurrences/{key}', [SymbolReviewController::class, 'deleteOccurrence'])->name('reviews.occurrenceDelete');
+    Route::post('reviews/{result}/symbols/manual', [SymbolReviewController::class, 'manualAdd'])->name('reviews.manualAdd');
+    Route::post('reviews/{result}/undo', [SymbolReviewController::class, 'undoLast'])->name('reviews.undo');
 
     /*
     | The signed-off takeoff: final symbol table, exports, and the handoff into a

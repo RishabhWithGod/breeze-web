@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Sparkles,
   Table2,
+  Undo2,
   X,
 } from 'lucide-react'
 import {
@@ -17,10 +18,8 @@ import {
   ButtonLink,
   Card,
   EmptyState,
-  FilterTabs,
   Pagination,
   SearchBox,
-  SectionHeading,
   SelectField,
   TextInput,
 } from '@/components/common'
@@ -32,26 +31,31 @@ import {
   appLayout,
 } from '@/components/layout'
 import {
-  ApprovalHistoryPanel,
+  DrawingOverlay,
   ReviewStats,
   SymbolCard,
 } from '@/components/review'
-import { REVIEW_FILTERS, REVIEW_SORT_OPTIONS, ROUTES, routeTo } from '@/constants'
-import { useDebouncedValue } from '@/hooks'
+import type { OccurrenceRef } from '@/components/review/SymbolBox'
+import { REVIEW_SORT_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type {
   AiReviewSummary,
-  ApprovalHistoryEntry,
+  OverlaySymbol,
+  PageDimensions,
   Paginated,
   ReviewFilter,
   ReviewTally,
   SharedPageProps,
   SymbolReviewRow,
 } from '@/types'
-import { formatDate } from '@/utils'
+import { cn, formatDate } from '@/utils'
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'failed'
 
 export interface AiReviewProps {
   result: AiReviewSummary
   symbols: Paginated<SymbolReviewRow>
+  overlaySymbols: readonly OverlaySymbol[]
+  pageDimensions: Readonly<Record<number, PageDimensions>>
   tally: ReviewTally
   pages: readonly { page: number; total: number }[]
   distinctNames: readonly string[]
@@ -61,7 +65,6 @@ export interface AiReviewProps {
     sort: string
     pageNo: number | null
   }
-  history: readonly ApprovalHistoryEntry[]
 }
 
 /**
@@ -75,16 +78,51 @@ export interface AiReviewProps {
 export default function AiReview({
   result,
   symbols,
+  overlaySymbols,
+  pageDimensions,
   tally,
   pages,
+  distinctNames,
   filters,
-  history,
 }: AiReviewProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [search, setSearch] = useState(filters.search)
   const [selected, setSelected] = useState<number[]>([])
   const [mergeName, setMergeName] = useState('')
+  const [selectedOccurrence, setSelectedOccurrence] = useState<OccurrenceRef | null>(null)
+  const [focusRequest, setFocusRequest] = useState<OccurrenceRef | null>(null)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const rows = symbols.data
+
+  const overlayById = useMemo(
+    () => new Map(overlaySymbols.map((symbol) => [symbol.id, symbol])),
+    [overlaySymbols],
+  )
+
+  /**
+   * Every action on this screen already persists the moment it happens —
+   * there is no local draft state to batch — so this just makes that
+   * honest: "Saving…" only while a real request is in flight, "Saved" only
+   * once the server has actually confirmed it. Global, via Inertia's own
+   * router events, since a save can be triggered from a card, a drawing
+   * marker's popover, or the bulk-action bar — not one single call site.
+   */
+  useEffect(() => {
+    const unsubscribe = [
+      router.on('start', () => setSaveStatus('saving')),
+      router.on('success', () => setSaveStatus('saved')),
+      router.on('error', () => setSaveStatus('failed')),
+    ]
+
+    return () => unsubscribe.forEach((off) => off())
+  }, [])
+
+  useEffect(() => {
+    if (saveStatus !== 'saved') return undefined
+    const timer = window.setTimeout(() => setSaveStatus('idle'), 2000)
+
+    return () => window.clearTimeout(timer)
+  }, [saveStatus])
 
   /**
    * Filters are server-side, so every change is a visit. Merging into the live
@@ -111,12 +149,27 @@ export default function AiReview({
     })
   }, [result.id])
 
-  const debouncedSearch = useDebouncedValue(search)
-
+  // A search that narrows the grid to exactly one symbol also brings the
+  // drawing to it — the real occurrence's own page, never guessed.
   useEffect(() => {
-    if (debouncedSearch === filters.search) return
-    applyFilters({ search: debouncedSearch })
-  }, [debouncedSearch, filters.search, applyFilters])
+    if (filters.search.trim() === '' || rows.length !== 1) return
+
+    const match = overlayById.get(rows[0]?.id ?? -1)
+    if (!match) return
+
+    const occurrence = match.occurrences?.[0]
+
+    // Synchronizing to the external result of a search settling, not
+    // deriving render state.
+    if (occurrence) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFocusRequest({ reviewId: match.id, occurrenceKey: occurrence.key, page: occurrence.page })
+    } else if (match.page !== null) {
+      setFocusRequest({ reviewId: match.id, page: match.page })
+    }
+    // Only re-runs when the search itself (and the resulting row set) settles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.search, rows])
 
   const toggleSelected = useCallback((id: number, isSelected: boolean) => {
     setSelected((current) =>
@@ -249,6 +302,7 @@ export default function AiReview({
             <SearchBox
               value={search}
               onValueChange={setSearch}
+              onSearch={(value) => applyFilters({ search: value })}
               placeholder="Search symbols…"
               aria-label="Search detections"
               containerClassName="sm:max-w-xs"
@@ -272,6 +326,27 @@ export default function AiReview({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                'text-2xs text-white/60 transition-opacity duration-200',
+                saveStatus === 'idle' && 'opacity-0',
+              )}
+              aria-live="polite"
+            >
+              {saveStatus === 'saving' && 'Saving…'}
+              {saveStatus === 'saved' && 'Saved'}
+              {saveStatus === 'failed' && 'Save failed — check your connection and try again'}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={Undo2}
+              disabled={locked}
+              onClick={() => router.post(routeTo.reviewUndo(result.id))}
+              title="Undo the last change you made on this takeoff"
+            >
+              Undo last action
+            </Button>
             <Button
               variant="secondary"
               size="sm"
@@ -283,23 +358,6 @@ export default function AiReview({
             </Button>
           </div>
         </div>
-
-        <FilterTabs
-          className="mt-4"
-          options={REVIEW_FILTERS}
-          value={filters.status}
-          onChange={(value) => applyFilters({ status: value })}
-          counts={{
-            all: tally.total,
-            pending: tally.pending,
-            approved: tally.approved,
-            rejected: tally.rejected,
-            modified: tally.modified,
-            known: tally.known,
-            unknown: tally.unknown,
-          }}
-          solid
-        />
       </Card>
 
       {selectedOnPage.length > 0 && !locked && (
@@ -344,6 +402,20 @@ export default function AiReview({
         </Card>
       )}
 
+      <DrawingOverlay
+        resultId={result.id}
+        pageCount={result.pageCount}
+        overlaySymbols={overlaySymbols}
+        pageDimensions={pageDimensions}
+        distinctNames={distinctNames}
+        locked={locked}
+        initialPage={filters.pageNo}
+        selected={selectedOccurrence}
+        onSelect={setSelectedOccurrence}
+        focusRequest={focusRequest}
+        onFocusHandled={() => setFocusRequest(null)}
+      />
+
       {rows.length === 0 ? (
         <Card padding="lg">
           <EmptyState
@@ -353,7 +425,7 @@ export default function AiReview({
           />
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {rows.map((row, index) => (
             <SymbolCard
               key={row.id}
@@ -363,6 +435,7 @@ export default function AiReview({
               onSelect={toggleSelected}
               locked={locked}
               index={index}
+              focused={selectedOccurrence?.reviewId === row.id}
             />
           ))}
         </div>
@@ -386,15 +459,6 @@ export default function AiReview({
         }
         withLabels
       />
-
-      <Card padding="lg" className="mt-6">
-        <SectionHeading
-          as="h3"
-          title="Approval history"
-          subtitle="Every decision on this takeoff, in order"
-        />
-        <ApprovalHistoryPanel entries={history} />
-      </Card>
 
       {/*
         The way forward. A signed-off takeoff already has its summary, so the button

@@ -25,7 +25,7 @@ import {
 } from '@/components/common'
 import { REVIEW_STATUS_LABEL, REVIEW_STATUS_TONE, routeTo } from '@/constants'
 import type { SymbolReviewRow } from '@/types'
-import { cn, formatRelative } from '@/utils'
+import { cn, formatRelative, symbolColor } from '@/utils'
 
 /** Which inline editor the card currently shows. */
 type CardMode = 'rename' | 'split' | 'notes' | 'history' | null
@@ -39,6 +39,8 @@ export interface SymbolCardProps {
   /** A finalised takeoff is read-only until it is reopened. */
   locked?: boolean
   index?: number
+  /** Highlighted because its marker is selected on the drawing — distinct from `selected`, which is merge-checkbox state. */
+  focused?: boolean
 }
 
 /**
@@ -60,6 +62,7 @@ export function SymbolCard({
   onSelect,
   locked = false,
   index = 0,
+  focused = false,
 }: SymbolCardProps) {
   const [mode, setMode] = useState<CardMode>(null)
   // Null means "show the server's count"; a string means the field is being typed in.
@@ -111,24 +114,38 @@ export function SymbolCard({
   }, [countDraft, post, resultId, row.finalCount, row.id])
 
   const isRejected = row.status === 'rejected'
+  const color = symbolColor(row.name)
 
   return (
     <Card
       padding="none"
       index={index}
+      hoverable
       className={cn(
         'flex h-full flex-col overflow-hidden',
         selected && 'ring-1 ring-brand/70',
+        focused && 'ring-2 ring-white',
         isRejected && 'opacity-75',
       )}
     >
-      {/* Symbol image */}
-      <div className="relative flex h-28 items-center justify-center border-b border-hairline bg-white/5">
+      {/* The category's own identity color, matching the marker and legend
+          for this symbol on the drawing — a card is recognizable at a
+          glance before you even read its name. */}
+      <div aria-hidden className="h-1 w-full shrink-0" style={{ backgroundColor: color.solid }} />
+
+      {/* Symbol image — a fixed height regardless of the crop's own aspect
+          ratio, so every card presents the exact same size image area; the
+          crop itself still shows uncropped (`object-contain`) so a
+          technical symbol never loses an edge to fit the box. A fixed
+          height rather than `aspect-square` — a flex column with a taller
+          sibling (a long name, notes) can otherwise stretch an
+          aspect-ratioed box past its ratio in some browsers. */}
+      <div className="relative flex h-32 w-full shrink-0 items-center justify-center border-b border-hairline bg-white/5">
         {row.cropUrl && !imageFailed ? (
           <img
             src={row.cropUrl}
             alt={row.name}
-            className="max-h-24 max-w-full object-contain"
+            className="size-full object-contain p-3"
             onError={() => {
               if (import.meta.env.DEV) {
                 console.error(
@@ -177,13 +194,18 @@ export function SymbolCard({
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 p-3">
         {/* Symbol name */}
         <div className="min-w-0">
-          <h3 className="truncate text-md font-semibold text-white" title={row.name}>
-            {row.name}
+          <h3 className="flex items-center gap-2 truncate text-sm font-semibold text-white" title={row.name}>
+            <span
+              aria-hidden
+              className="size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: color.solid }}
+            />
+            <span className="truncate">{row.name}</span>
           </h3>
-          <div className="mt-1.5 flex items-center gap-2">
+          <div className="mt-1 flex items-center gap-2">
             <StatusChip
               tone={REVIEW_STATUS_TONE[row.status]}
               label={REVIEW_STATUS_LABEL[row.status]}
@@ -205,7 +227,7 @@ export function SymbolCard({
           >
             Quantity
           </label>
-          <div className="mt-1.5 flex items-center gap-2">
+          <div className="mt-1 flex items-center gap-1.5">
             <IconButton
               variant="secondary"
               size="sm"
@@ -229,7 +251,7 @@ export function SymbolCard({
                   commitCount()
                 }
               }}
-              className="h-9 py-0 text-center text-sm font-semibold"
+              className="h-8 py-0 text-center text-sm font-semibold"
             />
             <IconButton
               variant="secondary"
@@ -467,7 +489,6 @@ export function SymbolCard({
             ]}
           />
         </div>
-
       </div>
     </Card>
   )

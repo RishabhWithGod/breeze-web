@@ -366,21 +366,6 @@ export default function Processing({
         <Card padding="lg">
           <h3 className="mb-6 text-xl font-semibold text-white">Processing steps</h3>
           <ProcessingStepList stages={stageStates} />
-
-          <div className="mt-6 grid grid-cols-2 gap-3 border-t border-hairline pt-5">
-            <div className="rounded-panel bg-navy-950/35 p-3">
-              <p className="text-xs tracking-wide text-white/70 uppercase">Reported</p>
-              <p className="mt-1 text-lg font-semibold text-white tabular-nums">
-                {displayProgress}%
-              </p>
-            </div>
-            <div className="rounded-panel bg-navy-950/35 p-3">
-              <p className="text-xs tracking-wide text-white/70 uppercase">Stage</p>
-              <p className="mt-1 truncate text-lg font-semibold text-white">
-                {run.stageLabel ?? '—'}
-              </p>
-            </div>
-          </div>
         </Card>
       </div>
 

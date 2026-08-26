@@ -82,6 +82,25 @@ class AiTakeoffClient
         ));
     }
 
+    /**
+     * The engine's own per-page raster size for a run — the exact pixel space
+     * its detection coordinates were reported in, plus the DPI it rendered at.
+     * This is the only reliable source for mapping a bbox onto a drawing page;
+     * nothing else the engine returns carries page dimensions.
+     *
+     * @return array<string, mixed>
+     */
+    public function pageInfo(string $runId): array
+    {
+        $this->assertConfigured();
+
+        return $this->decode($this->send(
+            fn () => $this->request($this->config('timeout.read'))
+                ->get($this->url($this->config('endpoints.page_info'), ['run' => $runId])),
+            'reading the page dimensions',
+        ));
+    }
+
     /** Raw bytes of a lifecycle crop image, or null when it cannot be fetched. */
     public function lifecycleImage(string $runId, string $imagePath): ?string
     {

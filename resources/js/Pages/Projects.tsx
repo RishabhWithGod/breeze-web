@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import { FolderKanban, Plus, SearchX } from 'lucide-react'
@@ -25,7 +25,7 @@ import {
   type ProjectSort,
   type ProjectStatusFilter,
 } from '@/constants'
-import { useDebouncedValue, useDisclosure } from '@/hooks'
+import { useDisclosure } from '@/hooks'
 import type { Paginated, ProjectListRow, SharedPageProps, TableColumn } from '@/types'
 import {
   JOB_TYPE_LABEL,
@@ -65,7 +65,6 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
   const [pendingDelete, setPendingDelete] = useState<ProjectListRow | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
-  const debouncedQuery = useDebouncedValue(query)
 
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
@@ -81,12 +80,6 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
     },
     [filters],
   )
-
-  // Search is debounced so typing doesn't fire a request per keystroke.
-  useEffect(() => {
-    if (debouncedQuery === filters.search) return
-    applyFilters({ search: debouncedQuery })
-  }, [debouncedQuery, filters.search, applyFilters])
 
   const requestDelete = useCallback(
     (project: ProjectListRow) => {
@@ -217,6 +210,7 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
             <SearchBox
               value={query}
               onValueChange={setQuery}
+              onSearch={(value) => applyFilters({ search: value })}
               placeholder="Search name, client, number…"
               containerClassName="sm:w-72"
               aria-label="Search projects"

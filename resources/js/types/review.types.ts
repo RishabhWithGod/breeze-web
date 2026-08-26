@@ -56,7 +56,8 @@ export interface SymbolReviewRow {
   readonly reason: string | null
   readonly name: string
   readonly aiName: string
-  readonly page: number
+  /** Null for a symbol whose real locations live in `occurrences` instead — a genuinely multi-page symbol has no single honest page to report here. */
+  readonly page: number | null
   /** 0–1. */
   readonly confidence: number
   /** `[x, y, width, height]` in the AI's page pixel space. */
@@ -84,6 +85,51 @@ export interface SymbolReviewRow {
   readonly splitFromId: number | null
   readonly cropUrl: string | null
   readonly reviewedAt: string | null
+}
+
+/** One physical occurrence of a symbol on the drawing. */
+/** Where a physical occurrence came from — distinct from a card's own `origin`. */
+export type OccurrenceOrigin = 'ai' | 'manual' | 'duplicate'
+
+export interface OverlayOccurrence {
+  readonly key: string
+  /** `[x, y, width, height]` in the AI's page pixel space — the current, reviewed position. */
+  readonly bbox: readonly [number, number, number, number]
+  readonly page: number
+  readonly status: ReviewStatus
+  readonly confidence: number
+  /** Absent on data ingested before this field existed — treat as `'ai'`. */
+  readonly origin?: OccurrenceOrigin
+  /** Set once an occurrence is moved: the position the AI (or manual add) originally reported. */
+  readonly originalBbox?: readonly [number, number, number, number]
+  /** Present on a `duplicate`-origin occurrence: the key it was copied from. */
+  readonly duplicatedFrom?: string
+}
+
+/**
+ * The drawing overlay's own slice of a `SymbolReviewRow` — every row visible
+ * to the reviewer, unpaginated, carrying its full occurrence list so the
+ * overlay can draw every box on the active page.
+ */
+export interface OverlaySymbol {
+  readonly id: number
+  readonly name: string
+  /** Null for a symbol whose real locations live entirely in `occurrences` — a genuinely multi-page symbol has no single honest page to report here. */
+  readonly page: number | null
+  /** `[x, y, width, height]` — the row's single best-match box, when it has one. */
+  readonly bbox: readonly number[] | null
+  readonly status: ReviewStatus
+  readonly finalCount: number
+  readonly aiCount: number
+  readonly origin: ReviewOrigin | 'manual'
+  /** One element per physical detection; `null` for a row with just one box. */
+  readonly occurrences: readonly OverlayOccurrence[] | null
+}
+
+/** Dimensions of a drawing page in the AI's own pixel space. */
+export interface PageDimensions {
+  readonly width: number
+  readonly height: number
 }
 
 /** Counters above the grid. */

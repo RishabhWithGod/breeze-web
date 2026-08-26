@@ -326,22 +326,6 @@ class AnnotatedPdfWriter
      */
     private function pageSizes(AiResult $result): array
     {
-        $pages = $result->original_payload['pages'] ?? [];
-
-        return collect(is_array($pages) ? $pages : [])
-            ->mapWithKeys(function ($page, $index) {
-                if (! is_array($page)) {
-                    return [];
-                }
-
-                $number = (int) ($page['number'] ?? $page['page'] ?? $index + 1);
-
-                return [$number => [
-                    'width' => (float) ($page['width'] ?? data_get($page, 'size.width', 0)),
-                    'height' => (float) ($page['height'] ?? data_get($page, 'size.height', 0)),
-                ]];
-            })
-            ->filter(fn (array $size) => $size['width'] > 0 && $size['height'] > 0)
-            ->all();
+        return $result->pageDimensions();
     }
 }

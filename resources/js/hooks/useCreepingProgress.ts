@@ -58,5 +58,7 @@ export function useCreepingProgress(real: number, isRunning: boolean): number {
     return () => window.clearInterval(interval)
   }, [real, isRunning])
 
-  return isRunning ? display : real
+  // Never shown as 0% while a run is in progress — 0 reads as "nothing is
+  // happening yet" rather than "just started".
+  return isRunning ? Math.max(1, display) : real
 }

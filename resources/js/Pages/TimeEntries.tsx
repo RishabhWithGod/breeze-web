@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import {
   Check,
+  ChevronDown,
   DollarSign,
   Download,
   Eye,
+  Filter,
   Pencil,
   Play,
   Plus,
@@ -23,7 +25,6 @@ import {
   Modal,
   MoreMenu,
   Pagination,
-  SearchBox,
   SelectField,
   StatusChip,
   Table,
@@ -31,7 +32,7 @@ import {
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { StartTimerModal, TeamWeekSummary } from '@/components/timeTracking'
+import { StartTimerModal } from '@/components/timeTracking'
 import {
   BILLABLE_FILTERS,
   ROUTES,
@@ -40,12 +41,11 @@ import {
   TIME_ENTRY_STATUS_TONE,
   routeTo,
 } from '@/constants'
-import { useDebouncedValue, useDisclosure } from '@/hooks'
+import { useDisclosure } from '@/hooks'
 import type {
   Paginated,
   SharedPageProps,
   TableColumn,
-  TeamWeekSummaryState,
   TimeEntry,
   TimeEntryPersonRef,
   TimeTrackingAbilities,
@@ -67,7 +67,6 @@ interface EntryFilters {
 export interface TimeEntriesProps {
   entries: Paginated<TimeEntry>
   filters: EntryFilters
-  weekSummary: TeamWeekSummaryState
   jobs: readonly TimeTrackingJobOption[]
   teamMembers: readonly TimeEntryPersonRef[]
   taskTypes: readonly string[]
@@ -83,7 +82,6 @@ const taskTypeLabel = (value: string) => value.replace(/-/g, ' ')
 export default function TimeEntries({
   entries,
   filters,
-  weekSummary,
   jobs,
   teamMembers,
   taskTypes,
@@ -91,8 +89,8 @@ export default function TimeEntries({
 }: TimeEntriesProps) {
   const { flash, auth, activeTimer } = usePage<SharedPageProps>().props
 
-  const [query, setQuery] = useState(filters.search)
   const [draft, setDraft] = useState(filters)
+  const [showFilters, setShowFilters] = useState(false)
   const [dismissed, setDismissed] = useState<string | null>(null)
   const [rejectingEntry, setRejectingEntry] = useState<TimeEntry | null>(null)
   const [deletingEntry, setDeletingEntry] = useState<TimeEntry | null>(null)
@@ -101,7 +99,6 @@ export default function TimeEntries({
   const rejectDialog = useDisclosure()
   const deleteDialog = useDisclosure()
   const startTimer = useDisclosure()
-  const debouncedQuery = useDebouncedValue(query)
 
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
@@ -132,11 +129,6 @@ export default function TimeEntries({
     [],
   )
 
-  useEffect(() => {
-    if (debouncedQuery === filters.search) return
-    updateQuery({ search: debouncedQuery })
-  }, [debouncedQuery, filters.search, updateQuery])
-
   const applyFilters = () => updateQuery({ ...draft })
 
   const resetFilters = () => {
@@ -150,18 +142,9 @@ export default function TimeEntries({
       status: 'all',
       billable: 'all',
     }
-    setQuery('')
     setDraft(cleared)
     router.get(ROUTES.timeEntries, {}, { preserveState: true, preserveScroll: true, replace: true })
   }
-
-  const stepWeek = (weeks: number) => {
-    const anchor = new Date(`${weekSummary.weekStart}T00:00:00`)
-    anchor.setDate(anchor.getDate() + weeks * 7)
-    updateQuery({ ...draft, week: anchor.toISOString().slice(0, 10) })
-  }
-
-  const goToThisWeek = () => updateQuery({ ...draft, week: undefined })
 
   const openReject = (entry: TimeEntry) => {
     setRejectingEntry(entry)
@@ -333,6 +316,15 @@ export default function TimeEntries({
           <>
             <Button
               variant="secondary"
+              leftIcon={Filter}
+              rightIcon={ChevronDown}
+              aria-expanded={showFilters}
+              onClick={() => setShowFilters((current) => !current)}
+            >
+              Filters
+            </Button>
+            <Button
+              variant="secondary"
               leftIcon={Download}
               onClick={() => window.open(`${routeTo.timeEntriesExport('csv')}?${window.location.search.replace(/^\?/, '')}`, '_blank')}
             >
@@ -364,17 +356,10 @@ export default function TimeEntries({
       </AnimatePresence>
 
       {/* ==================================================== Filters ========= */}
+      {/* Hidden until "Filters" is clicked in the header above — these columns
+          start out of the way. */}
+      {showFilters && (
       <div className="mb-6 rounded-card border border-hairline glass p-5 shadow-panel sm:p-6">
-        <div className="mb-4">
-          <SearchBox
-            value={query}
-            onValueChange={setQuery}
-            placeholder="Search entries…"
-            aria-label="Search time entries"
-            className="max-w-sm"
-          />
-        </div>
-
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
           <TextInput
             id="filter-from"
@@ -460,16 +445,7 @@ export default function TimeEntries({
           </div>
         </div>
       </div>
-
-      {/* ============================================== Weekly Summary ======== */}
-      <div className="mb-6 rounded-card border border-hairline glass p-5 shadow-panel sm:p-6">
-        <TeamWeekSummary
-          week={weekSummary}
-          onPrevWeek={() => stepWeek(-1)}
-          onNextWeek={() => stepWeek(1)}
-          onThisWeek={goToThisWeek}
-        />
-      </div>
+      )}
 
       {/* =================================================== Entries table ==== */}
       <div className="overflow-hidden rounded-card border border-hairline glass shadow-panel">

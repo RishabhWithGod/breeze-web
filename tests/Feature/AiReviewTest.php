@@ -168,6 +168,467 @@ class AiReviewTest extends TestCase
         $this->assertTrue($review->isModified());
     }
 
+    public function test_ingestion_captures_one_occurrence_per_engine_detection(): void
+    {
+        $payload = $this->engineResponse();
+        $withDetections = collect($payload['symbols'])->first(
+            fn (array $symbol) => count($symbol['detections'] ?? []) > 0
+        );
+
+        if ($withDetections === null) {
+            $this->markTestSkipped('No symbol in the fixture carries per-occurrence detections.');
+        }
+
+        $review = $this->symbolRows()->firstOrFail(
+            fn (SymbolReview $row) => $row->ai_name === $withDetections['name']
+        );
+
+        $this->assertNotNull($review->occurrences);
+        $this->assertCount(count($withDetections['detections']), $review->occurrences);
+        $this->assertSame($withDetections['count'], count($review->occurrences));
+
+        foreach ($review->occurrences as $occurrence) {
+            $this->assertSame(SymbolReview::STATUS_APPROVED, $occurrence['status']);
+            $this->assertCount(4, $occurrence['bbox']);
+        }
+    }
+
+    public function test_an_occurrence_can_be_rejected_and_reapproved_independently(): void
+    {
+        $review = $this->symbolRows()->first(
+            fn (SymbolReview $row) => is_array($row->occurrences) && count($row->occurrences) >= 2
+        );
+
+        if ($review === null) {
+            $this->markTestSkipped('No symbol in the fixture has two or more occurrences.');
+        }
+
+        $before = $review->final_count;
+        $target = $review->occurrences[0];
+        $untouched = $review->occurrences[1];
+
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/occurrences/{$target['key']}"));
+
+        $review->refresh();
+        $this->assertSame($before - 1, $review->final_count);
+
+        $rejected = collect($review->occurrences)->firstWhere('key', $target['key']);
+        $stillApproved = collect($review->occurrences)->firstWhere('key', $untouched['key']);
+        $this->assertSame(SymbolReview::STATUS_REJECTED, $rejected['status']);
+        $this->assertSame(SymbolReview::STATUS_APPROVED, $stillApproved['status']);
+
+        // Toggling the same occurrence again restores it — and only it.
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/occurrences/{$target['key']}"));
+
+        $review->refresh();
+        $this->assertSame($before, $review->final_count);
+        $this->assertSame(
+            SymbolReview::STATUS_APPROVED,
+            collect($review->occurrences)->firstWhere('key', $target['key'])['status'],
+        );
+    }
+
+    public function test_a_rejected_occurrence_is_excluded_from_the_final_json(): void
+    {
+        $review = $this->symbolRows()->first(
+            fn (SymbolReview $row) => is_array($row->occurrences) && count($row->occurrences) >= 2
+        );
+
+        if ($review === null) {
+            $this->markTestSkipped('No symbol in the fixture has two or more occurrences.');
+        }
+
+        $before = $review->final_count;
+        $key = $review->occurrences[0]['key'];
+
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/occurrences/{$key}"));
+
+        $this->finalise();
+
+        $final = $this->result->finalSymbols()->where('name', $review->fresh()->name)->firstOrFail();
+        $this->assertSame($before - 1, $final->count);
+    }
+
+    public function test_symbol_origin_pages_are_never_fabricated_to_page_one(): void
+    {
+        $withOccurrences = $this->symbolRows()->filter(
+            fn (SymbolReview $row) => is_array($row->occurrences) && $row->occurrences !== []
+        );
+
+        if ($withOccurrences->isEmpty()) {
+            $this->markTestSkipped('No symbol in the fixture carries per-occurrence detections.');
+        }
+
+        foreach ($withOccurrences as $row) {
+            $pages = collect($row->occurrences)->pluck('page')->unique();
+
+            if ($pages->count() > 1) {
+                // A genuinely multi-page symbol has no single honest page to
+                // store — it must stay null, never fall back to 1.
+                $this->assertNull($row->page, "{$row->name} spans pages {$pages->implode(', ')} but its row page was fabricated.");
+            } else {
+                // A single-page symbol gets that real page — including one
+                // that legitimately isn't page 1.
+                $this->assertSame($pages->first(), $row->page);
+            }
+        }
+    }
+
+    public function test_page_dimensions_come_only_from_the_engines_real_page_info(): void
+    {
+        $this->result->refresh();
+
+        // The engine is reachable in this suite (TalksToTheEngine skips
+        // otherwise), so a real run should have real per-page sizes recorded.
+        $this->assertNotEmpty($this->result->page_sizes, 'Expected the engine\'s page-info to have been captured at ingest.');
+
+        $dimensions = $this->result->pageDimensions();
+
+        foreach ($dimensions as $page => $size) {
+            $this->assertIsInt($page);
+            $this->assertGreaterThan(0, $size['width']);
+            $this->assertGreaterThan(0, $size['height']);
+        }
+
+        // Every occurrence's bbox must fit inside the page the engine itself
+        // reported for it — proof the two are in the same coordinate space.
+        foreach ($this->symbolRows() as $row) {
+            foreach ($row->occurrences ?? [] as $occurrence) {
+                $size = $dimensions[$occurrence['page']] ?? null;
+
+                if ($size === null) {
+                    continue;
+                }
+
+                [$x, $y, $w, $h] = $occurrence['bbox'];
+                $this->assertLessThanOrEqual($size['width'] + 1, $x + $w);
+                $this->assertLessThanOrEqual($size['height'] + 1, $y + $h);
+            }
+        }
+    }
+
+    public function test_final_symbol_pages_reflect_every_page_the_symbol_was_found_on(): void
+    {
+        $multiPage = $this->symbolRows()->first(function (SymbolReview $row) {
+            if (! is_array($row->occurrences)) {
+                return false;
+            }
+
+            return collect($row->occurrences)->pluck('page')->unique()->count() > 1;
+        });
+
+        if ($multiPage === null) {
+            $this->markTestSkipped('No symbol in the fixture spans more than one page.');
+        }
+
+        $expectedPages = collect($multiPage->occurrences)->pluck('page')->unique()->sort()->values()->all();
+
+        $this->finalise();
+
+        $final = $this->result->finalSymbols()->where('name', $multiPage->fresh()->name)->firstOrFail();
+
+        $this->assertSame($expectedPages, $final->pages);
+        $this->assertGreaterThan(1, count($final->pages));
+    }
+
+    public function test_fully_rejecting_every_occurrence_marks_the_symbol_rejected_and_reinstating_restores_it(): void
+    {
+        $review = $this->symbolRows()->first(
+            fn (SymbolReview $row) => is_array($row->occurrences) && count($row->occurrences) >= 2
+        );
+
+        if ($review === null) {
+            $this->markTestSkipped('No symbol in the fixture has two or more occurrences.');
+        }
+
+        $keys = collect($review->occurrences)->pluck('key');
+
+        foreach ($keys as $key) {
+            $this->actingAs($this->user)
+                ->post($this->url("symbols/{$review->id}/occurrences/{$key}"));
+        }
+
+        $review->refresh();
+        $this->assertSame(0, $review->final_count);
+        $this->assertSame(SymbolReview::STATUS_REJECTED, $review->status, 'A symbol with zero approved occurrences must read as rejected, not silently vanish while still "approved".');
+
+        // Reinstating one occurrence brings it back — count and status both.
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/occurrences/{$keys->first()}"));
+
+        $review->refresh();
+        $this->assertSame(1, $review->final_count);
+        $this->assertSame(SymbolReview::STATUS_APPROVED, $review->status);
+    }
+
+    public function test_backfill_command_rebuilds_occurrences_from_the_stored_response_without_reuploading(): void
+    {
+        $expected = $this->symbolRows()
+            ->filter(fn (SymbolReview $row) => is_array($row->occurrences) && $row->occurrences !== [])
+            ->mapWithKeys(fn (SymbolReview $row) => [$row->external_id => [$row->occurrences, $row->page]]);
+
+        if ($expected->isEmpty()) {
+            $this->markTestSkipped('No symbol in the fixture carries per-occurrence detections.');
+        }
+
+        // Simulate legacy data ingested before `occurrences` existed.
+        $this->result->reviews()->update(['occurrences' => null, 'page' => 1]);
+        $originalPayload = $this->result->original_payload;
+
+        $this->artisan('takeoff:backfill-occurrences', ['--result' => $this->result->id])
+            ->assertExitCode(0);
+
+        $this->result->refresh();
+        // Loose comparison: MySQL's JSON column re-orders object keys on
+        // storage, so a round-tripped payload never strictly `===` itself
+        // even when nothing in it actually changed.
+        $this->assertEquals($originalPayload, $this->result->original_payload, 'The original AI response must never be modified.');
+
+        foreach ($expected as $externalId => [$occurrences, $page]) {
+            $row = $this->result->reviews()->where('external_id', $externalId)->firstOrFail();
+            $this->assertEquals($occurrences, $row->occurrences);
+            $this->assertSame($page, $row->page);
+        }
+    }
+
+    public function test_backfill_command_is_idempotent(): void
+    {
+        $rowCountBefore = $this->result->reviews()->count();
+        $this->result->reviews()->update(['occurrences' => null, 'page' => 1]);
+
+        $this->artisan('takeoff:backfill-occurrences', ['--result' => $this->result->id])->assertExitCode(0);
+        $after1 = $this->result->reviews()->get(['id', 'occurrences', 'page'])->toArray();
+
+        $this->artisan('takeoff:backfill-occurrences', ['--result' => $this->result->id])->assertExitCode(0);
+        $after2 = $this->result->reviews()->get(['id', 'occurrences', 'page'])->toArray();
+
+        $this->assertEquals($after1, $after2, 'A second backfill run must not change, duplicate or drift the data a first run already wrote.');
+        $this->assertSame($rowCountBefore, $this->result->reviews()->count(), 'The backfill must never create new rows.');
+    }
+
+    public function test_an_occurrence_can_be_moved_and_the_original_position_is_preserved(): void
+    {
+        $review = $this->symbolRows()->first(
+            fn (SymbolReview $row) => is_array($row->occurrences) && $row->occurrences !== []
+        );
+
+        if ($review === null) {
+            $this->markTestSkipped('No symbol in the fixture carries per-occurrence detections.');
+        }
+
+        $occurrence = $review->occurrences[0];
+        $key = $occurrence['key'];
+        $originalBbox = $occurrence['bbox'];
+        $newBbox = [$originalBbox[0] + 15, $originalBbox[1] + 15, $originalBbox[2], $originalBbox[3]];
+
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/occurrences/{$key}/move"), ['bbox' => $newBbox]);
+
+        $moved = collect($review->fresh()->occurrences)->firstWhere('key', $key);
+        $this->assertEqualsWithDelta($newBbox, $moved['bbox'], 0.5);
+        $this->assertEqualsWithDelta($originalBbox, $moved['original_bbox'], 0.5, 'The AI\'s own reported position must survive a move, for audit.');
+
+        // Moving it again must not overwrite the already-preserved original.
+        $secondBbox = [$newBbox[0] + 15, $newBbox[1], $newBbox[2], $newBbox[3]];
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/occurrences/{$key}/move"), ['bbox' => $secondBbox]);
+
+        $movedAgain = collect($review->fresh()->occurrences)->firstWhere('key', $key);
+        $this->assertEqualsWithDelta($originalBbox, $movedAgain['original_bbox'], 0.5);
+    }
+
+    public function test_a_move_is_clamped_within_the_real_page_bounds(): void
+    {
+        $review = $this->symbolRows()->first(
+            fn (SymbolReview $row) => is_array($row->occurrences) && $row->occurrences !== []
+        );
+
+        if ($review === null) {
+            $this->markTestSkipped('No symbol in the fixture carries per-occurrence detections.');
+        }
+
+        $key = $review->occurrences[0]['key'];
+        $page = $review->occurrences[0]['page'];
+        $pageSize = $this->result->pageDimensions()[$page];
+
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/occurrences/{$key}/move"), [
+                'bbox' => [$pageSize['width'] + 5000, $pageSize['height'] + 5000, 40, 40],
+            ]);
+
+        $moved = collect($review->fresh()->occurrences)->firstWhere('key', $key);
+        $this->assertLessThanOrEqual($pageSize['width'], $moved['bbox'][0] + $moved['bbox'][2]);
+        $this->assertLessThanOrEqual($pageSize['height'], $moved['bbox'][1] + $moved['bbox'][3]);
+    }
+
+    public function test_duplicating_an_occurrence_creates_a_separate_entry_without_inflating_ai_count(): void
+    {
+        $review = $this->symbolRows()->first(
+            fn (SymbolReview $row) => is_array($row->occurrences) && $row->occurrences !== []
+        );
+
+        if ($review === null) {
+            $this->markTestSkipped('No symbol in the fixture carries per-occurrence detections.');
+        }
+
+        $aiCountBefore = $review->ai_count;
+        $countBefore = $review->final_count;
+        $occurrenceCountBefore = count($review->occurrences);
+        $key = $review->occurrences[0]['key'];
+
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/occurrences/{$key}/duplicate"));
+
+        $review->refresh();
+        $this->assertSame($countBefore + 1, $review->final_count);
+        $this->assertSame($aiCountBefore, $review->ai_count, 'A duplicate must never change what the AI itself reported.');
+        $this->assertCount($occurrenceCountBefore + 1, $review->occurrences);
+
+        $duplicate = collect($review->occurrences)->firstWhere('duplicatedFrom', $key);
+        $this->assertNotNull($duplicate);
+        $this->assertSame('duplicate', $duplicate['origin']);
+        $this->assertSame(SymbolReview::STATUS_APPROVED, $duplicate['status']);
+    }
+
+    public function test_a_duplicated_occurrence_can_be_deleted_but_an_ai_occurrence_cannot(): void
+    {
+        $review = $this->symbolRows()->first(
+            fn (SymbolReview $row) => is_array($row->occurrences) && $row->occurrences !== []
+        );
+
+        if ($review === null) {
+            $this->markTestSkipped('No symbol in the fixture carries per-occurrence detections.');
+        }
+
+        $aiKey = $review->occurrences[0]['key'];
+
+        // An AI-origin occurrence is never deletable this way.
+        $this->actingAs($this->user)
+            ->delete($this->url("symbols/{$review->id}/occurrences/{$aiKey}"))
+            ->assertForbidden();
+
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/occurrences/{$aiKey}/duplicate"));
+
+        $review->refresh();
+        $duplicateKey = collect($review->occurrences)->firstWhere('duplicatedFrom', $aiKey)['key'];
+        $countBefore = $review->final_count;
+
+        $this->actingAs($this->user)
+            ->delete($this->url("symbols/{$review->id}/occurrences/{$duplicateKey}"))
+            ->assertRedirect();
+
+        $review->refresh();
+        $this->assertSame($countBefore - 1, $review->final_count);
+        $this->assertNull(collect($review->occurrences)->firstWhere('key', $duplicateKey));
+        // The original AI occurrence is untouched.
+        $this->assertNotNull(collect($review->occurrences)->firstWhere('key', $aiKey));
+    }
+
+    public function test_deleting_the_last_occurrence_of_a_manual_symbol_removes_the_whole_row(): void
+    {
+        $this->actingAs($this->user)->post($this->url('symbols/manual'), [
+            'page' => 1,
+            'name' => 'Undo Test Manual Symbol',
+            'bbox' => [10, 10, 30, 30],
+        ]);
+
+        $created = $this->result->reviews()->where('name', 'Undo Test Manual Symbol')->firstOrFail();
+        $key = $created->occurrences[0]['key'];
+
+        $this->actingAs($this->user)
+            ->delete($this->url("symbols/{$created->id}/occurrences/{$key}"))
+            ->assertRedirect();
+
+        $this->assertModelMissing($created);
+    }
+
+    public function test_undo_reverses_the_most_recent_reversible_action(): void
+    {
+        $review = $this->symbolRows()->first();
+        $originalName = $review->name;
+
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/rename"), ['name' => 'Renamed For Undo Test']);
+        $this->assertSame('Renamed For Undo Test', $review->fresh()->name);
+
+        $this->actingAs($this->user)->post($this->url('undo'));
+
+        $this->assertSame($originalName, $review->fresh()->name);
+    }
+
+    public function test_undo_reverses_a_count_change_then_a_rename_in_order(): void
+    {
+        $review = $this->symbolRows()->first();
+        $originalName = $review->name;
+        $originalCount = $review->final_count;
+
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/rename"), ['name' => 'First Change']);
+        $this->actingAs($this->user)
+            ->post($this->url("symbols/{$review->id}/count"), ['count' => $originalCount + 5]);
+
+        // Undo walks backward: the count change first, then the rename.
+        $this->actingAs($this->user)->post($this->url('undo'));
+        $this->assertSame($originalCount, $review->fresh()->final_count);
+        $this->assertSame('First Change', $review->fresh()->name);
+
+        $this->actingAs($this->user)->post($this->url('undo'));
+        $this->assertSame($originalName, $review->fresh()->name);
+    }
+
+    public function test_undo_with_nothing_reversible_does_not_error(): void
+    {
+        $this->result->history()->delete();
+
+        $this->actingAs($this->user)
+            ->post($this->url('undo'))
+            ->assertSessionHas('warning');
+    }
+
+    public function test_manual_add_appends_to_an_existing_symbol_by_name(): void
+    {
+        $review = $this->symbolRows()->first();
+        $before = $review->final_count;
+
+        $this->actingAs($this->user)->post($this->url('symbols/manual'), [
+            'page' => $review->page ?? 1,
+            // Case-insensitive match against the existing row's name.
+            'name' => strtoupper($review->name),
+            'bbox' => [10, 10, 40, 40],
+        ]);
+
+        $review->refresh();
+        $this->assertSame($before + 1, $review->final_count);
+        $this->assertNotEmpty($review->occurrences);
+        $this->assertSame(
+            SymbolReview::STATUS_APPROVED,
+            collect($review->occurrences)->last()['status'],
+        );
+    }
+
+    public function test_manual_add_creates_a_new_symbol_for_an_unknown_name(): void
+    {
+        $this->actingAs($this->user)->post($this->url('symbols/manual'), [
+            'page' => 1,
+            'name' => 'Occupancy Sensor Added By Hand',
+            'bbox' => [5, 5, 30, 30],
+        ]);
+
+        $created = $this->result->reviews()
+            ->where('name', 'Occupancy Sensor Added By Hand')
+            ->firstOrFail();
+
+        $this->assertSame(SymbolReview::ORIGIN_MANUAL, $created->origin);
+        $this->assertSame(SymbolReview::STATUS_APPROVED, $created->status);
+        $this->assertSame(1, $created->final_count);
+        $this->assertCount(1, $created->occurrences);
+        $this->assertTrue($created->countsTowardsFinal());
+    }
+
     public function test_a_symbol_can_be_renamed_and_annotated(): void
     {
         $review = $this->symbolRows()->first();

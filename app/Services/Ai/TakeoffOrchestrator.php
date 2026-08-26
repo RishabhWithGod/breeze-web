@@ -341,7 +341,11 @@ class TakeoffOrchestrator
             'reason' => $card['reason'] ?? null,
             'ai_name' => $card['name'],
             'name' => $card['name'],
-            'page' => $card['page'] ?? 1,
+            // Never fabricated: a symbol-type card can span several pages, so
+            // there is no single honest value to default to. Its real
+            // per-page locations live in `occurrences` instead; a
+            // needs-review card always carries its own genuine page.
+            'page' => $card['page'] ?? null,
             'confidence' => $card['confidence'],
             'source_template' => $card['sources']['template'],
             'source_vector' => $card['sources']['vector'],
@@ -350,6 +354,7 @@ class TakeoffOrchestrator
             'evidence' => $card['evidence'],
             'detection_source' => $card['detection_source'] ?? null,
             'is_known' => $card['is_known'],
+            'occurrences' => $card['occurrences'] ?? null,
             'ai_count' => $card['count'],
             'final_count' => $card['count'],
             'status' => $card['status'],
@@ -443,6 +448,8 @@ class TakeoffOrchestrator
 
             $enriched = $this->lifecycle->attach($result, $lifecycleDocument);
 
+            $this->attachPageSizes($result, $run['run_id']);
+
             $result->recordHistory(
                 'lifecycle_attached',
                 "Crop detail attached from engine run {$run['run_id']} ({$enriched} symbols)",
@@ -465,6 +472,53 @@ class TakeoffOrchestrator
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Records the engine's real per-page raster sizes, the only reliable
+     * source for mapping a bbox onto the rendered drawing page. Decoration:
+     * a failure never loses a finished run — the drawing overlay simply
+     * cannot box that page's symbols until this succeeds.
+     *
+     * Retried a few times, a couple of seconds apart: confirmed against a
+     * real run that the engine's page-info can briefly answer
+     * `available: false` right when lifecycle detail (crops) is already
+     * attachable — an ingest-time eventual-consistency gap on the engine's
+     * side, not a real absence. The same call always succeeded within a few
+     * seconds in testing. `takeoff:backfill-occurrences` remains the
+     * fallback for the rare case this still comes up empty.
+     */
+    private function attachPageSizes(AiResult $result, string $runId): void
+    {
+        $attempts = 5;
+
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            try {
+                $sizes = $this->lifecycle->pageSizes($runId);
+
+                if ($sizes !== []) {
+                    $result->updateQuietly(['page_sizes' => $sizes]);
+
+                    return;
+                }
+            } catch (Throwable $e) {
+                Log::warning('Page dimensions could not be read from the engine', [
+                    'ai_result_id' => $result->id,
+                    'attempt' => $attempt,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            if ($attempt < $attempts) {
+                usleep(1_500_000);
+            }
+        }
+
+        Log::info('Page dimensions were not available from the engine after retrying; the backfill command can recover them later.', [
+            'ai_result_id' => $result->id,
+            'run_id' => $runId,
+            'attempts' => $attempts,
+        ]);
     }
 
     /** Review counters after ingest, for the "N need review" summary. */
