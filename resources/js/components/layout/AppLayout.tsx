@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react'
 import { usePage } from '@inertiajs/react'
-import { useUiStore } from '@/store'
-import { cn } from '@/utils'
 import { Footer } from './Footer'
 import { Navbar } from './Navbar'
 import { RealtimeUserSync } from './RealtimeUserSync'
@@ -15,7 +13,6 @@ import { Sidebar } from './Sidebar'
  * state across visits while only the content column swaps.
  */
 export function AppLayout({ children }: { children: ReactNode }) {
-  const isSidebarCollapsed = useUiStore((state) => state.isSidebarCollapsed)
   const { url } = usePage()
 
   return (
@@ -24,12 +21,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <Navbar />
       <Sidebar />
 
-      <div
-        className={cn(
-          'transition-[padding] duration-300 ease-out',
-          isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-sidebar',
-        )}
-      >
+      <div className="lg:pl-sidebar">
         <main
           id="main-content"
           className="mx-auto flex min-h-[calc(100dvh-var(--spacing-navbar))] max-w-ultra flex-col px-4 py-6 sm:px-6 sm:py-8 xl:px-10"

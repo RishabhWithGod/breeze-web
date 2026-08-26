@@ -1,47 +1,21 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Head, router, usePage } from '@inertiajs/react'
+import type { FormEvent } from 'react'
+import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
+import { Head, useForm, usePage } from '@inertiajs/react'
+import { ArrowRight, Table2 } from 'lucide-react'
 import {
-  ArrowRight,
-  Briefcase,
-  Check,
-  FileJson,
-  FileSpreadsheet,
-  FileText,
-  Table2,
-} from 'lucide-react'
-import {
-  AdvancedDetails,
   Alert,
-  Badge,
   Button,
   ButtonLink,
   Card,
-  EmptyState,
-  Pagination,
-  SearchBox,
+  RadioGroup,
   SectionHeading,
   SelectField,
-  RecordCreatedCard,
-  Table,
+  TextArea,
+  TextInput,
   WorkflowProgress,
 } from '@/components/common'
-import {
-  CircuitsPanel,
-  EngineBoqPanel,
-  EquipmentPanel,
-  PanelSchedulesPanel,
-  ReviewSummaryPanel,
-  WireSizesPanel,
-} from '@/components/finals'
-import {
-  appLayout,
-  PageHeader,
-  PageTransition,
-  StepFooter,
-} from '@/components/layout'
-import { ApprovalHistoryPanel, PipelineStatus } from '@/components/review'
-import { FINAL_SORT_OPTIONS, FINAL_SOURCE_OPTIONS, ROUTES, routeTo } from '@/constants'
-import { useDebouncedValue } from '@/hooks'
+import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type {
   ApprovalHistoryEntry,
   BoqLine,
@@ -51,14 +25,27 @@ import type {
   EquipmentRow,
   FinalSymbolRow,
   JobForeman,
+  JobType,
   Paginated,
   PanelScheduleRow,
   PipelineStage,
   SharedPageProps,
-  TableColumn,
   WireSizeRow,
 } from '@/types'
-import { formatCurrency, formatDate } from '@/utils'
+import { formatDate } from '@/utils'
+
+/** Payload for the "Create the job" form below — mirrors `FinalTakeoffController::storeJob`. */
+interface CreateJobForm {
+  name: string
+  client: string
+  location: string
+  description: string
+  job_type: JobType | ''
+  start_date: string
+  end_date: string
+  budget: string
+  foreman_id: string
+}
 
 interface FinalResultSummary {
   readonly id: number
@@ -115,20 +102,6 @@ export interface FinalSymbolsProps {
   history: readonly ApprovalHistoryEntry[]
 }
 
-/** Tick used for the per-detector columns. */
-function SourceTick({ on, label }: { on: boolean; label: string }) {
-  return on ? (
-    <span className="inline-grid size-5 place-items-center rounded-full bg-status-success/20 text-status-success">
-      <Check size={12} strokeWidth={3} aria-hidden />
-      <span className="sr-only">{label}</span>
-    </span>
-  ) : (
-    <span className="text-white/25" aria-label={`Not detected by ${label}`}>
-      ·
-    </span>
-  )
-}
-
 /**
  * The signed-off takeoff.
  *
@@ -136,118 +109,40 @@ function SourceTick({ on, label }: { on: boolean; label: string }) {
  * and is what the job and estimate are built from. The AI response is kept for
  * audit only and is never read again past this point.
  */
-export default function FinalSymbols({
-  result,
-  symbols,
-  filters,
-  totals,
-  boq,
-  engineBoq,
-  wireSizes,
-  panelSchedules,
-  equipment,
-  circuits,
-  history,
-}: FinalSymbolsProps) {
+export default function FinalSymbols({ result, foremen }: FinalSymbolsProps) {
   const { flash } = usePage<SharedPageProps>().props
-  const [search, setSearch] = useState(filters.search)
-  const debouncedSearch = useDebouncedValue(search)
-  const rows = symbols.data
 
-  const applyFilters = useCallback(
-    (changes: Record<string, string | null>) => {
-      const query = new URLSearchParams(window.location.search)
+  const jobForm = useForm<CreateJobForm>({
+    name: result.projectName,
+    client: result.client ?? '',
+    location: '',
+    description: '',
+    job_type: '',
+    start_date: '',
+    end_date: '',
+    budget: result.engineEstimate.grand_total
+      ? String(result.engineEstimate.grand_total)
+      : '',
+    foreman_id: '',
+  })
 
-      for (const [key, value] of Object.entries(changes)) {
-        if (value === null || value === '' || value === 'all') query.delete(key)
-        else query.set(key, value)
-      }
+  const updateJobField = <K extends FormDataKeys<CreateJobForm>>(
+    field: K,
+    value: FormDataValues<CreateJobForm, K>,
+  ) => {
+    jobForm.setData(field, value)
+    if (jobForm.errors[field]) jobForm.clearErrors(field)
+  }
 
-      query.delete('page')
-
-      router.get(`${routeTo.finalSymbols(result.id)}?${query.toString()}`, undefined, {
-        preserveState: true,
-        preserveScroll: true,
-        replace: true,
-      })
-    },
-    [result.id],
-  )
-
-  useEffect(() => {
-    if (debouncedSearch === filters.search) return
-    applyFilters({ search: debouncedSearch })
-  }, [debouncedSearch, filters.search, applyFilters])
-
-  const columns: readonly TableColumn<FinalSymbolRow>[] = [
-    {
-      key: 'name',
-      header: 'Name',
-      render: (row) => (
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium text-white">{row.name}</span>
-          {row.wasRenamed && (
-            <Badge tone="info" size="sm">
-              Renamed
-            </Badge>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'count',
-      header: 'Count',
-      width: 'w-24',
-      render: (row) => <span className="font-semibold text-white">{row.count}</span>,
-    },
-    {
-      key: 'template',
-      header: 'Template',
-      width: 'w-28',
-      render: (row) => <SourceTick on={row.template} label="template matching" />,
-    },
-    {
-      key: 'vector',
-      header: 'Vector',
-      width: 'w-24',
-      render: (row) => <SourceTick on={row.vector} label="vector analysis" />,
-    },
-    {
-      key: 'vision',
-      header: 'Vision',
-      width: 'w-24',
-      render: (row) => <SourceTick on={row.vision} label="vision model" />,
-    },
-    {
-      key: 'ocr',
-      header: 'OCR',
-      width: 'w-20',
-      render: (row) => <SourceTick on={row.ocr} label="OCR" />,
-    },
-    {
-      key: 'sources',
-      header: 'Sources',
-      render: (row) => (
-        <div className="flex flex-wrap gap-1.5">
-          {row.sources.map((source) => (
-            <Badge key={source} tone="brand" size="sm">
-              {source}
-            </Badge>
-          ))}
-        </div>
-      ),
-    },
-    {
-      key: 'confidence',
-      header: 'Confidence',
-      width: 'w-28',
-      align: 'right',
-      render: (row) => (
-        <span className="text-white">{Math.round(row.confidence * 100)}%</span>
-      ),
-    },
+  const foremanOptions = [
+    { label: 'Assign later', value: '' },
+    ...foremen.map((foreman) => ({ label: foreman.name, value: String(foreman.id) })),
   ]
 
+  const submitJob = (event: FormEvent) => {
+    event.preventDefault()
+    jobForm.post(routeTo.finalCreateJob(result.id), { preserveScroll: true })
+  }
 
   return (
     <PageTransition>
@@ -309,321 +204,112 @@ export default function FinalSymbols({
       />
 
       {/*
-        What exists is stated as a fact, and the button is the step after it — not
-        the one already taken. The estimate leads because it is what the job is
-        priced from.
+        Nothing is raised automatically once the review is signed off — the
+        reviewer fills in the job's details here and creates it explicitly,
+        the same fields as the standalone "Create New Job" screen.
       */}
-      {result.estimateId && (
-        <RecordCreatedCard
-          className="mb-4"
-          title="Estimate Created"
-          description={`Estimate ${result.estimateNumber} was built from your reviewed quantities.`}
-          facts={[
-            { label: 'Estimate Number', value: result.estimateNumber ?? '—' },
-            {
-              label: 'Amount',
-              value: formatCurrency(
-                result.engineEstimate.grand_total ?? totals.materialCost,
-                2,
-              ),
-            },
-          ]}
-          nextStep={result.workJobId ? 'Open the job' : 'Create the job'}
-          primary={
-            result.workJobId ? (
-              <ButtonLink href={routeTo.job(result.workJobId)} rightIcon={ArrowRight}>
-                Open Job
-              </ButtonLink>
-            ) : (
-              <Button
-                rightIcon={ArrowRight}
-                onClick={() => router.post(routeTo.finalCreateJob(result.id))}
-              >
-                Create Job
-              </Button>
-            )
-          }
-          secondary={
-            <>
-              <ButtonLink
-                href={routeTo.estimate(result.estimateId)}
-                variant="secondary"
-                size="sm"
-              >
-                Open Estimate
-              </ButtonLink>
-              <ButtonLink
-                href={routeTo.estimatePdf(result.estimateId)}
-                variant="secondary"
-                size="sm"
-                leftIcon={FileText}
-              >
-                Download PDF
-              </ButtonLink>
-            </>
-          }
-        />
-      )}
+      {!result.workJobId && (
+        <Card padding="lg" className="mb-6">
+          <SectionHeading
+            as="h3"
+            title="Create the job"
+            subtitle="Nothing is created until you submit this — fill in what you know."
+          />
 
-      {result.workJobId && (
-        <RecordCreatedCard
-          className="mb-4"
-          title="Job Created"
-          description={`${result.workJobName} is on the board and ready to be staffed.`}
-          facts={[{ label: 'Job', value: result.workJobName ?? '—' }]}
-          nextStep="Assign the team"
-          primary={
-            <ButtonLink href={routeTo.job(result.workJobId)} rightIcon={ArrowRight}>
-              Assign Team
-            </ButtonLink>
-          }
-          secondary={
-            <ButtonLink
-              href={routeTo.job(result.workJobId)}
-              variant="secondary"
-              size="sm"
-              leftIcon={Briefcase}
-            >
-              Open Job
-            </ButtonLink>
-          }
-        />
-      )}
+          <form onSubmit={submitJob} noValidate className="mt-4 space-y-6">
+            <TextInput
+              id="job-name"
+              label="Job Name"
+              value={jobForm.data.name}
+              onChange={(event) => updateJobField('name', event.target.value)}
+              {...(jobForm.errors.name ? { error: jobForm.errors.name } : {})}
+            />
 
-
-      <ReviewSummaryPanel
-        projectName={result.projectName}
-        client={result.client}
-        drawingName={result.drawingName}
-        pageCount={result.pageCount}
-        totals={totals}
-        materials={boq.materials}
-        estimatedCost={result.engineEstimate.grand_total ?? totals.materialCost}
-        backHref={routeTo.review(result.id)}
-        continueLabel={
-          result.estimateId ? `Open estimate ${result.estimateNumber}` : 'Continue to Estimate'
-        }
-        onContinue={() =>
-          result.estimateId
-            ? router.visit(routeTo.estimate(result.estimateId))
-            : router.post(routeTo.finalCreateEstimate(result.id))
-        }
-        className="mb-8"
-      />
-
-      {/* The detail behind the summary. Present, but no longer the front page. */}
-      <AdvancedDetails
-        label="Takeoff detail and exports"
-        hint="Symbol table, engine data and the raw export files"
-        className="mb-6"
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <ButtonLink
-            href={routeTo.finalExport(result.id, 'json')}
-            variant="secondary"
-            size="sm"
-            leftIcon={FileJson}
-          >
-            JSON
-          </ButtonLink>
-          <ButtonLink
-            href={routeTo.finalExport(result.id, 'csv')}
-            variant="secondary"
-            size="sm"
-            leftIcon={FileText}
-          >
-            CSV
-          </ButtonLink>
-          <ButtonLink
-            href={routeTo.finalExport(result.id, 'xlsx')}
-            variant="secondary"
-            size="sm"
-            leftIcon={FileSpreadsheet}
-          >
-            Excel
-          </ButtonLink>
-        </div>
-      </AdvancedDetails>
-
-      <Card padding="lg">
-        <SectionHeading
-          as="h3"
-          title="Final symbols"
-          subtitle="Search, filter and sort the reviewed quantities"
-          actions={
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <SearchBox
-                value={search}
-                onValueChange={setSearch}
-                placeholder="Filter…"
-                aria-label="Filter final symbols"
-                containerClassName="sm:w-56"
+            <div className="grid gap-6 lg:grid-cols-2">
+              <TextInput
+                id="job-client"
+                label="Client"
+                value={jobForm.data.client}
+                onChange={(event) => updateJobField('client', event.target.value)}
+                {...(jobForm.errors.client ? { error: jobForm.errors.client } : {})}
               />
-              <SelectField
-                id="final-source"
-                aria-label="Filter by detection source"
-                options={FINAL_SOURCE_OPTIONS}
-                value={filters.source}
-                onChange={(event) => applyFilters({ source: event.target.value })}
-                className="sm:w-44"
-              />
-              <SelectField
-                id="final-sort"
-                aria-label="Sort final symbols"
-                options={FINAL_SORT_OPTIONS}
-                value={filters.sort}
-                onChange={(event) => applyFilters({ sort: event.target.value })}
-                className="sm:w-56"
+              <TextInput
+                id="job-location"
+                label="Location"
+                placeholder="Enter job location"
+                value={jobForm.data.location}
+                onChange={(event) => updateJobField('location', event.target.value)}
+                {...(jobForm.errors.location ? { error: jobForm.errors.location } : {})}
               />
             </div>
-          }
-        />
 
-        <Table
-          columns={columns}
-          rows={rows}
-          getRowId={(row) => row.id}
-          variant="lined"
-          dense
-          caption="Approved symbols and their reviewed counts"
-          emptyState={
-            <EmptyState
-              title="Nothing to show"
-              description="No approved symbol matches this filter."
+            <div className="grid gap-6 lg:grid-cols-3">
+              <TextInput
+                id="job-start"
+                type="date"
+                label="Start Date"
+                value={jobForm.data.start_date}
+                onChange={(event) => updateJobField('start_date', event.target.value)}
+                {...(jobForm.errors.start_date ? { error: jobForm.errors.start_date } : {})}
+              />
+              <TextInput
+                id="job-end"
+                type="date"
+                label="End Date"
+                value={jobForm.data.end_date}
+                onChange={(event) => updateJobField('end_date', event.target.value)}
+                {...(jobForm.errors.end_date ? { error: jobForm.errors.end_date } : {})}
+              />
+              <TextInput
+                id="job-budget"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={50}
+                label="Budget ($)"
+                placeholder="Enter budget amount"
+                value={jobForm.data.budget}
+                onChange={(event) => updateJobField('budget', event.target.value)}
+                {...(jobForm.errors.budget ? { error: jobForm.errors.budget } : {})}
+              />
+            </div>
+
+            <TextArea
+              id="job-description"
+              label="Job Description"
+              rows={4}
+              placeholder="Enter detailed job description"
+              value={jobForm.data.description}
+              onChange={(event) => updateJobField('description', event.target.value)}
+              {...(jobForm.errors.description ? { error: jobForm.errors.description } : {})}
             />
-          }
-        />
 
-        <Pagination
-          className="mt-5"
-          page={symbols.meta.current_page}
-          pageCount={symbols.meta.last_page}
-          onPageChange={(page) => {
-            const query = new URLSearchParams(window.location.search)
-            query.set('page', String(page))
-            router.get(`${routeTo.finalSymbols(result.id)}?${query.toString()}`, undefined, {
-              preserveState: true,
-            })
-          }}
-          summary={
-            symbols.meta.total > 0
-              ? `Showing ${symbols.meta.from}–${symbols.meta.to} of ${symbols.meta.total} symbols`
-              : undefined
-          }
-          withLabels
-        />
-      </Card>
+            <RadioGroup
+              name="job-type"
+              label="Job Type"
+              options={JOB_TYPE_OPTIONS}
+              value={jobForm.data.job_type}
+              onChange={(value) => updateJobField('job_type', value as JobType)}
+              {...(jobForm.errors.job_type ? { error: jobForm.errors.job_type } : {})}
+            />
 
-      {/* Bill of quantities generated from the reviewed counts. */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <Card padding="lg">
-          <SectionHeading
-            as="h3"
-            title="Bill of quantities"
-            subtitle="Devices, their install hours and extended cost"
-          />
-          <ul className="flex flex-col gap-2">
-            {boq.lines.map((line) => (
-              <li
-                key={line.symbol}
-                className="flex min-w-0 items-center justify-between gap-3 rounded-panel bg-white/5 px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-md text-white">{line.symbol}</p>
-                  <p className="text-2xs text-white/75">
-                    {line.count} {line.unit} · {line.labor_hours} hrs
-                    {!line.rate_matched && ' · default rate'}
-                  </p>
-                </div>
-                <span className="shrink-0 text-md font-semibold text-white">
-                  {formatCurrency(line.extended_cost)}
-                </span>
-              </li>
-            ))}
-            {boq.lines.length === 0 && (
-              <EmptyState
-                title="No bill of quantities yet"
-                description="Generate the final JSON to build it."
-              />
-            )}
-          </ul>
+            <SelectField
+              id="job-foreman"
+              label="Foreman"
+              options={foremanOptions}
+              value={jobForm.data.foreman_id}
+              onChange={(event) => updateJobField('foreman_id', event.target.value)}
+              {...(jobForm.errors.foreman_id ? { error: jobForm.errors.foreman_id } : {})}
+            />
+
+            <div className="flex justify-end pt-2">
+              <Button type="submit" rightIcon={ArrowRight} isLoading={jobForm.processing}>
+                Create Job
+              </Button>
+            </div>
+          </form>
         </Card>
-
-        <Card padding="lg">
-          <SectionHeading
-            as="h3"
-            title="Consumables"
-            subtitle="Rough-in materials pulled by the approved devices"
-          />
-          <ul className="flex flex-col gap-2">
-            {boq.materials.map((material) => (
-              <li
-                key={material.description}
-                className="flex min-w-0 items-center justify-between gap-3 rounded-panel bg-white/5 px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-md text-white">{material.description}</p>
-                  <p className="text-2xs text-white/75">
-                    {material.quantity} {material.unit} @ {formatCurrency(material.unit_cost)}
-                  </p>
-                </div>
-                <span className="shrink-0 text-md font-semibold text-white">
-                  {formatCurrency(material.extended_cost)}
-                </span>
-              </li>
-            ))}
-            {boq.materials.length === 0 && (
-              <EmptyState
-                title="No consumables"
-                description="None of the approved symbols pull rough-in materials."
-              />
-            )}
-          </ul>
-        </Card>
-      </div>
-
-      {/* Priced by the engine — the input the estimate is generated from. */}
-      <div className="mt-6">
-        <EngineBoqPanel
-          lines={engineBoq}
-          subtotal={result.engineEstimate.subtotal}
-          currency={result.engineEstimate.currency}
-        />
-      </div>
-
-      {/* Everything else the engine read off the drawing. */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <WireSizesPanel wireSizes={wireSizes} />
-        <EquipmentPanel equipment={equipment} />
-        <PanelSchedulesPanel schedules={panelSchedules} />
-        <CircuitsPanel circuits={circuits} />
-      </div>
-
-      <PipelineStatus
-        stages={result.pipelineStatus}
-        processingTime={result.processingTime}
-        className="mt-6"
-      />
-
-      <Card padding="lg" className="mt-6">
-        <SectionHeading
-          as="h3"
-          title="Approval history"
-          subtitle="Who decided what, and when"
-        />
-        <ApprovalHistoryPanel entries={history} />
-      </Card>
-      <StepFooter
-        current="review"
-        continueLabel={
-          result.estimateId ? `Open estimate ${result.estimateNumber}` : 'Continue to Estimate'
-        }
-        {...(result.estimateId
-          ? { href: routeTo.estimate(result.estimateId) }
-          : { onContinue: () => router.post(routeTo.finalCreateEstimate(result.id)) })}
-        backHref={routeTo.review(result.id)}
-        backLabel="Back to Review"
-      />
+      )}
     </PageTransition>
   )
 }

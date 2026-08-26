@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Upload extends Model
@@ -74,6 +75,12 @@ class Upload extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(Document::class);
+    }
+
+    /** The takeoff run against this drawing, if it has been analysed. */
+    public function latestAiResult(): HasOne
+    {
+        return $this->hasOne(AiResult::class)->latestOfMany();
     }
 
     /** Preview of the given 1-indexed page, when one was rendered. */

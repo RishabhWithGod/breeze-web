@@ -1,3 +1,4 @@
+import type { EstimateStatus } from './estimate.types'
 import type { JobType } from './job.types'
 import type { ActivityEntry, TakeoffStatus } from './takeoff.types'
 import type { SupportedFormat } from './upload.types'
@@ -82,4 +83,33 @@ export interface ProjectDocumentLimits {
   readonly maxFileSizeMb: number
   /** Set when PHP's own limit is the binding one, explaining how to lift it. */
   readonly serverHint: string | null
+}
+
+/** An existing project, offered on the Create Job / Create Estimate screens. */
+export interface TakeoffProjectOption {
+  readonly id: number
+  readonly name: string
+  readonly client: string | null
+  readonly location: string | null
+  readonly dueDate: string | null
+  readonly projectType: JobType | null
+}
+
+/**
+ * A drawing already run through AI Takeoff, offered once its project is
+ * picked. Carries the estimate already raised against it, if there is one —
+ * picking it is how a manual Job/Estimate create form links back to the
+ * takeoff pipeline instead of starting a duplicate record.
+ */
+export interface TakeoffUploadOption {
+  readonly id: number
+  readonly name: string
+  readonly projectId: number
+  readonly estimate: {
+    readonly id: number
+    readonly number: string
+    readonly amount: number
+    readonly status: EstimateStatus
+    readonly editUrl: string
+  } | null
 }

@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\FeedItemResource;
+use App\Models\CrewShift;
 use App\Models\FeedItem;
 use App\Models\Job;
 use App\Models\Project;
 use App\Services\Dashboard\JobPerformanceCalculator;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -19,7 +21,8 @@ class DashboardController extends Controller
         return Inertia::render('Home', [
             'summary' => $this->summary(),
             // resolve() keeps these as plain arrays — only paginated props need
-            // the data/meta envelope.
+            // the data/meta envelope. Uncapped — the card itself scrolls
+            // rather than truncating the list.
             'activity' => FeedItemResource::collection(
                 FeedItem::scope(FeedItem::DASHBOARD_ACTIVITY)->get()
             )->resolve(),
@@ -28,11 +31,49 @@ class DashboardController extends Controller
             'notificationFeed' => FeedItemResource::collection(
                 FeedItem::scope(FeedItem::DASHBOARD_NOTIFICATIONS)->get()
             )->resolve(),
-            'schedule' => FeedItemResource::collection(
-                FeedItem::scope(FeedItem::DASHBOARD_SCHEDULE)->get()
-            )->resolve(),
+            'schedule' => $this->upcomingSchedule(),
             'performance' => $this->performance->series(),
         ]);
+    }
+
+    /**
+     * Every upcoming crew shift on the calendar, straight from `crew_shifts` —
+     * real bookings, not the generic activity feed (which is written in the
+     * past tense and has nothing to do with what's coming up). Uncapped — the
+     * card itself scrolls rather than truncating the list.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function upcomingSchedule(): array
+    {
+        return CrewShift::query()
+            ->with(['job', 'teamMember'])
+            ->where('scheduled_date', '>=', now()->toDateString())
+            ->orderBy('scheduled_date')
+            ->orderBy('start_time')
+            ->get()
+            ->map(function (CrewShift $shift) {
+                /** @var Carbon $date */
+                $date = $shift->scheduled_date;
+                $when = match (true) {
+                    $date->isToday() => 'Today',
+                    $date->isTomorrow() => 'Tomorrow',
+                    default => $date->format('M j'),
+                };
+
+                return [
+                    'id' => $shift->id,
+                    'segments' => [
+                        ['text' => $shift->job?->name ?? 'Unassigned job', 'strong' => true],
+                    ],
+                    'detail' => $shift->teamMember?->name ?? $shift->crew,
+                    'meta' => "{$when}, {$shift->startLabel()}",
+                    'icon' => 'calendar-check',
+                    'tile' => 'butter',
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

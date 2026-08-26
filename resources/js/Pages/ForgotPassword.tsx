@@ -12,8 +12,8 @@ interface ForgotPasswordForm {
 /**
  * Password-reset request.
  *
- * The response is always a success — see PasswordResetLinkController for why no
- * mail is actually sent in this prototype.
+ * The response is always a success regardless of whether the address is on
+ * file — see PasswordResetLinkController.
  */
 export default function ForgotPassword() {
   const sentTo = usePage().props['resetLinkSentTo'] as string | undefined
@@ -129,10 +129,6 @@ export default function ForgotPassword() {
             >
               {processing ? 'Sending link…' : 'Send reset link'}
             </Button>
-
-            <p className="text-center text-sm text-white/70">
-              Prototype only — no email is actually sent.
-            </p>
           </motion.form>
         )}
       </AnimatePresence>

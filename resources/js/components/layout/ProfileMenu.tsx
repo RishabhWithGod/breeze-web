@@ -1,13 +1,13 @@
-import { router, usePage } from '@inertiajs/react'
+import { Link, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, LogOut, Settings, User, type LucideIcon } from 'lucide-react'
 import { ROUTES } from '@/constants'
 import { useClickOutside, useDisclosure } from '@/hooks'
 import type { SharedPageProps } from '@/types'
 
-const ACCOUNT_ITEMS: readonly { label: string; icon: LucideIcon }[] = [
-  { label: 'Profile', icon: User },
-  { label: 'Settings', icon: Settings },
+const ACCOUNT_ITEMS: readonly { label: string; icon: LucideIcon; href: string }[] = [
+  { label: 'Profile', icon: User, href: ROUTES.profile },
+  { label: 'Settings', icon: Settings, href: ROUTES.settings },
 ]
 
 /** Avatar + name trigger with account actions and sign-out. */
@@ -59,16 +59,17 @@ export function ProfileMenu() {
             </div>
 
             <ul className="p-2">
-              {ACCOUNT_ITEMS.map(({ label, icon: Icon }) => (
+              {ACCOUNT_ITEMS.map(({ label, icon: Icon, href }) => (
                 <li key={label}>
-                  <button
-                    type="button"
+                  <Link
+                    href={href}
+                    onClick={close}
                     role="menuitem"
                     className="flex w-full items-center gap-3 rounded-panel px-3 py-2.5 text-md text-white transition-colors hover:bg-white/10 hover:text-brand"
                   >
                     <Icon size={17} aria-hidden />
                     {label}
-                  </button>
+                  </Link>
                 </li>
               ))}
 

@@ -26,7 +26,7 @@ import {
   WireSizesPanel,
 } from '@/components/finals'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ApprovalHistoryPanel, PipelineStatus } from '@/components/review'
+import { ApprovalHistoryPanel } from '@/components/review'
 import { ROUTES, routeTo } from '@/constants'
 import type {
   ApprovalHistoryEntry,
@@ -155,9 +155,7 @@ export default function DrawingDetails({
 
       <PageHeader
         title="Drawing details"
-        subtitle={`${drawing.projectName}${
-          engine?.runId ? ` · engine run ${engine.runId}` : ''
-        }`}
+        subtitle={drawing.projectName}
         breadcrumbs={[
           { label: 'AI Takeoff', href: ROUTES.aiTakeoff },
           { label: drawing.projectName },
@@ -187,14 +185,6 @@ export default function DrawingDetails({
             )}
             {engine && (
               <>
-                <ButtonLink
-                  href={engine.originalJsonUrl}
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={FileJson}
-                >
-                  Engine JSON
-                </ButtonLink>
                 {engine.finalJsonUrl && (
                   <ButtonLink
                     href={engine.finalJsonUrl}
@@ -202,7 +192,7 @@ export default function DrawingDetails({
                     size="sm"
                     leftIcon={FileJson}
                   >
-                    final_response.json
+                    Final data (JSON)
                   </ButtonLink>
                 )}
                 <ButtonLink
@@ -236,7 +226,7 @@ export default function DrawingDetails({
               </h2>
               <p className="mt-1 text-sm text-white/90">
                 {engine.isFinalised
-                  ? 'The reviewed counts in final_response.json are what the job and estimate were built from.'
+                  ? 'The job and estimate were built from your reviewed counts.'
                   : `${engine.detectionCount} symbols are waiting for approve, reject, rename or a count change.`}
               </p>
             </div>
@@ -386,7 +376,7 @@ export default function DrawingDetails({
                 <SectionHeading
                   as="h3"
                   title="Symbol counts"
-                  subtitle={`${engine.detectionCount} symbol types returned by the engine`}
+                  subtitle={`${engine.detectionCount} symbol types detected in this drawing`}
                 />
                 <div className="flex flex-wrap gap-1.5">
                   {symbolCounts.map(([name, count]) => (
@@ -396,19 +386,13 @@ export default function DrawingDetails({
                   ))}
                   {symbolCounts.length === 0 && (
                     <span className="text-sm text-white/75">
-                      The engine counted nothing on this drawing.
+                      Nothing was detected on this drawing.
                     </span>
                   )}
                 </div>
 
                 <dl className="mt-5 grid gap-4 border-t border-hairline pt-5 sm:grid-cols-2">
                   {[
-                    { label: 'Engine version', value: engine.engineVersion ?? '—' },
-                    { label: 'Engine run', value: engine.runId ?? 'not resolved' },
-                    {
-                      label: 'Title block read as',
-                      value: engine.engineProjectName ?? '—',
-                    },
                     {
                       label: 'Analysed',
                       value: engine.receivedAt ? formatDate(engine.receivedAt) : '—',
@@ -426,18 +410,12 @@ export default function DrawingDetails({
                 </dl>
               </Card>
 
-              <PipelineStatus
-                stages={engine.pipelineStatus}
-                processingTime={engine.processingTime}
-                statistics={engine.lifecycleStatistics}
-              />
-
               {(engine.estimateTotals.grand_total ?? 0) > 0 && (
                 <Card padding="lg">
                   <SectionHeading
                     as="h3"
-                    title="Engine pricing"
-                    subtitle="What the engine priced from this drawing, before review"
+                    title="Automatic pricing"
+                    subtitle="What was priced automatically, before your review"
                   />
                   <dl className="flex flex-col gap-2">
                     {[
@@ -517,7 +495,7 @@ export default function DrawingDetails({
               <EmptyState
                 icon={Sparkles}
                 title="This drawing has no analysis"
-                description="The AI engine has not returned a result for it — resubmit it from the processing screen."
+                description="No results have come back for it yet — resubmit it from the processing screen."
               />
             </Card>
           )}

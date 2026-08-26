@@ -39,7 +39,7 @@ export function EngineBoqPanel({ lines, subtotal, currency = 'USD' }: EngineBoqP
             {row.matchedSymbol}
           </Badge>
         ) : (
-          <span className="text-2xs text-white/70">engine quantity</span>
+          <span className="text-2xs text-white/70">automatic quantity</span>
         ),
     },
     {
@@ -71,11 +71,11 @@ export function EngineBoqPanel({ lines, subtotal, currency = 'USD' }: EngineBoqP
     <Card padding="lg">
       <SectionHeading
         as="h3"
-        title="AI bill of quantities"
+        title="Automatic bill of quantities"
         subtitle={
           subtotal
             ? `${lines.length} priced lines · ${currency} ${formatCurrency(subtotal, 2).replace('$', '')} before review`
-            : `${lines.length} priced lines returned by the engine`
+            : `${lines.length} priced lines, before review`
         }
       />
       <Table
@@ -84,10 +84,10 @@ export function EngineBoqPanel({ lines, subtotal, currency = 'USD' }: EngineBoqP
         getRowId={(row, index) => `${row.item}-${index}`}
         variant="lined"
         dense
-        caption="The AI engine's priced bill of quantities"
+        caption="The automatic bill of quantities, before review"
         emptyState={
           <EmptyState
-            title="The engine priced nothing"
+            title="Nothing was priced automatically"
             description="No bill of quantities came back for this drawing, so the estimate falls back to the configured price book."
           />
         }

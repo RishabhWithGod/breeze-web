@@ -7,6 +7,8 @@ use App\Http\Resources\EstimateResource;
 use App\Http\Resources\FeedItemResource;
 use App\Models\Estimate;
 use App\Models\FeedItem;
+use App\Models\Upload;
+use App\Services\Takeoff\TakeoffLinkOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -15,6 +17,8 @@ use Inertia\Response;
 
 class EstimateController extends Controller
 {
+    public function __construct(private readonly TakeoffLinkOptions $linkOptions) {}
+
     public function index(Request $request): Response
     {
         $filters = $request->validate([
@@ -69,15 +73,35 @@ class EstimateController extends Controller
                 ->distinct()
                 ->orderBy('client')
                 ->pluck('client'),
+            'projects' => $this->linkOptions->projects(),
+            'uploads' => $this->linkOptions->uploads(),
         ]);
     }
 
     public function store(StoreEstimateRequest $request): RedirectResponse
     {
+        $data = $request->validated();
+        $upload = isset($data['upload_id']) ? Upload::find($data['upload_id']) : null;
+        $aiResult = $upload?->latestAiResult;
+
+        // The PDF already has an estimate — nothing to create, only to open.
+        if ($aiResult?->estimate) {
+            return redirect()
+                ->route('estimates.edit', $aiResult->estimate)
+                ->with('warning', "{$upload->label()} already has estimate {$aiResult->estimate->number}.");
+        }
+
+        unset($data['upload_id']);
+
         $estimate = Estimate::create([
-            ...$request->validated(),
+            ...$data,
+            'ai_result_id' => $aiResult?->id,
             'number' => Estimate::nextNumber(),
         ]);
+
+        if ($aiResult) {
+            $aiResult->update(['estimate_id' => $estimate->id]);
+        }
 
         return redirect()
             ->route('estimates.index')

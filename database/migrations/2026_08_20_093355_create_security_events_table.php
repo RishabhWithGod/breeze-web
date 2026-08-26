@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('description');
             $table->string('ip_address')->nullable();
             $table->string('user_agent')->nullable();
-            $table->timestamp('occurred_at');
+            $table->timestamp('occurred_at')->useCurrent();
             $table->timestamps();
 
             $table->index(['user_id', 'occurred_at']);

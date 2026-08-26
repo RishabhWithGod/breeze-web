@@ -11,12 +11,10 @@ use App\Models\Project;
 use App\Models\SymbolReview;
 use App\Models\TeamMember;
 use App\Models\User;
-use App\Services\Takeoff\EstimateBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
-use LogicException;
 use Tests\Concerns\TalksToTheEngine;
 use Tests\TestCase;
 
@@ -28,9 +26,9 @@ use Tests\TestCase;
  * Nothing is faked, and no assertion hard-codes a symbol the engine happened to find
  * — the tests read the response and assert relationships against it.
  *
- * The rule they defend: the engine's response is evidence, not truth. Only approved
- * symbols reach the final JSON, they carry the reviewer's names and counts, and the
- * job and estimate are built from that document alone.
+ * The rule they defend: the engine's response is evidence, not truth. Signing off
+ * finalises the reviewed document alone; the job and estimate are only raised when
+ * a reviewer explicitly asks for them, from the review summary screen.
  */
 class AiReviewTest extends TestCase
 {
@@ -65,15 +63,21 @@ class AiReviewTest extends TestCase
         $payload = $this->engineResponse();
         $expected = count($payload['symbols']) + count($payload['needs_review']);
 
+        // An approved row with a zero final count is hidden from the review
+        // screen (SymbolReview::scopeVisible()) — `detectionCount` still
+        // reports everything the engine returned, but the visible tally and
+        // list only count what actually has something in it.
+        $expectedVisible = $this->result->reviews()->visible()->count();
+
         $this->actingAs($this->user)
             ->get("/reviews/{$this->result->id}")
             ->assertInertia(fn (Assert $page) => $page
                 ->component('AiReview')
                 ->where('result.detectionCount', $expected)
-                ->where('tally.total', $expected)
+                ->where('tally.total', $expectedVisible)
                 ->where('result.pipelineStatus.0.stage', 'legend')
                 ->has('result.warnings')
-                ->has('symbols.data', $expected)
+                ->has('symbols.data', $expectedVisible)
                 ->where('symbols.data.0.origin', 'symbol')
                 ->has('symbols.data.0.evidence')
                 ->has('history'));
@@ -99,7 +103,12 @@ class AiReviewTest extends TestCase
 
     public function test_symbols_can_be_filtered_searched_and_sorted(): void
     {
-        $first = $this->symbolRows()->first();
+        // A zero-count approved row is hidden from the screen (see the
+        // provenance test above), so search against one that's actually
+        // visible there.
+        $first = $this->symbolRows()->first(
+            fn (SymbolReview $row) => $row->status !== SymbolReview::STATUS_APPROVED || $row->final_count > 0,
+        );
 
         $this->actingAs($this->user)
             ->get("/reviews/{$this->result->id}?search=".urlencode($first->name))
@@ -110,7 +119,7 @@ class AiReviewTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->where('symbols.data.0.status', 'approved'));
 
-        $lowest = $this->result->reviews()->reorder()->orderBy('confidence')->firstOrFail();
+        $lowest = $this->result->reviews()->visible()->reorder()->orderBy('confidence')->firstOrFail();
 
         $this->actingAs($this->user)
             ->get("/reviews/{$this->result->id}?sort=confidence-asc")
@@ -245,10 +254,9 @@ class AiReviewTest extends TestCase
             $this->actingAs($this->user)->post($this->url("symbols/{$drop->id}/reject"));
         }
 
-        // Signing off completes the handoff, so it lands on the job it created.
-        $this->actingAs($this->user)
-            ->post($this->url('finalise'))
-            ->assertRedirect('/jobs/'.Job::latest('id')->firstOrFail()->id);
+        // Signing off finalises the document and raises the estimate straight
+        // away — no job yet, that's still a separate, explicit step.
+        $this->actingAs($this->user)->post($this->url('finalise'));
 
         $this->result->refresh();
         $payload = $this->result->final_payload;
@@ -329,33 +337,22 @@ class AiReviewTest extends TestCase
         $this->assertNotNull($this->result->upload->fresh()->annotated_path);
     }
 
-    public function test_the_ai_response_alone_raises_a_provisional_job_and_estimate(): void
+    public function test_the_ai_response_alone_raises_nothing(): void
     {
-        // Straight from ingest: both exist, and both say they are pre-review.
-        $job = $this->result->workJob;
-        $estimate = $this->result->estimate;
-
-        $this->assertNotNull($job, 'The AI response should have raised a job.');
-        $this->assertNotNull($estimate, 'The AI response should have raised an estimate.');
+        // Straight from ingest: no job, no estimate, until someone asks for one.
+        $this->assertNull($this->result->workJob);
+        $this->assertNull($this->result->estimate);
         $this->assertFalse($this->result->isFinalised());
-        $this->assertFalse($job->metadata['reviewed']);
-        $this->assertSame($this->result->id, $job->ai_result_id);
-        $this->assertSame($job->id, $estimate->job_id);
-        $this->assertTrue($estimate->items()->exists());
+        $this->assertDatabaseCount('work_jobs', 0);
+        $this->assertDatabaseCount('estimates', 0);
 
-        // Counted from the engine's own approved rows.
-        $engineTotal = (int) $this->result->reviews()
-            ->where('status', SymbolReview::STATUS_APPROVED)
-            ->sum('final_count');
-        $this->assertSame($engineTotal, (int) collect($job->symbol_counts)->sum());
-
-        // And both lists show them without any further action.
+        // Neither list shows anything for this takeoff yet.
         $this->actingAs($this->user)
             ->get('/jobs')
-            ->assertInertia(fn (Assert $page) => $page->where('jobs.data.0.id', $job->id));
+            ->assertInertia(fn (Assert $page) => $page->has('jobs.data', 0));
         $this->actingAs($this->user)
             ->get('/estimates')
-            ->assertInertia(fn (Assert $page) => $page->where('estimates.data.0.id', $estimate->id));
+            ->assertInertia(fn (Assert $page) => $page->has('estimates.data', 0));
     }
 
     public function test_asking_for_a_job_before_finalising_sends_the_reviewer_back_with_guidance(): void
@@ -370,10 +367,9 @@ class AiReviewTest extends TestCase
                 ->assertSessionHas('warning');
         }
 
-        // The provisional pair is untouched, and nothing is duplicated.
-        $this->assertDatabaseCount('work_jobs', 1);
-        $this->assertDatabaseCount('estimates', 1);
-        $this->assertFalse($this->result->fresh()->workJob->metadata['reviewed']);
+        // Nothing was raised.
+        $this->assertDatabaseCount('work_jobs', 0);
+        $this->assertDatabaseCount('estimates', 0);
     }
 
     public function test_the_job_is_created_from_the_final_json(): void
@@ -503,69 +499,40 @@ class AiReviewTest extends TestCase
         $this->assertSame((float) $halved, (float) $matched->quantity);
     }
 
-    public function test_signing_off_the_review_completes_the_whole_handoff_in_one_step(): void
+    public function test_signing_off_the_review_finalises_the_document_and_raises_the_estimate(): void
     {
         $review = $this->symbolRows()->first();
         $this->actingAs($this->user)->post($this->url("symbols/{$review->id}/approve"));
 
-        // One action. No second button, no "create job" step.
+        // Signing off finalises the document and raises the estimate straight
+        // away — the job (and any assignment) is still a separate, explicit
+        // step from the estimate's "Continue" button.
         $response = $this->actingAs($this->user)->post($this->url('finalise'));
 
         $this->result->refresh();
-        $job = Job::latest('id')->firstOrFail();
         $estimate = Estimate::latest('id')->firstOrFail();
 
-        $response->assertRedirect("/jobs/{$job->id}");
+        $response->assertRedirect("/estimates/{$estimate->id}");
 
-        // Everything a signed-off takeoff implies, written and linked.
         $this->assertSame(AiResult::REVIEW_FINALISED, $this->result->review_status);
         $this->assertNotNull($this->result->final_path);
-        $this->assertSame($job->id, $this->result->work_job_id);
-        $this->assertSame($estimate->id, $this->result->estimate_id);
-        $this->assertSame($this->result->id, $job->ai_result_id);
-        $this->assertSame($job->id, $estimate->job_id);
-        $this->assertSame($this->result->project_id, $estimate->project_id);
-        $this->assertTrue($estimate->items()->exists());
         $this->assertTrue($this->result->finalSymbols()->exists());
         $this->assertTrue($this->result->boqLines()->exists());
 
-        // The reviewer of record, and the audit row that explains the rest.
-        $reviewer = $job->activeAssignments()
-            ->where('role', JobAssignment::ROLE_REVIEWER)
-            ->firstOrFail();
-        $this->assertSame($this->user->id, $reviewer->user_id);
+        // The estimate is raised, but nothing job-related was — nobody assigned.
+        $this->assertNull($this->result->work_job_id);
+        $this->assertSame($estimate->id, $this->result->estimate_id);
+        $this->assertDatabaseCount('work_jobs', 0);
+        $this->assertDatabaseCount('estimates', 1);
+        $this->assertDatabaseCount('job_assignments', 0);
 
-        $completion = $this->result->history()->where('action', 'review_completed')->firstOrFail();
-        $this->assertSame($job->id, $completion->meta['job_id']);
-        $this->assertSame($estimate->id, $completion->meta['estimate_id']);
-
-        // Both modules list it without any further action.
-        $this->actingAs($this->user)
-            ->get('/jobs')
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('jobs.data.0.id', $job->id));
-
-        $this->actingAs($this->user)
-            ->get('/estimates')
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('estimates.data.0.id', $estimate->id));
+        $this->assertTrue($this->result->history()->where('action', 'final_json_generated')->exists());
     }
 
-    public function test_a_failure_while_completing_the_review_rolls_everything_back(): void
+    public function test_a_failed_final_json_build_leaves_the_review_untouched(): void
     {
-        $review = $this->symbolRows()->first();
-        $this->actingAs($this->user)->post($this->url("symbols/{$review->id}/approve"));
-
-        // Pricing blows up after the job has been written inside the transaction.
-        $this->app->bind(EstimateBuilder::class, fn () => new class extends EstimateBuilder
-        {
-            public function __construct() {}
-
-            public function fromFinalJson(AiResult $result, User $user, ?Job $job = null): Estimate
-            {
-                throw new LogicException('pricing exploded');
-            }
-        });
+        // Nothing approved: the review cannot be finalised.
+        $this->result->reviews()->update(['status' => SymbolReview::STATUS_REJECTED]);
 
         $this->actingAs($this->user)
             ->from("/reviews/{$this->result->id}")
@@ -573,19 +540,19 @@ class AiReviewTest extends TestCase
             ->assertRedirect("/reviews/{$this->result->id}")
             ->assertSessionHas('warning');
 
-        // Nothing was promoted: the provisional pair is unchanged, no duplicates, no
-        // reviewer recorded, and the takeoff is still reviewable.
-        $this->assertDatabaseCount('work_jobs', 1);
-        $this->assertDatabaseCount('estimates', 1);
-        $this->assertDatabaseCount('job_assignments', 0);
-        $this->assertFalse($this->result->fresh()->workJob->metadata['reviewed']);
         $this->assertNotSame(AiResult::REVIEW_FINALISED, $this->result->fresh()->review_status);
+        $this->assertDatabaseCount('work_jobs', 0);
+        $this->assertDatabaseCount('estimates', 0);
     }
 
-    public function test_signing_off_refreshes_the_provisional_pair_instead_of_duplicating_it(): void
+    public function test_creating_the_job_twice_refreshes_it_instead_of_duplicating_it(): void
     {
-        $job = $this->result->workJob;
-        $estimate = $this->result->estimate;
+        $this->finalise();
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job");
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/estimate");
+
+        $job = Job::latest('id')->firstOrFail();
+        $estimate = Estimate::latest('id')->firstOrFail();
         $engineCounts = $job->symbol_counts;
 
         // Something the estimator added by hand must outlive the reprice.
@@ -599,15 +566,19 @@ class AiReviewTest extends TestCase
             'position' => 99,
         ]);
 
-        // A reviewer disagrees with the engine and halves a count.
+        // Reopen, disagree with the engine on a count, and sign off again.
+        $this->actingAs($this->user)->post($this->url('reopen'));
         $review = $this->symbolRows()->first();
         $this->actingAs($this->user)->post($this->url("symbols/{$review->id}/approve"));
         $this->actingAs($this->user)
             ->post($this->url("symbols/{$review->id}/count"), ['count' => 2]);
+        $this->finalise();
 
-        $this->actingAs($this->user)->post($this->url('finalise'));
+        // Creating the job and estimate again brings the same two records up to
+        // the reviewed numbers rather than duplicating them.
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job");
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/estimate");
 
-        // The same two records, brought up to the reviewed numbers.
         $this->assertDatabaseCount('work_jobs', 1);
         $this->assertDatabaseCount('estimates', 1);
         $this->assertSame($job->id, $this->result->fresh()->work_job_id);
@@ -633,14 +604,11 @@ class AiReviewTest extends TestCase
     public function test_a_job_can_be_staffed_by_role_and_keeps_its_assignment_history(): void
     {
         $this->finalise();
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job");
         $job = Job::latest('id')->firstOrFail();
 
-        // Signing off the review already recorded its reviewer, so role counts here
-        // are scoped to the role under test.
-        $this->assertSame(
-            $this->user->name,
-            $job->activeAssignments()->where('role', JobAssignment::ROLE_REVIEWER)->firstOrFail()->name,
-        );
+        // Creating the job assigns nobody — staffing is a separate, explicit step.
+        $this->assertDatabaseCount('job_assignments', 0);
 
         $first = TeamMember::create(['name' => 'Dana Whitfield', 'initials' => 'DW', 'role' => 'Estimator']);
         $second = TeamMember::create(['name' => 'Marco Ruiz', 'initials' => 'MR', 'role' => 'Journeyman']);
@@ -673,8 +641,8 @@ class AiReviewTest extends TestCase
             ->get("/jobs/{$job->id}")
             ->assertInertia(fn (Assert $page) => $page
                 ->component('JobShow')
-                // The reviewer from sign-off, plus both estimator rows.
-                ->has('job.assignments', 3)
+                // Both estimator rows: the released one and the current one.
+                ->has('job.assignments', 2)
                 ->has('job.takeoff'));
     }
 

@@ -36,8 +36,7 @@ export function DashboardPanel({
   return (
     <motion.section
       initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.1 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: MOTION.slow,
         delay: index * MOTION.stagger,

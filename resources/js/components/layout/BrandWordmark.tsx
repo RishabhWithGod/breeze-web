@@ -5,8 +5,8 @@ export interface BrandWordmarkProps {
 }
 
 /**
- * The "Breeze Electric" wordmark as it appears on the sign-in screen: two
- * stacked italic words, "Breeze" dark with a chrome edge and "Electric" filled
+ * The "Breeze AI" wordmark as it appears on the sign-in screen: two
+ * stacked italic words, "Breeze" dark with a chrome edge and "AI" filled
  * with the same chrome, each led by a small cyan chevron.
  *
  * Drawn as an inline SVG rather than an image so it stays crisp at any size and
@@ -18,7 +18,7 @@ export function BrandWordmark({ className }: BrandWordmarkProps) {
     <svg
       viewBox="0 0 300 132"
       role="img"
-      aria-label="Breeze Electric"
+      aria-label="Breeze AI"
       className={cn('h-auto w-47.5', className)}
     >
       <defs>
@@ -64,7 +64,7 @@ export function BrandWordmark({ className }: BrandWordmarkProps) {
           strokeWidth="2.5"
           paintOrder="stroke"
         >
-          Electric
+          AI
         </text>
       </g>
     </svg>

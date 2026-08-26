@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\AiResult;
+use App\Models\CrewShift;
 use App\Models\Document;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
@@ -42,6 +43,17 @@ class DemoDataSeeder extends Seeder
     {
         $user = $this->seedDemoUser();
 
+        // `seedTeamMembers()`, `seedJobs()` and `seedEstimates()` key their own
+        // rows on natural content and are safe to call again on their own. Most
+        // of what follows is not — it attaches notes, invoices, time entries and
+        // activity onto rows it assumes it just created, with no natural key to
+        // check first. Re-running the whole batch would duplicate all of that,
+        // so this fixture is a one-time load: if its own job list is already
+        // there, there is nothing left to seed.
+        if (Job::where('name', 'Oakridge Medical Center Retrofit')->exists()) {
+            return;
+        }
+
         $this->seedTeamMembers();
         $this->seedJobs();
         $this->seedEstimates();
@@ -55,6 +67,7 @@ class DemoDataSeeder extends Seeder
         $this->seedUploads($user);
         $this->seedNotifications($user);
         $this->seedFeedItems();
+        $this->seedCrewShifts($user);
     }
 
     private function seedDemoUser(): User
@@ -84,11 +97,10 @@ class DemoDataSeeder extends Seeder
         ];
 
         foreach ($crew as [$name, $initials, $role]) {
-            TeamMember::create([
-                'name' => $name,
-                'initials' => $initials,
-                'role' => $role,
-            ]);
+            TeamMember::firstOrCreate(
+                ['name' => $name],
+                ['initials' => $initials, 'role' => $role],
+            );
         }
     }
 
@@ -565,7 +577,10 @@ class DemoDataSeeder extends Seeder
             ['name' => 'Priya Raman', 'initials' => 'PR'],
             ['name' => 'Luis Ortega', 'initials' => 'LO'],
             ['name' => 'Sam Okafor', 'initials' => 'SO'],
-        ])->map(fn (array $attributes) => Foreman::create($attributes))->all();
+        ])->map(fn (array $attributes) => Foreman::firstOrCreate(
+            ['name' => $attributes['name']],
+            $attributes,
+        ))->all();
 
         // [name, status, foreman index, start, end, budget]
         $jobs = [
@@ -620,17 +635,19 @@ class DemoDataSeeder extends Seeder
         $types = ['commercial', 'residential', 'industrial'];
 
         foreach ($jobs as $index => [$name, $status, $foremanIndex, $start, $end, $budget]) {
-            Job::create([
-                'name' => $name,
-                'client' => $clients[$index % count($clients)],
-                'location' => $locations[$index % count($locations)],
-                'job_type' => $types[$index % count($types)],
-                'status' => $status,
-                'foreman_id' => $foremen[$foremanIndex]->id,
-                'start_date' => $start,
-                'end_date' => $end,
-                'budget' => $budget,
-            ]);
+            Job::firstOrCreate(
+                ['name' => $name],
+                [
+                    'client' => $clients[$index % count($clients)],
+                    'location' => $locations[$index % count($locations)],
+                    'job_type' => $types[$index % count($types)],
+                    'status' => $status,
+                    'foreman_id' => $foremen[$foremanIndex]->id,
+                    'start_date' => $start,
+                    'end_date' => $end,
+                    'budget' => $budget,
+                ],
+            );
         }
     }
 
@@ -670,14 +687,18 @@ class DemoDataSeeder extends Seeder
         $sequence = 1082;
 
         foreach ($rows as [$project, $client, $issuedOn, $amount, $status]) {
-            Estimate::create([
-                'number' => 'EST-'.$sequence++,
-                'client' => $client,
-                'project' => $project,
-                'issued_on' => $issuedOn,
-                'amount' => $amount,
-                'status' => $status,
-            ]);
+            // Keyed on the row's own content rather than the generated number,
+            // so re-running this seeder finds the same estimate instead of
+            // colliding on `number`'s unique constraint.
+            Estimate::firstOrCreate(
+                ['project' => $project, 'client' => $client, 'issued_on' => $issuedOn],
+                [
+                    'number' => 'EST-'.$sequence,
+                    'amount' => $amount,
+                    'status' => $status,
+                ],
+            );
+            $sequence++;
         }
     }
 
@@ -913,14 +934,6 @@ class DemoDataSeeder extends Seeder
             [[['text' => 'Material shortage alert', 'strong' => true]], 'Panel boxes for Highland Office Park', '2 days ago', 'triangle-alert', 'lilac'],
         ];
 
-        $dashboardSchedule = array_fill(0, 3, [
-            [['text' => 'Site Visit - Oakwood Medical', 'strong' => true]],
-            'Oct 3, 2026 • 9:00 AM',
-            null,
-            'calendar-check',
-            'lilac',
-        ]);
-
         $historyActivity = [
             [[['text' => 'AI Takeoff completed for '], ['text' => 'Birchwood Office Complex', 'strong' => true]], null, 'Today, 10:23 AM', 'bot', 'butter'],
             [[['text' => 'Maplewood Apartments', 'strong' => true], ['text' => ' estimate was approved']], null, 'Today, 10:23 AM', 'file-text', 'lilac'],
@@ -931,7 +944,6 @@ class DemoDataSeeder extends Seeder
         $scopes = [
             FeedItem::DASHBOARD_ACTIVITY => $dashboardActivity,
             FeedItem::DASHBOARD_NOTIFICATIONS => $dashboardNotifications,
-            FeedItem::DASHBOARD_SCHEDULE => $dashboardSchedule,
             FeedItem::HISTORY_ACTIVITY => $historyActivity,
         ];
 
@@ -950,4 +962,35 @@ class DemoDataSeeder extends Seeder
         }
     }
 
+    /**
+     * A few upcoming crew shifts, so the dashboard's "Upcoming Schedule" card
+     * — read live from `crew_shifts`, not a canned feed row — has something
+     * to show. Dated relative to `now()` rather than a fixed calendar date so
+     * they stay in the future no matter when this seeder runs.
+     */
+    private function seedCrewShifts(User $user): void
+    {
+        $jobs = Job::whereNull('archived_at')->inRandomOrder()->take(3)->get();
+        $members = TeamMember::inRandomOrder()->take(3)->get();
+
+        if ($jobs->isEmpty() || $members->isEmpty()) {
+            return;
+        }
+
+        foreach ([1, 3, 6] as $index => $daysAhead) {
+            $job = $jobs[$index % $jobs->count()];
+            $member = $members[$index % $members->count()];
+
+            CrewShift::create([
+                'job_id' => $job->id,
+                'team_member_id' => $member->id,
+                'created_by' => $user->id,
+                'crew' => $member->name,
+                'scheduled_date' => now()->addDays($daysAhead)->toDateString(),
+                'start_time' => '08:00:00',
+                'duration_hours' => 8,
+                'status' => CrewShift::STATUS_SCHEDULED,
+            ]);
+        }
+    }
 }

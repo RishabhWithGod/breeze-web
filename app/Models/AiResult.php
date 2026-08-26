@@ -187,6 +187,12 @@ class AiResult extends Model
     {
         $reviews = $this->relationLoaded('reviews') ? $this->reviews : $this->reviews()->get();
 
+        // Mirrors SymbolReview::scopeVisible() — an approved row with nothing
+        // to count is excluded from every tab; pending/rejected always count.
+        $reviews = $reviews->filter(
+            fn (SymbolReview $review) => $review->status !== SymbolReview::STATUS_APPROVED || $review->final_count > 0,
+        );
+
         return [
             'total' => $reviews->count(),
             'pending' => $reviews->where('status', SymbolReview::STATUS_PENDING)->count(),

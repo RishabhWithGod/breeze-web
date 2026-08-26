@@ -1,5 +1,4 @@
 export * from './ApprovalHistoryPanel'
-export * from './PipelineStatus'
 export * from './PipelineTrail'
 export * from './ReviewStats'
 export * from './SourceBadges'

@@ -2,13 +2,25 @@ import { useState } from 'react'
 import { Head, useForm, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Gift } from 'lucide-react'
-import { Alert, Button, ButtonLink, Card, SelectField, TextInput } from '@/components/common'
+import {
+  Alert,
+  Button,
+  ButtonLink,
+  Card,
+  EmptyState,
+  SectionHeading,
+  SelectField,
+  Table,
+  TextInput,
+} from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import type { BreezeBucksTeamMember, SharedPageProps } from '@/types'
+import type { BreezeBucksAwardRow, BreezeBucksTeamMember, SharedPageProps, TableColumn } from '@/types'
+import { formatModified } from '@/utils'
 
 export interface BreezeBucksAwardProps {
   teamMembers: readonly BreezeBucksTeamMember[]
+  recentAwards: readonly BreezeBucksAwardRow[]
 }
 
 /**
@@ -17,9 +29,31 @@ export interface BreezeBucksAwardProps {
  * authorization independently; a role or user id never comes from the
  * client alone.
  */
-export default function BreezeBucksAward({ teamMembers }: BreezeBucksAwardProps) {
+export default function BreezeBucksAward({ teamMembers, recentAwards }: BreezeBucksAwardProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
+
+  const columns: TableColumn<BreezeBucksAwardRow>[] = [
+    { key: 'date', header: 'Date', render: (row) => <span className="whitespace-nowrap text-white/85">{formatModified(row.date)}</span> },
+    {
+      key: 'recipient',
+      header: 'Team Member',
+      render: (row) => (
+        <div>
+          <p className="font-medium text-white">{row.recipient.name}</p>
+          <p className="text-xs text-white/70">{row.recipient.role}</p>
+        </div>
+      ),
+    },
+    { key: 'reason', header: 'Reason', render: (row) => <span className="text-white">{row.reason}</span> },
+    {
+      key: 'amount',
+      header: 'Amount',
+      render: (row) => (
+        <span className="whitespace-nowrap font-medium tabular-nums text-status-success">+{row.amount} BB</span>
+      ),
+    },
+  ]
   const { data, setData, post, processing, errors, reset } = useForm({
     user_id: teamMembers[0] ? String(teamMembers[0].id) : '',
     amount: '',
@@ -89,6 +123,24 @@ export default function BreezeBucksAward({ teamMembers }: BreezeBucksAwardProps)
             Award
           </Button>
         </div>
+      </Card>
+
+      <Card className="mx-auto mt-6 max-w-xl">
+        <SectionHeading title="Recent awards" subtitle="Bonuses you've given out." />
+
+        {recentAwards.length === 0 ? (
+          <EmptyState icon={Gift} title="No awards given yet." />
+        ) : (
+          <Table
+            dense
+            variant="lined"
+            headerVariant="plain"
+            columns={columns}
+            rows={recentAwards}
+            getRowId={(row) => row.id}
+            caption="Recent Breeze Bucks awards"
+          />
+        )}
       </Card>
     </PageTransition>
   )

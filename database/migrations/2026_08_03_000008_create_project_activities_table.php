@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('description');
             /** brand | success | warning | info */
             $table->string('tone')->default('info');
-            $table->timestamp('occurred_at');
+            $table->timestamp('occurred_at')->useCurrent();
             $table->timestamps();
         });
     }

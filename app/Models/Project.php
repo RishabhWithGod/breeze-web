@@ -135,7 +135,7 @@ class Project extends Model
         return $this->symbols()->exists();
     }
 
-    /** Matches a project name, its client, its number or its site. */
+    /** Matches a project name, its drawing's filename, its client, its number or its site. */
     public function scopeSearch(Builder $query, ?string $term): Builder
     {
         if (blank($term)) {
@@ -144,6 +144,7 @@ class Project extends Model
 
         return $query->where(fn (Builder $query) => $query
             ->where('name', 'like', "%{$term}%")
+            ->orWhere('drawing_name', 'like', "%{$term}%")
             ->orWhere('client', 'like', "%{$term}%")
             ->orWhere('code', 'like', "%{$term}%")
             ->orWhere('location', 'like', "%{$term}%"));

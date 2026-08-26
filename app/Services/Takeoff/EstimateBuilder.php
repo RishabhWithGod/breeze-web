@@ -52,7 +52,7 @@ class EstimateBuilder
         $counted = $result->reviews()->where('status', SymbolReview::STATUS_APPROVED)->get();
 
         if ($engineLines->isEmpty() && $counted->isEmpty()) {
-            throw new RuntimeException('The engine returned nothing to price on this drawing.');
+            throw new RuntimeException('Nothing on this drawing could be priced automatically.');
         }
 
         $job ??= $result->workJob;
@@ -100,20 +100,20 @@ class EstimateBuilder
     public function fromFinalJson(AiResult $result, User $user, ?Job $job = null): Estimate
     {
         if (blank($result->final_payload)) {
-            throw new RuntimeException('This takeoff has no final JSON yet — generate it first.');
+            throw new RuntimeException('Please finish and sign off the review before pricing this takeoff.');
         }
 
         $job ??= $result->workJob;
-        $symbols = $result->finalSymbols()->get();
+        $symbols = $result->finalSymbols()->where('count', '>', 0)->get();
 
         if ($symbols->isEmpty()) {
-            throw new RuntimeException('The final JSON contains no approved symbols to price.');
+            throw new RuntimeException('Nothing was approved in the review, so there is nothing to price yet.');
         }
 
         // An estimate raised at analysis time is brought up to the reviewed counts
         // rather than duplicated.
         if ($result->estimate) {
-            return $this->reprice($result->estimate, $result, $symbols, $user);
+            return $this->reprice($result->estimate, $result, $symbols, $user, $job);
         }
 
         return DB::transaction(function () use ($result, $symbols, $job, $user) {
@@ -194,9 +194,9 @@ class EstimateBuilder
      *
      * @param  Collection<int, FinalSymbol>  $symbols
      */
-    private function reprice(Estimate $estimate, AiResult $result, Collection $symbols, User $user): Estimate
+    private function reprice(Estimate $estimate, AiResult $result, Collection $symbols, User $user, ?Job $job = null): Estimate
     {
-        return DB::transaction(function () use ($estimate, $result, $symbols, $user) {
+        return DB::transaction(function () use ($estimate, $result, $symbols, $user, $job) {
             $before = (float) $estimate->grand_total;
             $manual = $estimate->items()->where('source', 'manual')->count();
             $engineLines = $result->boqLines()->get();
@@ -210,6 +210,14 @@ class EstimateBuilder
             // Manual lines keep their own positions after the rewritten AI block.
             $estimate->update([
                 'notes' => $this->notes($engineLines, $result->ai_estimate ?? [], reviewed: true),
+                // The estimate may have been raised (e.g. at finalise) before a
+                // job existed yet — link it the first time one shows up, without
+                // overwriting a link that's already there.
+                ...($job && ! $estimate->job_id ? [
+                    'job_id' => $job->id,
+                    'client' => $job->client ?? $estimate->client,
+                    'project' => $job->name ?? $estimate->project,
+                ] : []),
             ]);
             $estimate->recalculateTotals();
             $estimate->refresh();
@@ -248,8 +256,14 @@ class EstimateBuilder
         $position = 0;
 
         foreach ($reviews as $review) {
-            $rates = $this->catalog->for($review->name);
             $count = (int) $review->final_count;
+
+            // Nothing to price or install for a symbol reviewed down to zero.
+            if ($count <= 0) {
+                continue;
+            }
+
+            $rates = $this->catalog->for($review->name);
 
             $estimate->items()->create([
                 'category' => $rates['category'],

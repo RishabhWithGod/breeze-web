@@ -200,11 +200,11 @@ export default function Upload({
               <Alert
                 key="ai-not-configured"
                 tone="warning"
-                title="AI takeoff engine not configured"
+                title="AI takeoff isn't available right now"
                 icon={TriangleAlert}
               >
-                Set <code>AI_API_BASE_URL</code> in <code>.env</code> so uploads can be
-                analysed. Drawings will not be submitted until it is set.
+                Please contact support, or try again later. Drawings can't be submitted
+                until this is resolved.
               </Alert>
             )}
 
@@ -212,18 +212,20 @@ export default function Upload({
               <Alert
                 key="ai-offline"
                 tone="danger"
-                title="The AI takeoff engine is not responding"
+                title="AI takeoff is temporarily unavailable"
                 icon={TriangleAlert}
               >
-                Nothing answered at <code>{'/api/health'}</code>. Start the engine, then
-                reload — a drawing uploaded now would fail analysis.
+                We can't reach the AI takeoff service right now — a drawing uploaded now
+                would fail analysis. Please try again shortly, or contact support if this
+                continues.
               </Alert>
             )}
 
             {/* PHP's own upload ceiling, when it is the binding constraint. */}
             {limits.serverHint && (
-              <Alert key="php-limit" tone="info" title="Server upload limit">
-                {limits.serverHint}
+              <Alert key="php-limit" tone="info" title="Upload size limit">
+                This server accepts drawings up to {limits.maxFileSizeMb} MB. Contact
+                support if you need to upload a larger set.
               </Alert>
             )}
 

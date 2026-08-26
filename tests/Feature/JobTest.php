@@ -2,8 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\AiJob;
+use App\Models\AiResult;
+use App\Models\Estimate;
 use App\Models\Foreman;
 use App\Models\Job;
+use App\Models\Project;
+use App\Models\Upload;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -125,6 +130,74 @@ class JobTest extends TestCase
         $this->assertDatabaseCount('work_jobs', 0);
     }
 
+    public function test_the_create_screen_offers_takeoff_projects_and_their_drawings(): void
+    {
+        [$project, $upload] = $this->makeTakeoffDrawing();
+
+        $this->actingAs($this->user)
+            ->get('/jobs/create')
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('JobCreate')
+                ->has('projects', 1)
+                ->where('projects.0.id', $project->id)
+                ->has('uploads', 1)
+                ->where('uploads.0.id', $upload->id)
+                ->where('uploads.0.projectId', $project->id)
+                ->where('uploads.0.estimate', null));
+    }
+
+    public function test_creating_a_job_links_it_to_the_selected_project_and_drawing(): void
+    {
+        [$project, $upload, $result] = $this->makeTakeoffDrawing();
+
+        $this->actingAs($this->user)
+            ->post('/jobs', [
+                'name' => 'Northgate Retail Fit-out',
+                'client' => 'Northgate Retail',
+                'location' => 'Northgate, Seattle',
+                'project_id' => $project->id,
+                'upload_id' => $upload->id,
+            ])
+            ->assertSessionHas('success');
+
+        $job = Job::latest('id')->firstOrFail();
+
+        $this->assertSame($project->id, $job->project_id);
+        $this->assertSame($result->id, $job->ai_result_id);
+    }
+
+    public function test_creating_a_job_links_the_drawings_existing_estimate_instead_of_duplicating_it(): void
+    {
+        [$project, $upload, $result] = $this->makeTakeoffDrawing();
+        $estimate = Estimate::create([
+            'ai_result_id' => $result->id,
+            'number' => 'EST-9001',
+            'client' => 'Northgate Retail',
+            'project' => 'Northgate Fit-out',
+            'issued_on' => now()->toDateString(),
+            'amount' => 5000,
+            'status' => 'draft',
+        ]);
+        $result->update(['estimate_id' => $estimate->id]);
+
+        $this->actingAs($this->user)
+            ->post('/jobs', [
+                'name' => 'Northgate Retail Fit-out',
+                'client' => 'Northgate Retail',
+                'location' => 'Northgate, Seattle',
+                'project_id' => $project->id,
+                'upload_id' => $upload->id,
+                // Ticked regardless — the linked estimate takes priority over this.
+                'create_estimate' => true,
+            ])
+            ->assertSessionHas('success');
+
+        $job = Job::latest('id')->firstOrFail();
+
+        $this->assertSame($job->id, $estimate->fresh()->job_id);
+        $this->assertDatabaseCount('estimates', 1);
+    }
+
     public function test_a_job_can_be_deleted_and_restored(): void
     {
         $job = $this->makeJob();
@@ -156,5 +229,43 @@ class JobTest extends TestCase
             'budget' => 1000,
             ...$attributes,
         ]);
+    }
+
+    /**
+     * A project with one uploaded drawing already run through the AI engine —
+     * what the Project/PDF pickers on the create screens link back to.
+     *
+     * @return array{0: Project, 1: Upload, 2: AiResult}
+     */
+    private function makeTakeoffDrawing(): array
+    {
+        $project = Project::create([
+            'user_id' => $this->user->id,
+            'name' => 'Northgate Fit-out',
+            'client' => 'Northgate Retail',
+            'status' => 'completed',
+        ]);
+        $upload = Upload::create([
+            'project_id' => $project->id,
+            'user_id' => $this->user->id,
+            'name' => 'northgate-electrical.pdf',
+            'format' => 'PDF',
+            'size_bytes' => 1024,
+            'status' => 'completed',
+        ]);
+        $aiJob = AiJob::create([
+            'project_id' => $project->id,
+            'upload_id' => $upload->id,
+            'user_id' => $this->user->id,
+            'status' => 'completed',
+        ]);
+        $result = AiResult::create([
+            'ai_job_id' => $aiJob->id,
+            'project_id' => $project->id,
+            'upload_id' => $upload->id,
+            'original_payload' => [],
+        ]);
+
+        return [$project, $upload, $result];
     }
 }

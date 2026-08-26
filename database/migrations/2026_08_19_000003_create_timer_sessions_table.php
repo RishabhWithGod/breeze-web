@@ -32,7 +32,7 @@ return new class extends Migration
             $table->string('task_label')->nullable();
             $table->text('description')->nullable();
 
-            $table->timestamp('started_at');
+            $table->timestamp('started_at')->useCurrent();
             $table->timestamp('paused_at')->nullable();
             $table->unsignedInteger('accumulated_seconds')->default(0);
 

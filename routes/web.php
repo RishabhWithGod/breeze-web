@@ -4,6 +4,7 @@ use App\Http\Controllers\AiReviewController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\BreezeBucksController;
+use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\DashboardController;
@@ -28,6 +29,7 @@ use App\Http\Controllers\JobTeamController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentSettingsController;
 use App\Http\Controllers\ProcessingController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectDocumentController;
 use App\Http\Controllers\ResultsController;
@@ -70,6 +72,11 @@ Route::middleware('guest')->group(function () {
     Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
         ->middleware('throttle:password-reset')
         ->name('password.email');
+
+    Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])->name('password.reset');
+    Route::post('reset-password', [NewPasswordController::class, 'store'])
+        ->middleware('throttle:password-reset')
+        ->name('password.store');
 
     // The login-time 2FA challenge — reached only via a pending marker set by
     // a real credential check in `LoginRequest::authenticate()`, not by a
@@ -398,6 +405,11 @@ Route::middleware('auth')->group(function () {
         Route::delete('methods/{method}', [PaymentSettingsController::class, 'destroyPaymentMethod'])->name('methods.destroy');
         Route::put('billing', [PaymentSettingsController::class, 'updateBillingSettings'])->name('billing.update');
     });
+
+    // Profile: the user's own name. Email/phone/password live on Security
+    // since those go through an OTP-verified challenge.
+    Route::get('profile', [ProfileController::class, 'index'])->name('profile.index');
+    Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
 
     // Security Settings: 2FA enrollment, authentication method, email/phone
     // verification, per-event notification preferences, and the audit log.

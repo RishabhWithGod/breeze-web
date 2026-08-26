@@ -51,8 +51,8 @@ export function StatMedallionCard({
         <FeedIcon name={stat.icon} className="size-10 sm:size-12" aria-hidden />
       </span>
 
-      <p className="relative mt-7 text-center text-2xl font-medium text-white sm:text-3xl">
-        <span className="font-semibold text-brand">
+      <p className="relative mt-7 text-center text-md font-medium text-white">
+        <span className="text-lg font-semibold text-brand">
           <AnimatedCounter value={stat.value} className="tabular-nums" />
         </span>{' '}
         {stat.label}

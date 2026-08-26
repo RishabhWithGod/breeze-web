@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ApprovalHistoryResource;
-use App\Http\Resources\DocumentResource;
 use App\Http\Resources\EstimateItemResource;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
@@ -74,9 +73,6 @@ class EstimateDetailController extends Controller
                     'label' => EstimateItem::CATEGORY_LABELS[$category],
                 ]),
             'statuses' => Estimate::STATUSES,
-            'documents' => $estimate->documents()->where('is_archived', false)->with('uploader')->take(5)->get()
-                ->map(fn ($document) => (new DocumentResource($document))->resolve()),
-            'documentsCount' => $estimate->documents()->where('is_archived', false)->count(),
 
             /*
              * Read off the same drawing but not priced by the engine: wire runs are

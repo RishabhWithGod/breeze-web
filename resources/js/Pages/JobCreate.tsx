@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
-import { Lightbulb } from 'lucide-react'
+import { FileCheck2, Lightbulb } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -14,12 +14,23 @@ import {
 } from '@/components/common'
 import { appLayout, PageTransition } from '@/components/layout'
 import { JOB_TYPE_OPTIONS, ROUTES } from '@/constants'
-import type { JobDraft, JobForeman, JobType } from '@/types'
+import type {
+  JobDraft,
+  JobForeman,
+  JobType,
+  TakeoffProjectOption,
+  TakeoffUploadOption,
+} from '@/types'
+import { formatCurrency } from '@/utils'
 
 export interface JobCreateProps {
   foremen: readonly JobForeman[]
   /** Clients already on record, offered in the Client select. */
   clients: readonly string[]
+  /** Projects already run through AI Takeoff, offered to link this job to. */
+  projects: readonly TakeoffProjectOption[]
+  /** Their drawings — narrowed to the picked project once one is chosen. */
+  uploads: readonly TakeoffUploadOption[]
 }
 
 /**
@@ -29,7 +40,7 @@ export interface JobCreateProps {
  * restates the server's rules. "Save as Draft" and "Create Job" post the same
  * payload — the server picks the status from the `save_as_draft` flag.
  */
-export default function JobCreate({ foremen, clients }: JobCreateProps) {
+export default function JobCreate({ foremen, clients, projects, uploads }: JobCreateProps) {
   const [savingDraft, setSavingDraft] = useState(false)
 
   const { data, setData, post, processing, errors, hasErrors, clearErrors, transform } =
@@ -47,6 +58,8 @@ export default function JobCreate({ foremen, clients }: JobCreateProps) {
       assign_team: false,
       notify_client: false,
       save_as_draft: false,
+      project_id: '',
+      upload_id: '',
     })
 
   /**
@@ -85,6 +98,28 @@ export default function JobCreate({ foremen, clients }: JobCreateProps) {
       value: String(foreman.id),
     })),
   ]
+
+  const projectOptions = [
+    { label: 'No linked project', value: '' },
+    ...projects.map((project) => ({
+      label: project.client ? `${project.name} — ${project.client}` : project.name,
+      value: String(project.id),
+    })),
+  ]
+
+  const uploadsForProject = useMemo(
+    () => uploads.filter((upload) => String(upload.projectId) === data.project_id),
+    [uploads, data.project_id],
+  )
+
+  const uploadOptions = [
+    { label: 'No linked drawing', value: '' },
+    ...uploadsForProject.map((upload) => ({ label: upload.name, value: String(upload.id) })),
+  ]
+
+  const linkedEstimate = uploadsForProject.find(
+    (upload) => String(upload.id) === data.upload_id,
+  )?.estimate
 
   return (
     <PageTransition>
@@ -186,17 +221,81 @@ export default function JobCreate({ foremen, clients }: JobCreateProps) {
 
             <fieldset>
               <legend className="mb-3 text-md font-medium text-white">
+                Link to AI Takeoff (optional)
+              </legend>
+              <div className="grid gap-6 lg:grid-cols-2">
+                <SelectField
+                  id="job-project"
+                  label="Project"
+                  options={projectOptions}
+                  value={data.project_id}
+                  onChange={(event) => {
+                    const projectId = event.target.value
+                    update('project_id', projectId)
+                    update('upload_id', '')
+
+                    // Carry over the project's own location/date/type — but
+                    // never overwrite a field the user has already filled in.
+                    const project = projects.find((p) => String(p.id) === projectId)
+                    if (project) {
+                      if (!data.location && project.location) {
+                        update('location', project.location)
+                      }
+                      if (!data.start_date && project.dueDate) {
+                        update('start_date', project.dueDate)
+                      }
+                      if (!data.job_type && project.projectType) {
+                        update('job_type', project.projectType)
+                      }
+                    }
+                  }}
+                  {...(errors.project_id ? { error: errors.project_id } : {})}
+                />
+                <SelectField
+                  id="job-upload"
+                  label="PDF"
+                  options={uploadOptions}
+                  value={data.upload_id}
+                  disabled={!data.project_id}
+                  onChange={(event) => update('upload_id', event.target.value)}
+                  {...(errors.upload_id ? { error: errors.upload_id } : {})}
+                />
+              </div>
+
+              {linkedEstimate && (
+                <Alert tone="info" icon={FileCheck2} title="This drawing already has an estimate" className="mt-4">
+                  <p>
+                    Estimate {linkedEstimate.number} —{' '}
+                    {formatCurrency(linkedEstimate.amount, 2)}. Creating this job links it here
+                    instead of raising a new one.
+                  </p>
+                  <ButtonLink
+                    href={linkedEstimate.editUrl}
+                    variant="secondary"
+                    size="sm"
+                    className="mt-3"
+                  >
+                    Edit estimate
+                  </ButtonLink>
+                </Alert>
+              )}
+            </fieldset>
+
+            <fieldset>
+              <legend className="mb-3 text-md font-medium text-white">
                 Additional Options
               </legend>
               {/* `Checkbox` renders an inline-flex label, so a flex column is
                   what actually stacks them. */}
               <div className="flex flex-col items-start gap-3">
-                <Checkbox
-                  id="job-create-estimate"
-                  label="Create estimate for this job"
-                  checked={data.create_estimate}
-                  onChange={(event) => setData('create_estimate', event.target.checked)}
-                />
+                {!linkedEstimate && (
+                  <Checkbox
+                    id="job-create-estimate"
+                    label="Create estimate for this job"
+                    checked={data.create_estimate}
+                    onChange={(event) => setData('create_estimate', event.target.checked)}
+                  />
+                )}
                 <Checkbox
                   id="job-assign-team"
                   label="Assign team members"

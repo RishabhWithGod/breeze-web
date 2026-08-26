@@ -107,6 +107,23 @@ class BreezeBucksController extends Controller
 
         return Inertia::render('BreezeBucksAward', [
             'teamMembers' => User::where('id', '!=', $request->user()->id)->orderBy('name')->get(['id', 'name', 'role']),
+            'recentAwards' => BreezeBucksTransaction::where('created_by', $request->user()->id)
+                ->where('type', BreezeBucksTransaction::TYPE_BONUS)
+                ->with('user:id,name,role')
+                ->latest()
+                ->latest('id')
+                ->take(15)
+                ->get()
+                ->map(fn (BreezeBucksTransaction $transaction) => [
+                    'id' => $transaction->id,
+                    'date' => $transaction->created_at->toISOString(),
+                    'amount' => $transaction->amount,
+                    'reason' => $transaction->description,
+                    'recipient' => [
+                        'name' => $transaction->user->name,
+                        'role' => $transaction->user->role,
+                    ],
+                ]),
         ]);
     }
 

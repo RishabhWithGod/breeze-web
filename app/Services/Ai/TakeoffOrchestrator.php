@@ -200,7 +200,6 @@ class TakeoffOrchestrator
             $project->update([
                 'status' => 'completed',
                 'review_status' => AiResult::REVIEW_PENDING,
-                'name' => $normalised['project_name'] ?: $project->name,
                 'items_count' => $normalised['item_total'],
                 'page_count' => $normalised['pages'],
                 'overall_confidence' => $normalised['confidence'],

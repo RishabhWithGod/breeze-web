@@ -60,7 +60,7 @@ export default function Home({
 
       {/* =================================== Activity + notifications ======== */}
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <DashboardPanel title="Recent Activity">
+        <DashboardPanel title="Recent Activity" bodyClassName="max-h-96 overflow-y-auto">
           <ul className="space-y-4">
             {activity.map((row, index) => (
               <IconListRow key={row.id} row={row} index={index} />
@@ -70,8 +70,9 @@ export default function Home({
 
         <DashboardPanel
           title="Notifications"
-          link={{ label: 'View all estimates', href: ROUTES.results }}
+          link={{ label: 'View all notifications', href: ROUTES.notifications }}
           index={1}
+          bodyClassName="max-h-96 overflow-y-auto"
         >
           <ul className="space-y-4">
             {notificationFeed.map((row, index) => (
@@ -87,7 +88,7 @@ export default function Home({
           <PerformanceChart data={performance} seriesLabel="On-Time Completion Rate" />
         </DashboardPanel>
 
-        <DashboardPanel title="Upcoming Schedule" index={1}>
+        <DashboardPanel title="Upcoming Schedule" index={1} bodyClassName="max-h-96 overflow-y-auto">
           <ul className="space-y-4">
             {schedule.map((row, index) => (
               <IconListRow key={row.id} row={row} index={index} />

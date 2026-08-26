@@ -112,7 +112,7 @@ return [
     | Turn it off to require a signed-off review before either exists.
     |
     */
-    'auto_handoff' => (bool) env('AI_AUTO_HANDOFF', true),
+    'auto_handoff' => (bool) env('AI_AUTO_HANDOFF', false),
 
     /*
     |--------------------------------------------------------------------------

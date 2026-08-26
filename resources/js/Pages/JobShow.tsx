@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Building2,
   CalendarDays,
+  Check,
   Copy,
   HardHat,
   MapPin,
@@ -27,28 +28,20 @@ import {
 } from '@/components/common'
 import {
   ForemanBadge,
-  JobActivityTimeline,
   JobAssignmentsPanel,
   JobAttachmentsPanel,
   JobEstimatesPanel,
   JobNotesPanel,
-  JobStatusHistory,
   JobTakeoffPanel,
   JobTeamPanel,
 } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ApprovalHistoryPanel } from '@/components/review'
-import { JobCostingSummary } from '@/components/jobCosting'
-import { JobDocumentsPanel } from '@/components/documents'
-import { JobTimeTrackingSummary } from '@/components/timeTracking'
 import { JOB_STATUS_OPTIONS, ROUTES, routeTo } from '@/constants'
 import { useDisclosure, useEchoConnectionState, usePrivateChannel } from '@/hooks'
 import type {
   ApprovalHistoryEntry,
-  Document,
   JobCostRow,
   JobDetail,
-  JobLaborSummary,
   JobStatus,
   JobTeamMember,
   SharedPageProps,
@@ -69,11 +62,8 @@ export interface JobShowProps {
   crew: readonly JobTeamMember[]
   /** The takeoff's audit trail, when the job came from one. */
   takeoffHistory: readonly ApprovalHistoryEntry[]
-  timeTracking: JobLaborSummary
   canViewTimeCosts: boolean
   jobCosting: JobCostRow
-  documents: readonly Document[]
-  documentsCount: number
 }
 
 /**
@@ -82,17 +72,7 @@ export interface JobShowProps {
  * Every panel writes through its own controller and the page reloads with the
  * updated relationships, so what is on screen always matches the database.
  */
-export default function JobShow({
-  job,
-  assignableMembers,
-  crew,
-  takeoffHistory,
-  timeTracking,
-  canViewTimeCosts,
-  jobCosting,
-  documents,
-  documentsCount,
-}: JobShowProps) {
+export default function JobShow({ job, assignableMembers, crew }: JobShowProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
@@ -106,12 +86,12 @@ export default function JobShow({
     router.post(routeTo.jobStatus(job.id), { status }, { preserveScroll: true })
   }
 
-  // Status, staffing and time-entry activity all live inside the `job`,
-  // `timeTracking` and `jobCosting` props — one small partial reload covers
-  // whichever of those a realtime event on this job just changed, without
-  // touching scroll position, open modals, or the delete-confirmation dialog.
+  // Status, staffing and cost activity all live inside the `job` and
+  // `jobCosting` props — one small partial reload covers whichever of those a
+  // realtime event on this job just changed, without touching scroll
+  // position, open modals, or the delete-confirmation dialog.
   const resync = useCallback(() => {
-    router.reload({ only: ['job', 'timeTracking', 'jobCosting'] })
+    router.reload({ only: ['job', 'jobCosting'] })
   }, [])
 
   usePrivateChannel(`job.${job.id}`, {
@@ -144,6 +124,14 @@ export default function JobShow({
               leftIcon={PencilLine}
             >
               Edit
+            </ButtonLink>
+            {/*
+              Every panel on this page writes through its own controller and saves
+              immediately, so there is nothing to submit here — this just closes out
+              the setup and sends the user back to the list.
+            */}
+            <ButtonLink href={ROUTES.jobs} leftIcon={Check}>
+              Finish
             </ButtonLink>
           </>
         }
@@ -290,20 +278,6 @@ export default function JobShow({
         <JobAssignmentsPanel jobId={job.id} assignments={job.assignments} members={crew} />
       </div>
 
-      {/* ============================================= Time Tracking ========= */}
-      <div className="mt-6">
-        <JobTimeTrackingSummary
-          jobId={job.id}
-          summary={timeTracking}
-          canViewCosts={canViewTimeCosts}
-        />
-      </div>
-
-      {/* =============================================== Job Costing ========== */}
-      <div className="mt-6">
-        <JobCostingSummary jobId={job.id} summary={jobCosting} canViewCosts={canViewTimeCosts} />
-      </div>
-
       {/* ============================================ Team + estimates ======= */}
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card padding="lg">
@@ -336,47 +310,6 @@ export default function JobShow({
             subtitle={`${job.attachments.length} uploaded`}
           />
           <JobAttachmentsPanel jobId={job.id} attachments={job.attachments} />
-        </Card>
-      </div>
-
-      {/* =================================================== Documents ======== */}
-      <Card padding="lg" className="mt-6">
-        <SectionHeading title="Documents" subtitle={`${documentsCount} filed against this job`} />
-        <JobDocumentsPanel
-          viewAllHref={`${ROUTES.documents}?job_id=${job.id}`}
-          documents={documents}
-          totalCount={documentsCount}
-          emptyLabel="No documents filed against this job yet."
-        />
-      </Card>
-
-      {/* The reasoning behind the job's numbers, not just the numbers. */}
-      {takeoffHistory.length > 0 && (
-        <Card padding="lg" className="mt-6">
-          <SectionHeading
-            title="Takeoff audit history"
-            subtitle="Every decision made while reviewing the drawing"
-          />
-          <ApprovalHistoryPanel entries={takeoffHistory} />
-        </Card>
-      )}
-
-      {/* ========================================= Activity + history ======== */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Card padding="lg">
-          <SectionHeading
-            title="Activity timeline"
-            subtitle="Everything that has happened to this job"
-          />
-          <JobActivityTimeline activities={job.activities} />
-        </Card>
-
-        <Card padding="lg">
-          <SectionHeading
-            title="Status history"
-            subtitle={`${job.statusHistory.length} transitions`}
-          />
-          <JobStatusHistory history={job.statusHistory} />
         </Card>
       </div>
 

@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreJobRequest;
 use App\Http\Requests\UpdateJobRequest;
 use App\Http\Resources\ApprovalHistoryResource;
-use App\Http\Resources\DocumentResource;
 use App\Http\Resources\FeedItemResource;
 use App\Http\Resources\JobDetailResource;
 use App\Http\Resources\JobResource;
@@ -15,9 +14,10 @@ use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
+use App\Models\Upload;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\JobCosting\JobCostSummary;
-use App\Services\TimeTracking\JobLaborSummary;
+use App\Services\Takeoff\TakeoffLinkOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -28,9 +28,9 @@ use Inertia\Response;
 class JobController extends Controller
 {
     public function __construct(
-        private readonly JobLaborSummary $laborSummary,
         private readonly JobCostSummary $costSummary,
         private readonly FeedItemRecorder $activity,
+        private readonly TakeoffLinkOptions $linkOptions,
     ) {}
 
     public function index(Request $request): Response
@@ -54,7 +54,7 @@ class JobController extends Controller
         $view = $filters['view'] ?? 'active';
 
         $jobs = Job::query()
-            ->with('foreman')
+            ->with(['foreman', 'activeAssignments.assigner'])
             ->withCount(['teamMembers', 'estimates'])
             ->search($filters['search'] ?? null)
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
@@ -97,6 +97,8 @@ class JobController extends Controller
         return Inertia::render('JobCreate', [
             'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
             'clients' => $this->knownClients(),
+            'projects' => $this->linkOptions->projects(),
+            'uploads' => $this->linkOptions->uploads(),
         ]);
     }
 
@@ -106,8 +108,13 @@ class JobController extends Controller
         $isDraft = (bool) ($data['save_as_draft'] ?? false);
         unset($data['save_as_draft']);
 
+        $upload = isset($data['upload_id']) ? Upload::find($data['upload_id']) : null;
+        $aiResult = $upload?->latestAiResult;
+        unset($data['upload_id']);
+
         $job = Job::create([
             ...$data,
+            'ai_result_id' => $aiResult?->id,
             'status' => $isDraft ? 'draft' : 'planning',
         ]);
 
@@ -118,8 +125,19 @@ class JobController extends Controller
             $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "New job created: {$job->name}", 'briefcase', 'lilac');
         }
 
-        // "Create estimate for this job" — a real linked estimate, not a flag.
-        if (! empty($data['create_estimate'])) {
+        // The selected PDF already carries an estimate — link it rather than
+        // raising a second one from the checkbox below.
+        $linkedEstimate = $aiResult?->estimate;
+
+        if ($linkedEstimate && $linkedEstimate->job_id === null) {
+            $linkedEstimate->update(['job_id' => $job->id]);
+            $job->recordActivity(
+                'estimate_created',
+                "Estimate {$linkedEstimate->number} linked from {$upload->label()}",
+                ['estimate_id' => $linkedEstimate->id, 'number' => $linkedEstimate->number],
+            );
+        } elseif (! empty($data['create_estimate'])) {
+            // "Create estimate for this job" — a real linked estimate, not a flag.
             $estimate = $this->makeEstimateFor($job);
             $job->recordActivity(
                 'estimate_created',
@@ -143,6 +161,7 @@ class JobController extends Controller
     {
         $job->load([
             'foreman',
+            'project',
             'teamMembers',
             'estimates',
             'notes.author',
@@ -154,7 +173,6 @@ class JobController extends Controller
         ]);
 
         $canViewTimeCosts = (bool) $request->user()->can('viewJobCosts', TimeEntry::class);
-        $timeTracking = $this->laborSummary->for($job);
         $jobCosting = $this->costSummary->for($job);
 
         return Inertia::render('JobShow', [
@@ -175,18 +193,8 @@ class JobController extends Controller
                     $job->aiResult->history()->with('actor')->take(25)->get()
                 )->resolve()
                 : [],
-            // Live labor totals — never a stored duplicate of the time entries
-            // they summarise. `laborCost`/`billableAmount` are dollar figures,
-            // so they're nulled out below for a role without `viewJobCosts` —
-            // the same rule the Job Costing dashboard applies.
-            'timeTracking' => $canViewTimeCosts
-                ? $timeTracking
-                : [...$timeTracking, 'laborCost' => null, 'billableAmount' => null],
             'canViewTimeCosts' => $canViewTimeCosts,
             'jobCosting' => $canViewTimeCosts ? $jobCosting : JobCostSummary::redact($jobCosting),
-            'documents' => $job->documents()->where('is_archived', false)->with('uploader')->take(5)->get()
-                ->map(fn ($document) => (new DocumentResource($document))->resolve()),
-            'documentsCount' => $job->documents()->where('is_archived', false)->count(),
         ]);
     }
 

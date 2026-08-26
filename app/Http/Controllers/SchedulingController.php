@@ -79,7 +79,7 @@ class SchedulingController extends Controller
             'shifts' => CrewShiftResource::collection($shifts)->resolve(),
             'unassigned' => SchedulableJobResource::collection(
                 Job::query()->with('foreman')->unscheduled()
-                    ->sortedForScheduling('priority-desc')
+                    ->sortedForScheduling('start-desc')
                     ->take(self::STRIP_LIMIT)
                     ->get()
             )->resolve(),
@@ -108,7 +108,7 @@ class SchedulingController extends Controller
         ]);
 
         $type = $filters['type'] ?? 'all';
-        $sort = $filters['sort'] ?? 'priority-desc';
+        $sort = $filters['sort'] ?? 'start-desc';
 
         $jobs = Job::query()
             ->with('foreman')

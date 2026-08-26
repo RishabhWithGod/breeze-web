@@ -26,7 +26,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
 
             $table->foreignId('assigned_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamp('assigned_at');
+            $table->timestamp('assigned_at')->useCurrent();
             $table->timestamp('released_at')->nullable();
             $table->timestamps();
 

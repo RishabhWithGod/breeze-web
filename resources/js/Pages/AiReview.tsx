@@ -4,7 +4,6 @@ import {
   Check,
   CheckCheck,
   Combine,
-  Download,
   Lock,
   RotateCcw,
   Sparkles,
@@ -12,7 +11,6 @@ import {
   X,
 } from 'lucide-react'
 import {
-  AdvancedDetails,
   Alert,
   Badge,
   Button,
@@ -35,7 +33,6 @@ import {
 } from '@/components/layout'
 import {
   ApprovalHistoryPanel,
-  PipelineStatus,
   ReviewStats,
   SymbolCard,
 } from '@/components/review'
@@ -176,8 +173,7 @@ export default function AiReview({
         title="AI Review"
         subtitle={
           `${result.detectionCount} symbols from ${result.drawingName ?? 'the drawing set'} — ` +
-          'approve what is real before it reaches an estimate.' +
-          (result.runId ? ` Engine run ${result.runId}.` : '')
+          'approve what is real before it reaches an estimate.'
         }
         breadcrumbs={[
           { label: 'AI Takeoff', href: ROUTES.aiTakeoff },
@@ -209,7 +205,7 @@ export default function AiReview({
                 size="sm"
                 leftIcon={Check}
                 disabled={tally.approved === 0}
-                title="Builds the estimate and raises the job from the approved symbols"
+                title="Locks in the approved symbols so you can create the estimate and job"
                 onClick={() => router.post(routeTo.reviewFinalise(result.id))}
               >
                 Finish review
@@ -232,8 +228,8 @@ export default function AiReview({
 
       {!locked && tally.approved > 0 && (
         <Alert tone="info" className="mb-6">
-          Finishing this review builds the estimate and raises the job —{' '}
-          {tally.approvedCount} items across {tally.approved} approved symbols.
+          Finishing this review locks in {tally.approvedCount} items across{' '}
+          {tally.approved} approved symbols, ready for you to create the estimate and job.
         </Alert>
       )}
 
@@ -246,32 +242,6 @@ export default function AiReview({
       )}
 
       <ReviewStats tally={tally} className="mb-6" />
-
-      {/*
-        How the engine ran is real information and occasionally settles an argument,
-        but it is not what the reviewer is here to do. One click away.
-      */}
-      <AdvancedDetails
-        label="How the AI read this drawing"
-        hint="Detector stages, processing time and crop statistics"
-        className="mb-6"
-      >
-        <PipelineStatus
-          stages={result.pipelineStatus}
-          processingTime={result.processingTime}
-          statistics={result.lifecycleStatistics}
-        />
-
-        <ButtonLink
-          href={result.originalJsonUrl}
-          variant="secondary"
-          size="sm"
-          leftIcon={Download}
-          className="mt-4"
-        >
-          Download the raw AI response
-        </ButtonLink>
-      </AdvancedDetails>
 
       <Card padding="md" className="mb-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -383,7 +353,7 @@ export default function AiReview({
           />
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {rows.map((row, index) => (
             <SymbolCard
               key={row.id}

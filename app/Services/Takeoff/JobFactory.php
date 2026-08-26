@@ -66,7 +66,7 @@ class JobFactory
         $payload = $result->final_payload;
 
         if (blank($payload)) {
-            throw new RuntimeException('This takeoff has no final JSON yet — generate it first.');
+            throw new RuntimeException('Please finish and sign off the review before creating a job.');
         }
 
         return DB::transaction(function () use ($result, $payload, $attributes, $user) {
@@ -115,12 +115,14 @@ class JobFactory
             'ai_result_id' => $result->id,
             'name' => $attributes['name'] ?? $project->name,
             'client' => $attributes['client'] ?? ($project->client === 'Unassigned' ? null : $project->client),
-            'location' => $attributes['location'] ?? null,
+            // Carries over what was already captured when the project was
+            // created, so the same location/date is never retyped here.
+            'location' => $attributes['location'] ?? $project->location,
             'description' => $attributes['description'] ?? $this->describe($payload, $reviewed),
-            'job_type' => $attributes['job_type'] ?? 'commercial',
+            'job_type' => $attributes['job_type'] ?? $project->project_type ?? 'commercial',
             'status' => 'planning',
             'foreman_id' => $attributes['foreman_id'] ?? null,
-            'start_date' => $attributes['start_date'] ?? null,
+            'start_date' => $attributes['start_date'] ?? $project->due_date,
             'end_date' => $attributes['end_date'] ?? null,
             ...$this->takeoffFields($result, $payload, $reviewed),
             'budget' => $attributes['budget'] ?? $this->budget($payload),

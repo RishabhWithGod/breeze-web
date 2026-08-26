@@ -27,7 +27,7 @@ return new class extends Migration
             $table->string('client')->nullable();
             $table->string('description');
             $table->string('external_reference')->nullable();
-            $table->timestamp('occurred_at');
+            $table->timestamp('occurred_at')->useCurrent();
             $table->foreignId('recorded_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 

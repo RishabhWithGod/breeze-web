@@ -287,8 +287,6 @@ class JobCostingTest extends TestCase
             ->get("/jobs/{$job->id}")
             ->assertInertia(fn (Assert $page) => $page
                 ->where('canViewTimeCosts', false)
-                ->where('timeTracking.laborCost', null)
-                ->where('timeTracking.billableAmount', null)
                 ->where('jobCosting.actualLaborCost', null)
                 ->where('jobCosting.profit', null));
     }

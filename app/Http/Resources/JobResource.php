@@ -32,6 +32,12 @@ class JobResource extends JsonResource
             'isArchived' => $this->archived_at !== null,
             'teamCount' => $this->team_members_count ?? 0,
             'estimateCount' => $this->estimates_count ?? 0,
+            // Who's currently staffed, and in what role — the same assignments
+            // made on the job's own detail screen, surfaced here so the list
+            // doesn't require opening every job to see who's on it.
+            'assignments' => JobAssignmentResource::collection(
+                $this->whenLoaded('activeAssignments'),
+            )->resolve(),
             'options' => [
                 'createEstimate' => $this->create_estimate,
                 'assignTeam' => $this->assign_team,

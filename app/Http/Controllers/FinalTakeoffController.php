@@ -46,6 +46,7 @@ class FinalTakeoffController extends Controller
         $sort = $filters['sort'] ?? 'count-desc';
 
         $symbols = $result->finalSymbols()
+            ->where('count', '>', 0)
             ->reorder()
             ->search($filters['search'] ?? null)
             ->source($source)
@@ -89,8 +90,8 @@ class FinalTakeoffController extends Controller
                 'sort' => $sort,
             ],
             'totals' => [
-                'symbolTypes' => $result->finalSymbols()->count(),
-                'items' => (int) $result->finalSymbols()->sum('count'),
+                'symbolTypes' => $result->finalSymbols()->where('count', '>', 0)->count(),
+                'items' => (int) $result->finalSymbols()->where('count', '>', 0)->sum('count'),
                 'approved' => data_get($payload, 'metadata.approved', 0),
                 'rejected' => data_get($payload, 'metadata.rejected', 0),
                 'modified' => data_get($payload, 'metadata.modified', 0),
@@ -157,7 +158,7 @@ class FinalTakeoffController extends Controller
         $this->authorize('view', $result);
         abort_unless(in_array($format, ['json', 'csv', 'xlsx'], true), 404);
 
-        $symbols = $result->finalSymbols()->get();
+        $symbols = $result->finalSymbols()->where('count', '>', 0)->get();
         $slug = str($result->project->name)->slug()->value();
 
         if ($format === 'json') {
@@ -239,10 +240,12 @@ class FinalTakeoffController extends Controller
             'name' => ['nullable', 'string', 'max:160'],
             'client' => ['nullable', 'string', 'max:160'],
             'location' => ['nullable', 'string', 'max:200'],
+            'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
             'foreman_id' => ['nullable', 'integer', 'exists:foremen,id'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'budget' => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
         ]);
 
         try {
@@ -285,8 +288,8 @@ class FinalTakeoffController extends Controller
             ->route('reviews.show', $result)
             ->with(
                 'warning',
-                "Finalize the review before creating {$what} — it is built from the reviewed "
-                .'counts in final_response.json.'
+                "Please finish reviewing the drawing before creating {$what} — it's built "
+                .'from what you approve there.'
             );
     }
 

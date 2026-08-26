@@ -23,9 +23,10 @@ export function IconListRow({ row, index = 0, className }: IconListRowProps) {
   return (
     <motion.li
       initial={{ opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
+      animate={{ opacity: 1, y: 0 }}
+      // Capped so a long, scrollable list doesn't queue up seconds of delay
+      // for the rows further down — only the first screenful staggers in.
+      transition={{ duration: 0.3, delay: Math.min(index, 8) * 0.05 }}
       className={cn(
         'flex items-start gap-4 rounded-panel border border-hairline bg-white/4 p-4',
         'transition-colors duration-200 hover:border-brand/35 hover:bg-white/12',

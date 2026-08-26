@@ -37,7 +37,7 @@ class FinalJsonBuilder
 
         if ($approved->isEmpty()) {
             throw new RuntimeException(
-                'At least one symbol must be approved before the final JSON can be generated.'
+                'Please approve at least one symbol before finishing this review.'
             );
         }
 
@@ -242,10 +242,18 @@ class FinalJsonBuilder
         $position = 0;
 
         foreach ($groups as $name => $group) {
+            $count = (int) $group->sum('final_count');
+
+            // A zero final count means nothing to build — it has no place on the
+            // signed-off takeoff, the BOQ, or an estimate line.
+            if ($count <= 0) {
+                continue;
+            }
+
             $result->finalSymbols()->create([
                 'project_id' => $result->project_id,
                 'name' => $name,
-                'count' => (int) $group->sum('final_count'),
+                'count' => $count,
                 'confidence' => round((float) $group->avg('confidence'), 4),
                 'source_template' => $group->contains->source_template,
                 'source_vector' => $group->contains->source_vector,

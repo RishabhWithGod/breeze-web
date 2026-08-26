@@ -49,3 +49,14 @@ export interface BreezeBucksTeamMember {
   readonly name: string
   readonly role: string
 }
+
+export interface BreezeBucksAwardRow {
+  readonly id: number
+  readonly date: string
+  readonly amount: number
+  readonly reason: string
+  readonly recipient: {
+    readonly name: string
+    readonly role: string
+  }
+}

@@ -106,7 +106,7 @@ class JobDetailResource extends JsonResource
                 'reviewed' => (bool) data_get($this->metadata, 'reviewed', true),
                 'drawingName' => data_get($this->metadata, 'drawing_name')
                     ?? data_get($this->metadata, 'drawing.name'),
-                'projectName' => data_get($this->metadata, 'project_name'),
+                'projectName' => $this->project?->name,
                 'engineVersion' => data_get($this->metadata, 'engine_version'),
                 'engineRunId' => data_get($this->metadata, 'engine_run_id'),
                 'processingTime' => data_get($this->metadata, 'processing_time'),

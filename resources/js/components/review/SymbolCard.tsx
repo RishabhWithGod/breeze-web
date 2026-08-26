@@ -123,12 +123,12 @@ export function SymbolCard({
       )}
     >
       {/* Symbol image */}
-      <div className="relative flex h-36 items-center justify-center border-b border-hairline bg-white/5">
+      <div className="relative flex h-28 items-center justify-center border-b border-hairline bg-white/5">
         {row.cropUrl && !imageFailed ? (
           <img
             src={row.cropUrl}
             alt={row.name}
-            className="max-h-32 max-w-full object-contain"
+            className="max-h-24 max-w-full object-contain"
             onError={() => {
               if (import.meta.env.DEV) {
                 console.error(
@@ -177,10 +177,10 @@ export function SymbolCard({
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-4 p-5">
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
         {/* Symbol name */}
         <div className="min-w-0">
-          <h3 className="truncate text-lg font-semibold text-white" title={row.name}>
+          <h3 className="truncate text-md font-semibold text-white" title={row.name}>
             {row.name}
           </h3>
           <div className="mt-1.5 flex items-center gap-2">
@@ -229,7 +229,7 @@ export function SymbolCard({
                   commitCount()
                 }
               }}
-              className="h-10 py-0 text-center text-base font-semibold"
+              className="h-9 py-0 text-center text-sm font-semibold"
             />
             <IconButton
               variant="secondary"

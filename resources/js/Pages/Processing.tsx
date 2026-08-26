@@ -292,11 +292,9 @@ export default function Processing({
                   : 'The drawing is with the AI service. Progress updates as it reports back — you may navigate away.'}
           </p>
 
-          {(run.runId || run.processingTime) && (
+          {run.processingTime && (
             <p className="mt-2 font-mono text-2xs text-white/65">
-              {run.runId ? `engine run ${run.runId}` : ''}
-              {run.runId && run.processingTime ? ' · ' : ''}
-              {run.processingTime ? `${run.processingTime.toFixed(1)}s` : ''}
+              {run.processingTime.toFixed(1)}s
             </p>
           )}
 
@@ -329,18 +327,6 @@ export default function Processing({
             )}
           </div>
 
-          {(run.warnings?.length ?? 0) > 0 && (
-            <Alert tone="warning" className="mt-8 text-left" title="Engine warnings">
-              <ul className="mt-1 flex flex-col gap-1">
-                {run.warnings?.map((warning) => (
-                  <li key={warning} className="text-sm">
-                    {warning}
-                  </li>
-                ))}
-              </ul>
-            </Alert>
-          )}
-
           {/*
             A queued run that nothing has claimed means no queue worker is running.
             Said plainly, with the one action that fixes it, rather than spinning.
@@ -349,12 +335,12 @@ export default function Processing({
             <Alert
               tone="warning"
               className="mt-8 text-left"
-              title="Waiting for a queue worker"
+              title="This is taking longer than usual"
             >
               <p>
-                The drawing is stored and the analysis is queued, but no worker has
-                picked it up. Start one with <code>php artisan queue:work</code> (or{' '}
-                <code>composer run dev</code>), then this screen carries on by itself.
+                Your drawing is saved and queued for analysis, but it hasn't started yet.
+                This screen will update automatically once it does — try again if it
+                doesn't move shortly.
               </p>
               <Button
                 variant="secondary"
@@ -370,8 +356,9 @@ export default function Processing({
 
           {isRunning && !run.awaitingWorker && (
             <Alert tone="info" className="mt-8 text-left">
-              The engine is identifying symbols, circuits and connections. Cancelling
-              stops the run — the drawing stays uploaded so it can be resubmitted.
+              We're identifying symbols, circuits and connections in your drawing.
+              Cancelling stops the analysis — the drawing stays uploaded so it can be
+              resubmitted.
             </Alert>
           )}
         </Card>

@@ -88,7 +88,7 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
   const [lastDeletedId, setLastDeletedId] = useState<number | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
 
-  const filterBar = useDisclosure(true)
+  const filterBar = useDisclosure()
   const deleteDialog = useDisclosure()
   const debouncedQuery = useDebouncedValue(query)
 

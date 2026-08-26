@@ -36,6 +36,7 @@ class Job extends Model
 
     /** Sort keys accepted by `scopeSortedForScheduling`. */
     public const SCHEDULING_SORTS = [
+        'start-desc',
         'priority-desc',
         'priority-asc',
         'hours-desc',
@@ -289,13 +290,16 @@ class Job extends Model
         };
 
         return match ($sort) {
+            'priority-desc' => $query->orderByRaw($rank)->orderByDesc('id'),
             'priority-asc' => $query->orderByRaw("{$rank} desc")->orderByDesc('id'),
             'hours-desc' => $query->orderByRaw('estimated_hours is null')->orderByDesc('estimated_hours'),
             'hours-asc' => $query->orderByRaw('estimated_hours is null')->orderBy('estimated_hours'),
             'value-desc' => $query->orderByRaw('budget is null')->orderByDesc('budget'),
             'created-desc' => $query->latest('created_at')->orderByDesc('id'),
             'name-asc' => $query->orderBy('name'),
-            default => $query->orderByRaw($rank)->orderByDesc('id'),
+            // Newest work date first — a job with no start date yet sorts last
+            // rather than first, so it doesn't outrank dated work.
+            default => $query->orderByRaw('start_date is null')->orderByDesc('start_date')->orderByDesc('id'),
         };
     }
 

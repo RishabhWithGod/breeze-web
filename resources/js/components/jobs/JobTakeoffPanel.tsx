@@ -8,17 +8,7 @@ import {
 } from 'lucide-react'
 import { Alert, Badge, ButtonLink, Card, SectionHeading, Table } from '@/components/common'
 import type { JobBoqLine, JobTakeoff, TableColumn } from '@/types'
-import { TONE_DOT_CLASS, cn, formatCurrency, formatNumber } from '@/utils'
-
-/** The engine's words for a stage, mapped onto the design system's tones. */
-const STATUS_TONE: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
-  ok: 'success',
-  parsed: 'success',
-  partial: 'warning',
-  fallback: 'warning',
-  failed: 'danger',
-  error: 'danger',
-}
+import { formatCurrency, formatNumber } from '@/utils'
 
 export interface JobTakeoffPanelProps {
   takeoff: JobTakeoff
@@ -74,10 +64,8 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
         Until the review is signed off they are the engine's, and they will move.
       */}
       {takeoff.reviewed === false && (
-        <Alert tone="warning" title="These counts are not reviewed yet">
-          The job and its estimate were raised from the AI response so the work is
-          visible straight away. Signing off the review updates these same records
-          with the reviewed counts.
+        <Alert tone="warning" title="This job's quantities haven't been reviewed yet">
+          Please review the drawing to confirm these counts before finalizing this job.
           <ButtonLink href={takeoff.reviewUrl} size="sm" className="mt-3" leftIcon={Sparkles}>
             Review the symbols
           </ButtonLink>
@@ -133,7 +121,7 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
                 size="sm"
                 leftIcon={FileJson}
               >
-                final_response.json
+                Final data (JSON)
               </ButtonLink>
               <ButtonLink
                 href={takeoff.reviewUrl}
@@ -170,46 +158,6 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
             </div>
           ))}
         </div>
-
-        {/* How the engine fared on this drawing, as it reported it. */}
-        {takeoff.pipelineStatus && takeoff.pipelineStatus.length > 0 && (
-          <div className="mt-4">
-            <p className="mb-2 text-sm font-medium text-white/90">AI summary</p>
-            <ul className="flex flex-wrap gap-2">
-              {takeoff.pipelineStatus.map((stage) => (
-                <li
-                  key={stage.stage}
-                  className="flex items-center gap-2 rounded-panel bg-white/5 px-3 py-1.5"
-                >
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'size-2 rounded-full',
-                      TONE_DOT_CLASS[STATUS_TONE[stage.status.toLowerCase()] ?? 'neutral'],
-                    )}
-                  />
-                  <span className="text-sm text-white capitalize">{stage.stage}</span>
-                  <span className="text-2xs text-white/75 uppercase">{stage.status}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-2xs text-white/70">
-              {takeoff.engineVersion ? `Engine ${takeoff.engineVersion}` : 'AI engine'}
-              {takeoff.engineRunId ? ` · run ${takeoff.engineRunId}` : ''}
-              {takeoff.processingTime ? ` · analysed in ${takeoff.processingTime.toFixed(1)}s` : ''}
-            </p>
-          </div>
-        )}
-
-        {(takeoff.warnings?.length ?? 0) > 0 && (
-          <ul className="mt-4 flex flex-col gap-1 rounded-panel bg-status-warning/10 px-4 py-3">
-            {takeoff.warnings?.map((warning) => (
-              <li key={warning} className="text-2xs text-status-warning">
-                {warning}
-              </li>
-            ))}
-          </ul>
-        )}
 
         <div className="mt-4">
           <p className="mb-2 text-sm font-medium text-white/90">

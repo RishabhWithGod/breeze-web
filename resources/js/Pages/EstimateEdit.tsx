@@ -271,7 +271,7 @@ export default function EstimateEdit({
 
           {totals.engineGrandTotal > 0 && (
             <p className="mt-4 border-t border-hairline pt-4 text-sm text-white/80">
-              The AI engine priced {totals.engineLineCount} lines at{' '}
+              {totals.engineLineCount} lines were priced automatically at{' '}
               {formatCurrency(totals.engineGrandTotal, 2)} before review.
             </p>
           )}

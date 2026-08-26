@@ -1,6 +1,15 @@
+import { useMemo } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
-import { ArrowLeft, Building2, CalendarDays, FileText, Save, Wallet } from 'lucide-react'
+import {
+  ArrowLeft,
+  Building2,
+  CalendarDays,
+  FileCheck2,
+  FileText,
+  Save,
+  Wallet,
+} from 'lucide-react'
 import {
   Alert,
   Button,
@@ -13,7 +22,7 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ESTIMATE_STATUS_OPTIONS, ROUTES } from '@/constants'
-import type { EstimateDraft } from '@/types'
+import type { EstimateDraft, TakeoffProjectOption, TakeoffUploadOption } from '@/types'
 import {
   ESTIMATE_STATUS_LABEL,
   ESTIMATE_STATUS_TONE,
@@ -26,6 +35,10 @@ export interface EstimateCreateProps {
   nextNumber: string
   /** Existing clients, offered as a datalist so spelling stays consistent. */
   clients: readonly string[]
+  /** Projects already run through AI Takeoff, offered to link this estimate to. */
+  projects: readonly TakeoffProjectOption[]
+  /** Their drawings — narrowed to the picked project once one is chosen. */
+  uploads: readonly TakeoffUploadOption[]
 }
 
 /**
@@ -36,7 +49,12 @@ export interface EstimateCreateProps {
  * never restates the server's rules. On success Laravel redirects to the
  * estimates list with the new row already in place.
  */
-export default function EstimateCreate({ nextNumber, clients }: EstimateCreateProps) {
+export default function EstimateCreate({
+  nextNumber,
+  clients,
+  projects,
+  uploads,
+}: EstimateCreateProps) {
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<EstimateDraft>({
       client: '',
@@ -44,6 +62,8 @@ export default function EstimateCreate({ nextNumber, clients }: EstimateCreatePr
       issued_on: '',
       amount: '',
       status: 'draft',
+      project_id: '',
+      upload_id: '',
     })
 
   /**
@@ -66,6 +86,40 @@ export default function EstimateCreate({ nextNumber, clients }: EstimateCreatePr
 
   const amount = Number(data.amount)
   const hasAmount = data.amount !== '' && Number.isFinite(amount)
+
+  const projectOptions = [
+    { label: 'No linked project', value: '' },
+    ...projects.map((option) => ({
+      label: option.client ? `${option.name} — ${option.client}` : option.name,
+      value: String(option.id),
+    })),
+  ]
+
+  const uploadsForProject = useMemo(
+    () => uploads.filter((upload) => String(upload.projectId) === data.project_id),
+    [uploads, data.project_id],
+  )
+
+  const uploadOptions = [
+    { label: 'No linked drawing', value: '' },
+    ...uploadsForProject.map((upload) => ({ label: upload.name, value: String(upload.id) })),
+  ]
+
+  const linkedEstimate = uploadsForProject.find(
+    (upload) => String(upload.id) === data.upload_id,
+  )?.estimate
+
+  /** Selecting a project fills in the free-text fields rather than duplicating entry. */
+  const selectProject = (projectId: string) => {
+    const project = projects.find((option) => String(option.id) === projectId)
+    setData((current) => ({
+      ...current,
+      project_id: projectId,
+      upload_id: '',
+      project: project?.name ?? current.project,
+      client: project?.client ?? current.client,
+    }))
+  }
 
   return (
     <PageTransition>
@@ -129,6 +183,48 @@ export default function EstimateCreate({ nextNumber, clients }: EstimateCreatePr
               />
 
               <div className="grid gap-5 sm:grid-cols-2">
+                <SelectField
+                  id="estimate-linked-project"
+                  label="Link to AI Takeoff project (optional)"
+                  options={projectOptions}
+                  value={data.project_id}
+                  onChange={(event) => selectProject(event.target.value)}
+                  {...(errors.project_id ? { error: errors.project_id } : {})}
+                />
+                <SelectField
+                  id="estimate-linked-upload"
+                  label="Drawing"
+                  options={uploadOptions}
+                  value={data.upload_id}
+                  disabled={!data.project_id}
+                  onChange={(event) => update('upload_id', event.target.value)}
+                  {...(errors.upload_id ? { error: errors.upload_id } : {})}
+                />
+              </div>
+
+              {linkedEstimate && (
+                <Alert
+                  tone="info"
+                  icon={FileCheck2}
+                  title="This drawing already has an estimate"
+                >
+                  <p>
+                    Estimate {linkedEstimate.number} —{' '}
+                    {formatCurrency(linkedEstimate.amount, 2)}. Edit that one instead of
+                    creating a duplicate.
+                  </p>
+                  <ButtonLink
+                    href={linkedEstimate.editUrl}
+                    variant="secondary"
+                    size="sm"
+                    className="mt-3"
+                  >
+                    Edit estimate
+                  </ButtonLink>
+                </Alert>
+              )}
+
+              <div className="grid gap-5 sm:grid-cols-2">
                 <TextInput
                   id="estimate-date"
                   type="date"
@@ -165,9 +261,15 @@ export default function EstimateCreate({ nextNumber, clients }: EstimateCreatePr
             </div>
 
             <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-hairline pt-6">
-              <Button type="submit" leftIcon={Save} isLoading={processing}>
-                Create Estimate
-              </Button>
+              {linkedEstimate ? (
+                <ButtonLink href={linkedEstimate.editUrl} leftIcon={Save}>
+                  Edit {linkedEstimate.number} instead
+                </ButtonLink>
+              ) : (
+                <Button type="submit" leftIcon={Save} isLoading={processing}>
+                  Create Estimate
+                </Button>
+              )}
               <ButtonLink href={ROUTES.estimates} variant="secondary">
                 Cancel
               </ButtonLink>

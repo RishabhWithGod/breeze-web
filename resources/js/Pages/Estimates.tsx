@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Plus, SearchX, SlidersHorizontal, Undo2 } from 'lucide-react'
+import { SearchX, SlidersHorizontal, Undo2 } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -259,15 +259,6 @@ export default function Estimates({
       <section className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
         <header className="flex flex-col gap-4 border-b border-hairline grad-ocean-soft px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <h1 className="text-2xl font-bold text-white sm:text-3xl">Estimates</h1>
-
-          <ButtonLink
-            href={ROUTES.estimateCreate}
-            variant="dark"
-            leftIcon={Plus}
-            className="lg:shrink-0"
-          >
-            Create Estimate
-          </ButtonLink>
         </header>
 
         <div className="p-5 sm:p-6">

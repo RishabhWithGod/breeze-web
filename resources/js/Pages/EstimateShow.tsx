@@ -1,21 +1,18 @@
-import { Head, router, usePage } from '@inertiajs/react'
+import { Head, usePage } from '@inertiajs/react'
 import {
+  ArrowRight,
   Briefcase,
-  FileSearch,
-  FileText,
   PencilLine,
-  Printer,
   Sparkles,
-  Table2,
 } from 'lucide-react'
 import {
   Alert,
   Badge,
-  Button,
   ButtonLink,
   Card,
   SectionHeading,
   StatusChip,
+  WorkflowProgress,
 } from '@/components/common'
 import { EstimateItemsTable } from '@/components/estimates'
 import {
@@ -25,11 +22,9 @@ import {
 } from '@/components/finals'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ApprovalHistoryPanel } from '@/components/review'
-import { JobDocumentsPanel } from '@/components/documents'
 import { ROUTES, routeTo } from '@/constants'
 import type {
   ApprovalHistoryEntry,
-  Document,
   EquipmentRow,
   EstimateItemRow,
   EstimateStatus,
@@ -83,8 +78,6 @@ export interface EstimateShowProps {
     panelSchedules: readonly PanelScheduleRow[]
   }
   history: readonly ApprovalHistoryEntry[]
-  documents: readonly Document[]
-  documentsCount: number
 }
 
 /**
@@ -101,8 +94,6 @@ export default function EstimateShow({
   categories,
   drawingData,
   history,
-  documents,
-  documentsCount,
 }: EstimateShowProps) {
   const { flash } = usePage<SharedPageProps>().props
 
@@ -128,57 +119,16 @@ export default function EstimateShow({
           { label: estimate.number },
         ]}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <ButtonLink href={estimate.editUrl} size="sm" leftIcon={PencilLine}>
-              Edit
-            </ButtonLink>
-            {estimate.drawingUrl && (
-              <ButtonLink
-                href={estimate.drawingUrl}
-                variant="secondary"
-                size="sm"
-                leftIcon={FileSearch}
-              >
-                PDF details
-              </ButtonLink>
-            )}
-            {estimate.aiResultId && (
-              <ButtonLink
-                href={routeTo.finalSymbols(estimate.aiResultId)}
-                variant="ghost"
-                size="sm"
-                leftIcon={Table2}
-              >
-                Final symbols
-              </ButtonLink>
-            )}
-            {estimate.jobId && (
-              <ButtonLink
-                href={routeTo.job(estimate.jobId)}
-                variant="ghost"
-                size="sm"
-                leftIcon={Briefcase}
-              >
-                {estimate.jobName}
-              </ButtonLink>
-            )}
+          estimate.jobId ? (
             <ButtonLink
-              href={routeTo.estimateCsv(estimate.id)}
-              variant="secondary"
+              href={routeTo.job(estimate.jobId)}
+              variant="ghost"
               size="sm"
-              leftIcon={FileText}
+              leftIcon={Briefcase}
             >
-              CSV
+              {estimate.jobName}
             </ButtonLink>
-            <ButtonLink
-              href={routeTo.estimatePdf(estimate.id)}
-              variant="secondary"
-              size="sm"
-              leftIcon={Printer}
-            >
-              PDF
-            </ButtonLink>
-          </div>
+          ) : undefined
         }
       />
 
@@ -190,6 +140,34 @@ export default function EstimateShow({
       {flash.success && (
         <Alert tone="success" className="mb-4">
           {flash.success}
+        </Alert>
+      )}
+
+      {/* Where this takeoff is, carried over from the review summary screen so
+          the roadmap travels with it instead of resetting between pages. */}
+      {estimate.aiResultId && (
+        <WorkflowProgress
+          current={estimate.jobId ? 'schedule' : 'job'}
+          done={['analysis', 'review', 'estimate', ...(estimate.jobId ? (['job'] as const) : [])]}
+          className="mb-6"
+        />
+      )}
+
+      {/* The next step after a takeoff's estimate — raising the job, back on
+          the review summary screen — until one exists. */}
+      {estimate.aiResultId && !estimate.jobId && (
+        <Alert tone="info" className="mb-4" title="Estimate ready">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>Check the numbers above, then continue to create the job.</span>
+            <ButtonLink
+              href={routeTo.finalSymbols(estimate.aiResultId)}
+              size="sm"
+              className="ml-auto"
+              rightIcon={ArrowRight}
+            >
+              Continue
+            </ButtonLink>
+          </div>
         </Alert>
       )}
 
@@ -335,33 +313,15 @@ export default function EstimateShow({
                 {totals.laborHours > 0 && <span>{totals.laborHours} labor hours · </span>}
                 raised {formatDate(estimate.createdAt)}
               </p>
-              {/* What the engine priced before review, for comparison. */}
+              {/* What was priced automatically before review, for comparison. */}
               {totals.engineGrandTotal > 0 && (
                 <p>
-                  AI engine priced {totals.engineLineCount} lines at{' '}
+                  {totals.engineLineCount} lines were priced automatically at{' '}
                   {formatCurrency(totals.engineGrandTotal, 2)} before review
                 </p>
               )}
             </div>
           </Card>
-
-          {!estimate.jobId && estimate.aiResultId && (
-            <Card padding="lg">
-              <SectionHeading
-                as="h3"
-                title="No job yet"
-                subtitle="Create the job this estimate belongs to"
-              />
-              <Button
-                leftIcon={Briefcase}
-                onClick={() =>
-                  router.post(routeTo.finalCreateJob(estimate.aiResultId as number))
-                }
-              >
-                Create job from the takeoff
-              </Button>
-            </Card>
-          )}
 
           {history.length > 0 && (
             <Card padding="lg">
@@ -369,16 +329,6 @@ export default function EstimateShow({
               <ApprovalHistoryPanel entries={history} />
             </Card>
           )}
-
-          <Card padding="lg">
-            <SectionHeading as="h3" title="Documents" subtitle={`${documentsCount} filed against this estimate`} />
-            <JobDocumentsPanel
-              viewAllHref={`${ROUTES.documents}?estimate_id=${estimate.id}`}
-              documents={documents}
-              totalCount={documentsCount}
-              emptyLabel="No documents filed against this estimate yet."
-            />
-          </Card>
         </div>
       </div>
 

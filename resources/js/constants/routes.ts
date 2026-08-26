@@ -73,6 +73,7 @@ export const ROUTES = {
   notifications: '/notifications',
   notificationsReadAll: '/notifications/read-all',
 
+  profile: '/profile',
   settings: '/settings',
   security: '/security',
   twoFactorChallenge: '/two-factor-challenge',

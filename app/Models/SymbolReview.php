@@ -182,6 +182,22 @@ class SymbolReview extends Model
         };
     }
 
+    /**
+     * Hides an *approved* card with nothing left to count — a zero
+     * `final_count` on an approved row looks like a real, counted item but
+     * carries nothing, which is just clutter. A `pending` row stays visible
+     * regardless of count, since it hasn't been given one yet and a reviewer
+     * still needs to see it to act on it; a `rejected` row stays visible too
+     * — zero is the expected, meaningful count for something turned down,
+     * not a stray leftover.
+     */
+    public function scopeVisible(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $inner) => $inner
+            ->where('status', '!=', self::STATUS_APPROVED)
+            ->orWhere('final_count', '>', 0));
+    }
+
     public function scopeSearch(Builder $query, ?string $term): Builder
     {
         if (blank($term)) {

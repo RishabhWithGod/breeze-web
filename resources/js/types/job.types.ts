@@ -35,6 +35,8 @@ export interface Job {
   readonly isArchived: boolean
   readonly teamCount: number
   readonly estimateCount: number
+  /** Who's currently staffed, and in what role — same shape as the detail screen. */
+  readonly assignments: readonly JobAssignmentRow[]
   readonly options: {
     readonly createEstimate: boolean
     readonly assignTeam: boolean
@@ -178,4 +180,7 @@ export interface JobDraft {
   assign_team: boolean
   notify_client: boolean
   save_as_draft: boolean
+  /** Links this job back to a drawing already run through AI Takeoff. */
+  project_id: string
+  upload_id: string
 }

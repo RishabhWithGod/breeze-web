@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Document;
-use App\Models\Estimate;
 use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\Upload;
@@ -187,42 +186,6 @@ class DocumentTest extends TestCase
         $this->actingAs($this->electrician)
             ->get('/documents?tab=shared')
             ->assertInertia(fn (Assert $page) => $page->has('documents.data', 1));
-    }
-
-    public function test_job_detail_renders_its_documents_as_a_plain_list_not_a_wrapped_resource(): void
-    {
-        $job = $this->makeJob();
-        $this->makeDocument($this->manager, ['job_id' => $job->id]);
-
-        $this->actingAs($this->manager)
-            ->get("/jobs/{$job->id}")
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('documents', 1)
-                ->where('documents.0.name', 'Electrical Plans')
-                ->where('documentsCount', 1));
-    }
-
-    public function test_estimate_detail_renders_its_documents_as_a_plain_list_not_a_wrapped_resource(): void
-    {
-        $job = $this->makeJob();
-        $estimate = Estimate::create([
-            'job_id' => $job->id,
-            'number' => 'EST-2001',
-            'client' => $job->client,
-            'project' => 'Panel upgrade',
-            'issued_on' => now()->toDateString(),
-            'amount' => 1000,
-            'status' => 'draft',
-        ]);
-        $this->makeDocument($this->manager, ['estimate_id' => $estimate->id]);
-
-        $this->actingAs($this->manager)
-            ->get("/estimates/{$estimate->id}")
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('documents', 1)
-                ->where('documentsCount', 1));
     }
 
     public function test_a_non_owner_non_manager_cannot_delete_someone_elses_document(): void

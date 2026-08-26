@@ -6,7 +6,6 @@ import { cn } from '@/utils'
 import { Logo } from './Logo'
 import { NotificationsMenu } from './NotificationsMenu'
 import { ProfileMenu } from './ProfileMenu'
-import { ThemeToggle } from './ThemeToggle'
 import { TimerIndicator } from './TimerIndicator'
 
 /**
@@ -69,7 +68,6 @@ export function Navbar() {
           </button>
 
           <TimerIndicator />
-          <ThemeToggle />
           <NotificationsMenu />
           <ProfileMenu />
         </div>

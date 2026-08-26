@@ -9,6 +9,7 @@ use App\Models\AiResult;
 use App\Models\SymbolReview;
 use App\Services\Ai\ArtefactStore;
 use App\Services\Takeoff\CompleteReview;
+use App\Services\Takeoff\EstimateBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response as ResponseFactory;
@@ -50,6 +51,7 @@ class AiReviewController extends Controller
         $result->load(['project', 'upload', 'aiJob']);
 
         $reviews = $result->reviews()
+            ->visible()
             ->status($status)
             ->search($filters['search'] ?? null)
             ->when($pageNo, fn ($query) => $query->where('page', $pageNo))
@@ -89,6 +91,7 @@ class AiReviewController extends Controller
             'symbols' => SymbolReviewResource::collection($reviews),
             'tally' => $result->reviewTally(),
             'pages' => $result->reviews()
+                ->visible()
                 /*
                  * `reviews()` orders by position and id for the grid. Those columns
                  * are meaningless once the rows are collapsed to one per page, and
@@ -117,40 +120,49 @@ class AiReviewController extends Controller
     }
 
     /**
-     * Signs off the review and completes the handoff.
+     * Signs off the review: builds final_response.json, the final symbol table and
+     * the bill of quantities, in one transaction — then raises the estimate
+     * straight away, so the reviewer lands on it rather than an empty summary.
      *
-     * One action, one transaction: final_response.json, the final symbol table, the
-     * bill of quantities, the job, its estimate, the reviewer assignment and the
-     * audit trail. Landing on the job means the reviewer sees the thing their work
-     * produced rather than another button.
+     * The job and any assignment are still deliberately left for later — raised
+     * explicitly, with whatever details the reviewer fills in, from the review
+     * summary screen the estimate's "Continue" button leads to.
      */
-    public function finalise(Request $request, AiResult $result, CompleteReview $complete): RedirectResponse
-    {
+    public function finalise(
+        Request $request,
+        AiResult $result,
+        CompleteReview $complete,
+        EstimateBuilder $estimateBuilder,
+    ): RedirectResponse {
         $this->authorize('finalise', $result);
 
         try {
-            $job = $complete->handle($result, $request->user());
+            $complete->handle($result, $request->user());
         } catch (RuntimeException $e) {
-            // Nothing approved yet, or nothing to price: the reviewer's to fix.
+            // Nothing approved yet: the reviewer's to fix.
             return back()->with('warning', $e->getMessage());
         } catch (Throwable $e) {
             // Already logged with its exception class and location; the takeoff is
             // untouched because the transaction rolled back.
             return back()->with(
                 'warning',
-                'The review could not be completed, so nothing was created: '.$e->getMessage()
+                'The review could not be completed: '.$e->getMessage()
             );
         }
 
-        $estimate = $result->fresh()->estimate;
+        try {
+            $estimate = $estimateBuilder->fromFinalJson($result, $request->user());
 
-        return redirect()
-            ->route('jobs.show', $job)
-            ->with('success', sprintf(
-                'Review signed off. “%s” and estimate %s were created from final_response.json.',
-                $job->name,
-                $estimate?->number ?? 'n/a',
-            ));
+            return redirect()
+                ->route('estimates.show', $estimate)
+                ->with('success', "Review signed off. Estimate {$estimate->number} was generated from it.");
+        } catch (RuntimeException) {
+            // Nothing priceable (e.g. every approved symbol counted to zero) —
+            // fall back to the review summary rather than blocking sign-off.
+            return redirect()
+                ->route('finals.show', $result)
+                ->with('success', 'Review signed off. Create the job when you’re ready.');
+        }
     }
 
     /** Re-opens a finalised takeoff for further review. */

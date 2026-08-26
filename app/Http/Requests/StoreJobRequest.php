@@ -32,6 +32,9 @@ class StoreJobRequest extends FormRequest
             'notify_client' => ['boolean'],
             /** "Save as Draft" instead of "Create Job". */
             'save_as_draft' => ['boolean'],
+            /** Links this job back to a drawing already run through AI Takeoff. */
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'upload_id' => ['nullable', 'integer', 'exists:uploads,id'],
         ];
     }
 

@@ -21,6 +21,7 @@ export type SchedulingTypeFilter = (typeof SCHEDULING_TYPE_FILTERS)[number]['val
 
 /** Mirrors Job::SCHEDULING_SORTS. */
 export const SCHEDULING_SORT_OPTIONS: readonly SelectOption[] = [
+  { label: 'Date (Latest First)', value: 'start-desc' },
   { label: 'Priority (High to Low)', value: 'priority-desc' },
   { label: 'Priority (Low to High)', value: 'priority-asc' },
   { label: 'Estimated Hours (Most)', value: 'hours-desc' },
@@ -30,7 +31,7 @@ export const SCHEDULING_SORT_OPTIONS: readonly SelectOption[] = [
   { label: 'Name (A–Z)', value: 'name-asc' },
 ]
 
-export type SchedulingSort = 'priority-desc' | 'priority-asc' | 'hours-desc' | 'hours-asc' | 'value-desc' | 'created-desc' | 'name-asc'
+export type SchedulingSort = 'start-desc' | 'priority-desc' | 'priority-asc' | 'hours-desc' | 'hours-asc' | 'value-desc' | 'created-desc' | 'name-asc'
 
 /** Long form, used on the queue rows: "High Priority". */
 export const PRIORITY_LABEL: Record<JobPriority, string> = {

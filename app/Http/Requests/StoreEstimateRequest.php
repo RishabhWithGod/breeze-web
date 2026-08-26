@@ -17,6 +17,9 @@ class StoreEstimateRequest extends FormRequest
             'issued_on' => ['required', 'date'],
             'amount' => ['required', 'numeric', 'min:0', 'max:99999999'],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
+            /** Links this estimate back to a drawing already run through AI Takeoff. */
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'upload_id' => ['nullable', 'integer', 'exists:uploads,id'],
         ];
     }
 

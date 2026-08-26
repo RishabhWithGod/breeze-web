@@ -23,4 +23,7 @@ export interface EstimateDraft {
   issued_on: string
   amount: string
   status: EstimateStatus
+  /** Links this estimate back to a drawing already run through AI Takeoff. */
+  project_id: string
+  upload_id: string
 }

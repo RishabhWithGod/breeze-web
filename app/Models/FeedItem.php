@@ -11,8 +11,6 @@ class FeedItem extends Model
 
     public const DASHBOARD_NOTIFICATIONS = 'dashboard_notifications';
 
-    public const DASHBOARD_SCHEDULE = 'dashboard_schedule';
-
     public const HISTORY_ACTIVITY = 'history_activity';
 
     protected $fillable = ['scope', 'segments', 'detail', 'meta', 'icon', 'tile', 'position'];
