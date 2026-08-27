@@ -171,24 +171,14 @@ export default function ProjectCreate({
           />
 
           <div className="space-y-6">
-            <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-              <TextInput
-                id="project-name"
-                label="Project Name*"
-                placeholder="e.g. Harborview Data Hall"
-                value={data.name}
-                onChange={(event) => update('name', event.target.value)}
-                {...(errors.name ? { error: errors.name } : {})}
-              />
-              <TextInput
-                id="project-code"
-                label="Project Number"
-                placeholder="e.g. PRJ-2041"
-                value={data.code}
-                onChange={(event) => update('code', event.target.value)}
-                {...(errors.code ? { error: errors.code } : {})}
-              />
-            </div>
+            <TextInput
+              id="project-name"
+              label="Project Name*"
+              placeholder="e.g. Harborview Data Hall"
+              value={data.name}
+              onChange={(event) => update('name', event.target.value)}
+              {...(errors.name ? { error: errors.name } : {})}
+            />
 
             <div className="grid gap-6 lg:grid-cols-2">
               {/*

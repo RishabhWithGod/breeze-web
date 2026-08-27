@@ -176,9 +176,6 @@ export interface JobDraft {
   end_date: string
   budget: string
   foreman_id: string
-  create_estimate: boolean
-  assign_team: boolean
-  notify_client: boolean
   save_as_draft: boolean
   /** Links this job back to a drawing already run through AI Takeoff. */
   project_id: string

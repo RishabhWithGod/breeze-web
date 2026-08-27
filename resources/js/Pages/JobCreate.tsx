@@ -6,7 +6,6 @@ import {
   Alert,
   Button,
   ButtonLink,
-  Checkbox,
   RadioGroup,
   SelectField,
   TextArea,
@@ -54,9 +53,6 @@ export default function JobCreate({ foremen, clients, projects, uploads }: JobCr
       end_date: '',
       budget: '',
       foreman_id: '',
-      create_estimate: false,
-      assign_team: false,
-      notify_client: false,
       save_as_draft: false,
       project_id: '',
       upload_id: '',
@@ -148,6 +144,72 @@ export default function JobCreate({ foremen, clients, projects, uploads }: JobCr
             noValidate
             className="space-y-6"
           >
+            {/* Picked first — location, schedule and job type below all carry
+                over from the linked project the moment it's chosen (and only
+                fill a field that's still blank), so this has to come before
+                them, not after. */}
+            <fieldset>
+              <legend className="mb-3 text-md font-medium text-white">
+                Link to AI Takeoff (optional)
+              </legend>
+              <div className="grid gap-6 lg:grid-cols-2">
+                <SelectField
+                  id="job-project"
+                  label="Project"
+                  options={projectOptions}
+                  value={data.project_id}
+                  onChange={(event) => {
+                    const projectId = event.target.value
+                    update('project_id', projectId)
+                    update('upload_id', '')
+
+                    // Carry over the project's own location/date/type — but
+                    // never overwrite a field the user has already filled in.
+                    const project = projects.find((p) => String(p.id) === projectId)
+                    if (project) {
+                      if (!data.location && project.location) {
+                        update('location', project.location)
+                      }
+                      if (!data.start_date && project.dueDate) {
+                        update('start_date', project.dueDate)
+                      }
+                      if (!data.job_type && project.projectType) {
+                        update('job_type', project.projectType)
+                      }
+                    }
+                  }}
+                  {...(errors.project_id ? { error: errors.project_id } : {})}
+                />
+                <SelectField
+                  id="job-upload"
+                  label="PDF"
+                  options={uploadOptions}
+                  value={data.upload_id}
+                  disabled={!data.project_id}
+                  onChange={(event) => update('upload_id', event.target.value)}
+                  {...(errors.upload_id ? { error: errors.upload_id } : {})}
+                />
+              </div>
+
+              {linkedEstimate && (
+                <Alert tone="info" icon={FileCheck2} title="This drawing already has an estimate" className="mt-4">
+                  <p>
+                    Estimate {linkedEstimate.number} —{' '}
+                    {formatCurrency(linkedEstimate.amount, 2)}. Creating this job links it here
+                    instead of raising a new one.
+                  </p>
+                  <ButtonLink
+                    href={linkedEstimate.editUrl}
+                    variant="secondary"
+                    size="sm"
+                    className="mt-3"
+                  >
+                    Edit estimate
+                  </ButtonLink>
+                </Alert>
+              )}
+            </fieldset>
+
             <TextInput
               id="job-name"
               label="Job Name*"
@@ -219,110 +281,14 @@ export default function JobCreate({ foremen, clients, projects, uploads }: JobCr
               {...(errors.job_type ? { error: errors.job_type } : {})}
             />
 
-            <fieldset>
-              <legend className="mb-3 text-md font-medium text-white">
-                Link to AI Takeoff (optional)
-              </legend>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <SelectField
-                  id="job-project"
-                  label="Project"
-                  options={projectOptions}
-                  value={data.project_id}
-                  onChange={(event) => {
-                    const projectId = event.target.value
-                    update('project_id', projectId)
-                    update('upload_id', '')
-
-                    // Carry over the project's own location/date/type — but
-                    // never overwrite a field the user has already filled in.
-                    const project = projects.find((p) => String(p.id) === projectId)
-                    if (project) {
-                      if (!data.location && project.location) {
-                        update('location', project.location)
-                      }
-                      if (!data.start_date && project.dueDate) {
-                        update('start_date', project.dueDate)
-                      }
-                      if (!data.job_type && project.projectType) {
-                        update('job_type', project.projectType)
-                      }
-                    }
-                  }}
-                  {...(errors.project_id ? { error: errors.project_id } : {})}
-                />
-                <SelectField
-                  id="job-upload"
-                  label="PDF"
-                  options={uploadOptions}
-                  value={data.upload_id}
-                  disabled={!data.project_id}
-                  onChange={(event) => update('upload_id', event.target.value)}
-                  {...(errors.upload_id ? { error: errors.upload_id } : {})}
-                />
-              </div>
-
-              {linkedEstimate && (
-                <Alert tone="info" icon={FileCheck2} title="This drawing already has an estimate" className="mt-4">
-                  <p>
-                    Estimate {linkedEstimate.number} —{' '}
-                    {formatCurrency(linkedEstimate.amount, 2)}. Creating this job links it here
-                    instead of raising a new one.
-                  </p>
-                  <ButtonLink
-                    href={linkedEstimate.editUrl}
-                    variant="secondary"
-                    size="sm"
-                    className="mt-3"
-                  >
-                    Edit estimate
-                  </ButtonLink>
-                </Alert>
-              )}
-            </fieldset>
-
-            <fieldset>
-              <legend className="mb-3 text-md font-medium text-white">
-                Additional Options
-              </legend>
-              {/* `Checkbox` renders an inline-flex label, so a flex column is
-                  what actually stacks them. */}
-              <div className="flex flex-col items-start gap-3">
-                {!linkedEstimate && (
-                  <Checkbox
-                    id="job-create-estimate"
-                    label="Create estimate for this job"
-                    checked={data.create_estimate}
-                    onChange={(event) => setData('create_estimate', event.target.checked)}
-                  />
-                )}
-                <Checkbox
-                  id="job-assign-team"
-                  label="Assign team members"
-                  checked={data.assign_team}
-                  onChange={(event) => setData('assign_team', event.target.checked)}
-                />
-                <Checkbox
-                  id="job-notify-client"
-                  label="Notify client when job is created"
-                  checked={data.notify_client}
-                  onChange={(event) => setData('notify_client', event.target.checked)}
-                />
-              </div>
-            </fieldset>
-
-            {/* Shown only when the team-assignment option is ticked, so the
-                default form matches the reference exactly. */}
-            {data.assign_team && (
-              <SelectField
-                id="job-foreman"
-                label="Foreman"
-                options={foremanOptions}
-                value={data.foreman_id}
-                onChange={(event) => update('foreman_id', event.target.value)}
-                {...(errors.foreman_id ? { error: errors.foreman_id } : {})}
-              />
-            )}
+            <SelectField
+              id="job-foreman"
+              label="Foreman"
+              options={foremanOptions}
+              value={data.foreman_id}
+              onChange={(event) => update('foreman_id', event.target.value)}
+              {...(errors.foreman_id ? { error: errors.foreman_id } : {})}
+            />
 
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
               <ButtonLink href={ROUTES.jobs} variant="white">

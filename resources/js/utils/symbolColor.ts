@@ -107,3 +107,8 @@ export function symbolColor(name: string): SymbolColor {
 
   return resolveSymbolColors([key]).get(key) ?? fallbackColor(key)
 }
+
+/** Display form for a symbol name — engine names arrive in every case (all-caps, all-lowercase); this normalises to Title Case for reading. */
+export function symbolLabel(name: string): string {
+  return name.replace(/\S+/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+}

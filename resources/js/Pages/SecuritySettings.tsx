@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { KeyRound, Mail, Phone, ShieldCheck } from 'lucide-react'
+import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -10,14 +10,12 @@ import {
   CardHeader,
   IconBubble,
   Pagination,
-  StatusChip,
   Switch,
   Table,
 } from '@/components/common'
 import {
   ChangeEmailModal,
   ChangePasswordModal,
-  ChangePhoneModal,
   DisableTwoFactorModal,
   EnableTwoFactorModal,
   RecoveryCodesModal,
@@ -51,8 +49,6 @@ export interface SecuritySettingsProps {
  */
 export default function SecuritySettings({
   twoFactor,
-  smsConfigured,
-  maskedPhone,
   maskedEmail,
   notificationPreferences,
   auditLog,
@@ -63,7 +59,6 @@ export default function SecuritySettings({
   const enable2fa = useDisclosure()
   const disable2fa = useDisclosure()
   const changeEmail = useDisclosure()
-  const changePhone = useDisclosure()
   const changePassword = useDisclosure()
   const [dismissedCodesKey, setDismissedCodesKey] = useState<string | null>(null)
 
@@ -184,27 +179,6 @@ export default function SecuritySettings({
             </Button>
           </li>
 
-          <li className="flex items-center justify-between gap-3 rounded-panel border border-hairline bg-white/4 p-4">
-            <button
-              type="button"
-              onClick={() => smsConfigured && selectMethod('sms')}
-              disabled={!smsConfigured}
-              className="flex flex-1 items-center gap-3 text-left disabled:cursor-not-allowed"
-            >
-              <RadioDot checked={twoFactor.method === 'sms'} />
-              <IconBubble icon={Phone} tone="neutral" size="sm" />
-              <div>
-                <p className="font-medium text-white">SMS Authentication</p>
-                <p className="text-sm text-white/70">{maskedPhone ?? 'No phone number on file'}</p>
-              </div>
-            </button>
-            <div className="flex items-center gap-2">
-              {!smsConfigured && <StatusChip hideDot tone="neutral" label="Not Configured" />}
-              <Button variant="white" size="sm" onClick={changePhone.open}>
-                Change
-              </Button>
-            </div>
-          </li>
         </ul>
       </Card>
 
@@ -217,7 +191,6 @@ export default function SecuritySettings({
             <thead>
               <tr className="text-sm text-white/60">
                 <th className="py-2 pr-4 font-medium">Event</th>
-                <th className="py-2 pr-4 font-medium">SMS</th>
                 <th className="py-2 font-medium">Email</th>
               </tr>
             </thead>
@@ -225,14 +198,6 @@ export default function SecuritySettings({
               {notificationPreferences.map((preference) => (
                 <tr key={preference.eventType} className="border-t border-hairline">
                   <td className="py-3 pr-4 text-white">{preference.label}</td>
-                  <td className="py-3 pr-4">
-                    <Switch
-                      id={`pref-sms-${preference.eventType}`}
-                      checked={preference.smsEnabled}
-                      disabled={!smsConfigured}
-                      onChange={(event) => updatePreference(preference, 'sms', event.target.checked)}
-                    />
-                  </td>
                   <td className="py-3">
                     <Switch
                       id={`pref-email-${preference.eventType}`}
@@ -279,7 +244,6 @@ export default function SecuritySettings({
       <DisableTwoFactorModal isOpen={disable2fa.isOpen} onClose={disable2fa.close} />
       <RecoveryCodesModal isOpen={showRecoveryCodes} onClose={() => setDismissedCodesKey(codesKey)} codes={flash.recoveryCodes ?? []} />
       <ChangeEmailModal isOpen={changeEmail.isOpen} onClose={changeEmail.close} />
-      <ChangePhoneModal isOpen={changePhone.isOpen} onClose={changePhone.close} />
       <ChangePasswordModal isOpen={changePassword.isOpen} onClose={changePassword.close} />
     </PageTransition>
   )

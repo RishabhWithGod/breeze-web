@@ -295,22 +295,6 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
         ),
     },
     {
-      key: 'assignments',
-      header: 'Assigned',
-      render: (job) =>
-        job.assignments.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {job.assignments.map((assignment) => (
-              <Badge key={assignment.id} tone="info" size="sm">
-                {assignment.name} · {assignment.roleLabel}
-              </Badge>
-            ))}
-          </div>
-        ) : (
-          <span className="text-white/70">—</span>
-        ),
-    },
-    {
       key: 'startDate',
       header: 'Start Date',
       render: (job) => (

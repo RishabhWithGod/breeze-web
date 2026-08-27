@@ -17,6 +17,7 @@ use App\Http\Controllers\FinalTakeoffController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceDetailController;
+use App\Http\Controllers\InvoicePaymentController;
 use App\Http\Controllers\JobAssignmentController;
 use App\Http\Controllers\JobAttachmentController;
 use App\Http\Controllers\JobController;
@@ -240,6 +241,8 @@ Route::middleware('auth')->group(function () {
     Route::post('invoices/{invoice}/send', [InvoiceDetailController::class, 'send'])->name('invoices.send');
     Route::post('invoices/{invoice}/mark-paid', [InvoiceDetailController::class, 'markPaid'])->name('invoices.mark-paid');
     Route::get('invoices/{invoice}/pdf', [InvoiceDetailController::class, 'pdf'])->name('invoices.pdf');
+    Route::post('invoices/{invoice}/pay', [InvoicePaymentController::class, 'checkout'])->name('invoices.pay');
+    Route::get('invoices/{invoice}/pay/confirm', [InvoicePaymentController::class, 'confirm'])->name('invoices.pay.confirm');
 
     /*
     | Job management. `create` and `bulk` are declared before `{job}` so they are

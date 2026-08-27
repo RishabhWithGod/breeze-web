@@ -209,7 +209,7 @@ return [
     'estimating' => [
         'markup_pct' => (float) env('ESTIMATE_MARKUP_PCT', 0),
         'tax_pct' => (float) env('ESTIMATE_TAX_PCT', 8.25),
-        'labor_rate' => (float) env('ESTIMATE_LABOR_RATE', 78),
+        'labor_rate' => (float) env('ESTIMATE_LABOR_RATE', 50),
     ],
 
 ];

@@ -25,6 +25,13 @@ use Inertia\Response;
  *
  * Every action operates on `$request->user()` only — no route ever accepts
  * another user's id, so there is no ID to tamper with in the first place.
+ *
+ * Every action redirects with `redirect()->route('security.index')`, never
+ * `back()`: Laravel only records `_previous.url` on a real full-page GET
+ * (`StartSession::storeCurrentUrl()` explicitly skips AJAX requests), and
+ * Inertia's own client-side navigation — including simply landing on this
+ * page via a sidebar link — is AJAX. `back()` would land you on whatever
+ * page you last hard-loaded, not this one.
  */
 class SecuritySettingsController extends Controller
 {
@@ -84,7 +91,7 @@ class SecuritySettingsController extends Controller
     {
         $this->twoFactor->sendEnableChallenge($request->user());
 
-        return back()->with('success', 'A verification code was sent to your email.');
+        return redirect()->route('security.index')->with('success', 'A verification code was sent to your email.');
     }
 
     public function confirmTwoFactor(Request $request): RedirectResponse
@@ -97,7 +104,7 @@ class SecuritySettingsController extends Controller
             throw ValidationException::withMessages(['code' => 'That code is invalid or has expired.']);
         }
 
-        return back()->with('success', 'Two-factor authentication is now enabled.')
+        return redirect()->route('security.index')->with('success', 'Two-factor authentication is now enabled.')
             ->with('recoveryCodes', $result['recoveryCodes']);
     }
 
@@ -109,7 +116,7 @@ class SecuritySettingsController extends Controller
             throw ValidationException::withMessages(['current_password' => 'That password is incorrect.']);
         }
 
-        return back()->with('success', 'Two-factor authentication is now disabled.');
+        return redirect()->route('security.index')->with('success', 'Two-factor authentication is now disabled.');
     }
 
     public function regenerateRecoveryCodes(Request $request): RedirectResponse
@@ -122,7 +129,7 @@ class SecuritySettingsController extends Controller
 
         $codes = $this->twoFactor->generateRecoveryCodes($request->user(), $request);
 
-        return back()->with('recoveryCodes', $codes);
+        return redirect()->route('security.index')->with('recoveryCodes', $codes);
     }
 
     public function updateMethod(Request $request): RedirectResponse
@@ -133,7 +140,7 @@ class SecuritySettingsController extends Controller
 
         $this->twoFactor->setMethod($request->user(), $data['method'], $request);
 
-        return back()->with('success', 'Authentication method updated.');
+        return redirect()->route('security.index')->with('success', 'Authentication method updated.');
     }
 
     public function sendEmailChallenge(Request $request): RedirectResponse
@@ -142,7 +149,7 @@ class SecuritySettingsController extends Controller
 
         $this->otp->issue($request->user(), 'change_email', $data['email']);
 
-        return back()->with('success', 'A verification code was sent to the new address.');
+        return redirect()->route('security.index')->with('success', 'A verification code was sent to the new address.');
     }
 
     public function confirmEmail(Request $request): RedirectResponse
@@ -150,16 +157,21 @@ class SecuritySettingsController extends Controller
         $data = $request->validate(['code' => ['required', 'string']]);
         $user = $request->user();
 
+        // Read before verifying — `verify()` clears the cache entry the
+        // instant a code checks out, so a later `target()` call would
+        // always find nothing there and this update would null out the
+        // column instead of setting the new address.
+        $newEmail = $this->otp->target($user, 'change_email');
+
         if (! $this->otp->verify($user, 'change_email', $data['code'])) {
             throw ValidationException::withMessages(['code' => 'That code is invalid or has expired.']);
         }
 
-        $newEmail = $this->otp->target($user, 'change_email');
         $user->update(['email' => $newEmail, 'email_verified_at' => now()]);
 
         $this->logger->log($user, SecurityEvent::PROFILE_UPDATED, 'Email address was changed.', $request);
 
-        return back()->with('success', 'Your email address was updated.');
+        return redirect()->route('security.index')->with('success', 'Your email address was updated.');
     }
 
     public function sendPhoneChallenge(Request $request): RedirectResponse
@@ -170,7 +182,7 @@ class SecuritySettingsController extends Controller
         // provider is configured to deliver a code to the new number itself.
         $this->otp->issue($request->user(), 'change_phone', $data['phone']);
 
-        return back()->with('success', 'A verification code was sent to your email to confirm this change.');
+        return redirect()->route('security.index')->with('success', 'A verification code was sent to your email to confirm this change.');
     }
 
     public function confirmPhone(Request $request): RedirectResponse
@@ -178,16 +190,19 @@ class SecuritySettingsController extends Controller
         $data = $request->validate(['code' => ['required', 'string']]);
         $user = $request->user();
 
+        // See the identical comment in confirmEmail() above — target() has
+        // to run before verify() clears the cache entry it reads.
+        $newPhone = $this->otp->target($user, 'change_phone');
+
         if (! $this->otp->verify($user, 'change_phone', $data['code'])) {
             throw ValidationException::withMessages(['code' => 'That code is invalid or has expired.']);
         }
 
-        $newPhone = $this->otp->target($user, 'change_phone');
         $user->update(['phone' => $newPhone, 'phone_verified_at' => now()]);
 
         $this->logger->log($user, SecurityEvent::PROFILE_UPDATED, 'Phone number was changed.', $request);
 
-        return back()->with('success', 'Your phone number was updated.');
+        return redirect()->route('security.index')->with('success', 'Your phone number was updated.');
     }
 
     public function updatePassword(Request $request): RedirectResponse
@@ -215,7 +230,7 @@ class SecuritySettingsController extends Controller
 
         $this->logger->log($user, SecurityEvent::PASSWORD_CHANGED, 'Password was changed.', $request);
 
-        return back()->with('success', 'Your password was updated.');
+        return redirect()->route('security.index')->with('success', 'Your password was updated.');
     }
 
     public function updateNotificationPreference(Request $request, string $eventType): RedirectResponse
@@ -236,6 +251,6 @@ class SecuritySettingsController extends Controller
 
         $this->logger->log($user, SecurityEvent::NOTIFICATION_PREFERENCE_CHANGED, 'Notification preference for '.SecurityNotificationPreference::LABELS[$eventType].' was updated.', $request);
 
-        return back()->with('success', 'Notification preference saved.');
+        return redirect()->route('security.index')->with('success', 'Notification preference saved.');
     }
 }

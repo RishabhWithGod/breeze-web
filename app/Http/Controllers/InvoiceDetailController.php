@@ -9,6 +9,7 @@ use App\Models\FeedItem;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Job;
+use App\Models\PaymentProcessor;
 use App\Models\PaymentTransaction;
 use App\Notifications\InvoiceStatusChanged;
 use App\Policies\InvoicePolicy;
@@ -52,6 +53,10 @@ class InvoiceDetailController extends Controller
                 'send' => $abilities->send($request->user(), $invoice),
                 'markPaid' => $abilities->markPaid($request->user(), $invoice),
             ],
+            'stripeConnected' => PaymentProcessor::query()
+                ->where('key', PaymentProcessor::STRIPE)
+                ->whereIn('status', [PaymentProcessor::STATUS_ACTIVE, PaymentProcessor::STATUS_LIMITED])
+                ->exists(),
         ]);
     }
 

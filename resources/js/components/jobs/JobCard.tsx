@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Badge, Button, StatusChip, StatusDot } from '@/components/common'
+import { Button, StatusChip, StatusDot } from '@/components/common'
 import type { Job } from '@/types'
 import {
   JOB_STATUS_LABEL,
@@ -74,19 +74,6 @@ export function JobCard({ job, index = 0, onView, onDelete, className }: JobCard
           </dd>
         </div>
       </dl>
-
-      {job.assignments.length > 0 && (
-        <div className="mt-3">
-          <p className="text-sm text-white/70">Assigned</p>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {job.assignments.map((assignment) => (
-              <Badge key={assignment.id} tone="info" size="sm">
-                {assignment.name} · {assignment.roleLabel}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
         <Button size="sm" onClick={() => onView(job)}>

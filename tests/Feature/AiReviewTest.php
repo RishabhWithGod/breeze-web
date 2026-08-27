@@ -11,9 +11,11 @@ use App\Models\Project;
 use App\Models\SymbolReview;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\Takeoff\SymbolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Concerns\TalksToTheEngine;
 use Tests\TestCase;
@@ -875,12 +877,31 @@ class AiReviewTest extends TestCase
         $this->assertSame($this->result->id, $estimate->ai_result_id);
         $this->assertSame(Job::latest('id')->firstOrFail()->id, $estimate->job_id);
 
-        // One line per engine BOQ line, priced at the engine's own rates.
-        $this->assertSame(count($engine['boq']), $estimate->items()->count());
+        // One line per engine BOQ line, priced at the engine's own rates —
+        // plus one labor line per "ea" (per-device) line whose item resolves
+        // to a real price-book rate, since the engine's own BOQ prices
+        // material only.
+        $catalog = app(SymbolCatalog::class);
+        $expectedLaborLines = collect($engine['boq'])
+            ->filter(fn (array $line) => Str::lower(trim($line['unit'] ?? 'ea')) === 'ea')
+            ->filter(fn (array $line) => $catalog->for($line['item'])['labor_hours'] > 0)
+            ->count();
+
+        $this->assertSame(
+            count($engine['boq']) + $expectedLaborLines,
+            $estimate->items()->count(),
+        );
         $this->assertDatabaseHas('estimate_items', [
             'estimate_id' => $estimate->id,
             'unit_cost' => number_format((float) $engine['boq'][0]['unit_price'], 2, '.', ''),
         ]);
+        if ($expectedLaborLines > 0) {
+            $this->assertDatabaseHas('estimate_items', [
+                'estimate_id' => $estimate->id,
+                'category' => EstimateItem::CATEGORY_LABOR,
+                'unit_cost' => number_format((float) config('ai.estimating.labor_rate'), 2, '.', ''),
+            ]);
+        }
 
         // Tax comes from the engine's rate (a fraction) as a percentage.
         $this->assertSame(

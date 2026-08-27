@@ -226,6 +226,7 @@ export const routeTo = {
   invoiceSend: (invoiceId: number) => `/invoices/${invoiceId}/send`,
   invoiceMarkPaid: (invoiceId: number) => `/invoices/${invoiceId}/mark-paid`,
   invoicePdf: (invoiceId: number) => `/invoices/${invoiceId}/pdf`,
+  invoicePay: (invoiceId: number) => `/invoices/${invoiceId}/pay`,
 
   // Job Costing
   jobCostingExport: (format: 'csv' | 'xlsx') => `/job-costing/export/${format}`,

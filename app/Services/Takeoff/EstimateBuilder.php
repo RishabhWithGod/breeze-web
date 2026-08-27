@@ -297,11 +297,15 @@ class EstimateBuilder
      */
     private function writeEngineLines(Estimate $estimate, Collection $lines, Collection $symbols): void
     {
+        $laborRate = (float) config('ai.estimating.labor_rate');
         $symbolsById = $symbols->keyBy('id');
         $position = 0;
 
         foreach ($lines as $line) {
             $symbol = $line->final_symbol_id ? $symbolsById->get($line->final_symbol_id) : null;
+            // Reviewed count where the line maps to a symbol, else the engine's
+            // own quantity.
+            $quantity = $symbol ? $symbol->count : (float) $line->quantity;
 
             $estimate->items()->create([
                 'final_symbol_id' => $symbol?->id,
@@ -310,13 +314,37 @@ class EstimateBuilder
                     ? $line->item
                     : "{$line->item} — {$line->description}",
                 'unit' => $line->unit ?: 'ea',
-                // Reviewed count where the line maps to a symbol, else the engine's
-                // own quantity.
-                'quantity' => $symbol ? $symbol->count : (float) $line->quantity,
+                'quantity' => $quantity,
                 'unit_cost' => (float) $line->unit_price,
                 'source' => 'ai',
                 'position' => $position++,
             ]);
+
+            // The engine's own BOQ prices material only, with no labor line —
+            // the reviewed symbol's name (or the line's own item name, when it
+            // wasn't matched to one) resolves to the same install-hours rate
+            // the price-book fallback paths below already use, so a takeoff
+            // the engine priced itself gets a labor charge too, not just the
+            // fallback ones. Only for a per-device ("ea") line, though — the
+            // catalog's rate is hours to install *one device*, and applying
+            // it to, say, a 250 ft wire run would charge 250 devices' worth
+            // of labor for a single measured quantity.
+            $isPerDevice = Str::lower(trim($line->unit ?: 'ea')) === 'ea';
+            $rates = $isPerDevice ? $this->catalog->for($symbol?->name ?? $line->item) : null;
+            $laborHours = $rates ? round($rates['labor_hours'] * $quantity, 2) : 0.0;
+
+            if ($laborHours > 0) {
+                $estimate->items()->create([
+                    'final_symbol_id' => $symbol?->id,
+                    'category' => EstimateItem::CATEGORY_LABOR,
+                    'description' => 'Install labor — '.Str::of($line->item)->headline()->value(),
+                    'unit' => 'hr',
+                    'quantity' => $laborHours,
+                    'unit_cost' => $laborRate,
+                    'source' => 'ai',
+                    'position' => $position++,
+                ]);
+            }
         }
     }
 

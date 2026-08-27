@@ -30,6 +30,8 @@ export interface SymbolBoxProps {
   locked: boolean
   isSelected: boolean
   onSelect: (ref: OccurrenceRef | null) => void
+  /** Reports this box's own name while the pointer is over it, and `null` on leave — drives the matching row's highlight in the legend. */
+  onHoverChange?: (name: string | null) => void
   /** Current on-screen CSS pixel size of the layer this box's percentages are relative to. Move is disabled without it. */
   containerSize: { width: number; height: number } | null
 }
@@ -62,6 +64,7 @@ export function SymbolBox({
   locked,
   isSelected,
   onSelect,
+  onHoverChange,
   containerSize,
 }: SymbolBoxProps) {
   const [isDragging, setIsDragging] = useState(false)
@@ -176,6 +179,8 @@ export function SymbolBox({
       }}
       onDragEnd={handleDragEnd}
       onClick={handleClick}
+      onHoverStart={() => onHoverChange?.(name)}
+      onHoverEnd={() => onHoverChange?.(null)}
       whileHover={{ scale: 1.08 }}
       animate={isSelected ? { scale: 1.15 } : { scale: 1 }}
     >

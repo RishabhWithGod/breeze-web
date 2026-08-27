@@ -101,6 +101,7 @@ export function DrawingOverlay({
   const [viewportWidth, setViewportWidth] = useState(0)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [activeStatus, setActiveStatus] = useState<'all' | 'approved' | 'rejected'>('all')
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null)
   // Whether the page image itself loaded — independent of whether the
   // engine's page dimensions have arrived. A missing bbox source shouldn't
   // hide a perfectly good picture, and a real load failure shouldn't be
@@ -599,6 +600,7 @@ export function DrawingOverlay({
                       && selected?.occurrenceKey === box.occurrenceKey
                     }
                     onSelect={onSelect}
+                    onHoverChange={setHoveredCategory}
                     containerSize={containerSize}
                   />
                 </div>
@@ -670,6 +672,7 @@ export function DrawingOverlay({
             countsByName={countsByName}
             activeCategory={activeCategory}
             onSelectCategory={setActiveCategory}
+            hoveredCategory={hoveredCategory}
           />
         </div>
       </div>

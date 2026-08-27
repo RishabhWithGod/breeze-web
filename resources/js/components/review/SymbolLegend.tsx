@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { OverlaySymbol } from '@/types'
-import { cn, resolveSymbolColors } from '@/utils'
+import { cn, resolveSymbolColors, symbolLabel } from '@/utils'
 
 export interface SymbolLegendProps {
   symbols: readonly OverlaySymbol[]
@@ -8,6 +8,8 @@ export interface SymbolLegendProps {
   countsByName: ReadonlyMap<string, number>
   activeCategory: string | null
   onSelectCategory: (name: string | null) => void
+  /** The marker currently under the pointer on the drawing — highlights the matching row without changing the click-to-filter selection. */
+  hoveredCategory?: string | null
 }
 
 /** Name → color key for every symbol actually drawn on the overlay. Clicking a row filters the drawing to that category. */
@@ -16,6 +18,7 @@ export function SymbolLegend({
   countsByName,
   activeCategory,
   onSelectCategory,
+  hoveredCategory = null,
 }: SymbolLegendProps) {
   const names = useMemo(
     () => [...new Set(symbols.map((symbol) => symbol.name))].sort((a, b) => a.localeCompare(b)),
@@ -33,6 +36,7 @@ export function SymbolLegend({
         const key = name.trim().toLowerCase()
         const color = colors.get(key)
         const isActive = activeCategory === name
+        const isHovered = !isActive && hoveredCategory === name
 
         return (
           <li key={name}>
@@ -44,6 +48,7 @@ export function SymbolLegend({
                 'flex w-full items-center gap-2 rounded-panel px-1.5 py-1 text-left text-2xs text-white/90 transition-colors duration-150',
                 'hover:bg-white/10',
                 isActive && 'bg-white/15 ring-1 ring-white/40',
+                isHovered && 'bg-brand/30 ring-1 ring-brand/60',
               )}
             >
               <span
@@ -52,7 +57,7 @@ export function SymbolLegend({
                 aria-hidden
               />
               <span className="min-w-0 flex-1 truncate" title={name}>
-                {name}
+                {symbolLabel(name)}
               </span>
               <span className="shrink-0 text-white/60">{countsByName.get(key) ?? 0}</span>
             </button>

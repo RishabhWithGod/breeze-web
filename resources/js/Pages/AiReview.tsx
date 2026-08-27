@@ -474,8 +474,6 @@ export default function AiReview({
         {...(!locked && tally.approved > 0
           ? { onContinue: () => router.post(routeTo.reviewFinalise(result.id)) }
           : {})}
-        backHref={routeTo.processing(result.projectId)}
-        backLabel="Back to Analysis"
       />
     </PageTransition>
   )

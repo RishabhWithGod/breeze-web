@@ -3,12 +3,9 @@ import { router } from '@inertiajs/react'
 import {
   Check,
   Minus,
-  History,
   Pencil,
   Plus,
   RotateCcw,
-  Scissors,
-  StickyNote,
   X,
 } from 'lucide-react'
 import {
@@ -18,14 +15,13 @@ import {
   Checkbox,
   DetailRow,
   IconButton,
-  MoreMenu,
   StatusChip,
   TextArea,
   TextInput,
 } from '@/components/common'
 import { REVIEW_STATUS_LABEL, REVIEW_STATUS_TONE, routeTo } from '@/constants'
 import type { SymbolReviewRow } from '@/types'
-import { cn, formatRelative, symbolColor } from '@/utils'
+import { cn, formatRelative, symbolColor, symbolLabel } from '@/utils'
 
 /** Which inline editor the card currently shows. */
 type CardMode = 'rename' | 'split' | 'notes' | 'history' | null
@@ -203,7 +199,7 @@ export function SymbolCard({
               className="size-2 shrink-0 rounded-full"
               style={{ backgroundColor: color.solid }}
             />
-            <span className="truncate">{row.name}</span>
+            <span className="truncate">{symbolLabel(row.name)}</span>
           </h3>
           <div className="mt-1 flex items-center gap-2">
             <StatusChip
@@ -412,24 +408,25 @@ export function SymbolCard({
         {/* Two decisions on the surface; everything else behind More. */}
         <div className="mt-auto grid grid-cols-3 gap-2 pt-1">
           {row.status === 'approved' ? (
-            <Button
+            <IconButton
               variant="secondary"
               size="sm"
-              leftIcon={RotateCcw}
+              icon={RotateCcw}
+              label="Undo"
               disabled={locked}
               onClick={() => post(routeTo.symbolReset(resultId, row.id))}
-            >
-              Undo
-            </Button>
+              className="mx-auto"
+            />
           ) : (
-            <Button
+            <IconButton
+              variant="primary"
               size="sm"
-              leftIcon={Check}
+              icon={Check}
+              label="Approve"
               disabled={locked}
               onClick={() => post(routeTo.symbolApprove(resultId, row.id))}
-            >
-              Approve
-            </Button>
+              className="mx-auto"
+            />
           )}
 
           {isRejected ? (
@@ -454,39 +451,17 @@ export function SymbolCard({
             </Button>
           )}
 
-          <MoreMenu
-            ariaLabel={`More actions for ${row.name}`}
-            items={[
-              {
-                label: 'Rename',
-                icon: Pencil,
-                disabled: locked,
-                onSelect: () => {
-                  setRenameDraft(row.name)
-                  setMode('rename')
-                },
-              },
-              {
-                label: 'Split',
-                icon: Scissors,
-                disabled: locked || row.finalCount <= 1,
-                onSelect: () => setMode('split'),
-              },
-              {
-                label: 'Notes',
-                icon: StickyNote,
-                disabled: locked,
-                onSelect: () => {
-                  setNoteDraft(row.notes ?? '')
-                  setMode('notes')
-                },
-              },
-              {
-                label: 'History',
-                icon: History,
-                onSelect: () => setMode('history'),
-              },
-            ]}
+          <IconButton
+            variant="secondary"
+            size="sm"
+            icon={Pencil}
+            label="Rename"
+            disabled={locked}
+            onClick={() => {
+              setRenameDraft(row.name)
+              setMode('rename')
+            }}
+            className="mx-auto"
           />
         </div>
       </div>

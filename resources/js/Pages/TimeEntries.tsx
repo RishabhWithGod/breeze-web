@@ -5,11 +5,9 @@ import {
   Check,
   ChevronDown,
   DollarSign,
-  Download,
   Eye,
   Filter,
   Pencil,
-  Play,
   Plus,
   SearchX,
   Send,
@@ -32,7 +30,6 @@ import {
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { StartTimerModal } from '@/components/timeTracking'
 import {
   BILLABLE_FILTERS,
   ROUTES,
@@ -87,7 +84,7 @@ export default function TimeEntries({
   taskTypes,
   can,
 }: TimeEntriesProps) {
-  const { flash, auth, activeTimer } = usePage<SharedPageProps>().props
+  const { flash, auth } = usePage<SharedPageProps>().props
 
   const [draft, setDraft] = useState(filters)
   const [showFilters, setShowFilters] = useState(false)
@@ -98,7 +95,6 @@ export default function TimeEntries({
 
   const rejectDialog = useDisclosure()
   const deleteDialog = useDisclosure()
-  const startTimer = useDisclosure()
 
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
@@ -323,20 +319,8 @@ export default function TimeEntries({
             >
               Filters
             </Button>
-            <Button
-              variant="secondary"
-              leftIcon={Download}
-              onClick={() => window.open(`${routeTo.timeEntriesExport('csv')}?${window.location.search.replace(/^\?/, '')}`, '_blank')}
-            >
-              Export
-            </Button>
-            {!activeTimer && jobs.length > 0 && (
-              <Button variant="secondary" leftIcon={Play} onClick={startTimer.open}>
-                Start Timer
-              </Button>
-            )}
             <ButtonLink leftIcon={Plus} href={routeTo.timeEntryCreate()}>
-              Add Time Entry
+              Manual Time Entry
             </ButtonLink>
           </>
         }
@@ -531,7 +515,6 @@ export default function TimeEntries({
         />
       </Modal>
 
-      <StartTimerModal isOpen={startTimer.isOpen} onClose={startTimer.close} jobs={jobs} />
     </PageTransition>
   )
 }
