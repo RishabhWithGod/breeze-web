@@ -1,0 +1,229 @@
+import { useState } from 'react'
+import { Head, Link, useForm } from '@inertiajs/react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
+import { Alert } from '@/components/common'
+import { BrandWordmark } from '@/components/layout'
+import { MOTION, ROUTES } from '@/constants'
+
+interface LoginForm {
+  email: string
+  password: string
+  remember: boolean
+}
+
+export interface LoginProps {
+  /** Set when the last sign-in ticked "Remember me". */
+  rememberedEmail: string | null
+}
+
+/** Light-filled control, as the sign-in screen renders its two fields. Left
+ *  padding clears the leading icon every field on this screen carries. */
+const FIELD =
+  'w-full rounded-lg border border-transparent bg-[#eef1fa] py-2.5 pr-4 pl-11 text-[0.9375rem] ' +
+  'text-navy-950 placeholder:text-navy-950/45 shadow-[inset_0_1px_2px_rgb(3_10_25/0.08)] transition-shadow duration-200 ' +
+  'focus:border-brand/60 focus:outline-none focus:ring-2 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-60'
+
+/**
+ * Sign-in against Laravel's session guard.
+ *
+ * Its own single-column shell rather than `AuthLayout`: this screen is the
+ * product's front door and is laid out to the brand design — logo, heading, one
+ * glass card, nothing beside it.
+ */
+export default function Login({ rememberedEmail }: LoginProps) {
+  const { data, setData, post, processing, errors, clearErrors } = useForm<LoginForm>({
+    email: rememberedEmail ?? '',
+    password: '',
+    remember: Boolean(rememberedEmail),
+  })
+  const [showPassword, setShowPassword] = useState(false)
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault()
+    // The server redirects to the intended page on success.
+    post(ROUTES.login, { onFinish: () => setData('password', '') })
+  }
+
+  return (
+    <div className="relative flex min-h-dvh flex-col items-center justify-center px-4 py-12 sm:px-6 sm:py-16">
+      <Head title="Sign in" />
+
+      {/*
+        The app's backdrop is darkened for dense screens; the sign-in screen wants
+        the artwork bright and its mesh visible, so this lifts it back — on this
+        page only, leaving the global backdrop alone.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-0 bg-[linear-gradient(135deg,rgb(26_86_190/0.5)_0%,rgb(16_56_140/0.32)_42%,rgb(8_20_54/0.12)_75%)]"
+      />
+
+      {/* A soft brand-colored glow seated behind the card — the one purely
+          decorative touch on this screen, giving the form a focal point
+          instead of sitting flat against the backdrop. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 left-1/2 z-0 size-125 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/20 blur-[110px]"
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: MOTION.slow, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 w-full max-w-md"
+      >
+        <div className="flex justify-center drop-shadow-[0_0_24px_rgb(51_227_255/0.35)]">
+          <BrandWordmark />
+        </div>
+
+        <h1 className="mt-7 text-center text-2xl font-extrabold text-white sm:text-[1.75rem]">
+          Sign In
+        </h1>
+        <p className="mt-2 text-center text-sm font-medium text-white/70">
+          Enter your credentials to access your account
+        </p>
+
+        <form
+          onSubmit={submit}
+          noValidate
+          className="mt-7 rounded-2xl border border-hairline-strong grad-spotlight p-6 shadow-glow backdrop-blur-xl sm:p-7"
+        >
+          <AnimatePresence initial={false}>
+            {errors.email && (
+              <Alert
+                key="auth-error"
+                tone="danger"
+                title="Sign-in failed"
+                className="mb-5"
+                onDismiss={clearErrors}
+              >
+                {errors.email}
+              </Alert>
+            )}
+          </AnimatePresence>
+
+          <label htmlFor="email" className="block text-sm font-semibold text-white/90">
+            Email
+          </label>
+          <div className="relative mt-2">
+            <Mail
+              aria-hidden
+              size={18}
+              className="pointer-events-none absolute inset-y-0 left-4 my-auto text-navy-950/45"
+            />
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              aria-invalid={Boolean(errors.email) || undefined}
+              disabled={processing}
+              value={data.email}
+              onChange={(event) => setData('email', event.target.value)}
+              className={FIELD}
+            />
+          </div>
+
+          <label
+            htmlFor="password"
+            className="mt-4 block text-sm font-semibold text-white/90"
+          >
+            Password
+          </label>
+          <div className="relative mt-2">
+            <Lock
+              aria-hidden
+              size={18}
+              className="pointer-events-none absolute inset-y-0 left-4 my-auto text-navy-950/45"
+            />
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              aria-invalid={Boolean(errors.password) || undefined}
+              disabled={processing}
+              value={data.password}
+              onChange={(event) => setData('password', event.target.value)}
+              className={`${FIELD} pr-11`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((visible) => !visible)}
+              disabled={processing}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-navy-950/60 transition-colors hover:text-navy-950 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {showPassword ? <EyeOff size={19} aria-hidden /> : <Eye size={19} aria-hidden />}
+            </button>
+          </div>
+          {errors.password && (
+            <p className="mt-2 text-sm text-red-300">{errors.password}</p>
+          )}
+
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            {/*
+              A white box rather than the app's cyan-on-glass checkbox, which is
+              what this screen shows; the native input underneath keeps keyboard
+              and screen-reader behaviour standard.
+            */}
+            <label
+              htmlFor="remember"
+              className="group inline-flex cursor-pointer items-center gap-2.5 text-sm font-medium text-white/85 select-none has-[input:disabled]:cursor-not-allowed has-[input:disabled]:opacity-60"
+            >
+              <input
+                id="remember"
+                type="checkbox"
+                className="sr-only"
+                disabled={processing}
+                checked={data.remember}
+                onChange={(event) => setData('remember', event.target.checked)}
+              />
+              <span
+                aria-hidden
+                className="grid size-4.5 shrink-0 place-items-center rounded-xs bg-white transition-colors group-has-[input:checked]:bg-brand group-has-[input:focus-visible]:outline-2 group-has-[input:focus-visible]:outline-brand group-has-[input:focus-visible]:outline-offset-2"
+              >
+                <svg
+                  viewBox="0 0 14 14"
+                  className="size-3 scale-0 text-brand-ink transition-transform duration-150 group-has-[input:checked]:scale-100"
+                >
+                  <path
+                    d="M2 7.5 5.2 11 12 3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              Remember me
+            </label>
+
+            <Link
+              href={ROUTES.forgotPassword}
+              className="text-sm font-semibold text-brand transition-colors hover:text-white"
+            >
+              Forgot Password?
+            </Link>
+          </div>
+
+          <button
+            type="submit"
+            disabled={processing}
+            className="mt-6 w-full rounded-lg bg-linear-to-b from-brand-soft to-brand py-2.5 text-[0.9375rem] font-bold text-brand-ink shadow-[0_6px_20px_-6px_rgb(51_227_255/0.6)] transition-all duration-200 hover:shadow-[0_8px_26px_-6px_rgb(51_227_255/0.8)] hover:brightness-105 active:brightness-95 focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-70 disabled:shadow-none disabled:hover:brightness-100"
+          >
+            {processing ? 'Signing In…' : 'Sign In'}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center text-sm font-medium text-white/70">
+          Don&apos;t have an account?{' '}
+          <Link href={ROUTES.signup} className="font-semibold text-brand transition-colors hover:text-white">
+            Sign Up
+          </Link>
+        </p>
+      </motion.div>
+    </div>
+  )
+}

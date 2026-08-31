@@ -1,0 +1,270 @@
+import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
+import { Head, useForm } from '@inertiajs/react'
+import { ArrowLeft, Save } from 'lucide-react'
+import {
+  Alert,
+  Button,
+  ButtonLink,
+  Card,
+  Checkbox,
+  RadioGroup,
+  SectionHeading,
+  SelectField,
+  TextArea,
+  TextInput,
+} from '@/components/common'
+import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { JOB_STATUS_OPTIONS, JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
+import type { JobDetail, JobForeman, JobStatus, JobType } from '@/types'
+
+/** Edit payload — snake_case to match UpdateJobRequest. */
+interface JobEditForm {
+  name: string
+  client: string
+  location: string
+  description: string
+  job_type: JobType | ''
+  status: JobStatus
+  start_date: string
+  end_date: string
+  budget: string
+  foreman_id: string
+  create_estimate: boolean
+  assign_team: boolean
+  notify_client: boolean
+}
+
+export interface JobEditProps {
+  job: JobDetail
+  foremen: readonly JobForeman[]
+  clients: readonly string[]
+}
+
+/** Date inputs need `yyyy-MM-dd`; the server sends ISO timestamps. */
+function toDateInput(iso: string | null): string {
+  return iso ? iso.slice(0, 10) : ''
+}
+
+/**
+ * Edit Job.
+ *
+ * Puts to UpdateJobRequest. Status changes made here are recorded in the status
+ * history by the controller, exactly as they are from the detail screen.
+ */
+export default function JobEdit({ job, foremen, clients }: JobEditProps) {
+  const { data, setData, put, processing, errors, hasErrors, clearErrors } =
+    useForm<JobEditForm>({
+      name: job.name,
+      client: job.client ?? '',
+      location: job.location ?? '',
+      description: job.description ?? '',
+      job_type: job.jobType ?? '',
+      status: job.status,
+      start_date: toDateInput(job.startDate),
+      end_date: toDateInput(job.endDate),
+      budget: job.budget === null ? '' : String(job.budget),
+      foreman_id: job.foreman ? String(job.foreman.id) : '',
+      create_estimate: job.options.createEstimate,
+      assign_team: job.options.assignTeam,
+      notify_client: job.options.notifyClient,
+    })
+
+  const update = <K extends FormDataKeys<JobEditForm>>(
+    field: K,
+    value: FormDataValues<JobEditForm, K>,
+  ) => {
+    setData(field, value)
+    if (errors[field]) clearErrors(field)
+  }
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault()
+    put(routeTo.job(job.id), { preserveScroll: true })
+  }
+
+  const clientOptions = [
+    { label: 'Select client', value: '' },
+    // The job's own client may not be in the distinct list yet.
+    ...(job.client && !clients.includes(job.client)
+      ? [{ label: job.client, value: job.client }]
+      : []),
+    ...clients.map((client) => ({ label: client, value: client })),
+  ]
+
+  const foremanOptions = [
+    { label: 'Unassigned', value: '' },
+    ...foremen.map((foreman) => ({
+      label: foreman.name,
+      value: String(foreman.id),
+    })),
+  ]
+
+  return (
+    <PageTransition>
+      <Head title={`Edit ${job.name}`} />
+
+      <PageHeader
+        title="Edit Job"
+        subtitle={job.name}
+        breadcrumbs={[
+          { label: 'Jobs', href: ROUTES.jobs },
+          { label: 'Details', href: routeTo.job(job.id) },
+          { label: 'Edit' },
+        ]}
+        actions={
+          <ButtonLink
+            href={routeTo.job(job.id)}
+            variant="secondary"
+            leftIcon={ArrowLeft}
+          >
+            Back to job
+          </ButtonLink>
+        }
+      />
+
+      {hasErrors && (
+        <Alert tone="danger" title="Check the form" className="mb-6">
+          Some fields need attention before this job can be saved.
+        </Alert>
+      )}
+
+      <form onSubmit={submit} noValidate>
+        <Card padding="lg">
+          <SectionHeading title="Job details" />
+
+          <div className="space-y-6">
+            <TextInput
+              id="job-name"
+              label="Job Name*"
+              value={data.name}
+              onChange={(event) => update('name', event.target.value)}
+              {...(errors.name ? { error: errors.name } : {})}
+            />
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <SelectField
+                id="job-client"
+                label="Client*"
+                options={clientOptions}
+                value={data.client}
+                onChange={(event) => update('client', event.target.value)}
+                {...(errors.client ? { error: errors.client } : {})}
+              />
+              <TextInput
+                id="job-location"
+                label="Location*"
+                value={data.location}
+                onChange={(event) => update('location', event.target.value)}
+                {...(errors.location ? { error: errors.location } : {})}
+              />
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-3">
+              <SelectField
+                id="job-status"
+                label="Status"
+                options={JOB_STATUS_OPTIONS}
+                value={data.status}
+                onChange={(event) => update('status', event.target.value as JobStatus)}
+                {...(errors.status ? { error: errors.status } : {})}
+              />
+              <SelectField
+                id="job-foreman"
+                label="Foreman"
+                options={foremanOptions}
+                value={data.foreman_id}
+                onChange={(event) => update('foreman_id', event.target.value)}
+                {...(errors.foreman_id ? { error: errors.foreman_id } : {})}
+              />
+              <TextInput
+                id="job-budget"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={50}
+                label="Budget ($)"
+                value={data.budget}
+                onChange={(event) => update('budget', event.target.value)}
+                {...(errors.budget ? { error: errors.budget } : {})}
+              />
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <TextInput
+                id="job-start"
+                type="date"
+                label="Start date"
+                value={data.start_date}
+                onChange={(event) => update('start_date', event.target.value)}
+                {...(errors.start_date ? { error: errors.start_date } : {})}
+              />
+              <TextInput
+                id="job-end"
+                type="date"
+                label="End date"
+                value={data.end_date}
+                onChange={(event) => update('end_date', event.target.value)}
+                {...(errors.end_date ? { error: errors.end_date } : {})}
+              />
+            </div>
+
+            <TextArea
+              id="job-description"
+              label="Job Description"
+              rows={5}
+              value={data.description}
+              onChange={(event) => update('description', event.target.value)}
+              {...(errors.description ? { error: errors.description } : {})}
+            />
+
+            <RadioGroup
+              name="job-type"
+              label="Job Type"
+              options={JOB_TYPE_OPTIONS}
+              value={data.job_type}
+              onChange={(value) => update('job_type', value as JobType)}
+              {...(errors.job_type ? { error: errors.job_type } : {})}
+            />
+
+            <fieldset>
+              <legend className="mb-3 text-md font-medium text-white">
+                Additional Options
+              </legend>
+              <div className="flex flex-col items-start gap-3">
+                <Checkbox
+                  id="job-create-estimate"
+                  label="Create estimate for this job"
+                  checked={data.create_estimate}
+                  onChange={(event) => setData('create_estimate', event.target.checked)}
+                />
+                <Checkbox
+                  id="job-assign-team"
+                  label="Assign team members"
+                  checked={data.assign_team}
+                  onChange={(event) => setData('assign_team', event.target.checked)}
+                />
+                <Checkbox
+                  id="job-notify-client"
+                  label="Notify client when job is created"
+                  checked={data.notify_client}
+                  onChange={(event) => setData('notify_client', event.target.checked)}
+                />
+              </div>
+            </fieldset>
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-hairline pt-6">
+            <ButtonLink href={routeTo.job(job.id)} variant="white">
+              Cancel
+            </ButtonLink>
+            <Button type="submit" leftIcon={Save} isLoading={processing}>
+              Save changes
+            </Button>
+          </div>
+        </Card>
+      </form>
+    </PageTransition>
+  )
+}
+
+JobEdit.layout = appLayout
