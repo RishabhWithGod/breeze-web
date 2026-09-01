@@ -42,3 +42,30 @@ export interface MonthlyPoint {
   /** Jobs completed that month — the denominator behind `value`. */
   readonly count: number
 }
+
+/** The dashboard's Billing Snapshot panel — the same figures as the Invoice Summary card. */
+export interface BillingSnapshot {
+  readonly totalOutstanding: number
+  readonly overdue: number
+  readonly paidThisMonth: number
+  readonly averageDaysToPay: number | null
+}
+
+/** A draft estimate still waiting to be finished and sent. */
+export interface DraftEstimateRow {
+  readonly id: number
+  readonly client: string
+  readonly project: string
+  readonly number: string
+  readonly issuedOn: string | null
+  readonly amount: number
+}
+
+/** An AI takeoff review that hasn't been signed off yet. */
+export interface ReviewAttentionRow {
+  readonly id: number
+  readonly projectName: string
+  readonly drawingName: string | null
+  readonly reviewStatus: 'pending' | 'in-review'
+  readonly receivedAt: string | null
+}
