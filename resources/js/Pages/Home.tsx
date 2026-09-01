@@ -6,7 +6,6 @@ import {
   CirclePlus,
   DollarSign,
   Hourglass,
-  Lightbulb,
   ReceiptText,
   Timer,
   Wallet,
@@ -14,7 +13,6 @@ import {
 import {
   Badge,
   ButtonLink,
-  Card,
   EmptyState,
   IconBubble,
   Table,
@@ -44,7 +42,6 @@ export interface HomeProps {
   billing: BillingSnapshot
   draftEstimates: readonly DraftEstimateRow[]
   reviewsNeedingAttention: readonly ReviewAttentionRow[]
-  tip: string
 }
 
 const REVIEW_ATTENTION_TONE: Record<ReviewAttentionRow['reviewStatus'], Tone> = {
@@ -77,7 +74,6 @@ export default function Home({
   billing,
   draftEstimates,
   reviewsNeedingAttention,
-  tip,
 }: HomeProps) {
   const reviewColumns: readonly TableColumn<ReviewAttentionRow>[] = [
     {
@@ -275,14 +271,6 @@ export default function Home({
               ))}
             </div>
           </DashboardPanel>
-
-          <Card className="flex items-start gap-4">
-            <IconBubble icon={Lightbulb} tone="warning" size="md" />
-            <div className="min-w-0">
-              <p className="text-lg font-semibold text-white">Tip of the Day</p>
-              <p className="mt-1.5 text-md text-white/85">{tip}</p>
-            </div>
-          </Card>
 
           <DashboardPanel
             title="Notifications"

@@ -44,7 +44,6 @@ class DashboardController extends Controller
             'billing' => $this->invoiceSummary->calculate(),
             'draftEstimates' => $this->draftEstimates(),
             'reviewsNeedingAttention' => $this->reviewsNeedingAttention(),
-            'tip' => $this->tipOfTheDay(),
         ]);
     }
 
@@ -173,22 +172,5 @@ class DashboardController extends Controller
             ])
             ->values()
             ->all();
-    }
-
-    /**
-     * A new tip each calendar day, cycling through a fixed list — stable
-     * within the day without needing anywhere to store which one was shown.
-     */
-    private function tipOfTheDay(): string
-    {
-        $tips = [
-            'Complete symbol reviews within 24 hours so estimates stay accurate and on schedule.',
-            'Approve at least one symbol before finishing a review — an empty sign-off has nothing to price.',
-            "Draft estimates left unsent don't bill anyone. Send them once a client agrees to scope.",
-            'Reconcile overdue invoices weekly — the longer they sit, the harder they are to collect.',
-            'Reopen a finalised review instead of starting a new takeoff when only a few symbols changed.',
-        ];
-
-        return $tips[now()->dayOfYear % count($tips)];
     }
 }
