@@ -93,7 +93,7 @@ export function JobEstimatesPanel({ jobId, estimates }: JobEstimatesPanelProps) 
                 {estimate.isConverted ? (
                   <p className="flex items-center gap-2 text-sm text-status-success">
                     <CheckCircle2 size={15} aria-hidden />
-                    Converted to project #{estimate.convertedProjectId}
+                    Converted to client #{estimate.convertedProjectId}
                   </p>
                 ) : (
                   <Button
@@ -102,7 +102,7 @@ export function JobEstimatesPanel({ jobId, estimates }: JobEstimatesPanelProps) 
                     leftIcon={ArrowRightLeft}
                     onClick={() => convert(estimate.id)}
                   >
-                    Convert to project
+                    Convert to client
                   </Button>
                 )}
               </div>

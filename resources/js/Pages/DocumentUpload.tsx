@@ -89,7 +89,7 @@ export default function DocumentUpload({ jobId, jobs, folders, importableUploads
 
       <PageHeader
         title="Upload Document"
-        subtitle="Add a drawing, specification or other project file."
+        subtitle="Add a drawing, specification or other client file."
         breadcrumbs={[{ label: 'Documents', href: ROUTES.documents }, { label: 'Upload' }]}
         actions={
           <ButtonLink href={cancelHref} variant="secondary" leftIcon={ArrowLeft}>

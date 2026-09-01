@@ -189,7 +189,7 @@ export default function Estimates({
     },
     {
       key: 'project',
-      header: 'Project',
+      header: 'Client',
       render: (estimate) => <span className="text-white">{estimate.project}</span>,
     },
     {
@@ -326,7 +326,7 @@ export default function Estimates({
                           value={query}
                           onValueChange={setQuery}
                           onSearch={(value) => applyFilters({ search: value })}
-                          placeholder="Search estimate #, client or project..."
+                          placeholder="Search estimate #, client..."
                           aria-label="Search estimates"
                         />
                         <TextInput
@@ -450,7 +450,7 @@ export default function Estimates({
             summary={
               meta.total === 0
                 ? 'No estimates to display'
-                : `Showing ${rows.length} of ${meta.total} projects`
+                : `Showing ${rows.length} of ${meta.total} clients`
             }
           />
         </div>

@@ -134,7 +134,7 @@ export default function Upload({
 
       <PageHeader
         title="AI Takeoff Upload"
-        subtitle="Upload your project files for AI-powered electrical takeoff analysis."
+        subtitle="Upload your client files for AI-powered electrical takeoff analysis."
         breadcrumbs={[{ label: 'AI Takeoff', href: ROUTES.upload }, { label: 'Upload' }]}
         actions={
           <>
@@ -318,7 +318,7 @@ export default function Upload({
         isOpen={clearDialog.isOpen}
         tone="danger"
         title="Remove all queued files?"
-        description="This clears the upload queue and your project notes. It cannot be undone."
+        description="This clears the upload queue and your client notes. It cannot be undone."
         confirmLabel="Clear everything"
         confirmVariant="danger"
         onConfirm={handleClearAll}

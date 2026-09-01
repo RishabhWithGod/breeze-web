@@ -167,7 +167,7 @@ export default function ProjectShow({
           project.code ? `${project.code} · ${project.client}` : project.client
         }
         breadcrumbs={[
-          { label: 'Projects', href: ROUTES.projects },
+          { label: 'Clients', href: ROUTES.projects },
           { label: project.name },
         ]}
         actions={
@@ -245,7 +245,7 @@ export default function ProjectShow({
       <div className="grid gap-6 xl:grid-cols-3">
         {/* ------------------------------------------------------- Details ---- */}
         <Card padding="lg">
-          <CardHeader title="Project details" />
+          <CardHeader title="Client details" />
 
           <dl className="space-y-4">
             {details.map((detail) => (
@@ -324,7 +324,7 @@ export default function ProjectShow({
 
       {/* --------------------------------------------------------- Activity --- */}
       {activity.length > 0 && (
-        <DashboardPanel title="Project Activity" className="mt-6" index={2}>
+        <DashboardPanel title="Client Activity" className="mt-6" index={2}>
           <ActivityFeed entries={activity} />
         </DashboardPanel>
       )}
@@ -333,7 +333,7 @@ export default function ProjectShow({
         isOpen={deleteDialog.isOpen}
         tone="danger"
         title={`Remove “${pendingDelete?.label ?? ''}”?`}
-        description="The PDF is deleted from the project and from storage. This cannot be undone."
+        description="The PDF is deleted from the client and from storage. This cannot be undone."
         confirmLabel="Remove drawing"
         confirmVariant="danger"
         onConfirm={confirmDocumentDelete}
@@ -347,8 +347,8 @@ export default function ProjectShow({
         isOpen={deleteProjectDialog.isOpen}
         tone="danger"
         title={`Delete “${project.name}”?`}
-        description="The project is removed from your list. Its drawings stay on file."
-        confirmLabel="Delete project"
+        description="The client is removed from your list. Its drawings stay on file."
+        confirmLabel="Delete client"
         confirmVariant="danger"
         onConfirm={() => {
           router.delete(routeTo.project(project.id))

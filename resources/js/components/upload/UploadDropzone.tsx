@@ -101,7 +101,7 @@ export function UploadDropzone({
         className,
       )}
     >
-      <input {...getInputProps()} aria-label="Choose project files" />
+      <input {...getInputProps()} aria-label="Choose client files" />
 
       {/* Scanning beam shown while a drag is in progress. */}
       {isDragActive && !isRejecting && (
@@ -139,11 +139,13 @@ export function UploadDropzone({
       </motion.div>
 
       <p className="text-xl font-semibold text-white">
-        {isRejecting
+        {isDragReject
           ? 'That file type is not supported'
-          : isDragActive
-            ? 'Drop to add your drawings'
-            : 'Drag & drop files here'}
+          : hasError
+            ? 'Resolve the message above to continue'
+            : isDragActive
+              ? 'Drop to add your drawings'
+              : 'Drag & drop files here'}
       </p>
 
       <p className="mt-1 text-md text-white/80">or</p>

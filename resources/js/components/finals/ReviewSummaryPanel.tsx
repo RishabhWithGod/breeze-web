@@ -99,7 +99,7 @@ export function ReviewSummaryPanel({
       <Card padding="lg">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <p className="text-md text-white/80">Project</p>
+            <p className="text-md text-white/80">Client</p>
             <h2 className="mt-1 text-2xl font-bold text-white">{projectName}</h2>
             {client && <p className="mt-1 text-md text-white/85">{client}</p>}
 

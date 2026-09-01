@@ -136,8 +136,8 @@ export function ProjectPdfPicker({
                 ? 'Drop the PDF here'
                 : 'Drop the PDFs here'
               : maxFiles === 1
-                ? 'Drag & drop the project PDF'
-                : 'Drag & drop the project PDFs'}
+                ? 'Drag & drop the client PDF'
+                : 'Drag & drop the client PDFs'}
         </p>
 
         <Button

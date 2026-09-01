@@ -230,7 +230,7 @@ export default function EstimateShow({
             <dl className="grid gap-4 sm:grid-cols-2">
               {[
                 { label: 'Client', value: estimate.client },
-                { label: 'Project', value: estimate.project },
+                { label: 'Client', value: estimate.project },
                 {
                   label: 'Issued on',
                   value: estimate.issuedOn ? formatDate(estimate.issuedOn) : '—',

@@ -25,7 +25,7 @@ export function ProjectPickerCard({
   index,
 }: ProjectPickerCardProps) {
   const options = [
-    { value: '', label: projects.length > 0 ? 'Select a project…' : 'No projects yet' },
+    { value: '', label: projects.length > 0 ? 'Select a client…' : 'No clients yet' },
     ...projects.map((project) => ({
       value: String(project.id),
       label: `${project.name} — ${project.client}`,
@@ -35,11 +35,11 @@ export function ProjectPickerCard({
   return (
     <Card {...(index !== undefined ? { index } : {})}>
       <CardHeader
-        title="Project"
-        subtitle="Choose which project this takeoff belongs to"
+        title="Client"
+        subtitle="Choose which client this takeoff belongs to"
         actions={
           <ButtonLink href={ROUTES.projectCreate} variant="secondary" size="sm" leftIcon={Plus}>
-            New Project
+            New Client
           </ButtonLink>
         }
       />

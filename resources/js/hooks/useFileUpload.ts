@@ -36,7 +36,7 @@ export function useFileUpload(): {
     }
 
     if (projectId === null) {
-      setFormError('Select a project before running a takeoff.')
+      setFormError('Select a client before running a takeoff.')
       return
     }
 

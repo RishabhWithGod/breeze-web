@@ -374,7 +374,7 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-white sm:text-3xl">Jobs</h1>
             <p className="mt-1 text-md text-white/90">
-              Manage all your electrical projects in one place
+              Manage all your electrical clients in one place
             </p>
           </div>
 
@@ -639,7 +639,7 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
             summary={
               meta.total === 0
                 ? 'No jobs to display'
-                : `Showing ${rows.length} of ${meta.total} projects`
+                : `Showing ${rows.length} of ${meta.total} clients`
             }
           />
         </div>

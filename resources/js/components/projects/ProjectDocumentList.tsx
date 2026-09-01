@@ -25,7 +25,7 @@ export function ProjectDocumentList({
         size="sm"
         icon={FileText}
         title="No drawings yet"
-        description="Add the project's PDFs so a takeoff can be run against them."
+        description="Add the client's PDFs so a takeoff can be run against them."
         className={className}
       />
     )

@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Briefcase,
   Check,
-  CreditCard,
   Download,
   Pencil,
   Send,
@@ -31,8 +30,6 @@ export interface InvoiceShowProps {
   invoice: InvoiceDetail
   items: readonly InvoiceItemRow[]
   can: InvoiceActionAbilities
-  /** Whether a connected Stripe processor exists to actually take an online payment against. */
-  stripeConnected: boolean
 }
 
 /**
@@ -40,7 +37,7 @@ export interface InvoiceShowProps {
  * workflow. Status only ever changes through the dedicated actions below;
  * nothing here lets it be typed in freely.
  */
-export default function InvoiceShow({ invoice, items, can, stripeConnected }: InvoiceShowProps) {
+export default function InvoiceShow({ invoice, items, can }: InvoiceShowProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
@@ -50,11 +47,6 @@ export default function InvoiceShow({ invoice, items, can, stripeConnected }: In
 
   const send = () => router.post(routeTo.invoiceSend(invoice.id), {}, { preserveScroll: true })
   const markPaid = () => router.post(routeTo.invoiceMarkPaid(invoice.id), {}, { preserveScroll: true })
-  // The server responds with `Inertia::location(...)` for this one — Stripe's
-  // own checkout page isn't a route in this app, so Inertia's client turns
-  // that into a real `window.location` navigation instead of trying to fetch
-  // it as another page here.
-  const payOnline = () => router.post(routeTo.invoicePay(invoice.id))
 
   const confirmDelete = () => {
     router.delete(routeTo.invoice(invoice.id), {
@@ -163,13 +155,8 @@ export default function InvoiceShow({ invoice, items, can, stripeConnected }: In
                   Send Invoice
                 </Button>
               )}
-              {can.markPaid && stripeConnected && (
-                <Button leftIcon={CreditCard} onClick={payOnline}>
-                  Pay Now
-                </Button>
-              )}
               {can.markPaid && (
-                <Button variant={stripeConnected ? 'secondary' : 'primary'} leftIcon={Check} onClick={markPaid}>
+                <Button leftIcon={Check} onClick={markPaid}>
                   Mark as Paid
                 </Button>
               )}

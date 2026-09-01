@@ -5,6 +5,7 @@ namespace App\Services\Ai;
 use App\Events\TakeoffFailed;
 use App\Events\TakeoffProcessed;
 use App\Jobs\BackfillTakeoffCrops;
+use App\Jobs\RenderSymbolCrops;
 use App\Models\AiJob;
 use App\Models\AiResult;
 use App\Models\Project;
@@ -231,6 +232,8 @@ class TakeoffOrchestrator
         ]));
 
         $this->profiler->measure('lifecycle_enrich', fn () => $this->enrichFromLifecycle($result));
+
+        RenderSymbolCrops::dispatch($result->id)->delay(now()->addSeconds(5));
 
         $aiJob->update([
             'status' => AiJob::STATUS_SUCCEEDED,

@@ -28,12 +28,12 @@ export function ProjectNotesCard({
 
   return (
     <Card {...(index !== undefined ? { index } : {})}>
-      <CardHeader title="Project Notes" />
+      <CardHeader title="Client Notes" />
 
       <TextArea
         id="project-notes"
         rows={4}
-        placeholder="Add any specific instructions or details about the project…"
+        placeholder="Add any specific instructions or details about the client…"
         addon={`${value.length}/${MAX_NOTES_LENGTH}`}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -43,7 +43,7 @@ export function ProjectNotesCard({
       <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="flex items-start gap-3 text-md text-white/90">
           <Info size={18} aria-hidden className="mt-0.5 shrink-0 text-brand" />
-          Notes help our AI understand your project better.
+          Notes help our AI understand your client better.
         </p>
         <Button
           type="button"

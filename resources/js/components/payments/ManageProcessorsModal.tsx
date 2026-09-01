@@ -5,6 +5,7 @@ import { Alert, Button, Modal, StatusChip, TextInput } from '@/components/common
 import { PAYMENT_PROCESSOR_STATUS_LABEL, PAYMENT_PROCESSOR_STATUS_TONE, routeTo } from '@/constants'
 import type { PaymentProcessor } from '@/types'
 import { formatModified } from '@/utils'
+import { ProcessorMark } from './ProcessorMark'
 
 export interface ManageProcessorsModalProps {
   isOpen: boolean
@@ -76,13 +77,16 @@ function ProcessorRow({
   }
 
   return (
-    <div className="rounded-panel border border-hairline bg-white/4 p-4">
+    <div className="rounded-panel border border-hairline bg-white/4 p-4 transition-colors duration-200 hover:border-hairline-strong hover:bg-white/6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="font-semibold text-white">{processor.displayName}</p>
-          <p className="mt-0.5 text-sm text-white/70">
-            {processor.connectedAt ? `Connected on ${formatModified(processor.connectedAt)}` : 'Not yet connected'}
-          </p>
+        <div className="flex items-center gap-3">
+          <ProcessorMark processorKey={processor.key} size="sm" />
+          <div>
+            <p className="font-semibold text-white">{processor.displayName}</p>
+            <p className="mt-0.5 text-sm text-white/70">
+              {processor.connectedAt ? `Connected on ${formatModified(processor.connectedAt)}` : 'Not yet connected'}
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">

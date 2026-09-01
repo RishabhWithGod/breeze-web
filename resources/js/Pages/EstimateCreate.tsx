@@ -88,7 +88,7 @@ export default function EstimateCreate({
   const hasAmount = data.amount !== '' && Number.isFinite(amount)
 
   const projectOptions = [
-    { label: 'No linked project', value: '' },
+    { label: 'No linked client', value: '' },
     ...projects.map((option) => ({
       label: option.client ? `${option.name} — ${option.client}` : option.name,
       value: String(option.id),
@@ -175,7 +175,7 @@ export default function EstimateCreate({
 
               <TextInput
                 id="estimate-project"
-                label="Project"
+                label="Client"
                 placeholder="e.g. Office Building Renovation"
                 value={data.project}
                 onChange={(event) => update('project', event.target.value)}
@@ -185,7 +185,7 @@ export default function EstimateCreate({
               <div className="grid gap-5 sm:grid-cols-2">
                 <SelectField
                   id="estimate-linked-project"
-                  label="Link to AI Takeoff project (optional)"
+                  label="Link to AI Takeoff client (optional)"
                   options={projectOptions}
                   value={data.project_id}
                   onChange={(event) => selectProject(event.target.value)}
@@ -307,7 +307,7 @@ export default function EstimateCreate({
               <div className="rounded-panel border border-hairline bg-white/4 p-4">
                 <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
                   <FileText size={14} aria-hidden className="text-brand" />
-                  Project
+                  Client
                 </dt>
                 <dd className="mt-2 text-md text-white">
                   {data.project.trim() || <span className="text-white/60">Not set</span>}

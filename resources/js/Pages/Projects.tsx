@@ -105,7 +105,7 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
   const columns: TableColumn<ProjectListRow>[] = [
     {
       key: 'name',
-      header: 'Project',
+      header: 'Client',
       render: (row) => (
         <div className="flex items-center gap-3">
           <span className="grid size-8 shrink-0 place-items-center rounded-sm bg-ocean-600 text-white">
@@ -193,14 +193,14 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
 
   return (
     <PageTransition>
-      <Head title="Projects" />
+      <Head title="Clients" />
 
       <section className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
         <header className="flex flex-col gap-4 border-b border-hairline grad-ocean-soft px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-white sm:text-3xl">Projects</h1>
+            <h1 className="text-2xl font-bold text-white sm:text-3xl">Clients</h1>
             <p className="mt-1 text-md text-white/90">
-              {counts.total} {counts.total === 1 ? 'project' : 'projects'} ·{' '}
+              {counts.total} {counts.total === 1 ? 'client' : 'clients'} ·{' '}
               {counts.drafts} in draft · {counts.documents}{' '}
               {counts.documents === 1 ? 'drawing' : 'drawings'} on record
             </p>
@@ -213,10 +213,10 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
               onSearch={(value) => applyFilters({ search: value })}
               placeholder="Search name, client, number…"
               containerClassName="sm:w-72"
-              aria-label="Search projects"
+              aria-label="Search clients"
             />
             <ButtonLink href={ROUTES.projectCreate} variant="dark" leftIcon={Plus}>
-              New Project
+              New Client
             </ButtonLink>
           </div>
         </header>
@@ -267,13 +267,13 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
               icon={filters.search || filters.status !== 'all' ? SearchX : FolderKanban}
               title={
                 filters.search || filters.status !== 'all'
-                  ? 'No projects found'
-                  : 'No projects yet'
+                  ? 'No clients found'
+                  : 'No clients yet'
               }
               description={
                 filters.search || filters.status !== 'all'
-                  ? 'No projects match your current filters. Try another status or clear the search.'
-                  : 'Create a project to hold its details and its drawing PDFs.'
+                  ? 'No clients match your current filters. Try another status or clear the search.'
+                  : 'Create a client to hold its details and its drawing PDFs.'
               }
               actions={
                 filters.search || filters.status !== 'all' ? (
@@ -282,7 +282,7 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
                   </Button>
                 ) : (
                   <ButtonLink href={ROUTES.projectCreate} leftIcon={Plus}>
-                    New Project
+                    New Client
                   </ButtonLink>
                 )
               }
@@ -298,7 +298,7 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
                   columns={columns}
                   rows={rows}
                   getRowId={(row) => row.id}
-                  caption="Projects on record"
+                  caption="Clients on record"
                 />
               </div>
 
@@ -325,8 +325,8 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
             onPageChange={(page) => applyFilters({ page })}
             summary={
               meta.total === 0
-                ? 'No projects to display'
-                : `Showing ${rows.length} of ${meta.total} projects`
+                ? 'No clients to display'
+                : `Showing ${rows.length} of ${meta.total} clients`
             }
           />
         </div>
@@ -336,8 +336,8 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
         isOpen={deleteDialog.isOpen}
         tone="danger"
         title={`Delete “${pendingDelete?.name ?? ''}”?`}
-        description="The project is removed from your list. Its drawings stay on file."
-        confirmLabel="Delete project"
+        description="The client is removed from your list. Its drawings stay on file."
+        confirmLabel="Delete client"
         confirmVariant="danger"
         onConfirm={handleDeleteConfirmed}
         onCancel={() => {

@@ -1,12 +1,14 @@
 import { Link, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, LogOut, Settings, User, type LucideIcon } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, Settings, ShieldCheck, User, type LucideIcon } from 'lucide-react'
 import { ROUTES } from '@/constants'
 import { useClickOutside, useDisclosure } from '@/hooks'
 import type { SharedPageProps } from '@/types'
 
 const ACCOUNT_ITEMS: readonly { label: string; icon: LucideIcon; href: string }[] = [
   { label: 'Profile', icon: User, href: ROUTES.profile },
+  { label: 'Notifications', icon: Bell, href: ROUTES.notifications },
+  { label: 'Security', icon: ShieldCheck, href: ROUTES.security },
   { label: 'Settings', icon: Settings, href: ROUTES.settings },
 ]
 

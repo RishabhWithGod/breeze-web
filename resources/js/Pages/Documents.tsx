@@ -288,7 +288,7 @@ export default function Documents({
 
       <PageHeader
         title="Documents"
-        subtitle="Manage project documents, blueprints, and specifications"
+        subtitle="Manage client documents, blueprints, and specifications"
         actions={
           <>
             <Button variant="secondary" leftIcon={SlidersHorizontal} aria-expanded={filterBar.isOpen} onClick={filterBar.toggle}>
@@ -404,7 +404,7 @@ export default function Documents({
               columns={columns}
               rows={rows}
               getRowId={(document) => document.id}
-              caption="Project documents"
+              caption="Client documents"
             />
           )}
 

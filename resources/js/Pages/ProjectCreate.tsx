@@ -50,7 +50,7 @@ export default function ProjectCreate({
   /** Files the browser refused outright — never sent, so reported client-side. */
   const [rejected, setRejected] = useState<readonly RejectedUploadFile[]>([])
 
-  const { data, setData, post, processing, errors, hasErrors, clearErrors } =
+  const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
     useForm<ProjectDraft>({
       name: '',
       code: '',
@@ -106,6 +106,10 @@ export default function ProjectCreate({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
+    // A single name field now stands in for both — the server still records
+    // a separate `client` value, so it's carried across at submit time
+    // rather than asked for twice.
+    transform((payload) => ({ ...payload, client: payload.name }))
     // `forceFormData` because the PDFs cannot travel as JSON.
     post(ROUTES.projects, { forceFormData: true, preserveScroll: true })
   }
@@ -117,14 +121,14 @@ export default function ProjectCreate({
 
   return (
     <PageTransition>
-      <Head title="Create New Project" />
+      <Head title="Create New Client" />
 
       <PageHeader
-        title="Create New Project"
-        subtitle="Define the project, then attach the drawing PDFs it will be taken off from."
+        title="Create New Client"
+        subtitle="Define the client, then attach the drawing PDFs it will be taken off from."
         breadcrumbs={[
-          { label: 'Projects', href: ROUTES.projects },
-          { label: 'New Project' },
+          { label: 'Clients', href: ROUTES.projects },
+          { label: 'New Client' },
         ]}
       />
 
@@ -132,7 +136,7 @@ export default function ProjectCreate({
         <AnimatePresence initial={false}>
           {hasErrors && (
             <Alert key="form-error" tone="danger" title="Check the form">
-              Some fields need attention before this project can be created.
+              Some fields need attention before this client can be created.
             </Alert>
           )}
 
@@ -166,45 +170,36 @@ export default function ProjectCreate({
         {/* ------------------------------------------------- Project details --- */}
         <Card padding="lg">
           <CardHeader
-            title="Project details"
-            subtitle="Who the project is for, and where the work is"
+            title="Client details"
+            subtitle="Who the client is for, and where the work is"
           />
 
           <div className="space-y-6">
+            {/*
+              One field rather than a separate name + client pair: clients
+              already on record are offered as suggestions via the datalist,
+              and a client new to the workspace is typed straight in.
+            */}
             <TextInput
               id="project-name"
-              label="Project Name*"
+              label="Client Name*"
               placeholder="e.g. Harborview Data Hall"
+              list="project-known-clients"
+              autoComplete="off"
               value={data.name}
               onChange={(event) => update('name', event.target.value)}
+              {...(clients.length > 0
+                ? { hint: 'Existing clients are suggested as you type.' }
+                : {})}
               {...(errors.name ? { error: errors.name } : {})}
             />
+            <datalist id="project-known-clients">
+              {clients.map((client) => (
+                <option key={client} value={client} />
+              ))}
+            </datalist>
 
             <div className="grid gap-6 lg:grid-cols-2">
-              {/*
-                One field rather than a select: clients already on record are
-                offered as suggestions, and a client new to the workspace is typed
-                straight in.
-              */}
-              <TextInput
-                id="project-client"
-                label="Client*"
-                placeholder="Enter client name"
-                list="project-known-clients"
-                autoComplete="off"
-                value={data.client}
-                onChange={(event) => update('client', event.target.value)}
-                {...(clients.length > 0
-                  ? { hint: 'Existing clients are suggested as you type.' }
-                  : {})}
-                {...(errors.client ? { error: errors.client } : {})}
-              />
-              <datalist id="project-known-clients">
-                {clients.map((client) => (
-                  <option key={client} value={client} />
-                ))}
-              </datalist>
-
               <TextInput
                 id="project-location"
                 label="Site / Location"
@@ -213,9 +208,6 @@ export default function ProjectCreate({
                 onChange={(event) => update('location', event.target.value)}
                 {...(errors.location ? { error: errors.location } : {})}
               />
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
               <SelectField
                 id="project-discipline"
                 label="Discipline"
@@ -224,19 +216,20 @@ export default function ProjectCreate({
                 onChange={(event) => update('discipline', event.target.value)}
                 {...(errors.discipline ? { error: errors.discipline } : {})}
               />
-              <TextInput
-                id="project-due"
-                type="date"
-                label="Takeoff Due"
-                value={data.due_date}
-                onChange={(event) => update('due_date', event.target.value)}
-                {...(errors.due_date ? { error: errors.due_date } : {})}
-              />
             </div>
+
+            <TextInput
+              id="project-due"
+              type="date"
+              label="Takeoff Due"
+              value={data.due_date}
+              onChange={(event) => update('due_date', event.target.value)}
+              {...(errors.due_date ? { error: errors.due_date } : {})}
+            />
 
             <RadioGroup
               name="project-type"
-              label="Project Type"
+              label="Client Type"
               options={PROJECT_TYPE_OPTIONS}
               value={data.project_type}
               onChange={(value) => update('project_type', value as ProjectType)}
@@ -288,7 +281,7 @@ export default function ProjectCreate({
             Cancel
           </ButtonLink>
           <Button type="submit" leftIcon={FolderKanban} isLoading={processing}>
-            Create Project
+            Create Client
           </Button>
         </div>
       </form>
@@ -301,7 +294,7 @@ export default function ProjectCreate({
         <div className="min-w-0">
           <p className="text-md font-semibold text-brand">Pro Tip</p>
           <p className="mt-1 text-md text-white">
-            Drawings can be added to the project later, and a project created here is
+            Drawings can be added to the client later, and a client created here is
             ready for AI Takeoff — run the analysis from the AI Takeoff module when the
             set is complete.
           </p>

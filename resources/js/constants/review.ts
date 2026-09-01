@@ -89,7 +89,7 @@ export const ESTIMATE_CATEGORY_LABEL: Record<EstimateCategory, string> = {
 /** Roles a job can be staffed with. Values match JobAssignment::ROLES. */
 export const ASSIGNMENT_ROLES: readonly { value: AssignmentRole; label: string }[] = [
   { value: 'estimator', label: 'Estimator' },
-  { value: 'project-manager', label: 'Project Manager' },
+  { value: 'project-manager', label: 'Client Manager' },
   { value: 'foreman', label: 'Foreman' },
   { value: 'electrician', label: 'Electrician' },
   { value: 'reviewer', label: 'Reviewer' },

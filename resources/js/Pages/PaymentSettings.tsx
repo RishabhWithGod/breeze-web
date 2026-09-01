@@ -9,12 +9,11 @@ import {
   CardFooter,
   CardHeader,
   EmptyState,
-  IconBubble,
   Pagination,
   StatusChip,
   Table,
 } from '@/components/common'
-import { ManageProcessorsModal } from '@/components/payments'
+import { ManageProcessorsModal, ProcessorMark } from '@/components/payments'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import {
   PAYMENT_PROCESSOR_STATUS_LABEL,
@@ -105,9 +104,9 @@ export default function PaymentSettings({
 
         <ul className="space-y-3">
           {stripeOnly.map((processor) => (
-            <li key={processor.id} className="flex items-center justify-between gap-3 rounded-panel border border-hairline bg-white/4 p-4">
+            <li key={processor.id} className="flex items-center justify-between gap-3 rounded-panel border border-hairline bg-white/4 p-4 transition-colors duration-200 hover:border-hairline-strong hover:bg-white/6">
               <div className="flex items-center gap-3">
-                <IconBubble icon={CreditCard} tone={processor.isConnected ? 'brand' : 'neutral'} size="sm" />
+                <ProcessorMark processorKey={processor.key} size="sm" className={!processor.isConnected ? 'opacity-50 grayscale' : undefined} />
                 <div>
                   <p className="font-semibold text-white">{processor.displayName}</p>
                   <p className="text-sm text-white/70">

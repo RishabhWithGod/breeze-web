@@ -174,14 +174,24 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
                 onChange={(event) => applyJob(event.target.value)}
               />
 
-              <TextInput
-                id="invoice-date"
-                type="date"
-                label="Invoice Date *"
-                value={data.invoice_date}
-                onChange={(event) => update('invoice_date', event.target.value)}
-                {...(errors.invoice_date ? { error: errors.invoice_date } : {})}
-              />
+              <div className="grid gap-5 sm:grid-cols-2">
+                <TextInput
+                  id="invoice-date"
+                  type="date"
+                  label="Invoice Date *"
+                  value={data.invoice_date}
+                  onChange={(event) => update('invoice_date', event.target.value)}
+                  {...(errors.invoice_date ? { error: errors.invoice_date } : {})}
+                />
+                <TextInput
+                  id="invoice-due-date"
+                  type="date"
+                  label="Due Date"
+                  value={data.due_date}
+                  onChange={(event) => update('due_date', event.target.value)}
+                  {...(errors.due_date ? { error: errors.due_date } : {})}
+                />
+              </div>
 
               <TextInput
                 id="invoice-tax-pct"

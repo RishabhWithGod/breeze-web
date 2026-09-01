@@ -190,7 +190,7 @@ export function SymbolCard({
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-2 p-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-3.5">
         {/* Symbol name */}
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 truncate text-sm font-semibold text-white" title={row.name}>
@@ -223,14 +223,15 @@ export function SymbolCard({
           >
             Quantity
           </label>
-          <div className="mt-1 flex items-center gap-1.5">
+          <div className="mt-1 flex items-stretch overflow-hidden rounded-panel border border-hairline-strong bg-white/5">
             <IconButton
-              variant="secondary"
+              variant="ghost"
               size="sm"
               icon={Minus}
               label={`Decrease the quantity of ${row.name}`}
               disabled={locked || row.finalCount <= 0}
               onClick={() => step(-1)}
+              className="size-8 shrink-0 rounded-none border-0 hover:bg-white/10"
             />
             <TextInput
               id={`symbol-count-${row.id}`}
@@ -247,15 +248,16 @@ export function SymbolCard({
                   commitCount()
                 }
               }}
-              className="h-8 py-0 text-center text-sm font-semibold"
+              className="h-8 min-w-0 flex-1 rounded-none border-x border-hairline bg-transparent py-0 text-center text-sm font-semibold hover:border-hairline focus:bg-white/10"
             />
             <IconButton
-              variant="secondary"
+              variant="ghost"
               size="sm"
               icon={Plus}
               label={`Increase the quantity of ${row.name}`}
               disabled={locked}
               onClick={() => step(1)}
+              className="size-8 shrink-0 rounded-none border-0 hover:bg-white/10"
             />
           </div>
         </div>
@@ -415,7 +417,7 @@ export function SymbolCard({
               label="Undo"
               disabled={locked}
               onClick={() => post(routeTo.symbolReset(resultId, row.id))}
-              className="mx-auto"
+              className="mx-auto rounded-panel"
             />
           ) : (
             <IconButton
@@ -425,7 +427,7 @@ export function SymbolCard({
               label="Approve"
               disabled={locked}
               onClick={() => post(routeTo.symbolApprove(resultId, row.id))}
-              className="mx-auto"
+              className="mx-auto rounded-panel"
             />
           )}
 
@@ -461,7 +463,7 @@ export function SymbolCard({
               setRenameDraft(row.name)
               setMode('rename')
             }}
-            className="mx-auto"
+            className="mx-auto rounded-panel"
           />
         </div>
       </div>

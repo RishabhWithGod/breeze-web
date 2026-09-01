@@ -5,7 +5,7 @@ import type { EstimateStatus, JobStatus, SelectOption } from '@/types'
 /* -------------------------------------------------------------------------- */
 
 export const HISTORY_FILTERS = [
-  { label: 'All Projects', value: 'all' },
+  { label: 'All Clients', value: 'all' },
   { label: 'Drafts', value: 'draft' },
   { label: 'Completed', value: 'completed' },
   { label: 'Converted', value: 'converted' },
@@ -28,7 +28,7 @@ export type HistorySort = (typeof HISTORY_SORT_OPTIONS)[number]['value']
 
 /** Mirrors Project::STATUSES, plus the "all" pseudo-filter. */
 export const PROJECT_STATUS_FILTERS = [
-  { label: 'All Projects', value: 'all' },
+  { label: 'All Clients', value: 'all' },
   { label: 'Draft', value: 'draft' },
   { label: 'Processing', value: 'processing' },
   { label: 'Completed', value: 'completed' },

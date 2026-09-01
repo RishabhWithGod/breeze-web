@@ -9,9 +9,7 @@ import {
   CardFooter,
   CardHeader,
   IconBubble,
-  Pagination,
   Switch,
-  Table,
 } from '@/components/common'
 import {
   ChangeEmailModal,
@@ -21,13 +19,12 @@ import {
   RecoveryCodesModal,
 } from '@/components/security'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ROUTES, routeTo } from '@/constants'
+import { routeTo } from '@/constants'
 import { useDisclosure } from '@/hooks'
 import type {
   SecurityAuditLogPage,
   SecurityNotificationPreference,
   SharedPageProps,
-  TableColumn,
   TwoFactorState,
 } from '@/types'
 import { formatModified } from '@/utils'
@@ -51,7 +48,6 @@ export default function SecuritySettings({
   twoFactor,
   maskedEmail,
   notificationPreferences,
-  auditLog,
 }: SecuritySettingsProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
@@ -100,17 +96,6 @@ export default function SecuritySettings({
       { preserveScroll: true },
     )
   }
-
-  const auditColumns: TableColumn<SecurityAuditLogPage['data'][number]>[] = [
-    { key: 'activity', header: 'Activity', render: (row) => <span className="font-medium text-white">{row.activity}</span> },
-    { key: 'ip', header: 'IP Address', render: (row) => <span className="whitespace-nowrap text-white/85">{row.ipAddress}</span> },
-    { key: 'location', header: 'Location', render: (row) => <span className="text-white/70">{row.location}</span> },
-    {
-      key: 'date',
-      header: 'Date & Time',
-      render: (row) => <span className="whitespace-nowrap text-white/85">{formatModified(row.occurredAt)}</span>,
-    },
-  ]
 
   return (
     <PageTransition>
@@ -210,34 +195,6 @@ export default function SecuritySettings({
             </tbody>
           </table>
         </div>
-      </Card>
-
-      {/* ==================================================== Security Audit Log */}
-      <Card className="mt-6">
-        <CardHeader title="Security Audit Log" subtitle="A record of activity on your account" />
-
-        <Table
-          dense
-          variant="lined"
-          headerVariant="plain"
-          columns={auditColumns}
-          rows={auditLog.data}
-          getRowId={(row) => row.id}
-          caption="Security audit log"
-          emptyState={<span className="text-white/70">No security activity recorded yet.</span>}
-        />
-
-        {auditLog.meta.total > 0 && (
-          <Pagination
-            withLabels
-            tone="light"
-            className="mt-6"
-            page={auditLog.meta.current_page}
-            pageCount={auditLog.meta.last_page}
-            onPageChange={(page) => router.get(ROUTES.security, { page }, { preserveScroll: true, preserveState: true })}
-            summary={`Showing ${auditLog.data.length} of ${auditLog.meta.total} events`}
-          />
-        )}
       </Card>
 
       <EnableTwoFactorModal isOpen={enable2fa.isOpen} onClose={enable2fa.close} maskedEmail={maskedEmail} />

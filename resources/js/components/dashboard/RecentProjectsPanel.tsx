@@ -31,7 +31,7 @@ export function RecentProjectsPanel({ projects, index }: RecentProjectsPanelProp
   const columns: TableColumn<DashboardProject>[] = [
     {
       key: 'name',
-      header: 'Project Name',
+      header: 'Client Name',
       render: (project) => (
         <div className="flex items-center gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-brand/15 text-brand">
@@ -108,9 +108,9 @@ export function RecentProjectsPanel({ projects, index }: RecentProjectsPanelProp
 
   return (
     <DashboardPanel
-      title="Recent Projects"
+      title="Recent Clients"
       subtitle={`${projects.length} most recent takeoffs`}
-      link={{ label: 'View all projects', href: ROUTES.history }}
+      link={{ label: 'View all clients', href: ROUTES.history }}
       {...(index !== undefined ? { index } : {})}
     >
       {/* Table view — xl and up, where all six columns fit without scrolling */}
@@ -119,7 +119,7 @@ export function RecentProjectsPanel({ projects, index }: RecentProjectsPanelProp
           columns={columns}
           rows={projects}
           getRowId={(project) => project.id}
-          caption="Recent AI takeoff projects"
+          caption="Recent AI takeoff clients"
         />
       </div>
 

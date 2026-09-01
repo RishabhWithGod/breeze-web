@@ -26,14 +26,14 @@ const SUGGESTIONS = [
 export default function EmptyState() {
   return (
     <PageTransition>
-      <Head title="Projects" />
+      <Head title="Clients" />
 
       <PageHeader
-        title="Projects"
+        title="Clients"
         subtitle="Everything you take off with AI lands here."
         breadcrumbs={[
           { label: 'AI Takeoff', href: ROUTES.upload },
-          { label: 'Projects' },
+          { label: 'Clients' },
         ]}
       />
 

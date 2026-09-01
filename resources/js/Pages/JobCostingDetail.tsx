@@ -165,7 +165,7 @@ export default function JobCostingDetail({
         </div>
       ) : (
         <Alert tone="info" className="mb-6" title="Cost figures are restricted">
-          Only a Project Manager, Admin or Owner can see this job's dollar figures. Hours and status are shown below.
+          Only a Client Manager, Admin or Owner can see this job's dollar figures. Hours and status are shown below.
         </Alert>
       )}
 
@@ -276,7 +276,7 @@ export default function JobCostingDetail({
             actions={summary.estimateId ? <ButtonLink href={routeTo.estimate(summary.estimateId)} variant="secondary" size="sm">Open Estimate</ButtonLink> : undefined}
           />
           {!canViewCosts ? (
-            <p className="text-md text-white/70">Cost figures are restricted. Only a Project Manager, Admin or Owner can see this comparison.</p>
+            <p className="text-md text-white/70">Cost figures are restricted. Only a Client Manager, Admin or Owner can see this comparison.</p>
           ) : summary.estimateId && summary.estimatedLaborCost !== null && summary.estimatedMaterialCost !== null && summary.estimatedTotalCost !== null && summary.actualLaborCost !== null && summary.actualMaterialCost !== null && summary.actualTotalCost !== null && summary.totalCostVariance !== null ? (
             <dl className="grid grid-cols-2 gap-4">
               <Field label="Estimate" value={summary.estimateNumber ?? '—'} />

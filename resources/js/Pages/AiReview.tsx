@@ -92,6 +92,7 @@ export default function AiReview({
   const [selectedOccurrence, setSelectedOccurrence] = useState<OccurrenceRef | null>(null)
   const [focusRequest, setFocusRequest] = useState<OccurrenceRef | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [isFinalising, setIsFinalising] = useState(false)
   const rows = symbols.data
 
   const overlayById = useMemo(
@@ -213,6 +214,18 @@ export default function AiReview({
     )
   }
 
+  // Guards against a double click (or a resend) firing the sign-off twice —
+  // the second request used to land after the first had already finalised
+  // the review and come back as a confusing error.
+  const finalise = () => {
+    if (isFinalising) return
+    setIsFinalising(true)
+    router.post(routeTo.reviewFinalise(result.id), {}, {
+      preserveScroll: true,
+      onFinish: () => setIsFinalising(false),
+    })
+  }
+
   return (
     <PageTransition>
       <Head title={`AI Review — ${result.projectName}`} />
@@ -258,8 +271,9 @@ export default function AiReview({
                 size="sm"
                 leftIcon={Check}
                 disabled={tally.approved === 0}
+                isLoading={isFinalising}
                 title="Locks in the approved symbols so you can create the estimate and job"
-                onClick={() => router.post(routeTo.reviewFinalise(result.id))}
+                onClick={finalise}
               >
                 Finish review
               </Button>
@@ -467,12 +481,13 @@ export default function AiReview({
       <StepFooter
         current="review"
         continueLabel={locked ? 'Continue to Review Summary' : 'Finish review and continue'}
+        isBusy={isFinalising}
         {...(locked ? { href: routeTo.finalSymbols(result.id) } : {})}
         {...(!locked && tally.approved === 0
           ? { blockedReason: 'Approve at least one symbol to continue.' }
           : {})}
         {...(!locked && tally.approved > 0
-          ? { onContinue: () => router.post(routeTo.reviewFinalise(result.id)) }
+          ? { onContinue: finalise }
           : {})}
       />
     </PageTransition>

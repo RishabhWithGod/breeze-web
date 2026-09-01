@@ -95,7 +95,7 @@ export default function SchedulingUnassigned({
               value={query}
               onValueChange={setQuery}
               onSearch={(value) => apply({ search: value })}
-              placeholder="Search projects..."
+              placeholder="Search clients..."
               containerClassName="w-full sm:w-72"
               aria-label="Search unassigned jobs"
             />
@@ -200,7 +200,7 @@ export default function SchedulingUnassigned({
             className="mt-8"
             page={jobs.meta.current_page}
             pageCount={jobs.meta.last_page}
-            summary={`Showing ${jobs.data.length} of ${jobs.meta.total} projects`}
+            summary={`Showing ${jobs.data.length} of ${jobs.meta.total} clients`}
             onPageChange={(page) => apply({ page })}
           />
         </>

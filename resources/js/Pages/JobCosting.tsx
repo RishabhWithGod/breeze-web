@@ -211,7 +211,7 @@ export default function JobCosting({
               </div>
             </>
           ) : (
-            <EmptyState title="Cost figures are restricted" description="Only a Project Manager, Admin or Owner can see labor cost totals. Hours worked, shown below, are not restricted." />
+            <EmptyState title="Cost figures are restricted" description="Only a Client Manager, Admin or Owner can see labor cost totals. Hours worked, shown below, are not restricted." />
           )}
           {!canViewCosts && (
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -224,7 +224,7 @@ export default function JobCosting({
         <Card padding="lg">
           <SectionHeading as="h3" title="Estimated vs Actual Materials" />
           {!canViewCosts ? (
-            <EmptyState title="Cost figures are restricted" description="Only a Project Manager, Admin or Owner can see material cost totals." />
+            <EmptyState title="Cost figures are restricted" description="Only a Client Manager, Admin or Owner can see material cost totals." />
           ) : materialTotals.estimatedCost === 0 && materialTotals.actualCost === 0 ? (
             <EmptyState title="No material costing data yet" description="Log an estimate with material lines, or record an actual material cost on a job, to see this chart." />
           ) : (
@@ -274,7 +274,7 @@ export default function JobCosting({
               </div>
             </>
           ) : (
-            <EmptyState title="Cost and revenue figures are restricted" description="Only a Project Manager, Admin or Owner can see this job's financial totals." />
+            <EmptyState title="Cost and revenue figures are restricted" description="Only a Client Manager, Admin or Owner can see this job's financial totals." />
           )}
         </Card>
 

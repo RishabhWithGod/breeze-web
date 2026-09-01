@@ -96,7 +96,7 @@ export default function JobCreate({ foremen, clients, projects, uploads }: JobCr
   ]
 
   const projectOptions = [
-    { label: 'No linked project', value: '' },
+    { label: 'No linked client', value: '' },
     ...projects.map((project) => ({
       label: project.client ? `${project.name} — ${project.client}` : project.name,
       value: String(project.id),
@@ -155,7 +155,7 @@ export default function JobCreate({ foremen, clients, projects, uploads }: JobCr
               <div className="grid gap-6 lg:grid-cols-2">
                 <SelectField
                   id="job-project"
-                  label="Project"
+                  label="Client"
                   options={projectOptions}
                   value={data.project_id}
                   onChange={(event) => {

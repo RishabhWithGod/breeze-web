@@ -124,7 +124,7 @@ export default function History({ projects, filters, activity }: HistoryProps) {
   const columns: TableColumn<TakeoffHistoryRow>[] = [
     {
       key: 'name',
-      header: 'Project Name',
+      header: 'Client Name',
       render: (row) => (
         <div className="flex items-center gap-3">
           <span className="grid size-8 shrink-0 place-items-center rounded-sm bg-ocean-600 text-white">
@@ -203,7 +203,7 @@ export default function History({ projects, filters, activity }: HistoryProps) {
               AI Takeoff History
             </h1>
             <p className="mt-1 text-md text-white/90">
-              View and manage your previous takeoff projects
+              View and manage your previous takeoff clients
             </p>
           </div>
 
@@ -212,9 +212,9 @@ export default function History({ projects, filters, activity }: HistoryProps) {
               value={query}
               onValueChange={setQuery}
               onSearch={(value) => applyFilters({ search: value })}
-              placeholder="Search projects..."
+              placeholder="Search clients..."
               containerClassName="sm:w-72"
-              aria-label="Search projects"
+              aria-label="Search clients"
             />
             <ButtonLink href={ROUTES.upload} variant="dark" leftIcon={Plus}>
               New Takeoff
@@ -280,7 +280,7 @@ export default function History({ projects, filters, activity }: HistoryProps) {
           {rows.length === 0 ? (
             <EmptyState
               icon={SearchX}
-              title="No projects found"
+              title="No clients found"
               description="No takeoffs match your current filters. Try another status or clear the search."
               actions={
                 <Button variant="secondary" onClick={resetFilters}>
@@ -299,7 +299,7 @@ export default function History({ projects, filters, activity }: HistoryProps) {
                   columns={columns}
                   rows={rows}
                   getRowId={(row) => row.id}
-                  caption="Previous AI takeoff projects"
+                  caption="Previous AI takeoff clients"
                 />
               </div>
 
@@ -327,8 +327,8 @@ export default function History({ projects, filters, activity }: HistoryProps) {
             onPageChange={(page) => applyFilters({ page })}
             summary={
               meta.total === 0
-                ? 'No projects to display'
-                : `Showing ${rows.length} of ${meta.total} projects`
+                ? 'No clients to display'
+                : `Showing ${rows.length} of ${meta.total} clients`
             }
           />
         </div>
@@ -347,8 +347,8 @@ export default function History({ projects, filters, activity }: HistoryProps) {
         isOpen={deleteDialog.isOpen}
         tone="danger"
         title={`Delete “${pendingDelete?.name ?? ''}”?`}
-        description="The project is removed from your history. You can undo this straight after."
-        confirmLabel="Delete project"
+        description="The client is removed from your history. You can undo this straight after."
+        confirmLabel="Delete client"
         confirmVariant="danger"
         onConfirm={handleDeleteConfirmed}
         onCancel={() => {

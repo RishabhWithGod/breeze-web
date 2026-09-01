@@ -20,7 +20,7 @@ export interface LoginProps {
 /** Light-filled control, as the sign-in screen renders its two fields. Left
  *  padding clears the leading icon every field on this screen carries. */
 const FIELD =
-  'w-full rounded-lg border border-transparent bg-[#eef1fa] py-2.5 pr-4 pl-11 text-[1.0625rem] ' +
+  'w-full rounded-lg border border-transparent bg-[#eef1fa] py-2.5 pr-4 pl-11 text-[0.9375rem] ' +
   'text-navy-950 placeholder:text-navy-950/45 shadow-[inset_0_1px_2px_rgb(3_10_25/0.08)] transition-shadow duration-200 ' +
   'focus:border-brand/60 focus:outline-none focus:ring-2 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-60'
 
@@ -71,23 +71,23 @@ export default function Login({ rememberedEmail }: LoginProps) {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: MOTION.slow, ease: [0.22, 1, 0.36, 1] }}
-        className="relative z-10 w-full max-w-3xl"
+        className="relative z-10 w-full max-w-md"
       >
         <div className="flex justify-center drop-shadow-[0_0_24px_rgb(51_227_255/0.35)]">
           <BrandWordmark />
         </div>
 
-        <h1 className="mt-6 text-center text-3xl font-extrabold text-white sm:text-4xl">
+        <h1 className="mt-7 text-center text-2xl font-extrabold text-white sm:text-[1.75rem]">
           Sign In
         </h1>
-        <p className="mt-3 text-center text-lg font-bold text-white sm:text-xl">
+        <p className="mt-2 text-center text-sm font-medium text-white/70">
           Enter your credentials to access your account
         </p>
 
         <form
           onSubmit={submit}
           noValidate
-          className="mt-8 rounded-2xl border border-hairline-strong grad-spotlight p-5 shadow-glow backdrop-blur-xl sm:p-6"
+          className="mt-7 rounded-2xl border border-hairline-strong grad-spotlight p-6 shadow-glow backdrop-blur-xl sm:p-7"
         >
           <AnimatePresence initial={false}>
             {errors.email && (
@@ -103,13 +103,13 @@ export default function Login({ rememberedEmail }: LoginProps) {
             )}
           </AnimatePresence>
 
-          <label htmlFor="email" className="block text-lg font-medium text-white">
+          <label htmlFor="email" className="block text-sm font-semibold text-white/90">
             Email
           </label>
           <div className="relative mt-2">
             <Mail
               aria-hidden
-              size={19}
+              size={18}
               className="pointer-events-none absolute inset-y-0 left-4 my-auto text-navy-950/45"
             />
             <input
@@ -126,14 +126,14 @@ export default function Login({ rememberedEmail }: LoginProps) {
 
           <label
             htmlFor="password"
-            className="mt-5 block text-lg font-medium text-white"
+            className="mt-4 block text-sm font-semibold text-white/90"
           >
             Password
           </label>
           <div className="relative mt-2">
             <Lock
               aria-hidden
-              size={19}
+              size={18}
               className="pointer-events-none absolute inset-y-0 left-4 my-auto text-navy-950/45"
             />
             <input
@@ -169,7 +169,7 @@ export default function Login({ rememberedEmail }: LoginProps) {
             */}
             <label
               htmlFor="remember"
-              className="group inline-flex cursor-pointer items-center gap-3 text-lg text-white select-none has-[input:disabled]:cursor-not-allowed has-[input:disabled]:opacity-60"
+              className="group inline-flex cursor-pointer items-center gap-2.5 text-sm font-medium text-white/85 select-none has-[input:disabled]:cursor-not-allowed has-[input:disabled]:opacity-60"
             >
               <input
                 id="remember"
@@ -202,7 +202,7 @@ export default function Login({ rememberedEmail }: LoginProps) {
 
             <Link
               href={ROUTES.forgotPassword}
-              className="text-lg text-brand transition-colors hover:text-white"
+              className="text-sm font-semibold text-brand transition-colors hover:text-white"
             >
               Forgot Password?
             </Link>
@@ -211,15 +211,15 @@ export default function Login({ rememberedEmail }: LoginProps) {
           <button
             type="submit"
             disabled={processing}
-            className="mt-6 w-full rounded-lg bg-linear-to-b from-brand-soft to-brand py-3 text-lg font-bold text-brand-ink shadow-[0_6px_20px_-6px_rgb(51_227_255/0.6)] transition-all duration-200 hover:shadow-[0_8px_26px_-6px_rgb(51_227_255/0.8)] hover:brightness-105 active:brightness-95 focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-70 disabled:shadow-none disabled:hover:brightness-100"
+            className="mt-6 w-full rounded-lg bg-linear-to-b from-brand-soft to-brand py-2.5 text-[0.9375rem] font-bold text-brand-ink shadow-[0_6px_20px_-6px_rgb(51_227_255/0.6)] transition-all duration-200 hover:shadow-[0_8px_26px_-6px_rgb(51_227_255/0.8)] hover:brightness-105 active:brightness-95 focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-70 disabled:shadow-none disabled:hover:brightness-100"
           >
             {processing ? 'Signing In…' : 'Sign In'}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-lg font-bold text-white">
+        <p className="mt-6 text-center text-sm font-medium text-white/70">
           Don&apos;t have an account?{' '}
-          <Link href={ROUTES.signup} className="text-brand transition-colors hover:text-white">
+          <Link href={ROUTES.signup} className="font-semibold text-brand transition-colors hover:text-white">
             Sign Up
           </Link>
         </p>

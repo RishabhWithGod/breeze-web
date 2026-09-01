@@ -164,7 +164,7 @@ export default function EstimateEdit({
             />
             <TextInput
               id="estimate-project"
-              label="Project"
+              label="Client"
               className="sm:col-span-2"
               value={form.data.project}
               onChange={(event) => form.setData('project', event.target.value)}

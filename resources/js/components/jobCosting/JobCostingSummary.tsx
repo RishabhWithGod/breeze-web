@@ -46,7 +46,7 @@ export function JobCostingSummary({ jobId, summary, canViewCosts }: JobCostingSu
           </p>
         </>
       ) : (
-        <p className="text-md text-white/70">Only a Project Manager, Admin or Owner can see this job's cost figures.</p>
+        <p className="text-md text-white/70">Only a Client Manager, Admin or Owner can see this job's cost figures.</p>
       )}
     </Card>
   )

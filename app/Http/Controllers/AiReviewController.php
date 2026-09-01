@@ -141,6 +141,18 @@ class AiReviewController extends Controller
         CompleteReview $complete,
         EstimateBuilder $estimateBuilder,
     ): RedirectResponse {
+        $this->authorize('view', $result);
+
+        // A duplicate submit (double click, a resend after the tab lost focus)
+        // lands here after the first request already finalised it. Send the
+        // reviewer back to a normal page instead of the 403 the policy would
+        // otherwise raise for a review that's no longer theirs to finalise.
+        if ($result->isFinalised()) {
+            return redirect()
+                ->route('reviews.show', $result)
+                ->with('success', 'This review was already signed off.');
+        }
+
         $this->authorize('finalise', $result);
 
         try {

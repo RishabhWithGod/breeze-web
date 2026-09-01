@@ -91,7 +91,7 @@ return [
                 'allowed_origins' => array_values(array_filter(array_map(
                     'trim',
                     explode(',', (string) env('REVERB_APP_ALLOWED_ORIGINS', ''))
-                ))) ?: (env('APP_ENV', 'production') === 'local' ? ['*'] : []),
+                ))) ?: (app()->environment('local') ? ['*'] : []),
                 'ping_interval' => env('REVERB_APP_PING_INTERVAL', 60),
                 'activity_timeout' => env('REVERB_APP_ACTIVITY_TIMEOUT', 30),
                 'max_connections' => env('REVERB_APP_MAX_CONNECTIONS'),
