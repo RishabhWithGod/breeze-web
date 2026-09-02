@@ -124,7 +124,7 @@ export default function History({ projects, filters, activity }: HistoryProps) {
   const columns: TableColumn<TakeoffHistoryRow>[] = [
     {
       key: 'name',
-      header: 'Client Name',
+      header: 'Client',
       render: (row) => (
         <div className="flex items-center gap-3">
           <span className="grid size-8 shrink-0 place-items-center rounded-sm bg-ocean-600 text-white">
@@ -140,11 +140,6 @@ export default function History({ projects, filters, activity }: HistoryProps) {
       render: (row) => (
         <span className="whitespace-nowrap text-white/90">{formatDate(row.date)}</span>
       ),
-    },
-    {
-      key: 'client',
-      header: 'Client',
-      render: (row) => <span className="text-white/90">{row.client}</span>,
     },
     {
       key: 'status',

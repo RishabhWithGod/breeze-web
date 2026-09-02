@@ -13,8 +13,11 @@ use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 /**
- * The standalone Create Estimate screen — a client-facing record on its own,
- * or one linked back to a drawing already run through AI Takeoff.
+ * The Create Estimate screen.
+ *
+ * The client is picked from the client register rather than typed: clients are
+ * projects, so `project_id` names the client and the estimate's own
+ * `client`/`project` columns are snapshots the server writes from it.
  */
 class EstimateTest extends TestCase
 {
@@ -28,12 +31,13 @@ class EstimateTest extends TestCase
         $this->user = User::factory()->create();
     }
 
-    public function test_an_estimate_can_be_created_without_any_takeoff_link(): void
+    public function test_an_estimate_can_be_created_without_any_takeoff_drawing(): void
     {
+        [$project] = $this->makeTakeoffDrawing();
+
         $this->actingAs($this->user)
             ->post('/estimates', [
-                'client' => 'Westview Properties',
-                'project' => 'Office Building Renovation',
+                'project_id' => $project->id,
                 'issued_on' => '2026-08-10',
                 'amount' => '24850',
                 'status' => 'draft',
@@ -41,12 +45,27 @@ class EstimateTest extends TestCase
             ->assertSessionHas('success');
 
         $estimate = Estimate::latest('id')->firstOrFail();
-        $this->assertSame('Westview Properties', $estimate->client);
-        $this->assertNull($estimate->project_id);
+        // Both name columns are snapshots of the picked client, not typed input.
+        $this->assertSame('Northgate Fit-out', $estimate->client);
+        $this->assertSame('Northgate Fit-out', $estimate->project);
+        $this->assertSame($project->id, $estimate->project_id);
         $this->assertNull($estimate->ai_result_id);
     }
 
-    public function test_the_create_screen_offers_takeoff_projects_and_their_drawings(): void
+    public function test_an_estimate_cannot_be_created_without_a_client(): void
+    {
+        $this->actingAs($this->user)
+            ->post('/estimates', [
+                'issued_on' => '2026-08-10',
+                'amount' => '24850',
+                'status' => 'draft',
+            ])
+            ->assertSessionHasErrors('project_id');
+
+        $this->assertDatabaseCount('estimates', 0);
+    }
+
+    public function test_the_create_screen_offers_the_client_register_and_their_drawings(): void
     {
         [$project, $upload] = $this->makeTakeoffDrawing();
 
@@ -54,8 +73,9 @@ class EstimateTest extends TestCase
             ->get('/estimates/create')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('EstimateCreate')
-                ->has('projects', 1)
-                ->where('projects.0.id', $project->id)
+                ->has('clients', 1)
+                ->where('clients.0.id', $project->id)
+                ->where('clients.0.name', $project->name)
                 ->has('uploads', 1)
                 ->where('uploads.0.id', $upload->id)
                 ->where('uploads.0.estimate', null));
@@ -67,8 +87,6 @@ class EstimateTest extends TestCase
 
         $this->actingAs($this->user)
             ->post('/estimates', [
-                'client' => 'Northgate Retail',
-                'project' => 'Northgate Fit-out',
                 'issued_on' => '2026-08-10',
                 'amount' => '5000',
                 'status' => 'draft',
@@ -100,8 +118,6 @@ class EstimateTest extends TestCase
 
         $this->actingAs($this->user)
             ->post('/estimates', [
-                'client' => 'Northgate Retail',
-                'project' => 'Northgate Fit-out',
                 'issued_on' => '2026-08-10',
                 'amount' => '5000',
                 'status' => 'draft',

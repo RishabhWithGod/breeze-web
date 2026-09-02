@@ -8,6 +8,7 @@ use App\Models\Foreman;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Job;
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -17,9 +18,13 @@ use Tests\TestCase;
  * Invoices: numbering, the create → send → paid lifecycle, line-item totals,
  * and who is allowed to do what.
  *
- * `total` is never trusted from the client — every line-item write recomputes
+ * `total` is never trusted from the browser — every line-item write recomputes
  * it server-side, the same guarantee `TimeEntryTest` and `Estimate` already
  * hold their own totals to.
+ *
+ * The client is picked from the client register rather than typed: clients are
+ * projects, so an invoice posts `project_id` and its `client` column is a
+ * snapshot the server writes from it.
  */
 class InvoiceTest extends TestCase
 {
@@ -57,10 +62,9 @@ class InvoiceTest extends TestCase
     public function test_client_is_required_to_create_an_invoice(): void
     {
         $this->actingAs($this->manager)->post('/invoices', [
-            'client' => '',
             'invoice_date' => '2026-08-10',
             'tax_pct' => 0,
-        ])->assertSessionHasErrors('client');
+        ])->assertSessionHasErrors('project_id');
 
         $this->assertSame(0, Invoice::count());
     }
@@ -68,7 +72,7 @@ class InvoiceTest extends TestCase
     public function test_an_electrician_cannot_create_an_invoice(): void
     {
         $this->actingAs($this->electrician)->post('/invoices', [
-            'client' => 'Apex Construction',
+            'project_id' => $this->makeClient()->id,
             'invoice_date' => '2026-08-10',
             'tax_pct' => 0,
         ])->assertForbidden();
@@ -200,7 +204,7 @@ class InvoiceTest extends TestCase
         ]);
 
         $this->actingAs($this->manager)->post('/invoices', [
-            'client' => $estimate->client,
+            'project_id' => $this->makeClient($estimate->client)->id,
             'job_id' => $job->id,
             'estimate_id' => $estimate->id,
             'invoice_date' => '2026-08-10',
@@ -214,16 +218,30 @@ class InvoiceTest extends TestCase
         $this->assertSame('500.00', $invoice->total);
     }
 
+    /** @param array<string, mixed> $overrides */
     private function createInvoice(array $overrides = []): Invoice
     {
+        $client = $this->makeClient($overrides['client'] ?? 'Apex Construction');
+
         $this->actingAs($this->manager)->post('/invoices', [
-            'client' => $overrides['client'] ?? 'Apex Construction',
+            'project_id' => $client->id,
             'invoice_date' => '2026-08-10',
             'due_date' => $overrides['due_date'] ?? null,
             'tax_pct' => $overrides['tax_pct'] ?? 0,
         ])->assertSessionHasNoErrors();
 
         return Invoice::latest('id')->first();
+    }
+
+    /** A client to raise an invoice for. Clients are projects. */
+    private function makeClient(string $name = 'Apex Construction'): Project
+    {
+        return Project::create([
+            'user_id' => $this->manager->id,
+            'name' => $name,
+            'client' => $name,
+            'status' => 'draft',
+        ]);
     }
 
     private function addItem(Invoice $invoice, string $description, float $quantity, float $unitPrice): InvoiceItem

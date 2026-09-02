@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreUploadRequest;
-use App\Http\Resources\UploadResource;
 use App\Jobs\ProcessTakeoffRun;
 use App\Jobs\RenderDrawingPreviews;
 use App\Models\Upload;
@@ -24,15 +23,12 @@ class UploadController extends Controller
         return Inertia::render('Upload', [
             'projects' => $request->user()->projects()
                 ->orderByDesc('created_at')
-                ->get(['id', 'name', 'client'])
+                ->get(['id', 'name'])
                 ->map(fn ($project) => [
                     'id' => $project->id,
                     'name' => $project->name,
-                    'client' => $project->client,
                 ]),
-            'recentUploads' => UploadResource::collection(
-                $request->user()->uploads()->latest()->take(3)->get()
-            )->resolve(),
+            'selectedProjectId' => $this->preselectedClient($request),
             /*
              * The dropzone renders the limit the request actually enforces — the
              * lower of the product's setting and PHP's own ceiling — so it can
@@ -51,6 +47,32 @@ class UploadController extends Controller
             'aiConfigured' => $orchestrator->configured(),
             'engineStatusUrl' => route('ai.engine-status'),
         ]);
+    }
+
+    /**
+     * The client the picker should open on.
+     *
+     * Either named outright by a link that came from a client's own screen, or
+     * remembered from creating one — someone who has just made a client and
+     * come here to upload its drawing means that client. Both are checked
+     * against the signed-in user's own clients, so neither can point the
+     * picker at someone else's record.
+     *
+     * The remembered one is read once and cleared: it answers "the client you
+     * just created", not "the client you always want".
+     */
+    private function preselectedClient(Request $request): ?int
+    {
+        $requested = $request->integer('project') ?: null;
+        $remembered = $request->session()->pull('takeoff.preselected_client');
+
+        $candidate = $requested ?? $remembered;
+
+        if ($candidate === null) {
+            return null;
+        }
+
+        return $request->user()->projects()->whereKey($candidate)->value('id');
     }
 
     /**
@@ -101,7 +123,6 @@ class UploadController extends Controller
                 'drawing_name' => $files[0]->getClientOriginalName(),
                 'status' => 'processing',
                 'review_status' => 'none',
-                'notes' => $request->input('notes'),
                 'started_at' => $project->started_at ?? now(),
             ]);
 
@@ -130,6 +151,11 @@ class UploadController extends Controller
             // The drawing the analysis runs against: the first PDF if there is
             // one, otherwise the first file uploaded.
             $primary = collect($uploads)->firstWhere('format', 'PDF') ?? $uploads[0];
+
+            // Uploading a drawing to run a takeoff on it *is* choosing it, so
+            // the client screen shows it selected rather than still pointing at
+            // whatever was there before.
+            $project->update(['selected_upload_id' => $primary->id]);
 
             return [$project, $primary];
         });

@@ -13,16 +13,18 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import type { InvoiceDetail, InvoiceJobOption } from '@/types'
+import type { ClientOption, InvoiceDetail, InvoiceJobOption } from '@/types'
 
 export interface InvoiceEditProps {
   invoice: InvoiceDetail
-  clients: readonly string[]
+  /** The client register. Clients are projects, so this is one list, not two. */
+  clients: readonly ClientOption[]
   jobs: readonly InvoiceJobOption[]
 }
 
 interface InvoiceEditForm {
-  client: string
+  /** The client. Clients are projects, so this is a `projects` id. */
+  project_id: string
   job_id: string
   invoice_date: string
   due_date: string
@@ -37,7 +39,7 @@ interface InvoiceEditForm {
 export default function InvoiceEdit({ invoice, clients, jobs }: InvoiceEditProps) {
   const { data, setData, put, processing, errors, hasErrors, clearErrors } =
     useForm<InvoiceEditForm>({
-      client: invoice.client,
+      project_id: invoice.projectId === null ? '' : String(invoice.projectId),
       job_id: invoice.jobId ? String(invoice.jobId) : '',
       invoice_date: invoice.invoiceDate,
       due_date: invoice.dueDate ?? '',
@@ -55,8 +57,21 @@ export default function InvoiceEdit({ invoice, clients, jobs }: InvoiceEditProps
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    put(routeTo.invoice(invoice.id), { preserveScroll: true })
+    put(routeTo.invoice(invoice.id))
   }
+
+  /**
+   * An invoice raised before clients and projects were merged may name a client
+   * that never became a record. Its stored name becomes the placeholder, so the
+   * select shows who the invoice is for rather than a blank "Select client" —
+   * but the placeholder has no value, so saving still requires a real one.
+   */
+  const clientOptions = [
+    invoice.projectId === null
+      ? { label: `${invoice.client} — not yet a client record`, value: '' }
+      : { label: 'Select client', value: '' },
+    ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
+  ]
 
   return (
     <PageTransition>
@@ -89,22 +104,15 @@ export default function InvoiceEdit({ invoice, clients, jobs }: InvoiceEditProps
           <SectionHeading title="Invoice details" />
 
           <div className="space-y-5">
-            <div>
-              <TextInput
-                id="invoice-client"
-                label="Client *"
-                list="invoice-client-options"
-                autoComplete="off"
-                value={data.client}
-                onChange={(event) => update('client', event.target.value)}
-                {...(errors.client ? { error: errors.client } : {})}
-              />
-              <datalist id="invoice-client-options">
-                {clients.map((client) => (
-                  <option key={client} value={client} />
-                ))}
-              </datalist>
-            </div>
+            <SelectField
+              id="invoice-client"
+              label="Client *"
+              hint="Not listed? Add them under Clients first."
+              options={clientOptions}
+              value={data.project_id}
+              onChange={(event) => update('project_id', event.target.value)}
+              {...(errors.project_id ? { error: errors.project_id } : {})}
+            />
 
             <SelectField
               id="invoice-job"

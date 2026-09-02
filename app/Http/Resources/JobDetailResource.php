@@ -21,7 +21,15 @@ class JobDetailResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'client' => $this->client,
+            /** The client's own id — clients are projects, so this is a `projects` id. */
+            'clientId' => $this->project_id,
             'location' => $this->location,
+            /** The client sites this job runs at, in the order they were picked. */
+            'addressIds' => $this->whenLoaded(
+                'addresses',
+                fn () => $this->addresses->pluck('id')->all(),
+                [],
+            ),
             'description' => $this->description,
             'jobType' => $this->job_type,
             'status' => $this->status,
@@ -52,7 +60,7 @@ class JobDetailResource extends JsonResource
             'estimates' => $this->estimates->map(fn ($estimate) => [
                 'id' => $estimate->id,
                 'number' => $estimate->number,
-                'project' => $estimate->project,
+                // `project` holds the same snapshot and is not sent twice.
                 'client' => $estimate->client,
                 'date' => $estimate->issued_on->toISOString(),
                 'amount' => (float) $estimate->amount,

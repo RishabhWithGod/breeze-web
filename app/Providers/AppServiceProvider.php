@@ -62,6 +62,13 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(120)->by('api:'.($request->user()?->id ?? $request->ip()));
         });
 
+        // Address lookup fires as someone types, so the budget has to cover a
+        // few real searches a minute without letting a stuck field hammer a
+        // metered geocoder. The field debounces on its side; this bounds it.
+        RateLimiter::for('address-lookup', function (Request $request) {
+            return Limit::perMinute(60)->by('address-lookup:'.($request->user()?->id ?? $request->ip()));
+        });
+
         // AI takeoff processing calls a real, costed external service —
         // upload, start, retry and restart all end up dispatching that
         // call, so all four share one strict per-user budget.

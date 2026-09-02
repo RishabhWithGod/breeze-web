@@ -9,9 +9,9 @@ use App\Models\Invoice;
 use App\Models\Job;
 use App\Policies\InvoicePolicy;
 use App\Services\Billing\InvoiceSummaryCalculator;
+use App\Services\Clients\ClientDirectory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -22,7 +22,10 @@ use Inertia\Response;
  */
 class InvoiceController extends Controller
 {
-    public function __construct(private readonly InvoiceSummaryCalculator $summary) {}
+    public function __construct(
+        private readonly InvoiceSummaryCalculator $summary,
+        private readonly ClientDirectory $clients,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -81,15 +84,15 @@ class InvoiceController extends Controller
     {
         return Inertia::render('InvoiceCreate', [
             'nextNumber' => Invoice::nextNumber(),
-            'clients' => $this->knownClients(),
-            'jobs' => Job::query()->orderBy('name')->get(['id', 'name', 'client']),
+            'clients' => $this->clients->options(),
+            'jobs' => Job::query()->orderBy('name')->get(['id', 'name', 'client', 'project_id']),
             // Sent/approved estimates not yet converted into an invoice — the
             // real "generate invoice from estimate" starting point.
             'estimates' => Estimate::query()
                 ->whereIn('status', ['sent', 'approved'])
                 ->whereDoesntHave('invoices')
                 ->orderByDesc('issued_on')
-                ->get(['id', 'number', 'client', 'project', 'job_id', 'grand_total']),
+                ->get(['id', 'number', 'client', 'project_id', 'job_id', 'grand_total']),
         ]);
     }
 
@@ -97,6 +100,9 @@ class InvoiceController extends Controller
     {
         $data = $request->validated();
         $estimate = ! empty($data['estimate_id']) ? Estimate::find($data['estimate_id']) : null;
+
+        // `client` is a snapshot of the picked client's name, never typed.
+        $data = $this->clients->withClientSnapshot($data);
 
         $invoice = Invoice::create([
             ...$data,
@@ -146,16 +152,5 @@ class InvoiceController extends Controller
         $trashed->restore();
 
         return back()->with('success', "{$trashed->invoice_number} was restored.");
-    }
-
-    /** Every client already known to the app — from jobs, estimates and past invoices. */
-    private function knownClients(): Collection
-    {
-        return Job::query()->whereNotNull('client')->pluck('client')
-            ->merge(Estimate::query()->whereNotNull('client')->pluck('client'))
-            ->merge(Invoice::query()->pluck('client'))
-            ->unique()
-            ->sort()
-            ->values();
     }
 }

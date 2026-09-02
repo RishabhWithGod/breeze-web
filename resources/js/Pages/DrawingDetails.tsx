@@ -133,7 +133,6 @@ export default function DrawingDetails({
       label: 'File size',
       value: drawing.sizeBytes ? formatFileSize(drawing.sizeBytes) : '—',
     },
-    { label: 'Client', value: drawing.client ?? '—' },
     {
       label: 'Uploaded',
       value: drawing.uploadedAt ? formatDate(drawing.uploadedAt) : '—',

@@ -63,6 +63,8 @@ class Job extends Model
         'name',
         'client',
         'location',
+        'latitude',
+        'longitude',
         'description',
         'job_type',
         'status',
@@ -86,6 +88,8 @@ class Job extends Model
         return [
             'start_date' => 'date',
             'end_date' => 'date',
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
             'budget' => 'decimal:2',
             'estimated_hours' => 'decimal:2',
             'required_skills' => 'array',
@@ -135,6 +139,21 @@ class Job extends Model
     public function isFromTakeoff(): bool
     {
         return $this->ai_result_id !== null;
+    }
+
+    /**
+     * The client sites this job is at. A job can run across more than one.
+     *
+     * `location` on the job is the first one's snapshot — a printed job sheet
+     * must not change when someone later edits the client's address book.
+     *
+     * @return BelongsToMany<ClientAddress, $this>
+     */
+    public function addresses(): BelongsToMany
+    {
+        return $this->belongsToMany(ClientAddress::class, 'job_addresses')
+            ->withPivot('position')
+            ->orderBy('job_addresses.position');
     }
 
     /** @return BelongsToMany<TeamMember, $this> */

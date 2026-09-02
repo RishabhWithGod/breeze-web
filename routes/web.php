@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AddressLookupController;
 use App\Http\Controllers\AiReviewController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\NewPasswordController;
@@ -7,6 +8,7 @@ use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\BreezeBucksController;
+use App\Http\Controllers\ClientAddressController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFolderController;
@@ -26,6 +28,7 @@ use App\Http\Controllers\JobEstimateController;
 use App\Http\Controllers\JobNoteController;
 use App\Http\Controllers\JobScheduleController;
 use App\Http\Controllers\JobTaskController;
+use App\Http\Controllers\JobTaskSetupController;
 use App\Http\Controllers\JobTeamController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentSettingsController;
@@ -183,10 +186,19 @@ Route::middleware('auth')->group(function () {
     | the drawing PDFs defined against it. `create` is declared before `{project}`
     | so it is never read as an id.
     */
+    // Feeds the Site / Location field's suggestions. JSON, not Inertia — it
+    // answers a keystroke, not a navigation.
+    Route::get('address-lookup', AddressLookupController::class)
+        ->middleware('throttle:address-lookup')
+        ->name('address.lookup');
+
     Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
     Route::get('projects/create', [ProjectController::class, 'create'])->name('projects.create');
     Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::get('projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
+    // Recorded from whichever screen needed the site — usually Create Job.
+    Route::post('projects/{project}/addresses', [ClientAddressController::class, 'store'])
+        ->name('projects.addresses.store');
     Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 
     // Starts the first AI takeoff run against the project's drawing already on
@@ -195,10 +207,13 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:ai-processing')
         ->name('projects.takeoff.start');
 
-    Route::post('projects/{project}/documents', [ProjectDocumentController::class, 'store'])
-        ->name('projects.documents.store');
+    // No `store`: a drawing PDF only ever arrives through AI Takeoff now, so a
+    // client's drawings can be opened and removed here but not added.
     Route::get('projects/{project}/documents/{document}', [ProjectDocumentController::class, 'show'])
         ->name('projects.documents.show');
+    // Which drawing the next takeoff runs against.
+    Route::post('projects/{project}/documents/{document}/select', [ProjectDocumentController::class, 'select'])
+        ->name('projects.documents.select');
     Route::delete('projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy'])
         ->name('projects.documents.destroy');
 
@@ -271,6 +286,10 @@ Route::middleware('auth')->group(function () {
     */
     Route::get('jobs/{job}/schedule', [JobScheduleController::class, 'show'])->name('jobs.schedule.show');
     Route::put('jobs/{job}/schedule', [JobScheduleController::class, 'update'])->name('jobs.schedule.update');
+    // The step straight after Create Job: laying the work out in one go.
+    Route::get('jobs/{job}/tasks/setup', [JobTaskSetupController::class, 'create'])->name('jobs.tasks.setup');
+    Route::post('jobs/{job}/tasks/setup', [JobTaskSetupController::class, 'store'])->name('jobs.tasks.setup.store');
+
     Route::post('jobs/{job}/schedule/tasks', [JobTaskController::class, 'store'])->name('jobs.tasks.store');
     Route::post('jobs/{job}/schedule/reorder', [JobTaskController::class, 'reorder'])->name('jobs.tasks.reorder');
 

@@ -47,6 +47,11 @@ export interface ProjectListRow {
 export interface ProjectRecord extends ProjectListRow {
   readonly notes: string | null
   readonly drawingName: string | null
+  /**
+   * The drawing the next takeoff runs against — chosen on this screen, or the
+   * first on record when nothing has been chosen. Null with no drawings at all.
+   */
+  readonly selectedUploadId: number | null
   readonly pageCount: number
   readonly startedAt: string | null
   readonly completedAt: string | null
@@ -58,45 +63,67 @@ export interface ProjectRecord extends ProjectListRow {
 export type ProjectActivityEntry = ActivityEntry
 
 /**
- * The Create Project payload.
+ * The Create Client payload.
  *
- * `documents` and `document_titles` are parallel arrays — index `i` of one is the
- * label for index `i` of the other — because that is what a multipart form can
- * express.
+ * No drawings: a PDF is uploaded through AI Takeoff, against a client that
+ * already exists, so this is a plain JSON post rather than a multipart one.
  */
 export interface ProjectDraft {
+  /** The client's name. The `client` column is written from it server-side. */
   name: string
   code: string
-  client: string
-  location: string
-  discipline: string
+  /** Every site. The first is the primary, and is mirrored onto `location`. */
+  addresses: DraftAddress[]
   project_type: string
   due_date: string
   notes: string
-  documents: File[]
-  document_titles: string[]
 }
 
-/** Limits the server enforces on the PDFs, mirrored to the picker as props. */
-export interface ProjectDocumentLimits {
-  readonly maxFiles: number
-  readonly maxFileSizeMb: number
-  /** Set when PHP's own limit is the binding one, explaining how to lift it. */
-  readonly serverHint: string | null
+/** One site being typed into the Create Client form, before it is saved. */
+export interface DraftAddress {
+  label: string
+  address: string
+  /** Set only when the address was picked from the lookup, never when typed. */
+  latitude: number | null
+  longitude: number | null
 }
 
-/** An existing project, offered on the Create Job / Create Estimate screens. */
-export interface TakeoffProjectOption {
+/** One site already on a client's record. */
+export interface ClientAddressOption {
   readonly id: number
-  readonly name: string
-  readonly client: string | null
-  readonly location: string | null
-  readonly dueDate: string | null
-  readonly projectType: JobType | null
+  readonly label: string | null
+  readonly address: string
+  /** Label and address as one line, for a list. */
+  readonly display: string
+  readonly isPrimary: boolean
+}
+
+/** One address the geocoder matched, with the point behind it. */
+export interface AddressSuggestion {
+  readonly label: string
+  readonly latitude: number
+  readonly longitude: number
 }
 
 /**
- * A drawing already run through AI Takeoff, offered once its project is
+ * A client, offered in the single Client select on every intake form.
+ *
+ * Clients are projects — the same record — so picking one here both names the
+ * client and scopes the AI Takeoff drawings offered below it. `location`,
+ * `dueDate` and `projectType` are carried over into a blank field on the form
+ * rather than retyped.
+ */
+export interface ClientOption {
+  readonly id: number
+  readonly name: string
+  readonly dueDate: string | null
+  readonly projectType: JobType | null
+  /** Every site this client has work at. A job picks from these. */
+  readonly addresses: readonly ClientAddressOption[]
+}
+
+/**
+ * A drawing already run through AI Takeoff, offered once its client is
  * picked. Carries the estimate already raised against it, if there is one —
  * picking it is how a manual Job/Estimate create form links back to the
  * takeoff pipeline instead of starting a duplicate record.

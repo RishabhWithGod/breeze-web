@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Head, router, useForm, usePage } from '@inertiajs/react'
+import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import {
   CalendarClock,
@@ -8,9 +8,7 @@ import {
   MapPin,
   Sparkles,
   Trash2,
-  TriangleAlert,
   Upload as UploadIcon,
-  User,
 } from 'lucide-react'
 import {
   Alert,
@@ -21,17 +19,13 @@ import {
   ConfirmDialog,
   StatusChip,
 } from '@/components/common'
-import { ActivityFeed, DashboardPanel } from '@/components/dashboard'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ProjectDocumentList, ProjectPdfPicker } from '@/components/projects'
+import { ProjectDocumentList } from '@/components/projects'
 import { ROUTES, routeTo } from '@/constants'
 import { useDisclosure } from '@/hooks'
 import type {
-  ProjectActivityEntry,
   ProjectDocument,
-  ProjectDocumentLimits,
   ProjectRecord,
-  RejectedUploadFile,
   SharedPageProps,
 } from '@/types'
 import {
@@ -44,33 +38,24 @@ import {
 export interface ProjectShowProps {
   project: ProjectRecord
   documents: readonly ProjectDocument[]
-  activity: readonly ProjectActivityEntry[]
-  limits: ProjectDocumentLimits
-}
-
-/** Adding drawings to a project that already exists. */
-interface DocumentUpload {
-  documents: File[]
-  document_titles: string[]
 }
 
 /**
- * Project detail: the details it was created with, the drawing PDFs it holds, and
- * what has happened to it.
+ * Client detail: the details it was created with, the drawing PDFs it holds,
+ * and what has happened to it.
  *
- * PDFs are added and removed here rather than on the create screen, so a drawing
- * set can be completed as the drawings arrive.
+ * Drawings can be opened and removed here but not added — a PDF only ever
+ * arrives through AI Takeoff, which uploads it against a client that already
+ * exists.
  */
 export default function ProjectShow({
   project,
   documents,
-  activity,
-  limits,
 }: ProjectShowProps) {
   const { flash } = usePage<SharedPageProps>().props
 
-  const [rejected, setRejected] = useState<readonly RejectedUploadFile[]>([])
   const [pendingDelete, setPendingDelete] = useState<ProjectDocument | null>(null)
+  const [selecting, setSelecting] = useState(false)
   const [dismissed, setDismissed] = useState<string | null>(null)
   const [startingTakeoff, setStartingTakeoff] = useState(false)
   const deleteDialog = useDisclosure()
@@ -86,43 +71,24 @@ export default function ProjectShow({
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
 
-  const { data, setData, post, processing, errors, reset, clearErrors } =
-    useForm<DocumentUpload>({ documents: [], document_titles: [] })
+  /*
+   * Choosing is a real write — every later takeoff, and the drawing name shown
+   * on the Clients list, follow it — so it posts rather than being held in the
+   * page. Only offered with more than one drawing: with one there is nothing
+   * to choose, and the fallback already points at it.
+   */
+  const selectDrawing = (document: ProjectDocument) => {
+    if (document.id === project.selectedUploadId) return
 
-  const addFiles = (files: File[]) => {
-    setData('documents', [...data.documents, ...files])
-    setData('document_titles', [...data.document_titles, ...files.map(() => '')])
-    if (errors.documents) clearErrors('documents')
-  }
-
-  const removeFile = (index: number) => {
-    setData(
-      'documents',
-      data.documents.filter((_, position) => position !== index),
+    router.post(
+      routeTo.projectDocumentSelect(project.id, document.id),
+      {},
+      {
+        preserveScroll: true,
+        onStart: () => setSelecting(true),
+        onFinish: () => setSelecting(false),
+      },
     )
-    setData(
-      'document_titles',
-      data.document_titles.filter((_, position) => position !== index),
-    )
-  }
-
-  const setFileTitle = (index: number, title: string) => {
-    setData(
-      'document_titles',
-      data.document_titles.map((current, position) =>
-        position === index ? title : current,
-      ),
-    )
-  }
-
-  const submitFiles = (event: React.FormEvent) => {
-    event.preventDefault()
-
-    post(routeTo.projectDocuments(project.id), {
-      forceFormData: true,
-      preserveScroll: true,
-      onSuccess: () => reset(),
-    })
   }
 
   const confirmDocumentDelete = () => {
@@ -136,7 +102,6 @@ export default function ProjectShow({
   }
 
   const details = [
-    { icon: User, label: 'Client', value: project.client },
     { icon: MapPin, label: 'Site', value: project.location ?? 'Not recorded' },
     {
       icon: FolderKanban,
@@ -161,11 +126,11 @@ export default function ProjectShow({
     <PageTransition>
       <Head title={project.name} />
 
+      {/* The name is the client's own, so only a project number adds anything
+          to it — the subtitle would otherwise just repeat the title. */}
       <PageHeader
         title={project.name}
-        subtitle={
-          project.code ? `${project.code} · ${project.client}` : project.client
-        }
+        {...(project.code ? { subtitle: project.code } : {})}
         breadcrumbs={[
           { label: 'Clients', href: ROUTES.projects },
           { label: project.name },
@@ -176,10 +141,22 @@ export default function ProjectShow({
               tone={TAKEOFF_STATUS_TONE[project.status]}
               label={TAKEOFF_STATUS_LABEL[project.status]}
             />
-            {/* Shown once the engine has returned a result for this project. */}
+            {/*
+              Three states, in the order the work happens: read the takeoff once
+              there is one; otherwise run it if a drawing is on record; otherwise
+              go and upload one, which is the only way a drawing gets here.
+            */}
             {project.takeoffUrl ? (
               <ButtonLink href={project.takeoffUrl} variant="secondary" leftIcon={FileText}>
                 View takeoff
+              </ButtonLink>
+            ) : documents.length === 0 ? (
+              <ButtonLink
+                href={routeTo.uploadForProject(project.id)}
+                variant="secondary"
+                leftIcon={UploadIcon}
+              >
+                Upload a drawing
               </ButtonLink>
             ) : (
               <Button
@@ -187,12 +164,6 @@ export default function ProjectShow({
                 leftIcon={Sparkles}
                 onClick={startTakeoff}
                 isLoading={startingTakeoff}
-                disabled={documents.length === 0}
-                title={
-                  documents.length === 0
-                    ? 'Add a drawing PDF before running a takeoff'
-                    : undefined
-                }
               >
                 Run AI Takeoff
               </Button>
@@ -218,26 +189,6 @@ export default function ProjectShow({
             onDismiss={() => setDismissed(notice)}
           >
             {notice}
-          </Alert>
-        )}
-
-        {rejected.length > 0 && (
-          <Alert
-            key="rejected"
-            tone="warning"
-            title={`${rejected.length} file(s) could not be added`}
-            icon={TriangleAlert}
-            className="mb-6"
-            onDismiss={() => setRejected([])}
-          >
-            <ul className="mt-1 space-y-1">
-              {rejected.map((item) => (
-                <li key={item.name} className="text-sm">
-                  <span className="font-medium text-white">{item.name}</span> —{' '}
-                  {item.reason}
-                </li>
-              ))}
-            </ul>
           </Alert>
         )}
       </AnimatePresence>
@@ -275,59 +226,25 @@ export default function ProjectShow({
         <Card padding="lg" className="xl:col-span-2" index={1}>
           <CardHeader
             title="Drawing PDFs"
-            subtitle="The drawings a takeoff runs against. Open one to read it, or add the rest of the set."
+            subtitle={
+              documents.length > 1
+                ? 'Every drawing on record. Pick the one the next takeoff should run against.'
+                : 'Every drawing on record for this client.'
+            }
           />
 
           <ProjectDocumentList
             documents={documents}
-            disabled={processing}
+            selectedId={project.selectedUploadId}
+            disabled={selecting}
+            {...(documents.length > 1 ? { onSelect: selectDrawing } : {})}
             onRemove={(document) => {
               setPendingDelete(document)
               deleteDialog.open()
             }}
           />
-
-          <form onSubmit={submitFiles} className="mt-6 border-t border-hairline pt-6">
-            <ProjectPdfPicker
-              files={data.documents}
-              titles={data.document_titles}
-              onAdd={addFiles}
-              onRemove={removeFile}
-              onTitleChange={setFileTitle}
-              onReject={(items) => setRejected(items)}
-              maxFiles={limits.maxFiles}
-              maxFileSizeMb={limits.maxFileSizeMb}
-              disabled={processing}
-              fileErrors={errors as Record<string, string>}
-              {...(errors.documents ? { error: errors.documents } : {})}
-            />
-
-            {data.documents.length > 0 && (
-              <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
-                <Button
-                  type="button"
-                  variant="white"
-                  onClick={() => reset()}
-                  disabled={processing}
-                >
-                  Clear
-                </Button>
-                <Button type="submit" leftIcon={UploadIcon} isLoading={processing}>
-                  Add {data.documents.length}{' '}
-                  {data.documents.length === 1 ? 'PDF' : 'PDFs'}
-                </Button>
-              </div>
-            )}
-          </form>
         </Card>
       </div>
-
-      {/* --------------------------------------------------------- Activity --- */}
-      {activity.length > 0 && (
-        <DashboardPanel title="Client Activity" className="mt-6" index={2}>
-          <ActivityFeed entries={activity} />
-        </DashboardPanel>
-      )}
 
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}

@@ -28,6 +28,8 @@ export interface InvoiceDetail {
   readonly id: number
   readonly invoiceNumber: string
   readonly client: string
+  /** The client's own id — clients are projects, so this is a `projects` id. */
+  readonly projectId: number | null
   readonly jobId: number | null
   readonly jobName: string | null
   readonly estimateId: number | null
@@ -70,6 +72,8 @@ export interface InvoiceJobOption {
   readonly id: number
   readonly name: string
   readonly client?: string | null
+  /** Its client's id, so picking a job can fill the Client select in. */
+  readonly project_id?: number | null
 }
 
 /** A convertible estimate offered on the Create Invoice screen. */
@@ -77,7 +81,8 @@ export interface InvoiceEstimateOption {
   readonly id: number
   readonly number: string
   readonly client: string
-  readonly project: string
+  /** Its client's id, so converting an estimate fills the Client select in. */
+  readonly project_id: number | null
   readonly job_id: number | null
   readonly grand_total: number
 }

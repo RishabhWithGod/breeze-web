@@ -133,6 +133,27 @@ class JobTask extends Model
         return $this->hasMany(JobTaskAssignment::class)->orderBy('role');
     }
 
+    /**
+     * The estimate lines this task is the work for.
+     *
+     * @return HasMany<EstimateItem, $this>
+     */
+    public function estimateItems(): HasMany
+    {
+        return $this->hasMany(EstimateItem::class)->orderBy('position');
+    }
+
+    /**
+     * Who is running it. A set: a task can need two foremen, and a foreman
+     * runs several tasks.
+     *
+     * @return BelongsToMany<Foreman, $this>
+     */
+    public function foremen(): BelongsToMany
+    {
+        return $this->belongsToMany(Foreman::class, 'job_task_foremen')->orderBy('name');
+    }
+
     /** The people on this task. */
     public function members(): BelongsToMany
     {

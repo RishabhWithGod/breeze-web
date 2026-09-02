@@ -31,16 +31,14 @@ export function RecentProjectsPanel({ projects, index }: RecentProjectsPanelProp
   const columns: TableColumn<DashboardProject>[] = [
     {
       key: 'name',
-      header: 'Client Name',
+      header: 'Client',
       render: (project) => (
         <div className="flex items-center gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-brand/15 text-brand">
             <FileText size={16} aria-hidden />
           </span>
-          <div className="min-w-0">
-            <p className="font-semibold text-white">{project.name}</p>
-            <p className="text-sm text-white/75">{project.client}</p>
-          </div>
+          {/* `client` holds the same string as `name`, so it is not repeated. */}
+          <p className="min-w-0 truncate font-semibold text-white">{project.name}</p>
         </div>
       ),
     },

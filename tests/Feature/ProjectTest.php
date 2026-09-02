@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Project;
+use App\Models\Upload;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -11,8 +12,12 @@ use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 /**
- * The Projects module: a project and its drawing PDFs, defined by hand rather
- * than inferred from an upload.
+ * The Clients module: a client recorded by hand, and the drawing PDFs it ends
+ * up holding.
+ *
+ * Nothing here uploads a drawing — a PDF only ever arrives through AI Takeoff,
+ * against a client that already exists — so the drawing tests below put the
+ * `uploads` row on the disk directly, which is what that upload leaves behind.
  */
 class ProjectTest extends TestCase
 {
@@ -69,31 +74,30 @@ class ProjectTest extends TestCase
                 ->where('projects.data.0.status', 'completed'));
     }
 
-    public function test_the_create_screen_advertises_the_limits_it_enforces(): void
+    public function test_the_create_screen_asks_only_for_the_clients_details(): void
     {
+        $this->makeProject(['name' => 'Harborview Data Hall']);
+
         $this->actingAs($this->user)
             ->get('/projects/create')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('ProjectCreate')
-                ->where('limits.maxFiles', config('takeoff.uploads.max_files'))
-                ->has('disciplines'));
+                // Existing clients are suggested on the name field; there is no
+                // drawing picker and no discipline to choose.
+                ->has('clients', 1)
+                ->missing('limits')
+                ->missing('disciplines'));
     }
 
-    public function test_a_project_is_created_with_its_labelled_pdf(): void
+    public function test_a_client_is_created_from_its_details_alone(): void
     {
-        // One PDF per request — `takeoff.uploads.max_files` is 1, so a project's
-        // drawing set is built by adding one PDF at a time, not in a batch.
         $response = $this->actingAs($this->user)->post('/projects', [
             'name' => 'Harborview Data Hall',
             'code' => 'PRJ-2041',
-            'client' => 'Vertex Infrastructure',
             'location' => '41 Harbor Way',
-            'discipline' => 'Electrical',
             'project_type' => 'commercial',
             'due_date' => '2026-09-01',
             'notes' => 'Revision C only.',
-            'documents' => [UploadedFile::fake()->create('E-101.pdf', 120, 'application/pdf')],
-            'document_titles' => ['Ground floor lighting'],
         ]);
 
         $project = Project::query()->where('name', 'Harborview Data Hall')->sole();
@@ -104,121 +108,71 @@ class ProjectTest extends TestCase
         $this->assertSame('commercial', $project->project_type);
         $this->assertSame('PRJ-2041', $project->code);
         $this->assertSame('2026-09-01', $project->due_date->toDateString());
-        // The drawing a takeoff would run against, mirrored onto the project.
-        $this->assertSame('E-101.pdf', $project->drawing_name);
+        // The form leaves discipline unset; the column's default stands.
+        $this->assertSame('Electrical', $project->discipline);
 
-        $document = $project->uploads()->sole();
-        $this->assertSame('Ground floor lighting', $document->title);
-
-        $disk = Storage::disk(config('takeoff.uploads.disk'));
-        $this->assertTrue($disk->exists($document->path));
+        // No drawing arrives with it — that comes from AI Takeoff.
+        $this->assertSame(0, $project->uploads()->count());
+        $this->assertNull($project->drawing_name);
 
         $this->assertDatabaseHas('project_activities', [
             'project_id' => $project->id,
-            'title' => 'Project created',
+            'title' => 'Client created',
         ]);
     }
 
-    public function test_only_one_pdf_can_be_submitted_at_a_time(): void
+    public function test_a_drawing_posted_to_the_create_form_is_ignored(): void
     {
+        // The field is gone from the screen and from the rules, so a file sent
+        // by hand is dropped rather than quietly stored.
         $this->actingAs($this->user)
             ->post('/projects', [
-                'name' => 'Harborview Data Hall',
-                'client' => 'Vertex Infrastructure',
-                'documents' => [
-                    UploadedFile::fake()->create('E-101.pdf', 60, 'application/pdf'),
-                    UploadedFile::fake()->create('E-102.pdf', 60, 'application/pdf'),
-                ],
+                'name' => 'Rosewood Clinic',
+                'documents' => [UploadedFile::fake()->create('E-101.pdf', 60, 'application/pdf')],
+                'document_titles' => ['Ground floor lighting'],
             ])
-            ->assertSessionHasErrors('documents');
-
-        $this->assertDatabaseCount('projects', 0);
-    }
-
-    public function test_a_second_pdf_is_added_to_a_project_in_its_own_request(): void
-    {
-        $project = $this->makeProject(['name' => 'Harborview Data Hall']);
-
-        $this->actingAs($this->user)->post(route('projects.documents.store', $project), [
-            'documents' => [UploadedFile::fake()->create('E-101.pdf', 120, 'application/pdf')],
-            'document_titles' => ['Ground floor lighting'],
-        ]);
-
-        $this->actingAs($this->user)->post(route('projects.documents.store', $project), [
-            'documents' => [UploadedFile::fake()->create('E-102.pdf', 90, 'application/pdf')],
-        ]);
-
-        $documents = $project->uploads()->oldest()->get();
-        $this->assertCount(2, $documents);
-        $this->assertSame('Ground floor lighting', $documents[0]->title);
-        // No label given, so the file names itself.
-        $this->assertNull($documents[1]->title);
-        $this->assertSame('E-102.pdf', $documents[1]->label());
-    }
-
-    public function test_a_project_can_be_created_before_any_drawing_exists(): void
-    {
-        $this->actingAs($this->user)
-            ->post('/projects', ['name' => 'Rosewood Clinic', 'client' => 'Rosewood Health'])
             ->assertSessionHasNoErrors();
 
         $project = Project::query()->sole();
 
         $this->assertSame(0, $project->uploads()->count());
         $this->assertNull($project->drawing_name);
-        // The form leaves discipline unset; the module's default stands.
-        $this->assertSame('Electrical', $project->discipline);
+        $this->assertEmpty(
+            Storage::disk(config('takeoff.uploads.disk'))->files(config('takeoff.uploads.directory')),
+            'The dropped file must not reach the disk either.',
+        );
     }
 
-    public function test_the_name_and_the_client_are_required(): void
+    public function test_there_is_no_route_for_adding_a_drawing_to_a_client(): void
     {
+        $project = $this->makeProject();
+
+        $this->actingAs($this->user)
+            ->post("/projects/{$project->id}/documents", [
+                'documents' => [UploadedFile::fake()->create('E-101.pdf', 60, 'application/pdf')],
+            ])
+            ->assertNotFound();
+
+        $this->assertSame(0, $project->uploads()->count());
+    }
+
+    public function test_the_client_name_is_required(): void
+    {
+        // One field, not two: the name *is* the client, and the `client`
+        // column is written from it server-side.
         $this->actingAs($this->user)
             ->post('/projects', ['name' => 'ab'])
-            ->assertSessionHasErrors(['name', 'client']);
+            ->assertSessionHasErrors('name')
+            ->assertSessionDoesntHaveErrors('client');
 
         $this->assertDatabaseCount('projects', 0);
     }
 
-    public function test_only_pdfs_are_accepted_as_project_drawings(): void
-    {
-        $this->actingAs($this->user)
-            ->post('/projects', [
-                'name' => 'Rosewood Clinic',
-                'client' => 'Rosewood Health',
-                'documents' => [UploadedFile::fake()->create('plan.dwg', 40)],
-            ])
-            ->assertSessionHasErrors('documents.0');
-
-        $this->assertDatabaseCount('projects', 0);
-    }
-
-    public function test_drawings_can_be_added_to_an_existing_project(): void
+    public function test_removing_a_drawing_deletes_the_file_and_renames_the_clients_drawing(): void
     {
         $project = $this->makeProject();
-
-        $this->actingAs($this->user)
-            ->post(route('projects.documents.store', $project), [
-                'documents' => [UploadedFile::fake()->create('E-201.pdf', 60, 'application/pdf')],
-                'document_titles' => ['Panel schedules'],
-            ])
-            ->assertSessionHasNoErrors();
-
-        $document = $project->uploads()->sole();
-        $this->assertSame('Panel schedules', $document->title);
-        // The project had no drawing on record, so its first one names it.
-        $this->assertSame('E-201.pdf', $project->refresh()->drawing_name);
-    }
-
-    public function test_removing_a_drawing_deletes_the_file_and_renames_the_project_drawing(): void
-    {
-        $project = $this->makeProject();
-
-        $this->actingAs($this->user)->post(route('projects.documents.store', $project), [
-            'documents' => [UploadedFile::fake()->create('E-101.pdf', 60, 'application/pdf')],
-        ]);
-        $this->actingAs($this->user)->post(route('projects.documents.store', $project), [
-            'documents' => [UploadedFile::fake()->create('E-102.pdf', 60, 'application/pdf')],
-        ]);
+        $this->makeDrawing($project, 'E-101.pdf');
+        $this->makeDrawing($project, 'E-102.pdf');
 
         $documents = $project->uploads()->oldest()->get();
         $path = $documents[0]->path;
@@ -236,12 +190,7 @@ class ProjectTest extends TestCase
     public function test_a_drawing_is_streamed_inline(): void
     {
         $project = $this->makeProject();
-
-        $this->actingAs($this->user)->post(route('projects.documents.store', $project), [
-            'documents' => [UploadedFile::fake()->create('E-101.pdf', 60, 'application/pdf')],
-        ]);
-
-        $document = $project->uploads()->sole();
+        $document = $this->makeDrawing($project, 'E-101.pdf');
 
         $this->actingAs($this->user)
             ->get(route('projects.documents.show', [$project, $document]))
@@ -250,14 +199,10 @@ class ProjectTest extends TestCase
             ->assertHeader('content-disposition', 'inline; filename="E-101.pdf"');
     }
 
-    public function test_the_detail_screen_lists_the_projects_drawings(): void
+    public function test_the_detail_screen_lists_the_clients_drawings(): void
     {
         $project = $this->makeProject(['name' => 'Harborview Data Hall']);
-
-        $this->actingAs($this->user)->post(route('projects.documents.store', $project), [
-            'documents' => [UploadedFile::fake()->create('E-101.pdf', 60, 'application/pdf')],
-            'document_titles' => ['Ground floor lighting'],
-        ]);
+        $this->makeDrawing($project, 'E-101.pdf', 'Ground floor lighting');
 
         $this->actingAs($this->user)
             ->get(route('projects.show', $project))
@@ -269,7 +214,9 @@ class ProjectTest extends TestCase
                 ->where('documents.0.available', true)
                 // Nothing has been analysed, so there is no takeoff to hand off to.
                 ->where('project.takeoffUrl', null)
-                ->has('activity'));
+                // The screen no longer carries an activity feed, so the trail
+                // is not shipped to it either.
+                ->missing('activity'));
     }
 
     public function test_a_project_belonging_to_someone_else_is_out_of_reach(): void
@@ -278,12 +225,12 @@ class ProjectTest extends TestCase
             'name' => 'Someone Else Tower', 'client' => 'Other', 'status' => 'draft',
         ]);
 
+        $document = $this->makeDrawing($other, 'E-101.pdf');
+
         $this->actingAs($this->user)->get(route('projects.show', $other))->assertForbidden();
         $this->actingAs($this->user)->delete(route('projects.destroy', $other))->assertForbidden();
         $this->actingAs($this->user)
-            ->post(route('projects.documents.store', $other), [
-                'documents' => [UploadedFile::fake()->create('E-101.pdf', 10, 'application/pdf')],
-            ])
+            ->delete(route('projects.documents.destroy', [$other, $document]))
             ->assertForbidden();
     }
 
@@ -296,6 +243,34 @@ class ProjectTest extends TestCase
             ->assertRedirect(route('projects.index'));
 
         $this->assertSoftDeleted('projects', ['id' => $project->id]);
+    }
+
+    /**
+     * A drawing on record for a client — what an AI Takeoff upload leaves
+     * behind: the PDF on the takeoff disk, and an `uploads` row naming it.
+     */
+    private function makeDrawing(Project $project, string $name, ?string $title = null): Upload
+    {
+        $path = UploadedFile::fake()
+            ->create($name, 60, 'application/pdf')
+            ->store((string) config('takeoff.uploads.directory'), (string) config('takeoff.uploads.disk'));
+
+        $upload = $project->uploads()->create([
+            'user_id' => $project->user_id,
+            'name' => $name,
+            'title' => $title,
+            'format' => Upload::formatFor($name),
+            'size_bytes' => 60 * 1024,
+            'path' => $path,
+            'status' => 'completed',
+        ]);
+
+        // The first drawing names the client, exactly as the upload does.
+        if (blank($project->drawing_name)) {
+            $project->update(['drawing_name' => $name]);
+        }
+
+        return $upload;
     }
 
     /** @param array<string, mixed> $attributes */

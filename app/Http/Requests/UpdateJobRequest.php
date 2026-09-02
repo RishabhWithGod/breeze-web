@@ -18,8 +18,15 @@ class UpdateJobRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'min:3', 'max:160'],
-            'client' => ['required', 'string', 'max:120'],
-            'location' => ['required', 'string', 'max:160'],
+            /** The client, picked from the client register — see ClientDirectory. */
+            'project_id' => ['required', 'integer', 'exists:projects,id'],
+            /*
+             * The client sites this job is at — one or more of the client's own
+             * addresses. `location` is not posted: it is written from the first
+             * of these, so the two can never disagree.
+             */
+            'address_ids' => ['required', 'array', 'min:1', 'max:25'],
+            'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
             'status' => ['required', Rule::in(Job::STATUSES)],
@@ -39,8 +46,10 @@ class UpdateJobRequest extends FormRequest
         return [
             'name.required' => 'Job name is required',
             'name.min' => 'Use at least 3 characters',
-            'client.required' => 'Client is required',
-            'location.required' => 'Location is required',
+            'project_id.required' => 'Client is required',
+            'project_id.exists' => 'Pick a client from the list',
+            'address_ids.required' => 'Pick at least one site for this job',
+            'address_ids.*.exists' => 'That site is not on the client\'s record',
             'end_date.after_or_equal' => 'End date must be on or after the start date',
             'budget.gt' => 'Enter an amount greater than zero',
         ];

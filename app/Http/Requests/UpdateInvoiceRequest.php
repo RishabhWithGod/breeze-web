@@ -15,7 +15,8 @@ class UpdateInvoiceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'client' => ['required', 'string', 'max:160'],
+            /** The client, picked from the client register — see ClientDirectory. */
+            'project_id' => ['required', 'integer', 'exists:projects,id'],
             'job_id' => ['nullable', 'integer', 'exists:work_jobs,id'],
             'estimate_id' => ['nullable', 'integer', 'exists:estimates,id'],
             'invoice_date' => ['required', 'date'],
@@ -29,7 +30,8 @@ class UpdateInvoiceRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'client.required' => 'Client is required',
+            'project_id.required' => 'Client is required',
+            'project_id.exists' => 'Pick a client from the list',
             'invoice_date.required' => 'Invoice date is required',
             'due_date.after_or_equal' => 'Due date cannot be before the invoice date',
         ];

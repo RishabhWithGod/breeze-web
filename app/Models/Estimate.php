@@ -84,10 +84,11 @@ class Estimate extends Model
     }
 
     /**
-     * The takeoff this estimate was generated from, when it came from one.
+     * The client this estimate is for — and, when it came from one, the takeoff
+     * it was generated from. Clients are projects, so both are the same record.
      *
      * Named `takeoffProject` because `project` is already a column on this table
-     * (the free-text project name), and an attribute always shadows a relation.
+     * (the client-name snapshot), and an attribute always shadows a relation.
      */
     public function takeoffProject(): BelongsTo
     {

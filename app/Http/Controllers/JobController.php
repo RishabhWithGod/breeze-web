@@ -16,11 +16,12 @@ use App\Models\TeamMember;
 use App\Models\TimeEntry;
 use App\Models\Upload;
 use App\Services\Activity\FeedItemRecorder;
+use App\Services\Clients\ClientDirectory;
+use App\Services\Clients\JobSites;
 use App\Services\JobCosting\JobCostSummary;
 use App\Services\Takeoff\TakeoffLinkOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -31,6 +32,8 @@ class JobController extends Controller
         private readonly JobCostSummary $costSummary,
         private readonly FeedItemRecorder $activity,
         private readonly TakeoffLinkOptions $linkOptions,
+        private readonly ClientDirectory $clients,
+        private readonly JobSites $sites,
     ) {}
 
     public function index(Request $request): Response
@@ -95,9 +98,7 @@ class JobController extends Controller
     public function create(): Response
     {
         return Inertia::render('JobCreate', [
-            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
-            'clients' => $this->knownClients(),
-            'projects' => $this->linkOptions->projects(),
+            'clients' => $this->clients->options(),
             'uploads' => $this->linkOptions->uploads(),
         ]);
     }
@@ -112,11 +113,20 @@ class JobController extends Controller
         $aiResult = $upload?->latestAiResult;
         unset($data['upload_id']);
 
+        // `client` is a snapshot of the picked client's name, never typed.
+        $data = $this->clients->withClientSnapshot($data);
+
+        // Refused here rather than trusted: the ids must be this client's own.
+        $addresses = $this->sites->resolve((int) $data['project_id'], $data['address_ids']);
+        unset($data['address_ids']);
+
         $job = Job::create([
             ...$data,
             'ai_result_id' => $aiResult?->id,
             'status' => $isDraft ? 'draft' : 'planning',
         ]);
+
+        $this->sites->attach($job, $addresses);
 
         $job->recordInitialStatus();
         $job->recordActivity('created', $isDraft ? 'Job saved as a draft' : 'Job created');
@@ -146,8 +156,13 @@ class JobController extends Controller
             );
         }
 
+        /*
+         * Straight on to laying the job out in tasks. A draft is not ready to be
+         * planned, so it opens on the job itself; anything else goes to the step
+         * that turns a job into a plan, which can still be skipped there.
+         */
         return redirect()
-            ->route('jobs.show', $job)
+            ->route($isDraft ? 'jobs.show' : 'jobs.tasks.setup', $job)
             ->with(
                 'success',
                 $isDraft
@@ -201,19 +216,23 @@ class JobController extends Controller
     public function edit(Job $job): Response
     {
         return Inertia::render('JobEdit', [
-            'job' => (new JobDetailResource($job->load('foreman', 'teamMembers')))->resolve(),
+            'job' => (new JobDetailResource($job->load('foreman', 'teamMembers', 'addresses')))->resolve(),
             'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
-            'clients' => $this->knownClients(),
+            'clients' => $this->clients->options(),
         ]);
     }
 
     public function update(UpdateJobRequest $request, Job $job): RedirectResponse
     {
-        $data = $request->validated();
+        $data = $this->clients->withClientSnapshot($request->validated());
         $newStatus = $data['status'];
         unset($data['status']);
 
+        $addresses = $this->sites->resolve((int) $data['project_id'], $data['address_ids']);
+        unset($data['address_ids']);
+
         $job->update($data);
+        $this->sites->attach($job, $addresses);
         $job->recordActivity('updated', 'Job details updated');
 
         // Recorded separately so the status trail stays authoritative.
@@ -267,6 +286,7 @@ class JobController extends Controller
     {
         $copy = Job::create([
             'name' => "{$job->name} (Copy)",
+            'project_id' => $job->project_id,
             'client' => $job->client,
             'location' => $job->location,
             'description' => $job->description,
@@ -350,24 +370,16 @@ class JobController extends Controller
         );
     }
 
-    /** Distinct clients already on record, for the intake selects. */
-    private function knownClients(): Collection
-    {
-        return Job::query()
-            ->whereNotNull('client')
-            ->distinct()
-            ->orderBy('client')
-            ->pluck('client');
-    }
-
     /** Creates a linked estimate carrying the job's client and budget. */
     private function makeEstimateFor(Job $job): Estimate
     {
         return Estimate::create([
             'job_id' => $job->id,
+            'project_id' => $job->project_id,
             'number' => Estimate::nextNumber(),
+            // Both name columns are the client's — see ClientDirectory.
             'client' => $job->client ?? 'Unassigned',
-            'project' => $job->name,
+            'project' => $job->client ?? 'Unassigned',
             'issued_on' => now()->toDateString(),
             'amount' => $job->budget ?? 0,
             'status' => 'draft',

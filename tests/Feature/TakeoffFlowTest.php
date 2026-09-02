@@ -289,13 +289,13 @@ class TakeoffFlowTest extends TestCase
 
         $response = $this->actingAs($this->user)->post('/ai-takeoff/upload', [
             'files' => [$this->fixtureUpload()],
-            'notes' => 'Second floor only.',
         ]);
 
         $project = Project::latest('id')->firstOrFail();
         $response->assertRedirect("/processing/{$project->id}");
 
-        $this->assertSame('Second floor only.', $project->notes);
+        // Notes belong to the client and are set on its own screen — an upload
+        // attaches a drawing, it does not rewrite the client's record.
         $this->assertCount(1, $project->uploads);
         $this->assertTrue(
             app(ArtefactStore::class)->exists($project->primaryUpload->path)

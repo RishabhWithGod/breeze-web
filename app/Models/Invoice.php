@@ -50,6 +50,7 @@ class Invoice extends Model
         'invoice_number',
         'job_id',
         'estimate_id',
+        'project_id',
         'client',
         'invoice_date',
         'due_date',
@@ -92,6 +93,19 @@ class Invoice extends Model
     public function estimate(): BelongsTo
     {
         return $this->belongsTo(Estimate::class);
+    }
+
+    /**
+     * The client this was raised for. Clients *are* projects, so this is the
+     * link behind the `client` snapshot column — named `project` to match the
+     * same relation on Job and Estimate, and because a `client` relation would
+     * collide with the `client` column right above it.
+     *
+     * @return BelongsTo<Project, $this>
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 
     /** @return BelongsTo<User, $this> */

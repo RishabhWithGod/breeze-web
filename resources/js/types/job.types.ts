@@ -54,7 +54,6 @@ export interface JobTeamMember {
 export interface JobEstimateSummary {
   readonly id: number
   readonly number: string
-  readonly project: string
   readonly client: string
   readonly date: string
   readonly amount: number
@@ -148,6 +147,10 @@ export interface JobTakeoff {
 
 /** The full record rendered by the job detail screen. */
 export interface JobDetail extends Omit<Job, 'teamCount' | 'estimateCount'> {
+  /** The client's own id — clients are projects, so this is a `projects` id. */
+  readonly clientId: number | null
+  /** The client sites this job runs at, in the order they were picked. */
+  readonly addressIds: readonly number[]
   readonly foreman: (Pick<JobTeamMember, 'id' | 'name' | 'initials'>) | null
   readonly archivedAt: string | null
   readonly createdAt: string
@@ -168,8 +171,11 @@ export interface JobDetail extends Omit<Job, 'teamCount' | 'estimateCount'> {
  */
 export interface JobDraft {
   name: string
-  client: string
-  location: string
+  /**
+   * The client sites this job is at, in the order picked. The first one's
+   * address becomes the job's own `location` snapshot, server-side.
+   */
+  address_ids: number[]
   description: string
   job_type: JobType | ''
   start_date: string
@@ -177,7 +183,10 @@ export interface JobDraft {
   budget: string
   foreman_id: string
   save_as_draft: boolean
-  /** Links this job back to a drawing already run through AI Takeoff. */
+  /**
+   * The client. Clients are projects, so this is a `projects` id — the job's
+   * own `client` name column is a snapshot the server writes from it.
+   */
   project_id: string
   upload_id: string
 }

@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\ApprovalHistoryResource;
 use App\Http\Resources\EstimateItemResource;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\JobAssignment;
 use App\Notifications\EstimateStatusChanged;
+use App\Services\Clients\ClientDirectory;
 use App\Services\Export\EstimatePdfWriter;
 use App\Services\Takeoff\EstimateBuilder;
 use Illuminate\Http\RedirectResponse;
@@ -27,6 +27,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class EstimateDetailController extends Controller
 {
+    public function __construct(private readonly ClientDirectory $clients) {}
+
     public function show(Estimate $estimate): Response
     {
         $estimate->load([
@@ -39,7 +41,6 @@ class EstimateDetailController extends Controller
                 'id' => $estimate->id,
                 'number' => $estimate->number,
                 'client' => $estimate->client,
-                'project' => $estimate->project,
                 'status' => $estimate->status,
                 'issuedOn' => $estimate->issued_on?->toDateString(),
                 'notes' => $estimate->notes,
@@ -50,8 +51,13 @@ class EstimateDetailController extends Controller
                 'fromTakeoff' => $estimate->ai_result_id !== null,
                 'convertedProjectId' => $estimate->converted_project_id,
                 'createdAt' => $estimate->created_at->toISOString(),
-                // Where the numbers came from: the drawing, and the reviewed table.
-                'drawingUrl' => $estimate->project_id
+                /*
+                 * Where the numbers came from: the drawing, and the reviewed
+                 * table. Guarded on the drawing itself, not on `project_id` —
+                 * that now names the client, and a client without a takeoff has
+                 * no drawing to open.
+                 */
+                'drawingUrl' => $estimate->takeoffProject?->drawing_name
                     ? route('drawings.show', $estimate->project_id)
                     : null,
                 'drawingName' => $estimate->takeoffProject?->drawing_name,
@@ -101,12 +107,6 @@ class EstimateDetailController extends Controller
                     'rawHeaders' => $panel->raw_headers ?? [],
                 ])->all() ?? [],
             ],
-
-            'history' => $estimate->aiResult
-                ? ApprovalHistoryResource::collection(
-                    $estimate->aiResult->history()->with('actor')->take(15)->get()
-                )->resolve()
-                : [],
         ]);
     }
 
@@ -125,7 +125,7 @@ class EstimateDetailController extends Controller
                 'id' => $estimate->id,
                 'number' => $estimate->number,
                 'client' => $estimate->client,
-                'project' => $estimate->project,
+                'projectId' => $estimate->project_id,
                 'status' => $estimate->status,
                 'issuedOn' => $estimate->issued_on?->toDateString(),
                 'markupPct' => (float) $estimate->markup_pct,
@@ -134,18 +134,15 @@ class EstimateDetailController extends Controller
                 'jobId' => $estimate->job_id,
                 'jobName' => $estimate->job?->name,
                 'fromTakeoff' => $estimate->ai_result_id !== null,
-                'drawingUrl' => $estimate->project_id
+                // Guarded on the drawing, not the client link — see show().
+                'drawingUrl' => $estimate->takeoffProject?->drawing_name
                     ? route('drawings.show', $estimate->project_id)
                     : null,
             ],
             'statuses' => Estimate::STATUSES,
             // Shown beside the rate fields so the effect of a change is visible.
             'totals' => EstimateBuilder::totalsFor($estimate),
-            'clients' => Estimate::query()
-                ->whereNotNull('client')
-                ->distinct()
-                ->orderBy('client')
-                ->pluck('client'),
+            'clients' => $this->clients->options(),
         ]);
     }
 
@@ -153,14 +150,18 @@ class EstimateDetailController extends Controller
     public function update(Request $request, Estimate $estimate): RedirectResponse
     {
         $validated = $request->validate([
-            'client' => ['required', 'string', 'max:160'],
-            'project' => ['required', 'string', 'max:160'],
+            /** The client, picked from the client register — see ClientDirectory. */
+            'project_id' => ['required', 'integer', 'exists:projects,id'],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
             'issued_on' => ['required', 'date'],
             'markup_pct' => ['required', 'numeric', 'min:0', 'max:200'],
             'tax_pct' => ['required', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        // `client` and `project` are both snapshots of the picked client's name.
+        $validated = $this->clients->withClientSnapshot($validated);
+        $validated['project'] = $validated['client'];
 
         $previousStatus = $estimate->status;
         $estimate->update($validated);

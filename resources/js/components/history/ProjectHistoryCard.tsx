@@ -46,8 +46,8 @@ export function ProjectHistoryCard({
         </span>
 
         <div className="min-w-0 flex-1">
+          {/* The client's name — `client` holds the same string, so it is not repeated. */}
           <p className="font-bold text-white">{project.name}</p>
-          <p className="mt-0.5 truncate text-sm text-white/80">{project.client}</p>
         </div>
 
         <StatusChip

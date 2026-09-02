@@ -13,21 +13,22 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
-import type { InvoiceEstimateOption, InvoiceJobOption } from '@/types'
+import type { ClientOption, InvoiceEstimateOption, InvoiceJobOption } from '@/types'
 import { formatCurrency, formatDate } from '@/utils'
 
 export interface InvoiceCreateProps {
   /** Reference the server will assign on save. */
   nextNumber: string
-  /** Every client already known to the app — from jobs, estimates and past invoices. */
-  clients: readonly string[]
+  /** The client register. Clients are projects, so this is one list, not two. */
+  clients: readonly ClientOption[]
   jobs: readonly InvoiceJobOption[]
   /** Sent/approved estimates not yet converted into an invoice. */
   estimates: readonly InvoiceEstimateOption[]
 }
 
 interface InvoiceDraft {
-  client: string
+  /** The client. Clients are projects, so this is a `projects` id. */
+  project_id: string
   job_id: string
   estimate_id: string
   invoice_date: string
@@ -44,7 +45,7 @@ interface InvoiceDraft {
 export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: InvoiceCreateProps) {
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<InvoiceDraft>({
-      client: '',
+      project_id: '',
       job_id: '',
       estimate_id: '',
       invoice_date: new Date().toISOString().slice(0, 10),
@@ -66,26 +67,35 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
     setData({
       ...data,
       estimate_id: estimateId,
-      client: estimate ? estimate.client : data.client,
+      project_id: estimate?.project_id ? String(estimate.project_id) : data.project_id,
       job_id: estimate?.job_id ? String(estimate.job_id) : data.job_id,
     })
   }
 
+  /** Picking a job names its client too — but never over one already chosen. */
   const applyJob = (jobId: string) => {
     const job = jobs.find((row) => String(row.id) === jobId)
     setData({
       ...data,
       job_id: jobId,
-      client: job?.client && !data.client ? job.client : data.client,
+      project_id:
+        job?.project_id && !data.project_id ? String(job.project_id) : data.project_id,
     })
   }
 
   const submit = (event?: React.FormEvent) => {
     event?.preventDefault()
-    post(ROUTES.invoices, { preserveScroll: true })
+    post(ROUTES.invoices)
   }
 
   const chosenEstimate = estimates.find((row) => String(row.id) === data.estimate_id)
+
+  const clientOptions = [
+    { label: 'Select client', value: '' },
+    ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
+  ]
+
+  const clientName = clients.find((option) => String(option.id) === data.project_id)?.name
 
   return (
     <PageTransition>
@@ -142,23 +152,15 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
                 </div>
               )}
 
-              <div>
-                <TextInput
-                  id="invoice-client"
-                  label="Client *"
-                  list="invoice-client-options"
-                  placeholder="e.g. Apex Construction"
-                  autoComplete="off"
-                  value={data.client}
-                  onChange={(event) => update('client', event.target.value)}
-                  {...(errors.client ? { error: errors.client } : {})}
-                />
-                <datalist id="invoice-client-options">
-                  {clients.map((client) => (
-                    <option key={client} value={client} />
-                  ))}
-                </datalist>
-              </div>
+              <SelectField
+                id="invoice-client"
+                label="Client *"
+                hint="Not listed? Add them under Clients first."
+                options={clientOptions}
+                value={data.project_id}
+                onChange={(event) => update('project_id', event.target.value)}
+                {...(errors.project_id ? { error: errors.project_id } : {})}
+              />
 
               <SelectField
                 id="invoice-job"
@@ -248,7 +250,7 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
                   Client
                 </dt>
                 <dd className="mt-2 text-md text-white">
-                  {data.client.trim() || <span className="text-white/60">Not set</span>}
+                  {clientName ?? <span className="text-white/60">Not set</span>}
                 </dd>
               </div>
 

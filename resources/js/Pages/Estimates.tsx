@@ -188,11 +188,6 @@ export default function Estimates({
       render: (estimate) => <span className="text-white">{estimate.client}</span>,
     },
     {
-      key: 'project',
-      header: 'Client',
-      render: (estimate) => <span className="text-white">{estimate.project}</span>,
-    },
-    {
       key: 'date',
       header: 'Date',
       render: (estimate) => (

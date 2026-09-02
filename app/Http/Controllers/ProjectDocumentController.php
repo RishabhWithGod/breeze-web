@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\StoreProjectDocumentRequest;
 use App\Models\Project;
 use App\Models\Upload;
 use App\Services\Takeoff\ProjectDocumentStore;
@@ -10,42 +9,42 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-/** The drawing PDFs defined against a project: added, opened and removed. */
+/**
+ * A client's drawing PDFs: opened, chosen and removed.
+ *
+ * Not added — a PDF only ever arrives through AI Takeoff now, which uploads it
+ * against a client that already exists. This screen shows the set that upload
+ * produced, and which of them the next takeoff will run against.
+ */
 class ProjectDocumentController extends Controller
 {
     public function __construct(private readonly ProjectDocumentStore $documents) {}
 
-    public function store(StoreProjectDocumentRequest $request, Project $project): RedirectResponse
+    /**
+     * Chooses the drawing the next takeoff runs against.
+     *
+     * `drawing_name` is kept in step because it is the copy every list and
+     * every finished takeoff reads — leaving it behind would have the client
+     * screen and the Clients list naming two different drawings.
+     */
+    public function select(Project $project, Upload $document): RedirectResponse
     {
         $this->authorize('update', $project);
+        abort_unless($document->project_id === $project->id, 404);
 
-        $uploads = $this->documents->add(
-            $project,
-            $request->file('documents'),
-            (array) $request->input('document_titles', []),
-            $request->user(),
-        );
-
-        // The project may not have named a drawing yet — these are its first.
-        if (blank($project->drawing_name)) {
-            $project->update(['drawing_name' => $uploads[0]->name]);
-        }
-
-        $count = count($uploads);
+        $project->update([
+            'selected_upload_id' => $document->id,
+            'drawing_name' => $document->name,
+        ]);
 
         $project->activities()->create([
-            'title' => 'Drawings added',
-            'description' => $count.' drawing '.($count === 1 ? 'PDF' : 'PDFs').' added to the project',
+            'title' => 'Drawing selected',
+            'description' => "“{$document->label()}” is the drawing the next takeoff will run against",
             'tone' => 'info',
             'occurred_at' => now(),
         ]);
 
-        return back()->with(
-            'success',
-            $count === 1
-                ? "“{$uploads[0]->label()}” was added."
-                : "{$count} PDFs were added."
-        );
+        return back()->with('success', "“{$document->label()}” is now the selected drawing.");
     }
 
     /**
@@ -74,8 +73,13 @@ class ProjectDocumentController extends Controller
         $label = $document->label();
         $this->documents->remove($document);
 
-        // The removed PDF may have been the drawing the project was named after.
-        $project->update(['drawing_name' => $this->documents->primaryDrawingName($project)]);
+        /*
+         * The removed PDF may have been the selected one. The foreign key has
+         * already cleared the choice, so `takeoffDrawing()` falls back to the
+         * first still on record — and the name follows it.
+         */
+        $project->refresh();
+        $project->update(['drawing_name' => $project->takeoffDrawing()?->name]);
 
         $project->activities()->create([
             'title' => 'Drawing removed',

@@ -3,35 +3,31 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreProjectRequest;
-use App\Http\Resources\ProjectActivityResource;
 use App\Http\Resources\ProjectDocumentResource;
 use App\Http\Resources\ProjectListResource;
 use App\Models\FeedItem;
 use App\Models\Job;
 use App\Models\Project;
 use App\Services\Activity\FeedItemRecorder;
-use App\Services\Takeoff\ProjectDocumentStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Projects — the record a takeoff, an estimate and a job all hang off.
+ * Clients — the record a takeoff, an estimate and a job all hang off. Clients
+ * and projects are the same thing, so this controller backs both names.
  *
- * The AI Takeoff module creates a project implicitly, named after the drawing it
- * was given. This module creates one deliberately: the client, the site, the type
- * and the drawing PDFs are defined up front, before anything is analysed.
+ * The AI Takeoff module creates one implicitly, named after the drawing it was
+ * given. This module creates one deliberately: the client, the site and the
+ * type are recorded up front. Its drawings are not — a PDF is uploaded through
+ * AI Takeoff, against a client that already exists.
  */
 class ProjectController extends Controller
 {
-    public function __construct(
-        private readonly ProjectDocumentStore $documents,
-        private readonly FeedItemRecorder $activity,
-    ) {}
+    public function __construct(private readonly FeedItemRecorder $activity) {}
 
     /** Search, status filter, sort and pagination all run in the database. */
     public function index(Request $request): Response
@@ -69,63 +65,74 @@ class ProjectController extends Controller
         ]);
     }
 
-    /** Full-page create form: the project's details and its drawing PDFs. */
+    /** Full-page create form: the client's own details, and nothing else. */
     public function create(): Response
     {
         return Inertia::render('ProjectCreate', [
             'clients' => $this->knownClients(),
-            'disciplines' => Project::DISCIPLINES,
-            'limits' => StoreProjectRequest::documentLimits(),
         ]);
     }
 
     /**
-     * Records the project and the PDFs defined with it.
+     * Records the client. No drawings arrive with it: a PDF is uploaded through
+     * AI Takeoff, against a client that already exists.
      *
-     * Nothing is sent to the AI engine here — a project is opened to be worked on,
-     * and a takeoff is started separately from the AI Takeoff module.
+     * Nothing is sent to the AI engine here either — this opens the client, and
+     * a takeoff is started separately from the AI Takeoff module.
      */
     public function store(StoreProjectRequest $request): RedirectResponse
     {
         $data = $request->validated();
-        $files = $request->file('documents') ?? [];
-        $titles = (array) $request->input('document_titles', []);
 
-        $project = DB::transaction(function () use ($request, $data, $files, $titles) {
-            $project = $request->user()->projects()->create([
-                'name' => $data['name'],
-                'code' => $data['code'] ?? null,
-                'client' => $data['client'],
-                'location' => $data['location'] ?? null,
-                'discipline' => $data['discipline'] ?? 'Electrical',
-                'project_type' => $data['project_type'] ?? null,
-                'due_date' => $data['due_date'] ?? null,
-                'notes' => $data['notes'] ?? null,
-                'status' => 'draft',
-                'review_status' => 'none',
+        $addresses = array_values($data['addresses'] ?? []);
+        $primary = $addresses[0] ?? null;
+
+        $project = $request->user()->projects()->create([
+            'name' => $data['name'],
+            'code' => $data['code'] ?? null,
+            // Clients are projects: the name is the client, so the column
+            // is written from it rather than typed a second time.
+            'client' => $data['name'],
+            // The primary site, mirrored here because every list, search and
+            // job screen already reads `location` off the client.
+            'location' => $primary['address'] ?? null,
+            'latitude' => $primary['latitude'] ?? null,
+            'longitude' => $primary['longitude'] ?? null,
+            'project_type' => $data['project_type'] ?? null,
+            'due_date' => $data['due_date'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'status' => 'draft',
+            'review_status' => 'none',
+        ]);
+
+        foreach ($addresses as $position => $address) {
+            $project->addresses()->create([
+                'label' => $address['label'] ?? null,
+                'address' => $address['address'],
+                'latitude' => $address['latitude'] ?? null,
+                'longitude' => $address['longitude'] ?? null,
+                // The first one given is the one a job defaults to.
+                'is_primary' => $position === 0,
+                'position' => $position,
             ]);
+        }
 
-            $uploads = $this->documents->add($project, $files, $titles, $request->user());
+        $project->activities()->create([
+            'title' => 'Client created',
+            'description' => 'No drawings yet — upload one from AI Takeoff',
+            'tone' => 'brand',
+            'occurred_at' => now(),
+        ]);
 
-            // The drawing a takeoff would run against, mirrored onto the project so
-            // lists can name it without loading its uploads.
-            if ($uploads !== []) {
-                $project->update(['drawing_name' => $uploads[0]->name]);
-            }
+        $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "New client created: {$project->name}", 'briefcase', 'lilac');
 
-            $project->activities()->create([
-                'title' => 'Project created',
-                'description' => $uploads === []
-                    ? 'No drawings defined yet'
-                    : count($uploads).' drawing '.(count($uploads) === 1 ? 'PDF' : 'PDFs').' defined',
-                'tone' => 'brand',
-                'occurred_at' => now(),
-            ]);
-
-            return $project;
-        });
-
-        $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "New project created: {$project->name}", 'briefcase', 'lilac');
+        /*
+         * Remembered for the AI Takeoff upload screen, which preselects it —
+         * someone who has just created a client and gone to upload a drawing
+         * means that client, and should not have to find it in the list again.
+         * Read once and cleared, so it never quietly steers a later upload.
+         */
+        $request->session()->put('takeoff.preselected_client', $project->id);
 
         return redirect()
             ->route('projects.show', $project)
@@ -145,6 +152,9 @@ class ProjectController extends Controller
                 ...ProjectListResource::make($project)->resolve($request),
                 'notes' => $project->notes,
                 'drawingName' => $project->drawing_name,
+                // Which drawing the next takeoff runs against. Falls back to
+                // the first on record when nothing has been chosen.
+                'selectedUploadId' => $project->takeoffDrawing()?->id,
                 'pageCount' => $project->page_count,
                 'startedAt' => $project->started_at?->toISOString(),
                 'completedAt' => $project->completed_at?->toISOString(),
@@ -155,8 +165,6 @@ class ProjectController extends Controller
                     : null,
             ],
             'documents' => ProjectDocumentResource::collection($documents)->resolve($request),
-            'activity' => ProjectActivityResource::collection($project->activities)->resolve($request),
-            'limits' => StoreProjectRequest::documentLimits(),
         ]);
     }
 

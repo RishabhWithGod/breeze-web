@@ -15,6 +15,8 @@ export const ROUTES = {
   home: '/home',
   /** AI Takeoff module landing screen — the takeoff history. */
   aiTakeoff: '/ai-takeoff',
+  /** Address suggestions for the Site / Location field. JSON, not a page. */
+  addressLookup: '/address-lookup',
   /**
    * Semantic alias of `aiTakeoff`: history *is* the module landing screen.
    * Kept so "view history" links read clearly at their call sites.
@@ -86,13 +88,21 @@ export const ROUTES = {
 
 /** Per-record URLs. */
 export const routeTo = {
+  /** Adds a site to a client from whichever screen needed it. */
+  clientAddresses: (projectId: number) => `/projects/${projectId}/addresses`,
+  /** The step after Create Job: laying the job out in tasks. */
+  jobTaskSetup: (jobId: number) => `/jobs/${jobId}/tasks/setup`,
   project: (projectId: number) => `/projects/${projectId}`,
+  /** AI Takeoff upload, opened with this client already picked. */
+  uploadForProject: (projectId: number) => `/ai-takeoff/upload?project=${projectId}`,
   /** Starts an AI takeoff run against the project's drawing already on file. */
   projectTakeoffStart: (projectId: number) => `/projects/${projectId}/takeoff`,
-  /** Adds drawing PDFs to a project. */
-  projectDocuments: (projectId: number) => `/projects/${projectId}/documents`,
+  /** One of a client's drawing PDFs — opened, or removed. */
   projectDocument: (projectId: number, documentId: number) =>
     `/projects/${projectId}/documents/${documentId}`,
+  /** Makes this the drawing the next takeoff runs against. */
+  projectDocumentSelect: (projectId: number, documentId: number) =>
+    `/projects/${projectId}/documents/${documentId}/select`,
 
   processing: (projectId: number) => `/processing/${projectId}`,
   processingCancel: (projectId: number) => `/processing/${projectId}/cancel`,

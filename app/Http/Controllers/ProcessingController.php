@@ -219,7 +219,7 @@ class ProcessingController extends Controller
             return back()->with('warning', 'The AI takeoff service is not configured.');
         }
 
-        $upload = $project->primaryUpload;
+        $upload = $project->takeoffDrawing();
 
         if (! $upload) {
             return back()->with('warning', 'Add a drawing PDF before running an AI takeoff.');
@@ -257,7 +257,7 @@ class ProcessingController extends Controller
             return back()->with('warning', 'The AI takeoff service is not configured.');
         }
 
-        $upload = $project->primaryUpload;
+        $upload = $project->takeoffDrawing();
 
         if (! $upload) {
             return back()->with('warning', 'The original drawing is no longer available.');

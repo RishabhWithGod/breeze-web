@@ -8,11 +8,15 @@ use App\Http\Resources\SymbolReviewResource;
 use App\Jobs\BackfillTakeoffCrops;
 use App\Models\AiResult;
 use App\Models\SymbolReview;
+use App\Models\Upload;
 use App\Services\Ai\ArtefactStore;
 use App\Services\Takeoff\CompleteReview;
 use App\Services\Takeoff\EstimateBuilder;
+use App\Services\Takeoff\EstimatingComponents;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Response as ResponseFactory;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -31,7 +35,7 @@ use Throwable;
  */
 class AiReviewController extends Controller
 {
-    public function show(Request $request, AiResult $result): Response
+    public function show(Request $request, AiResult $result, EstimatingComponents $components): Response
     {
         $this->authorize('view', $result);
 
@@ -68,7 +72,6 @@ class AiReviewController extends Controller
                 'id' => $result->id,
                 'projectId' => $result->project_id,
                 'projectName' => $result->project->name,
-                'client' => $result->project->client,
                 'drawingName' => $result->project->drawing_name,
                 'modelVersion' => $result->model_version,
                 'pageCount' => $result->page_count,
@@ -97,20 +100,12 @@ class AiReviewController extends Controller
             )->resolve(),
             'pageDimensions' => $result->pageDimensions(),
             'tally' => $result->reviewTally(),
-            'pages' => $result->reviews()
-                ->visible()
-                /*
-                 * `reviews()` orders by position and id for the grid. Those columns
-                 * are meaningless once the rows are collapsed to one per page, and
-                 * MySQL rejects the query outright for selecting an ordering column
-                 * it cannot aggregate, so the inherited ordering is dropped first.
-                 */
-                ->reorder()
-                ->selectRaw('page, count(*) as total')
-                ->groupBy('page')
-                ->orderBy('page')
-                ->get()
-                ->map(fn ($row) => ['page' => (int) $row->page, 'total' => (int) $row->total]),
+            /*
+             * What the estimate will need from this takeoff, and how much of it
+             * this run already has — the same list the estimate screen shows,
+             * so the reviewer sees it before signing off rather than after.
+             */
+            'estimating' => $components->for($result),
             // Same reason as the page tally: a DISTINCT on one column cannot carry
             // the relation's row ordering, because those columns are not selected.
             'distinctNames' => $result->reviews()->reorder()->distinct()->orderBy('name')->pluck('name'),
@@ -254,9 +249,62 @@ class AiReviewController extends Controller
     {
         $this->authorize('view', $result);
 
-        $path = $result->upload?->previewFor($page);
+        $upload = $result->upload;
+        abort_unless($upload !== null, 404);
+
+        $path = $upload->previewFor($page);
+
+        /*
+         * Previews are rendered by a queued job, so on a worker that never ran —
+         * or one that failed, or a file since cleaned off the disk — the review
+         * screen had nothing to show and no way to recover: every retry asked
+         * for the same missing file and got the same 404.
+         *
+         * So the request renders them itself when they are not there. It costs
+         * about a second, once, and only in the case that was previously a dead
+         * end; every request after it is served straight off the disk.
+         */
+        if (! $store->exists($path)) {
+            $path = $this->renderOnDemand($upload, $page, $store);
+        }
+
         abort_unless($store->exists($path), 404);
 
         return $store->disk()->response($path);
+    }
+
+    /**
+     * Renders this upload's previews now, under a lock.
+     *
+     * `renderPreviews` clears the directory before writing, so two requests
+     * racing — the browser asking for one page while someone clicks to another —
+     * must not run it at the same time. Whoever waits re-reads rather than
+     * rendering a second time.
+     */
+    private function renderOnDemand(Upload $upload, int $page, ArtefactStore $store): ?string
+    {
+        $lock = Cache::lock("previews:upload:{$upload->id}", 120);
+
+        try {
+            // Waits for a render already in flight rather than starting another.
+            $lock->block(30);
+        } catch (LockTimeoutException) {
+            return $upload->refresh()->previewFor($page);
+        }
+
+        try {
+            $fresh = $upload->refresh();
+
+            // Rendered while this request was waiting for the lock.
+            if ($store->exists($fresh->previewFor($page))) {
+                return $fresh->previewFor($page);
+            }
+
+            $store->renderPreviews($fresh);
+
+            return $fresh->refresh()->previewFor($page);
+        } finally {
+            $lock->release();
+        }
     }
 }

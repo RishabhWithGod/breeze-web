@@ -120,13 +120,10 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
       ),
     },
     {
-      key: 'client',
-      header: 'Client',
+      key: 'location',
+      header: 'Location',
       render: (row) => (
-        <div className="min-w-0">
-          <p className="text-white/90">{row.client}</p>
-          {row.location && <p className="text-sm text-white/70">{row.location}</p>}
-        </div>
+        <span className="text-white/90">{row.location || '—'}</span>
       ),
     },
     {

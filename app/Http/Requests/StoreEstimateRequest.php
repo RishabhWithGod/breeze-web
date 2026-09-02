@@ -12,13 +12,11 @@ class StoreEstimateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'client' => ['required', 'string', 'max:120'],
-            'project' => ['required', 'string', 'max:160'],
             'issued_on' => ['required', 'date'],
             'amount' => ['required', 'numeric', 'min:0', 'max:99999999'],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
-            /** Links this estimate back to a drawing already run through AI Takeoff. */
-            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            /** The client, picked from the client register — see ClientDirectory. */
+            'project_id' => ['required', 'integer', 'exists:projects,id'],
             'upload_id' => ['nullable', 'integer', 'exists:uploads,id'],
         ];
     }
@@ -27,8 +25,8 @@ class StoreEstimateRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'client.required' => 'Client is required',
-            'project.required' => 'Project is required',
+            'project_id.required' => 'Client is required',
+            'project_id.exists' => 'Pick a client from the list',
             'issued_on.required' => 'Date is required',
             'amount.required' => 'Amount is required',
         ];

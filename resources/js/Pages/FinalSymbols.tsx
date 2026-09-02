@@ -14,6 +14,7 @@ import {
   TextInput,
   WorkflowProgress,
 } from '@/components/common'
+import { JobSitePicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type {
@@ -21,6 +22,7 @@ import type {
   BoqLine,
   BoqMaterial,
   CircuitRow,
+  ClientOption,
   EngineBoqLine,
   EquipmentRow,
   FinalSymbolRow,
@@ -37,8 +39,10 @@ import { formatDate } from '@/utils'
 /** Payload for the "Create the job" form below — mirrors `FinalTakeoffController::storeJob`. */
 interface CreateJobForm {
   name: string
-  client: string
-  location: string
+  /** The client this job is for. Defaults to the takeoff's, but can be another. */
+  project_id: string
+  /** The client sites this job is at. Its `location` is written from the first. */
+  address_ids: number[]
   description: string
   job_type: JobType | ''
   start_date: string
@@ -50,8 +54,8 @@ interface CreateJobForm {
 interface FinalResultSummary {
   readonly id: number
   readonly projectId: number
+  /** The client's name — `Project.client` holds the same string. */
   readonly projectName: string
-  readonly client: string | null
   readonly drawingName: string | null
   readonly modelVersion: string | null
   readonly isFinalised: boolean
@@ -98,6 +102,10 @@ export interface FinalSymbolsProps {
   panelSchedules: readonly PanelScheduleRow[]
   equipment: readonly EquipmentRow[]
   circuits: readonly CircuitRow[]
+  /** The client register, and its sites, exactly as Create Job offers them. */
+  clients: readonly ClientOption[]
+  /** The takeoff's own client — where the form starts. */
+  defaultClientId: number
   foremen: readonly JobForeman[]
   history: readonly ApprovalHistoryEntry[]
 }
@@ -109,13 +117,23 @@ export interface FinalSymbolsProps {
  * and is what the job and estimate are built from. The AI response is kept for
  * audit only and is never read again past this point.
  */
-export default function FinalSymbols({ result, foremen }: FinalSymbolsProps) {
+export default function FinalSymbols({
+  result,
+  clients,
+  defaultClientId,
+  foremen,
+}: FinalSymbolsProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   const jobForm = useForm<CreateJobForm>({
     name: result.projectName,
-    client: result.client ?? '',
-    location: '',
+    project_id: String(defaultClientId),
+    // That client's primary site, exactly as Create Job starts.
+    address_ids:
+      clients
+        .find((option) => option.id === defaultClientId)
+        ?.addresses.filter((site) => site.isPrimary)
+        .map((site) => site.id) ?? [],
     description: '',
     job_type: '',
     start_date: '',
@@ -134,6 +152,27 @@ export default function FinalSymbols({ result, foremen }: FinalSymbolsProps) {
     if (jobForm.errors[field]) jobForm.clearErrors(field)
   }
 
+  const selectedClient = clients.find(
+    (option) => String(option.id) === jobForm.data.project_id,
+  )
+
+  const clientOptions = clients.map((option) => ({
+    label: option.id === defaultClientId ? `${option.name} (this takeoff)` : option.name,
+    value: String(option.id),
+  }))
+
+  /** Changing the client drops sites that belonged to the old one. */
+  const selectClient = (clientId: string) => {
+    const client = clients.find((option) => String(option.id) === clientId)
+
+    jobForm.setData((current) => ({
+      ...current,
+      project_id: clientId,
+      address_ids:
+        client?.addresses.filter((site) => site.isPrimary).map((site) => site.id) ?? [],
+    }))
+  }
+
   const foremanOptions = [
     { label: 'Assign later', value: '' },
     ...foremen.map((foreman) => ({ label: foreman.name, value: String(foreman.id) })),
@@ -141,7 +180,7 @@ export default function FinalSymbols({ result, foremen }: FinalSymbolsProps) {
 
   const submitJob = (event: FormEvent) => {
     event.preventDefault()
-    jobForm.post(routeTo.finalCreateJob(result.id), { preserveScroll: true })
+    jobForm.post(routeTo.finalCreateJob(result.id))
   }
 
   return (
@@ -225,23 +264,38 @@ export default function FinalSymbols({ result, foremen }: FinalSymbolsProps) {
               {...(jobForm.errors.name ? { error: jobForm.errors.name } : {})}
             />
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <TextInput
-                id="job-client"
-                label="Client"
-                value={jobForm.data.client}
-                onChange={(event) => updateJobField('client', event.target.value)}
-                {...(jobForm.errors.client ? { error: jobForm.errors.client } : {})}
+            {/*
+              Starts on the takeoff's own client, because that is nearly always
+              the answer — but work is sometimes taken off one client's drawing
+              and built for another, so it can be changed. The takeoff itself
+              stays linked either way.
+            */}
+            <SelectField
+              id="job-client"
+              label="Client"
+              hint={
+                jobForm.data.project_id === String(defaultClientId)
+                  ? 'The client this takeoff is for.'
+                  : 'Not this takeoff’s own client — the takeoff stays linked to the job.'
+              }
+              options={clientOptions}
+              value={jobForm.data.project_id}
+              onChange={(event) => selectClient(event.target.value)}
+              {...(jobForm.errors.project_id ? { error: jobForm.errors.project_id } : {})}
+            />
+
+            <fieldset>
+              <legend className="mb-1 text-md font-medium text-white">Site(s)</legend>
+              <JobSitePicker
+                client={selectedClient}
+                value={jobForm.data.address_ids}
+                onChange={(addressIds) => updateJobField('address_ids', addressIds)}
+                disabled={jobForm.processing}
+                {...(jobForm.errors.address_ids
+                  ? { error: jobForm.errors.address_ids }
+                  : {})}
               />
-              <TextInput
-                id="job-location"
-                label="Location"
-                placeholder="Enter job location"
-                value={jobForm.data.location}
-                onChange={(event) => updateJobField('location', event.target.value)}
-                {...(jobForm.errors.location ? { error: jobForm.errors.location } : {})}
-              />
-            </div>
+            </fieldset>
 
             <div className="grid gap-6 lg:grid-cols-3">
               <TextInput

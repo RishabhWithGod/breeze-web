@@ -1,4 +1,4 @@
-import { Building2, CalendarClock, FileStack, Layers3 } from 'lucide-react'
+import { CalendarClock, FileStack, Layers3 } from 'lucide-react'
 import { Badge, Card, CircularProgress, StatusChip } from '@/components/common'
 import type { TakeoffProject } from '@/types'
 import {
@@ -18,8 +18,8 @@ export interface ProjectSummaryCardProps {
 export function ProjectSummaryCard({ project, index }: ProjectSummaryCardProps) {
   const primarySheet = project.sheets[1] ?? project.sheets[0]
 
+  // The card's own heading is the client's name, so it is not repeated here.
   const meta = [
-    { icon: Building2, label: 'Client', value: project.client },
     { icon: Layers3, label: 'Discipline', value: project.discipline },
     { icon: FileStack, label: 'Sheets', value: `${project.pageCount} pages` },
     {

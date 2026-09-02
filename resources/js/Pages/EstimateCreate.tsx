@@ -22,7 +22,7 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ESTIMATE_STATUS_OPTIONS, ROUTES } from '@/constants'
-import type { EstimateDraft, TakeoffProjectOption, TakeoffUploadOption } from '@/types'
+import type { ClientOption, EstimateDraft, TakeoffUploadOption } from '@/types'
 import {
   ESTIMATE_STATUS_LABEL,
   ESTIMATE_STATUS_TONE,
@@ -33,11 +33,9 @@ import {
 export interface EstimateCreateProps {
   /** Reference the server will assign on save. */
   nextNumber: string
-  /** Existing clients, offered as a datalist so spelling stays consistent. */
-  clients: readonly string[]
-  /** Projects already run through AI Takeoff, offered to link this estimate to. */
-  projects: readonly TakeoffProjectOption[]
-  /** Their drawings — narrowed to the picked project once one is chosen. */
+  /** The client register. Clients are projects, so this is one list, not two. */
+  clients: readonly ClientOption[]
+  /** Their drawings — narrowed to the picked client once one is chosen. */
   uploads: readonly TakeoffUploadOption[]
 }
 
@@ -52,13 +50,10 @@ export interface EstimateCreateProps {
 export default function EstimateCreate({
   nextNumber,
   clients,
-  projects,
   uploads,
 }: EstimateCreateProps) {
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<EstimateDraft>({
-      client: '',
-      project: '',
       issued_on: '',
       amount: '',
       status: 'draft',
@@ -81,45 +76,39 @@ export default function EstimateCreate({
 
   const submit = (event?: React.FormEvent) => {
     event?.preventDefault()
-    post(ROUTES.estimates, { preserveScroll: true })
+    post(ROUTES.estimates)
   }
 
   const amount = Number(data.amount)
   const hasAmount = data.amount !== '' && Number.isFinite(amount)
 
-  const projectOptions = [
-    { label: 'No linked client', value: '' },
-    ...projects.map((option) => ({
-      label: option.client ? `${option.name} — ${option.client}` : option.name,
-      value: String(option.id),
-    })),
+  const clientOptions = [
+    { label: 'Select client', value: '' },
+    ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
   ]
 
-  const uploadsForProject = useMemo(
+  /** Only the picked client's drawings — an estimate never links to someone else's. */
+  const uploadsForClient = useMemo(
     () => uploads.filter((upload) => String(upload.projectId) === data.project_id),
     [uploads, data.project_id],
   )
 
   const uploadOptions = [
     { label: 'No linked drawing', value: '' },
-    ...uploadsForProject.map((upload) => ({ label: upload.name, value: String(upload.id) })),
+    ...uploadsForClient.map((upload) => ({ label: upload.name, value: String(upload.id) })),
   ]
 
-  const linkedEstimate = uploadsForProject.find(
+  const linkedEstimate = uploadsForClient.find(
     (upload) => String(upload.id) === data.upload_id,
   )?.estimate
 
-  /** Selecting a project fills in the free-text fields rather than duplicating entry. */
-  const selectProject = (projectId: string) => {
-    const project = projects.find((option) => String(option.id) === projectId)
-    setData((current) => ({
-      ...current,
-      project_id: projectId,
-      upload_id: '',
-      project: project?.name ?? current.project,
-      client: project?.client ?? current.client,
-    }))
+  /** Changing the client invalidates whatever drawing was picked under the old one. */
+  const selectClient = (clientId: string) => {
+    setData((current) => ({ ...current, project_id: clientId, upload_id: '' }))
+    if (errors.project_id) clearErrors('project_id')
   }
+
+  const clientName = clients.find((option) => String(option.id) === data.project_id)?.name
 
   return (
     <PageTransition>
@@ -155,45 +144,19 @@ export default function EstimateCreate({
             />
 
             <div className="space-y-5">
-              <div>
-                <TextInput
-                  id="estimate-client"
-                  label="Client"
-                  list="estimate-client-options"
-                  placeholder="e.g. Westview Properties"
-                  autoComplete="off"
-                  value={data.client}
-                  onChange={(event) => update('client', event.target.value)}
-                  {...(errors.client ? { error: errors.client } : {})}
-                />
-                <datalist id="estimate-client-options">
-                  {clients.map((client) => (
-                    <option key={client} value={client} />
-                  ))}
-                </datalist>
-              </div>
-
-              <TextInput
-                id="estimate-project"
-                label="Client"
-                placeholder="e.g. Office Building Renovation"
-                value={data.project}
-                onChange={(event) => update('project', event.target.value)}
-                {...(errors.project ? { error: errors.project } : {})}
-              />
-
               <div className="grid gap-5 sm:grid-cols-2">
                 <SelectField
-                  id="estimate-linked-project"
-                  label="Link to AI Takeoff client (optional)"
-                  options={projectOptions}
+                  id="estimate-client"
+                  label="Client*"
+                  hint="Not listed? Add them under Clients first."
+                  options={clientOptions}
                   value={data.project_id}
-                  onChange={(event) => selectProject(event.target.value)}
+                  onChange={(event) => selectClient(event.target.value)}
                   {...(errors.project_id ? { error: errors.project_id } : {})}
                 />
                 <SelectField
                   id="estimate-linked-upload"
-                  label="Drawing"
+                  label="AI Takeoff drawing (optional)"
                   options={uploadOptions}
                   value={data.upload_id}
                   disabled={!data.project_id}
@@ -300,17 +263,7 @@ export default function EstimateCreate({
                   Client
                 </dt>
                 <dd className="mt-2 text-md text-white">
-                  {data.client.trim() || <span className="text-white/60">Not set</span>}
-                </dd>
-              </div>
-
-              <div className="rounded-panel border border-hairline bg-white/4 p-4">
-                <dt className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
-                  <FileText size={14} aria-hidden className="text-brand" />
-                  Client
-                </dt>
-                <dd className="mt-2 text-md text-white">
-                  {data.project.trim() || <span className="text-white/60">Not set</span>}
+                  {clientName ?? <span className="text-white/60">Not set</span>}
                 </dd>
               </div>
 

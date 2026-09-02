@@ -9,6 +9,8 @@ use App\Models\FinalSymbol;
 use App\Models\Foreman;
 use App\Models\Job;
 use App\Services\Ai\ArtefactStore;
+use App\Services\Clients\ClientDirectory;
+use App\Services\Clients\JobSites;
 use App\Services\Export\AnnotatedPdfWriter;
 use App\Services\Export\SymbolExporter;
 use App\Services\Takeoff\EstimateBuilder;
@@ -32,8 +34,12 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class FinalTakeoffController extends Controller
 {
-    public function show(Request $request, AiResult $result, ArtefactStore $store): Response
-    {
+    public function show(
+        Request $request,
+        AiResult $result,
+        ArtefactStore $store,
+        ClientDirectory $clients,
+    ): Response {
         $this->authorize('view', $result);
 
         $filters = $request->validate([
@@ -55,7 +61,7 @@ class FinalTakeoffController extends Controller
             ->withQueryString();
 
         $result->load([
-            'project', 'workJob', 'estimate', 'upload',
+            'project.addresses', 'workJob', 'estimate', 'upload',
             'wireSizes', 'panelSchedules', 'equipment', 'circuits', 'boqLines',
         ]);
         $payload = $result->final_payload ?? [];
@@ -65,7 +71,6 @@ class FinalTakeoffController extends Controller
                 'id' => $result->id,
                 'projectId' => $result->project_id,
                 'projectName' => $result->project->name,
-                'client' => $result->project->client,
                 'drawingName' => $result->project->drawing_name,
                 'modelVersion' => $result->model_version,
                 'isFinalised' => $result->isFinalised(),
@@ -142,7 +147,14 @@ class FinalTakeoffController extends Controller
                 'breaker' => $circuit->breaker,
                 'panel' => $circuit->panel,
             ])->all(),
-            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
+            /*
+             * The whole register, and which of them this takeoff is for. The
+             * takeoff's own client is the default rather than a rule — work is
+             * sometimes taken off one client's drawing and built for another —
+             * and `ai_result_id` still records where the numbers came from.
+             */
+            'clients' => $clients->options(),
+            'defaultClientId' => $result->project_id,
             'history' => ApprovalHistoryResource::collection(
                 $result->history()->with('actor')->take(20)->get()
             )->resolve(),
@@ -224,6 +236,7 @@ class FinalTakeoffController extends Controller
         AiResult $result,
         JobFactory $factory,
         EstimateBuilder $estimateBuilder,
+        JobSites $sites,
     ): RedirectResponse {
         $this->authorize('view', $result);
 
@@ -238,15 +251,31 @@ class FinalTakeoffController extends Controller
 
         $attributes = $request->validate([
             'name' => ['nullable', 'string', 'max:160'],
-            'client' => ['nullable', 'string', 'max:160'],
-            'location' => ['nullable', 'string', 'max:200'],
+            /*
+             * Defaults to the takeoff's own client, but can name another. The
+             * sites must then be that client's, and the job's own address is
+             * written from the first one picked rather than typed.
+             */
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'address_ids' => ['nullable', 'array', 'max:25'],
+            'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'foreman_id' => ['nullable', 'integer', 'exists:foremen,id'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'budget' => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
         ]);
+
+        $addressIds = $attributes['address_ids'] ?? [];
+        unset($attributes['address_ids']);
+
+        $clientId = (int) ($attributes['project_id'] ?? $result->project_id);
+
+        // Refused before the job is written: the sites must belong to whichever
+        // client the job is being raised for, whatever ids arrived.
+        $addresses = $addressIds === []
+            ? collect()
+            : $sites->resolve($clientId, $addressIds);
 
         try {
             $job = $factory->fromFinalJson($result, $request->user(), array_filter(
@@ -255,6 +284,10 @@ class FinalTakeoffController extends Controller
             ));
         } catch (RuntimeException $e) {
             return back()->with('warning', $e->getMessage());
+        }
+
+        if ($addresses->isNotEmpty()) {
+            $sites->attach($job, $addresses);
         }
 
         $estimate = null;

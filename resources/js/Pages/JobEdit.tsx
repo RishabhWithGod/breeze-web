@@ -13,15 +13,18 @@ import {
   TextArea,
   TextInput,
 } from '@/components/common'
+import { JobSitePicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_STATUS_OPTIONS, JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
-import type { JobDetail, JobForeman, JobStatus, JobType } from '@/types'
+import type { ClientOption, JobDetail, JobForeman, JobStatus, JobType } from '@/types'
 
 /** Edit payload — snake_case to match UpdateJobRequest. */
 interface JobEditForm {
   name: string
-  client: string
-  location: string
+  /** The client. Clients are projects, so this is a `projects` id. */
+  project_id: string
+  /** The client sites this job is at. Its `location` is written from the first. */
+  address_ids: number[]
   description: string
   job_type: JobType | ''
   status: JobStatus
@@ -37,7 +40,8 @@ interface JobEditForm {
 export interface JobEditProps {
   job: JobDetail
   foremen: readonly JobForeman[]
-  clients: readonly string[]
+  /** The client register. Clients are projects, so this is one list, not two. */
+  clients: readonly ClientOption[]
 }
 
 /** Date inputs need `yyyy-MM-dd`; the server sends ISO timestamps. */
@@ -55,8 +59,8 @@ export default function JobEdit({ job, foremen, clients }: JobEditProps) {
   const { data, setData, put, processing, errors, hasErrors, clearErrors } =
     useForm<JobEditForm>({
       name: job.name,
-      client: job.client ?? '',
-      location: job.location ?? '',
+      project_id: job.clientId === null ? '' : String(job.clientId),
+      address_ids: [...job.addressIds],
       description: job.description ?? '',
       job_type: job.jobType ?? '',
       status: job.status,
@@ -77,18 +81,30 @@ export default function JobEdit({ job, foremen, clients }: JobEditProps) {
     if (errors[field]) clearErrors(field)
   }
 
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault()
-    put(routeTo.job(job.id), { preserveScroll: true })
+  const selectedClient = clients.find((option) => String(option.id) === data.project_id)
+
+  /** Changing the client drops sites that belonged to the old one. */
+  const selectClient = (clientId: string) => {
+    setData((current) => ({ ...current, project_id: clientId, address_ids: [] }))
+    clearErrors('project_id', 'address_ids')
   }
 
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault()
+    put(routeTo.job(job.id))
+  }
+
+  /**
+   * A job created before clients and projects were merged may name a client
+   * that never became a record. Its stored name becomes the placeholder, so the
+   * select shows who the job is for rather than a blank "Select client" — but
+   * the placeholder has no value, so saving still requires picking a real one.
+   */
   const clientOptions = [
-    { label: 'Select client', value: '' },
-    // The job's own client may not be in the distinct list yet.
-    ...(job.client && !clients.includes(job.client)
-      ? [{ label: job.client, value: job.client }]
-      : []),
-    ...clients.map((client) => ({ label: client, value: client })),
+    job.clientId === null && job.client
+      ? { label: `${job.client} — not yet a client record`, value: '' }
+      : { label: 'Select client', value: '' },
+    ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
   ]
 
   const foremanOptions = [
@@ -141,23 +157,31 @@ export default function JobEdit({ job, foremen, clients }: JobEditProps) {
               {...(errors.name ? { error: errors.name } : {})}
             />
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <SelectField
-                id="job-client"
-                label="Client*"
-                options={clientOptions}
-                value={data.client}
-                onChange={(event) => update('client', event.target.value)}
-                {...(errors.client ? { error: errors.client } : {})}
+            <SelectField
+              id="job-client"
+              label="Client*"
+              hint="Not listed? Add them under Clients first."
+              className="lg:max-w-md"
+              options={clientOptions}
+              value={data.project_id}
+              onChange={(event) => selectClient(event.target.value)}
+              {...(errors.project_id ? { error: errors.project_id } : {})}
+            />
+
+            {/* Same picker as Create Job, so a site can be added from here too. */}
+            <fieldset>
+              <legend className="mb-1 text-md font-medium text-white">Site(s)*</legend>
+              <JobSitePicker
+                client={selectedClient}
+                value={data.address_ids}
+                onChange={(addressIds) => {
+                  setData('address_ids', addressIds)
+                  if (errors.address_ids) clearErrors('address_ids')
+                }}
+                disabled={processing}
+                {...(errors.address_ids ? { error: errors.address_ids } : {})}
               />
-              <TextInput
-                id="job-location"
-                label="Location*"
-                value={data.location}
-                onChange={(event) => update('location', event.target.value)}
-                {...(errors.location ? { error: errors.location } : {})}
-              />
-            </div>
+            </fieldset>
 
             <div className="grid gap-6 lg:grid-cols-3">
               <SelectField

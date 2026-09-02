@@ -18,16 +18,6 @@ class Project extends Model
     /** Same taxonomy as a job, so a converted project keeps its type. */
     public const TYPES = ['residential', 'commercial', 'industrial'];
 
-    /** Offered by the Create Project form; `discipline` itself is free text. */
-    public const DISCIPLINES = [
-        'Electrical',
-        'Mechanical',
-        'Plumbing',
-        'Fire Protection',
-        'Low Voltage',
-        'Structural',
-    ];
-
     /** How the Projects list can be ordered. */
     public const SORTS = ['recent', 'oldest', 'name-asc', 'due-asc', 'documents-desc'];
 
@@ -37,7 +27,10 @@ class Project extends Model
         'code',
         'client',
         'location',
+        'latitude',
+        'longitude',
         'drawing_name',
+        'selected_upload_id',
         'discipline',
         'project_type',
         'status',
@@ -54,6 +47,8 @@ class Project extends Model
     protected function casts(): array
     {
         return [
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
             'items_count' => 'integer',
             'page_count' => 'integer',
             'overall_confidence' => 'float',
@@ -93,6 +88,28 @@ class Project extends Model
         return $this->hasMany(ProjectActivity::class)->latest('occurred_at');
     }
 
+    /**
+     * The sites this client has work at.
+     *
+     * `location` on the client itself is the primary one's snapshot — kept
+     * because every list and search already reads it.
+     *
+     * @return HasMany<ClientAddress, $this>
+     */
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(ClientAddress::class)->orderBy('position')->orderBy('id');
+    }
+
+    /** @return HasOne<ClientAddress, $this> */
+    public function primaryAddress(): HasOne
+    {
+        return $this->hasOne(ClientAddress::class)->ofMany([
+            'is_primary' => 'max',
+            'position' => 'min',
+        ]);
+    }
+
     /** @return HasMany<Upload, $this> */
     public function uploads(): HasMany
     {
@@ -123,10 +140,29 @@ class Project extends Model
         return $this->hasOne(AiResult::class)->latestOfMany();
     }
 
-    /** The drawing the takeoff ran against. */
+    /** The first drawing on record — the default when nothing is chosen. */
     public function primaryUpload(): HasOne
     {
         return $this->hasOne(Upload::class)->oldestOfMany();
+    }
+
+    /** @return BelongsTo<Upload, $this> */
+    public function selectedUpload(): BelongsTo
+    {
+        return $this->belongsTo(Upload::class, 'selected_upload_id');
+    }
+
+    /**
+     * The drawing a takeoff runs against: the one chosen on the client screen,
+     * or the first on record when nothing has been chosen.
+     *
+     * The fallback is not a nicety — a client with one drawing never chooses,
+     * and deleting the chosen one clears the choice, so "nothing chosen" is a
+     * normal state rather than an edge case.
+     */
+    public function takeoffDrawing(): ?Upload
+    {
+        return $this->selectedUpload ?? $this->primaryUpload;
     }
 
     /** True once the run has symbols to review. */

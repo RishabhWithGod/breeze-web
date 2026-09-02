@@ -28,7 +28,7 @@ export function ProjectPickerCard({
     { value: '', label: projects.length > 0 ? 'Select a client…' : 'No clients yet' },
     ...projects.map((project) => ({
       value: String(project.id),
-      label: `${project.name} — ${project.client}`,
+      label: project.name,
     })),
   ]
 

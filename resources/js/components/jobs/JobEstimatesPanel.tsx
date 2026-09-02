@@ -61,8 +61,9 @@ export function JobEstimatesPanel({ jobId, estimates }: JobEstimatesPanelProps) 
                   >
                     {estimate.number}
                   </Link>
+                  {/* The client is the job's own, so only the date adds anything. */}
                   <p className="mt-0.5 truncate text-sm text-white/85">
-                    {estimate.project} · {formatDate(estimate.date)}
+                    {formatDate(estimate.date)}
                   </p>
                 </div>
 

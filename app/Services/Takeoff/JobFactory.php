@@ -4,6 +4,7 @@ namespace App\Services\Takeoff;
 
 use App\Models\AiResult;
 use App\Models\Job;
+use App\Models\Project;
 use App\Models\SymbolReview;
 use App\Models\User;
 use Illuminate\Support\Arr;
@@ -108,21 +109,36 @@ class JobFactory
      */
     private function write(AiResult $result, array $payload, array $attributes, bool $reviewed): Job
     {
-        $project = $result->project;
+        /*
+         * The takeoff's own client is the default, not a rule: work is sometimes
+         * taken off one client's drawing and built for another. The form can
+         * name a different one, and `ai_result_id` still records which takeoff
+         * the numbers came from.
+         */
+        $takeoffClient = $result->project;
+        $client = isset($attributes['project_id'])
+            ? Project::findOrFail($attributes['project_id'])
+            : $takeoffClient;
 
         $job = Job::create([
-            'project_id' => $project->id,
+            'project_id' => $client->id,
             'ai_result_id' => $result->id,
-            'name' => $attributes['name'] ?? $project->name,
-            'client' => $attributes['client'] ?? ($project->client === 'Unassigned' ? null : $project->client),
-            // Carries over what was already captured when the project was
-            // created, so the same location/date is never retyped here.
-            'location' => $attributes['location'] ?? $project->location,
+            'name' => $attributes['name'] ?? $takeoffClient->name,
+            // A snapshot of the client's name, never typed — see ClientDirectory.
+            'client' => $client->name,
+            /*
+             * The client's primary site, as a starting point. When the form
+             * picked sites, `JobSites::attach` overwrites all three from the
+             * first one — see `FinalTakeoffController::storeJob`.
+             */
+            'location' => $client->location,
+            'latitude' => $client->latitude,
+            'longitude' => $client->longitude,
             'description' => $attributes['description'] ?? $this->describe($payload, $reviewed),
-            'job_type' => $attributes['job_type'] ?? $project->project_type ?? 'commercial',
+            'job_type' => $attributes['job_type'] ?? $client->project_type ?? 'commercial',
             'status' => 'planning',
             'foreman_id' => $attributes['foreman_id'] ?? null,
-            'start_date' => $attributes['start_date'] ?? $project->due_date,
+            'start_date' => $attributes['start_date'] ?? $client->due_date,
             'end_date' => $attributes['end_date'] ?? null,
             ...$this->takeoffFields($result, $payload, $reviewed),
             'budget' => $attributes['budget'] ?? $this->budget($payload),
@@ -132,10 +148,10 @@ class JobFactory
         $job->recordActivity(
             'created',
             $reviewed
-                ? "Job created from the reviewed takeoff for “{$project->name}”"
-                : "Job created from the AI takeoff for “{$project->name}”, pending review",
+                ? "Job created from the reviewed takeoff for “{$takeoffClient->name}”"
+                : "Job created from the AI takeoff for “{$takeoffClient->name}”, pending review",
             [
-                'project_id' => $project->id,
+                'project_id' => $takeoffClient->id,
                 'ai_result_id' => $result->id,
                 'items' => Arr::get($payload, 'metadata.final_item_total'),
                 'reviewed' => $reviewed,

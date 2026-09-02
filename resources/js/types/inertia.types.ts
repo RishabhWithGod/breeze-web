@@ -39,6 +39,8 @@ export interface ActiveTimer {
 /** Props present on every page. */
 export interface SharedPageProps {
   readonly appName: string
+  /** False when no geocoder is configured — the address field says so. */
+  readonly addressLookupEnabled: boolean
   readonly auth: { readonly user: AuthUser | null }
   readonly notifications: readonly AppNotification[]
   readonly unreadNotificationCount: number

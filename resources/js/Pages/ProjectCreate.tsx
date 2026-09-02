@@ -1,73 +1,50 @@
-import { useState } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { FolderKanban, Lightbulb, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, FolderKanban } from 'lucide-react'
 import {
+  AddressListField,
   Alert,
   Button,
   ButtonLink,
   Card,
   CardHeader,
   RadioGroup,
-  SelectField,
   TextArea,
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ProjectPdfPicker } from '@/components/projects'
 import { PROJECT_TYPE_OPTIONS, ROUTES } from '@/constants'
-import type {
-  ProjectDocumentLimits,
-  ProjectDraft,
-  ProjectType,
-  RejectedUploadFile,
-} from '@/types'
+import type { ProjectDraft, ProjectType } from '@/types'
+import { emptyAddress } from '@/utils'
 
 export interface ProjectCreateProps {
-  /** Clients already on record, offered in the Client select. */
+  /** Clients already on record, offered as suggestions on the name field. */
   clients: readonly string[]
-  disciplines: readonly string[]
-  limits: ProjectDocumentLimits
 }
 
 /**
- * Create New Project.
+ * Create New Client.
  *
- * Two things are defined here: the project itself, and the drawing PDFs it holds.
- * Both are posted in one multipart request — `documents[i]` with its label in
- * `document_titles[i]` — so a project and its drawing set are created together or
- * not at all.
- *
- * Nothing is sent to the AI engine: this screen records the work, and a takeoff is
- * started from the AI Takeoff module when the drawings are ready.
+ * The client's own details and nothing else — no drawings are attached here. A
+ * PDF is uploaded from AI Takeoff, against a client that already exists, so the
+ * product has one upload path rather than three.
  */
-export default function ProjectCreate({
-  clients,
-  disciplines,
-  limits,
-}: ProjectCreateProps) {
-  /** Files the browser refused outright — never sent, so reported client-side. */
-  const [rejected, setRejected] = useState<readonly RejectedUploadFile[]>([])
-
+export default function ProjectCreate({ clients }: ProjectCreateProps) {
   const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
     useForm<ProjectDraft>({
       name: '',
       code: '',
-      client: '',
-      location: '',
-      discipline: disciplines[0] ?? 'Electrical',
+      addresses: [emptyAddress()],
       project_type: '',
       due_date: '',
       notes: '',
-      documents: [],
-      document_titles: [],
     })
 
   /**
    * Inertia keeps server errors until the next request, which would leave
-   * "Client is required" sitting under a field the user has just filled in, so
-   * each edit clears its own message.
+   * "Client name is required" sitting under a field the user has just filled
+   * in, so each edit clears its own message.
    */
   const update = <K extends FormDataKeys<ProjectDraft>>(
     field: K,
@@ -77,47 +54,21 @@ export default function ProjectCreate({
     if (errors[field]) clearErrors(field)
   }
 
-  const addDocuments = (files: File[]) => {
-    setData('documents', [...data.documents, ...files])
-    // Labels are positional, so every file gets a slot whether it is labelled or not.
-    setData('document_titles', [...data.document_titles, ...files.map(() => '')])
-    if (errors.documents) clearErrors('documents')
-  }
-
-  const removeDocument = (index: number) => {
-    setData(
-      'documents',
-      data.documents.filter((_, position) => position !== index),
-    )
-    setData(
-      'document_titles',
-      data.document_titles.filter((_, position) => position !== index),
-    )
-  }
-
-  const setDocumentTitle = (index: number, title: string) => {
-    setData(
-      'document_titles',
-      data.document_titles.map((current, position) =>
-        position === index ? title : current,
-      ),
-    )
-  }
-
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    // A single name field now stands in for both — the server still records
-    // a separate `client` value, so it's carried across at submit time
-    // rather than asked for twice.
-    transform((payload) => ({ ...payload, client: payload.name }))
-    // `forceFormData` because the PDFs cannot travel as JSON.
-    post(ROUTES.projects, { forceFormData: true, preserveScroll: true })
-  }
 
-  const disciplineOptions = disciplines.map((discipline) => ({
-    label: discipline,
-    value: discipline,
-  }))
+    /*
+     * The form always shows one empty row to type into, and a client can be
+     * opened before any site is known — so a row nobody filled in is dropped
+     * rather than rejected as a missing address.
+     */
+    transform((payload) => ({
+      ...payload,
+      addresses: payload.addresses.filter((row) => row.address.trim() !== ''),
+    }))
+
+    post(ROUTES.projects)
+  }
 
   return (
     <PageTransition>
@@ -125,11 +76,16 @@ export default function ProjectCreate({
 
       <PageHeader
         title="Create New Client"
-        subtitle="Define the client, then attach the drawing PDFs it will be taken off from."
+        subtitle="Record the client, then run their drawings through AI Takeoff."
         breadcrumbs={[
           { label: 'Clients', href: ROUTES.projects },
           { label: 'New Client' },
         ]}
+        actions={
+          <ButtonLink href={ROUTES.projects} variant="secondary" leftIcon={ArrowLeft}>
+            Back to clients
+          </ButtonLink>
+        }
       />
 
       <form onSubmit={submit} noValidate className="space-y-6">
@@ -139,39 +95,12 @@ export default function ProjectCreate({
               Some fields need attention before this client can be created.
             </Alert>
           )}
-
-          {rejected.length > 0 && (
-            <Alert
-              key="rejected"
-              tone="warning"
-              title={`${rejected.length} file(s) could not be added`}
-              icon={TriangleAlert}
-              onDismiss={() => setRejected([])}
-            >
-              <ul className="mt-1 space-y-1">
-                {rejected.map((item) => (
-                  <li key={item.name} className="text-sm">
-                    <span className="font-medium text-white">{item.name}</span> —{' '}
-                    {item.reason}
-                  </li>
-                ))}
-              </ul>
-            </Alert>
-          )}
-
-          {/* PHP's own upload ceiling, when it is the binding constraint. */}
-          {limits.serverHint && (
-            <Alert key="php-limit" tone="info" title="Server upload limit">
-              {limits.serverHint}
-            </Alert>
-          )}
         </AnimatePresence>
 
-        {/* ------------------------------------------------- Project details --- */}
         <Card padding="lg">
           <CardHeader
             title="Client details"
-            subtitle="Who the client is for, and where the work is"
+            subtitle="Who the client is, and where the work is"
           />
 
           <div className="space-y-6">
@@ -199,29 +128,11 @@ export default function ProjectCreate({
               ))}
             </datalist>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <TextInput
-                id="project-location"
-                label="Site / Location"
-                placeholder="Enter the site address"
-                value={data.location}
-                onChange={(event) => update('location', event.target.value)}
-                {...(errors.location ? { error: errors.location } : {})}
-              />
-              <SelectField
-                id="project-discipline"
-                label="Discipline"
-                options={disciplineOptions}
-                value={data.discipline}
-                onChange={(event) => update('discipline', event.target.value)}
-                {...(errors.discipline ? { error: errors.discipline } : {})}
-              />
-            </div>
-
             <TextInput
               id="project-due"
               type="date"
               label="Takeoff Due"
+              className="lg:max-w-xs"
               value={data.due_date}
               onChange={(event) => update('due_date', event.target.value)}
               {...(errors.due_date ? { error: errors.due_date } : {})}
@@ -235,6 +146,21 @@ export default function ProjectCreate({
               onChange={(value) => update('project_type', value as ProjectType)}
               {...(errors.project_type ? { error: errors.project_type } : {})}
             />
+
+            <div className="border-t border-hairline pt-6">
+              <p className="text-md font-medium text-white">Sites</p>
+              <p className="mt-1 mb-4 text-sm text-white/75">
+                Every address this client has work at. The first is the primary —
+                it names the client in lists, and a job starts on it.
+              </p>
+
+              <AddressListField
+                addresses={data.addresses}
+                onChange={(addresses) => setData('addresses', addresses)}
+                errors={errors as Record<string, string>}
+                disabled={processing}
+              />
+            </div>
 
             <TextArea
               id="project-notes"
@@ -250,32 +176,6 @@ export default function ProjectCreate({
           </div>
         </Card>
 
-        {/* ---------------------------------------------------- Drawing PDFs --- */}
-        <Card padding="lg" index={1}>
-          <CardHeader
-            title="Drawing PDFs"
-            subtitle={
-              limits.maxFiles === 1
-                ? 'Add one drawing PDF, and label it so it reads clearly later.'
-                : `Up to ${limits.maxFiles} PDFs. Label each one so the set reads clearly later.`
-            }
-          />
-
-          <ProjectPdfPicker
-            files={data.documents}
-            titles={data.document_titles}
-            onAdd={addDocuments}
-            onRemove={removeDocument}
-            onTitleChange={setDocumentTitle}
-            onReject={(items) => setRejected(items)}
-            maxFiles={limits.maxFiles}
-            maxFileSizeMb={limits.maxFileSizeMb}
-            disabled={processing}
-            fileErrors={errors as Record<string, string>}
-            {...(errors.documents ? { error: errors.documents } : {})}
-          />
-        </Card>
-
         <div className="flex flex-wrap items-center justify-end gap-3">
           <ButtonLink href={ROUTES.projects} variant="white">
             Cancel
@@ -285,21 +185,6 @@ export default function ProjectCreate({
           </Button>
         </div>
       </form>
-
-      {/* ------------------------------------------------------- Pro tip ---- */}
-      <aside className="mt-6 flex items-start gap-4 rounded-card border border-hairline glass p-5 shadow-panel sm:p-6">
-        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand/15 text-brand">
-          <Lightbulb size={20} aria-hidden />
-        </span>
-        <div className="min-w-0">
-          <p className="text-md font-semibold text-brand">Pro Tip</p>
-          <p className="mt-1 text-md text-white">
-            Drawings can be added to the client later, and a client created here is
-            ready for AI Takeoff — run the analysis from the AI Takeoff module when the
-            set is complete.
-          </p>
-        </div>
-      </aside>
     </PageTransition>
   )
 }

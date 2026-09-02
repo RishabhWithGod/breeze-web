@@ -1,30 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Head, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import { History, Sparkles, Trash2, TriangleAlert } from 'lucide-react'
-import {
-  Alert,
-  Button,
-  ButtonLink,
-  Card,
-  CardHeader,
-  ConfirmDialog,
-} from '@/components/common'
+import { Alert, Button, ButtonLink, Card, ConfirmDialog } from '@/components/common'
 import { PageHeader, PageTransition, StepWizard, appLayout } from '@/components/layout'
-import {
-  AiFeaturesCard,
-  HelpCard,
-  ProjectNotesCard,
-  ProjectPickerCard,
-  RecentUploadCard,
-  UploadDropzone,
-  UploadFileList,
-} from '@/components/upload'
-import { HELP_RESOURCES, ROUTES } from '@/constants'
+import { ProjectPickerCard, UploadDropzone, UploadFileList } from '@/components/upload'
+import { ROUTES } from '@/constants'
 import { useDisclosure, useFileUpload } from '@/hooks'
 import { selectHasValidFiles, useUploadStore } from '@/store'
 import type {
-  RecentUpload,
   RejectedUploadFile,
   SharedPageProps,
   UploadLimits,
@@ -33,7 +17,11 @@ import type {
 
 export interface UploadProps {
   projects: readonly UploadTargetProject[]
-  recentUploads: readonly RecentUpload[]
+  /**
+   * The client the picker opens on — named by the link that got here, or the
+   * one just created. Null when neither applies.
+   */
+  selectedProjectId: number | null
   limits: UploadLimits
   /** False when AI_API_BASE_URL is unset — a run cannot be started. */
   aiConfigured: boolean
@@ -45,15 +33,16 @@ export interface UploadProps {
 }
 
 /**
- * Primary entry point: drag & drop upload, project notes, capability summary,
- * recent activity and help resources.
+ * Primary entry point, and the only place a drawing PDF enters the app: pick
+ * the client, drop the file, run the takeoff. Nothing else is on the screen —
+ * anything that is not one of those two steps is a distraction from them.
  *
  * The queue is local until "Run AI Takeoff", which posts the files to Laravel;
  * the server stores them, opens a takeoff run and redirects to its progress.
  */
 export default function Upload({
   projects,
-  recentUploads,
+  selectedProjectId,
   limits,
   aiConfigured,
   engineStatusUrl,
@@ -95,7 +84,6 @@ export default function Upload({
   const {
     files,
     rejected,
-    notes,
     projectId,
     isSubmitting,
     formError,
@@ -104,7 +92,6 @@ export default function Upload({
     replaceFile,
     setRejected,
     clearRejected,
-    setNotes,
     setProjectId,
     setFormError,
     reset,
@@ -112,6 +99,22 @@ export default function Upload({
   const hasValidFiles = useUploadStore(selectHasValidFiles)
   const { startUpload } = useFileUpload()
   const clearDialog = useDisclosure()
+
+  /*
+   * Applied once, and only into an empty picker: arriving with a client in
+   * mind should not silently retarget a queue already built against another.
+   */
+  const preselected = useRef(false)
+
+  useEffect(() => {
+    if (preselected.current || selectedProjectId === null) return
+
+    preselected.current = true
+    if (projectId === null) setProjectId(selectedProjectId)
+    // `projectId` is read, not tracked: this must run on arrival, not again
+    // every time the picker changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProjectId, setProjectId])
 
   const handleRejected = useCallback(
     (items: RejectedUploadFile[]) => setRejected(items),
@@ -135,7 +138,7 @@ export default function Upload({
       <PageHeader
         title="AI Takeoff Upload"
         subtitle="Upload your client files for AI-powered electrical takeoff analysis."
-        breadcrumbs={[{ label: 'AI Takeoff', href: ROUTES.upload }, { label: 'Upload' }]}
+        breadcrumbs={[{ label: 'AI Takeoff', href: ROUTES.aiTakeoff }, { label: 'Upload' }]}
         actions={
           <>
             <ButtonLink href={ROUTES.history} variant="secondary" leftIcon={History}>
@@ -160,8 +163,7 @@ export default function Upload({
         {...(errors['project_id'] ? { error: errors['project_id'] } : {})}
       />
 
-      {/* Upload + context grid */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+      <div className="mt-6">
         <Card padding="lg" className="flex flex-col justify-center">
           <div className="space-y-4">
             <AnimatePresence initial={false}>
@@ -269,56 +271,13 @@ export default function Upload({
             )}
           </div>
         </Card>
-
-        <div className="flex flex-col gap-6">
-          <ProjectNotesCard
-            value={notes}
-            onChange={setNotes}
-            {...(errors['notes'] ? { error: errors['notes'] } : {})}
-            index={1}
-          />
-          <AiFeaturesCard index={2} />
-        </div>
       </div>
-
-      {/* Recent activity */}
-      <Card padding="lg" className="mt-6" index={1}>
-        <CardHeader
-          title="Recent Activity"
-          subtitle={`Your ${recentUploads.length} most recent uploads`}
-          actions={
-            <ButtonLink href={ROUTES.results} variant="dark" size="sm">
-              View last result
-            </ButtonLink>
-          }
-        />
-
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {recentUploads.map((upload, index) => (
-            <RecentUploadCard key={upload.id} upload={upload} index={index} />
-          ))}
-        </div>
-      </Card>
-
-      {/* Help */}
-      <Card padding="lg" className="mt-6" index={2}>
-        <CardHeader
-          title="Need Help?"
-          subtitle="Guides, walkthroughs and a human when you need one"
-        />
-
-        <div className="grid gap-5 lg:grid-cols-3">
-          {HELP_RESOURCES.map((resource, index) => (
-            <HelpCard key={resource.id} resource={resource} index={index} />
-          ))}
-        </div>
-      </Card>
 
       <ConfirmDialog
         isOpen={clearDialog.isOpen}
         tone="danger"
         title="Remove all queued files?"
-        description="This clears the upload queue and your client notes. It cannot be undone."
+        description="This clears the upload queue. It cannot be undone."
         confirmLabel="Clear everything"
         confirmVariant="danger"
         onConfirm={handleClearAll}

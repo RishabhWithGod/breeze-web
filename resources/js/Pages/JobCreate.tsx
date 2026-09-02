@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
-import { FileCheck2, Lightbulb } from 'lucide-react'
+import { ArrowLeft, FileCheck2, Lightbulb } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -11,24 +11,23 @@ import {
   TextArea,
   TextInput,
 } from '@/components/common'
-import { appLayout, PageTransition } from '@/components/layout'
+import { JobSitePicker } from '@/components/jobs'
+import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_TYPE_OPTIONS, ROUTES } from '@/constants'
 import type {
+  ClientOption,
   JobDraft,
   JobForeman,
   JobType,
-  TakeoffProjectOption,
   TakeoffUploadOption,
 } from '@/types'
 import { formatCurrency } from '@/utils'
 
 export interface JobCreateProps {
   foremen: readonly JobForeman[]
-  /** Clients already on record, offered in the Client select. */
-  clients: readonly string[]
-  /** Projects already run through AI Takeoff, offered to link this job to. */
-  projects: readonly TakeoffProjectOption[]
-  /** Their drawings — narrowed to the picked project once one is chosen. */
+  /** The client register. Clients are projects, so this is one list, not two. */
+  clients: readonly ClientOption[]
+  /** Their drawings — narrowed to the picked client once one is chosen. */
   uploads: readonly TakeoffUploadOption[]
 }
 
@@ -39,14 +38,13 @@ export interface JobCreateProps {
  * restates the server's rules. "Save as Draft" and "Create Job" post the same
  * payload — the server picks the status from the `save_as_draft` flag.
  */
-export default function JobCreate({ foremen, clients, projects, uploads }: JobCreateProps) {
+export default function JobCreate({ foremen, clients, uploads }: JobCreateProps) {
   const [savingDraft, setSavingDraft] = useState(false)
 
   const { data, setData, post, processing, errors, hasErrors, clearErrors, transform } =
     useForm<JobDraft>({
       name: '',
-      client: '',
-      location: '',
+      address_ids: [],
       description: '',
       job_type: '',
       start_date: '',
@@ -79,13 +77,40 @@ export default function JobCreate({ foremen, clients, projects, uploads }: JobCr
   const submit = (asDraft: boolean) => {
     setSavingDraft(asDraft)
     transform((payload) => ({ ...payload, save_as_draft: asDraft }))
-    post(ROUTES.jobs, { preserveScroll: true })
+    post(ROUTES.jobs)
   }
 
   const clientOptions = [
     { label: 'Select client', value: '' },
-    ...clients.map((client) => ({ label: client, value: client })),
+    ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
   ]
+
+  /**
+   * Picking the client also carries over its location, due date and type —
+   * but only into a field still blank, never over something already typed.
+   */
+  const selectClient = (clientId: string) => {
+    const client = clients.find((option) => String(option.id) === clientId)
+
+    setData((current) => ({
+      ...current,
+      project_id: clientId,
+      // Both belong to the old client, so neither survives the change.
+      upload_id: '',
+      address_ids: client
+        ? client.addresses.filter((site) => site.isPrimary).map((site) => site.id)
+        : [],
+      // Filled from the client, but only into a field still blank — never over
+      // something already typed.
+      name: current.name || (client?.name ?? ''),
+      start_date: current.start_date || (client?.dueDate ?? ''),
+      job_type: current.job_type || (client?.projectType ?? ''),
+    }))
+
+    clearErrors('project_id', 'address_ids')
+  }
+
+  const selectedClient = clients.find((option) => String(option.id) === data.project_id)
 
   const foremanOptions = [
     { label: 'Assign later', value: '' },
@@ -95,25 +120,18 @@ export default function JobCreate({ foremen, clients, projects, uploads }: JobCr
     })),
   ]
 
-  const projectOptions = [
-    { label: 'No linked client', value: '' },
-    ...projects.map((project) => ({
-      label: project.client ? `${project.name} — ${project.client}` : project.name,
-      value: String(project.id),
-    })),
-  ]
-
-  const uploadsForProject = useMemo(
+  /** Only the picked client's drawings — a job never links to someone else's. */
+  const uploadsForClient = useMemo(
     () => uploads.filter((upload) => String(upload.projectId) === data.project_id),
     [uploads, data.project_id],
   )
 
   const uploadOptions = [
     { label: 'No linked drawing', value: '' },
-    ...uploadsForProject.map((upload) => ({ label: upload.name, value: String(upload.id) })),
+    ...uploadsForClient.map((upload) => ({ label: upload.name, value: String(upload.id) })),
   ]
 
-  const linkedEstimate = uploadsForProject.find(
+  const linkedEstimate = uploadsForClient.find(
     (upload) => String(upload.id) === data.upload_id,
   )?.estimate
 
@@ -121,14 +139,22 @@ export default function JobCreate({ foremen, clients, projects, uploads }: JobCr
     <PageTransition>
       <Head title="Create New Job" />
 
+      <PageHeader
+        title="Create New Job"
+        subtitle="Fill in the details below to create a new job in the system"
+        breadcrumbs={[
+          { label: 'Jobs', href: ROUTES.jobs },
+          { label: 'Create' },
+        ]}
+        actions={
+          <ButtonLink href={ROUTES.jobs} variant="secondary" leftIcon={ArrowLeft}>
+            Back to jobs
+          </ButtonLink>
+        }
+      />
+
       <section className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
         <div className="p-6 sm:p-8 xl:p-10">
-          <header className="mb-8">
-            <h1 className="text-3xl font-bold text-white sm:text-4xl">Create New Job</h1>
-            <p className="mt-2 text-md text-white/90">
-              Fill in the details below to create a new job in the system
-            </p>
-          </header>
 
           {hasErrors && (
             <Alert tone="danger" title="Check the form" className="mb-6">
@@ -145,44 +171,23 @@ export default function JobCreate({ foremen, clients, projects, uploads }: JobCr
             className="space-y-6"
           >
             {/* Picked first — location, schedule and job type below all carry
-                over from the linked project the moment it's chosen (and only
-                fill a field that's still blank), so this has to come before
-                them, not after. */}
+                over from the client the moment it's chosen (and only fill a
+                field that's still blank), so this has to come before them. */}
             <fieldset>
-              <legend className="mb-3 text-md font-medium text-white">
-                Link to AI Takeoff (optional)
-              </legend>
+              <legend className="mb-3 text-md font-medium text-white">Client</legend>
               <div className="grid gap-6 lg:grid-cols-2">
                 <SelectField
-                  id="job-project"
-                  label="Client"
-                  options={projectOptions}
+                  id="job-client"
+                  label="Client*"
+                  hint="Not listed? Add them under Clients first."
+                  options={clientOptions}
                   value={data.project_id}
-                  onChange={(event) => {
-                    const projectId = event.target.value
-                    update('project_id', projectId)
-                    update('upload_id', '')
-
-                    // Carry over the project's own location/date/type — but
-                    // never overwrite a field the user has already filled in.
-                    const project = projects.find((p) => String(p.id) === projectId)
-                    if (project) {
-                      if (!data.location && project.location) {
-                        update('location', project.location)
-                      }
-                      if (!data.start_date && project.dueDate) {
-                        update('start_date', project.dueDate)
-                      }
-                      if (!data.job_type && project.projectType) {
-                        update('job_type', project.projectType)
-                      }
-                    }
-                  }}
+                  onChange={(event) => selectClient(event.target.value)}
                   {...(errors.project_id ? { error: errors.project_id } : {})}
                 />
                 <SelectField
                   id="job-upload"
-                  label="PDF"
+                  label="AI Takeoff PDF (optional)"
                   options={uploadOptions}
                   value={data.upload_id}
                   disabled={!data.project_id}
@@ -214,53 +219,53 @@ export default function JobCreate({ foremen, clients, projects, uploads }: JobCr
               id="job-name"
               label="Job Name*"
               placeholder="Enter job name"
+              hint="Filled from the client when you pick one — change it to anything."
               value={data.name}
               onChange={(event) => update('name', event.target.value)}
               {...(errors.name ? { error: errors.name } : {})}
             />
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <SelectField
-                id="job-client"
-                label="Client*"
-                options={clientOptions}
-                value={data.client}
-                onChange={(event) => update('client', event.target.value)}
-                {...(errors.client ? { error: errors.client } : {})}
+            {/*
+              Sites come from the client's own address book, so an address on
+              file is never retyped — and one that is not on it yet can be added
+              without leaving this form.
+            */}
+            <fieldset>
+              <legend className="mb-1 text-md font-medium text-white">Site(s)*</legend>
+              <JobSitePicker
+                client={selectedClient}
+                value={data.address_ids}
+                onChange={(addressIds) => {
+                  setData('address_ids', addressIds)
+                  if (errors.address_ids) clearErrors('address_ids')
+                }}
+                disabled={processing}
+                {...(errors.address_ids ? { error: errors.address_ids } : {})}
               />
-              <TextInput
-                id="job-location"
-                label="Location*"
-                placeholder="Enter job location"
-                value={data.location}
-                onChange={(event) => update('location', event.target.value)}
-                {...(errors.location ? { error: errors.location } : {})}
-              />
-            </div>
+            </fieldset>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <TextInput
-                id="job-start"
-                type="date"
-                label="Schedule"
-                placeholder="Select start date"
-                value={data.start_date}
-                onChange={(event) => update('start_date', event.target.value)}
-                {...(errors.start_date ? { error: errors.start_date } : {})}
-              />
-              <TextInput
-                id="job-budget"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step={50}
-                label="Budget ($)"
-                placeholder="Enter budget amount"
-                value={data.budget}
-                onChange={(event) => update('budget', event.target.value)}
-                {...(errors.budget ? { error: errors.budget } : {})}
-              />
-            </div>
+            <TextInput
+              id="job-start"
+              type="date"
+              label="Schedule"
+              placeholder="Select start date"
+              value={data.start_date}
+              onChange={(event) => update('start_date', event.target.value)}
+              {...(errors.start_date ? { error: errors.start_date } : {})}
+            />
+
+            <TextInput
+              id="job-budget"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={50}
+              label="Budget ($)"
+              placeholder="Enter budget amount"
+              value={data.budget}
+              onChange={(event) => update('budget', event.target.value)}
+              {...(errors.budget ? { error: errors.budget } : {})}
+            />
 
             <TextArea
               id="job-description"

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Http\Resources\NotificationResource;
 use App\Models\User;
+use App\Services\Geocoding\MapboxGeocoder;
 use App\Services\TimeTracking\TimerService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -33,6 +34,14 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
 
             'appName' => config('app.name'),
+
+            /*
+             * Whether the Site / Location field can look an address up. Shared
+             * rather than passed per-screen so the field can say up front that
+             * the lookup is off, instead of looking broken while it silently
+             * returns nothing.
+             */
+            'addressLookupEnabled' => app(MapboxGeocoder::class)->configured(),
 
             'auth' => [
                 'user' => $user ? [

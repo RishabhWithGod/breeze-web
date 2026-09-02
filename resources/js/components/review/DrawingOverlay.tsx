@@ -113,6 +113,7 @@ export function DrawingOverlay({
   const [imageAspect, setImageAspect] = useState<number | null>(null)
   const [retryToken, setRetryToken] = useState(0)
 
+  const imageRef = useRef<HTMLImageElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const panState = useRef<{ startX: number; startY: number; startScrollLeft: number; startScrollTop: number; dragging: boolean } | null>(null)
@@ -121,6 +122,32 @@ export function DrawingOverlay({
   // has been painted — keeping the anchor point (cursor, viewport center, a
   // focused occurrence) visually still across the resize.
   const pendingScrollRef = useRef<(() => void) | null>(null)
+
+  /*
+   * A cached image can finish loading before React attaches `onLoad` — which is
+   * exactly what happens on the way *back* to this screen, where the page image
+   * is already in the browser's cache. The event never fires, and the overlay
+   * sits on "Loading drawing…" over a picture that is right there. So the
+   * element is asked directly, on mount and on every change of page or retry.
+   */
+  useEffect(() => {
+    const image = imageRef.current
+
+    // Not cached: the element's own onLoad/onError will answer. Reset first, so
+    // a failure on the page just left does not sit over the one just opened.
+    if (!image?.complete) {
+      setImageStatus('loading')
+
+      return
+    }
+
+    // Synchronising to a load that already happened, not deriving render state.
+    setImageStatus(image.naturalWidth > 0 ? 'loaded' : 'error')
+
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      setImageAspect(image.naturalWidth / image.naturalHeight)
+    }
+  }, [resultId, activePage, retryToken])
 
   const dims = pageDimensions[activePage]
   const aspect = dims ? dims.width / dims.height : (imageAspect ?? 1)
@@ -567,8 +594,19 @@ export function DrawingOverlay({
             }}
           >
             <img
+              ref={imageRef}
               key={`${resultId}-${activePage}-${retryToken}`}
-              src={routeTo.reviewPage(resultId, activePage)}
+              /*
+               * The retry token is in the URL, not just the key. Re-requesting
+               * the same address after a failure is answered from the browser's
+               * cache with the same failure, so a Retry that only remounts the
+               * element does nothing at all.
+               */
+              src={
+                retryToken === 0
+                  ? routeTo.reviewPage(resultId, activePage)
+                  : `${routeTo.reviewPage(resultId, activePage)}?retry=${retryToken}`
+              }
               alt={`Drawing page ${activePage}`}
               className="absolute inset-0 block size-full object-contain"
               draggable={false}

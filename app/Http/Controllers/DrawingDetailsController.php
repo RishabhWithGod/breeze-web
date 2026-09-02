@@ -23,7 +23,7 @@ class DrawingDetailsController extends Controller
     {
         $this->authorize('view', $project);
 
-        $upload = $project->primaryUpload;
+        $upload = $project->takeoffDrawing();
         $result = $project->latestAiResult;
 
         $result?->load(['wireSizes', 'panelSchedules', 'equipment', 'circuits', 'boqLines', 'workJob', 'estimate']);
@@ -142,7 +142,7 @@ class DrawingDetailsController extends Controller
     {
         $this->authorize('view', $project);
 
-        $upload = $project->primaryUpload;
+        $upload = $project->takeoffDrawing();
         abort_unless($store->exists($upload?->path), 404);
 
         return $store->disk()->response($upload->path, $upload->name, [

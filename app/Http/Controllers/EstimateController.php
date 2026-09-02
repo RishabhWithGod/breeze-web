@@ -8,6 +8,7 @@ use App\Http\Resources\FeedItemResource;
 use App\Models\Estimate;
 use App\Models\FeedItem;
 use App\Models\Upload;
+use App\Services\Clients\ClientDirectory;
 use App\Services\Takeoff\TakeoffLinkOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,10 @@ use Inertia\Response;
 
 class EstimateController extends Controller
 {
-    public function __construct(private readonly TakeoffLinkOptions $linkOptions) {}
+    public function __construct(
+        private readonly TakeoffLinkOptions $linkOptions,
+        private readonly ClientDirectory $clients,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -69,11 +73,7 @@ class EstimateController extends Controller
     {
         return Inertia::render('EstimateCreate', [
             'nextNumber' => Estimate::nextNumber(),
-            'clients' => Estimate::query()
-                ->distinct()
-                ->orderBy('client')
-                ->pluck('client'),
-            'projects' => $this->linkOptions->projects(),
+            'clients' => $this->clients->options(),
             'uploads' => $this->linkOptions->uploads(),
         ]);
     }
@@ -92,6 +92,11 @@ class EstimateController extends Controller
         }
 
         unset($data['upload_id']);
+
+        // `client` and `project` are both snapshots of the picked client's
+        // name — the two columns this merge collapsed into one field.
+        $data = $this->clients->withClientSnapshot($data);
+        $data['project'] = $data['client'];
 
         $estimate = Estimate::create([
             ...$data,

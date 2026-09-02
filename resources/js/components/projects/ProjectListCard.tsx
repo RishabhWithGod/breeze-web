@@ -46,10 +46,10 @@ export function ProjectListCard({
 
         <div className="min-w-0 flex-1">
           <p className="font-bold text-white">{project.name}</p>
-          <p className="mt-0.5 truncate text-sm text-white/80">
-            {project.code ? `${project.code} · ` : ''}
-            {project.client}
-          </p>
+          {/* The name is the client's own — only a project number adds anything. */}
+          {project.code && (
+            <p className="mt-0.5 truncate text-sm text-white/80">{project.code}</p>
+          )}
         </div>
 
         <StatusChip
