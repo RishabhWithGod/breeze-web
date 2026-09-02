@@ -1,5 +1,5 @@
 import { Head, usePage } from '@inertiajs/react'
-import { Briefcase, PencilLine, Sparkles } from 'lucide-react'
+import { ArrowLeft, PencilLine, Sparkles } from 'lucide-react'
 import {
   Alert,
   Badge,
@@ -61,6 +61,13 @@ export interface EstimateShowProps {
   estimate: EstimateSummary
   items: readonly EstimateItemRow[]
   sections: Record<string, { label: string; lines: number; total: number }>
+  /**
+   * True only when the takeoff flow itself handed over to this screen. Opened
+   * from a job or the estimates list it is a record to read, not a step.
+   */
+  inFlow: boolean
+  /** Where Back goes — the screen this one was actually reached from. */
+  backUrl: string
   totals: EstimateTotals
   categories: readonly SelectOption[]
   statuses: readonly string[]
@@ -82,6 +89,8 @@ export interface EstimateShowProps {
 export default function EstimateShow({
   estimate,
   items,
+  inFlow,
+  backUrl,
   totals,
   categories,
   drawingData,
@@ -134,16 +143,20 @@ export default function EstimateShow({
                 ESTIMATE_STATUS_LABEL[estimate.status as EstimateStatus] ?? estimate.status
               }
             />
-            {estimate.jobId && (
-              <ButtonLink
-                href={routeTo.job(estimate.jobId)}
-                variant="ghost"
-                size="sm"
-                leftIcon={Briefcase}
-              >
-                {estimate.jobName}
-              </ButtonLink>
-            )}
+            {/*
+              Back is top-right on every screen, and goes to the one this was
+              reached from — the job whose list it was opened from, the review
+              in the flow, or the estimates index. Worked out server-side, where
+              the claim can be checked.
+            */}
+            <ButtonLink
+              href={backUrl}
+              variant="secondary"
+              size="sm"
+              leftIcon={ArrowLeft}
+            >
+              Back
+            </ButtonLink>
           </div>
         }
       />
@@ -162,7 +175,7 @@ export default function EstimateShow({
       {/* Where this takeoff is. The marker sits on the stage this screen *is*,
           never on the next one — a page you are reading is not finished work,
           and ticking it while pointing further along reads as both at once. */}
-      {estimate.aiResultId && (
+      {inFlow && estimate.aiResultId && (
         <WorkflowProgress
           current="estimate"
           done={['analysis', 'review', ...(estimate.jobId ? (['job'] as const) : [])]}
@@ -356,23 +369,19 @@ export default function EstimateShow({
       </div>
 
       {/*
-        Always drawn, so there is always a way back. What it continues to
-        depends on where the estimate has got to: raise the job, open the job it
-        already has, or — on a manual estimate with no takeoff behind it —
-        nothing, and the footer is only the way back.
+        Forward is the step after this one, which is the job step — the takeoff's
+        own summary, where the job is raised and, once it exists, named. It used
+        to jump straight to the job's detail screen whenever the estimate was
+        linked to one, which skipped the step and dropped out of the flow. An
+        estimate's `job_id` is not the same question either: the takeoff's
+        estimate is linked to whichever job was raised first.
       */}
-      <StepFooter
-        current="estimate"
-        showBack
-        {...(estimate.jobId
-          ? { href: routeTo.job(estimate.jobId), continueLabel: 'Continue to the job' }
-          : estimate.aiResultId
-            ? {
-                href: routeTo.finalSymbols(estimate.aiResultId),
-                continueLabel: 'Continue to create the job',
-              }
-            : {})}
-      />
+      {inFlow && estimate.aiResultId && (
+        <StepFooter
+          current="estimate"
+          href={routeTo.finalSymbols(estimate.aiResultId)}
+        />
+      )}
     </PageTransition>
   )
 }

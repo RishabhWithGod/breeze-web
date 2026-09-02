@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\ApprovalHistoryResource;
 use App\Models\Project;
 use App\Services\Ai\ArtefactStore;
 use Illuminate\Http\Request;
@@ -26,7 +25,9 @@ class DrawingDetailsController extends Controller
         $upload = $project->takeoffDrawing();
         $result = $project->latestAiResult;
 
-        $result?->load(['wireSizes', 'panelSchedules', 'equipment', 'circuits', 'boqLines', 'workJob', 'estimate']);
+        // Panel schedules, equipment, circuits and the approval history are no
+        // longer drawn on this screen, so they are not loaded or sent either.
+        $result?->load(['wireSizes', 'boqLines', 'workJob', 'estimate']);
 
         return Inertia::render('DrawingDetails', [
             'drawing' => [
@@ -70,8 +71,6 @@ class DrawingDetailsController extends Controller
                 'receivedAt' => $result->received_at?->toISOString(),
                 'reviewStatus' => $result->review_status,
                 'isFinalised' => $result->isFinalised(),
-                'detectionCount' => $result->detection_count,
-                'symbolCounts' => $result->symbol_counts ?? [],
                 'pipelineStatus' => $result->pipelineStages(),
                 'warnings' => $result->warnings ?? [],
                 'lifecycleStatistics' => $result->lifecycle_statistics,
@@ -103,34 +102,6 @@ class DrawingDetailsController extends Controller
                 'count' => $wire->count,
             ])->all() ?? [],
 
-            'panelSchedules' => $result?->panelSchedules->map(fn ($panel) => [
-                'page' => $panel->page,
-                'panelName' => $panel->panel_name,
-                'rows' => $panel->rows ?? [],
-                'rawHeaders' => $panel->raw_headers ?? [],
-            ])->all() ?? [],
-
-            'equipment' => $result?->equipment->map(fn ($item) => [
-                'page' => $item->page,
-                'tag' => $item->tag,
-                'description' => $item->description,
-                'rating' => $item->rating,
-                'quantity' => $item->quantity,
-            ])->all() ?? [],
-
-            'circuits' => $result?->circuits->map(fn ($circuit) => [
-                'page' => $circuit->page,
-                'number' => $circuit->number,
-                'description' => $circuit->description,
-                'breaker' => $circuit->breaker,
-                'panel' => $circuit->panel,
-            ])->all() ?? [],
-
-            'history' => $result
-                ? ApprovalHistoryResource::collection(
-                    $result->history()->with('actor')->take(20)->get()
-                )->resolve()
-                : [],
         ]);
     }
 

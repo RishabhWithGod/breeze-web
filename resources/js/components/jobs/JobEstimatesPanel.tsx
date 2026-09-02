@@ -1,7 +1,7 @@
-import { Link, router } from '@inertiajs/react'
+import { Link } from '@inertiajs/react'
 import { motion } from 'framer-motion'
-import { ArrowRightLeft, CheckCircle2, ExternalLink, FilePlus2 } from 'lucide-react'
-import { Button, ButtonLink, StatusChip } from '@/components/common'
+import { ExternalLink, PencilLine } from 'lucide-react'
+import { ButtonLink, StatusChip } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { JobEstimateSummary } from '@/types'
 import {
@@ -12,35 +12,22 @@ import {
 } from '@/utils'
 
 export interface JobEstimatesPanelProps {
+  /** Carried into each link so Back from an estimate comes back to this job. */
   jobId: number
   estimates: readonly JobEstimateSummary[]
 }
 
 /**
- * Estimates raised against this job (a real `estimates.job_id` relationship),
- * each convertible into a takeoff project.
+ * The estimates raised against this job — a real `estimates.job_id`
+ * relationship.
+ *
+ * A list to read and open, nothing more. Raising an estimate and turning one
+ * into a client are decisions made where those things belong, not as buttons
+ * beside a job's summary of them.
  */
 export function JobEstimatesPanel({ jobId, estimates }: JobEstimatesPanelProps) {
-  const create = () => {
-    router.post(routeTo.jobEstimates(jobId), {}, { preserveScroll: true })
-  }
-
-  const convert = (estimateId: number) => {
-    router.post(
-      routeTo.jobEstimateConvert(jobId, estimateId),
-      {},
-      { preserveScroll: true },
-    )
-  }
-
   return (
     <div>
-      <div className="mb-5 flex justify-end">
-        <Button size="sm" leftIcon={FilePlus2} onClick={create}>
-          Create estimate
-        </Button>
-      </div>
-
       {estimates.length === 0 ? (
         <p className="text-md text-white/75">No estimates raised for this job yet.</p>
       ) : (
@@ -56,7 +43,7 @@ export function JobEstimatesPanel({ jobId, estimates }: JobEstimatesPanelProps) 
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <Link
-                    href={routeTo.estimate(estimate.id)}
+                    href={routeTo.estimateFromJob(estimate.id, jobId)}
                     className="font-mono text-md font-semibold text-white transition-colors hover:text-brand"
                   >
                     {estimate.number}
@@ -81,31 +68,21 @@ export function JobEstimatesPanel({ jobId, estimates }: JobEstimatesPanelProps) 
 
               <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
                 <ButtonLink
-                  href={routeTo.estimate(estimate.id)}
+                  href={routeTo.estimateFromJob(estimate.id, jobId)}
                   variant="secondary"
                   size="sm"
                   leftIcon={ExternalLink}
                 >
-                  Open estimate
+                  Open
                 </ButtonLink>
-              </div>
-
-              <div className="mt-3 border-t border-hairline pt-3">
-                {estimate.isConverted ? (
-                  <p className="flex items-center gap-2 text-sm text-status-success">
-                    <CheckCircle2 size={15} aria-hidden />
-                    Converted to client #{estimate.convertedProjectId}
-                  </p>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={ArrowRightLeft}
-                    onClick={() => convert(estimate.id)}
-                  >
-                    Convert to client
-                  </Button>
-                )}
+                <ButtonLink
+                  href={routeTo.estimateEditFromJob(estimate.id, jobId)}
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={PencilLine}
+                >
+                  Edit
+                </ButtonLink>
               </div>
             </motion.li>
           ))}

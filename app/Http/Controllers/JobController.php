@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreJobRequest;
 use App\Http\Requests\UpdateJobRequest;
-use App\Http\Resources\ApprovalHistoryResource;
 use App\Http\Resources\FeedItemResource;
 use App\Http\Resources\JobDetailResource;
 use App\Http\Resources\JobResource;
@@ -12,9 +11,11 @@ use App\Models\Estimate;
 use App\Models\FeedItem;
 use App\Models\Foreman;
 use App\Models\Job;
+use App\Models\JobSchedule;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
 use App\Models\Upload;
+use App\Policies\JobSchedulePolicy;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\JobSites;
@@ -54,7 +55,14 @@ class JobController extends Controller
         $foreman = $filters['foreman'] ?? 'all';
         $type = $filters['type'] ?? 'all';
         $sort = $filters['sort'] ?? 'recent';
-        $view = $filters['view'] ?? 'active';
+        /*
+         * Everything, archived included. The list no longer offers archiving,
+         * so defaulting to the active view would leave anything archived
+         * earlier invisible with nothing on the screen to bring it back. The
+         * row still carries its Archived badge, which is what explains why a
+         * job is missing from the job pickers.
+         */
+        $view = $filters['view'] ?? 'all';
 
         $jobs = Job::query()
             ->with(['foreman', 'activeAssignments.assigner'])
@@ -83,11 +91,8 @@ class JobController extends Controller
                 'view' => $view,
                 'panel' => $filters['panel'] ?? '',
             ],
-            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
-            'counts' => [
-                'active' => Job::query()->active()->count(),
-                'archived' => Job::query()->archived()->count(),
-            ],
+            // No foreman column or filter on the list, so no options to offer.
+            // `?foreman=` is still honoured for a deep link.
             'activity' => FeedItemResource::collection(
                 FeedItem::scope(FeedItem::HISTORY_ACTIVITY)->get()
             )->resolve(),
@@ -140,7 +145,13 @@ class JobController extends Controller
         $linkedEstimate = $aiResult?->estimate;
 
         if ($linkedEstimate && $linkedEstimate->job_id === null) {
-            $linkedEstimate->update(['job_id' => $job->id]);
+            $linkedEstimate->update([
+                'job_id' => $job->id,
+                // The job it was waiting for has arrived: no longer a draft.
+                ...($linkedEstimate->status === 'draft'
+                    ? ['status' => Estimate::STATUS_FOR_A_LIVE_JOB]
+                    : []),
+            ]);
             $job->recordActivity(
                 'estimate_created',
                 "Estimate {$linkedEstimate->number} linked from {$upload->label()}",
@@ -179,6 +190,13 @@ class JobController extends Controller
             'project',
             'teamMembers',
             'estimates',
+            // Ordered the way the schedule holds them, with the count of what
+            // each covers — the detail the panel states without the lines.
+            'tasks' => fn ($query) => $query
+                ->with('foreman:id,name')
+                ->withCount('estimateItems')
+                ->orderBy('position')
+                ->orderBy('id'),
             'notes.author',
             'attachments.uploader',
             'activities.actor',
@@ -201,15 +219,11 @@ class JobController extends Controller
             // Assignments are role-based, so anyone can hold one — including
             // someone already on the crew list.
             'crew' => TeamMember::orderBy('name')->get(['id', 'name', 'initials', 'role']),
-            // The takeoff's audit trail, so the job carries the reasoning behind
-            // its numbers rather than just the numbers.
-            'takeoffHistory' => $job->aiResult
-                ? ApprovalHistoryResource::collection(
-                    $job->aiResult->history()->with('actor')->take(25)->get()
-                )->resolve()
-                : [],
             'canViewTimeCosts' => $canViewTimeCosts,
             'jobCosting' => $canViewTimeCosts ? $jobCosting : JobCostSummary::redact($jobCosting),
+            // Whoever plans the work may add to it; everyone else still reads.
+            'canPlanWork' => app(JobSchedulePolicy::class)
+                ->createTask($request->user(), $job->schedule ?? new JobSchedule),
         ]);
     }
 
@@ -382,7 +396,8 @@ class JobController extends Controller
             'project' => $job->client ?? 'Unassigned',
             'issued_on' => now()->toDateString(),
             'amount' => $job->budget ?? 0,
-            'status' => 'draft',
+            // Raised against a job that already exists — see Estimate::statusFor().
+            'status' => Estimate::statusFor($job),
         ]);
     }
 }

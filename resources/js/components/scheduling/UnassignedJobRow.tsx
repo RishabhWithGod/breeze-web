@@ -1,21 +1,18 @@
 import { Link } from '@inertiajs/react'
 import { CalendarDays, ChevronRight, Info } from 'lucide-react'
 import { Button } from '@/components/common'
-import { PRIORITY_LABEL, routeTo } from '@/constants'
+import { routeTo } from '@/constants'
 import type { JobPriority, SchedulableJob } from '@/types'
 import { cn, formatCurrency, formatDate } from '@/utils'
 
 /**
- * The bubble and the priority word share a colour per level.
- *
- * The word is a lighter tint than the bubble it sits under: the status reds and
- * violets are picked to carry a white glyph on a solid fill, and as text on this
- * dark background they fall well below a readable contrast ratio.
+ * The bubble carries the priority on its own now that the word beside it is
+ * gone — a colour per level, readable as a solid fill with a white glyph.
  */
-const PRIORITY_STYLES: Record<JobPriority, { bubble: string; text: string }> = {
-  high: { bubble: 'bg-status-danger text-white', text: 'text-red-300' },
-  medium: { bubble: 'bg-status-warning text-brand-ink', text: 'text-status-warning' },
-  low: { bubble: 'bg-status-success text-brand-ink', text: 'text-status-success' },
+const PRIORITY_STYLES: Record<JobPriority, { bubble: string }> = {
+  high: { bubble: 'bg-status-danger text-white' },
+  medium: { bubble: 'bg-status-warning text-brand-ink' },
+  low: { bubble: 'bg-status-success text-brand-ink' },
 }
 
 /** Residential reads green, commercial cyan, industrial violet. */
@@ -68,7 +65,6 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
                   ? job.jobType.charAt(0).toUpperCase() + job.jobType.slice(1)
                   : 'Unclassified'}
               </span>
-              <span className={priority.text}>{PRIORITY_LABEL[job.priority]}</span>
             </p>
           </div>
         </div>

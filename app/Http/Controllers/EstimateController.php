@@ -4,9 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreEstimateRequest;
 use App\Http\Resources\EstimateResource;
-use App\Http\Resources\FeedItemResource;
 use App\Models\Estimate;
-use App\Models\FeedItem;
 use App\Models\Upload;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Takeoff\TakeoffLinkOptions;
@@ -62,9 +60,6 @@ class EstimateController extends Controller
                 ->distinct()
                 ->orderBy('client')
                 ->pluck('client'),
-            'activity' => FeedItemResource::collection(
-                FeedItem::scope(FeedItem::HISTORY_ACTIVITY)->get()
-            )->resolve(),
         ]);
     }
 

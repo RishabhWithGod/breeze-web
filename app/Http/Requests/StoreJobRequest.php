@@ -10,8 +10,9 @@ class StoreJobRequest extends FormRequest
 {
     /**
      * Mirrors the Create New Job screen: name, client and location are the only
-     * required fields. Everything else can be filled in later, and a foreman is
-     * assigned after intake. The client arrives as `project_id`: clients are
+     * required fields. Everything else can be filled in later. No foreman: they
+     * are assigned per task, once the job has been broken into the work it
+     * takes — picking one here was a guess made before that was known. The client arrives as `project_id`: clients are
      * projects, so it is picked from the register rather than typed, and the
      * job's own `client` column is a snapshot the controller writes from it.
      *
@@ -40,7 +41,12 @@ class StoreJobRequest extends FormRequest
             'save_as_draft' => ['boolean'],
             /** The client, picked from the client register — see ClientDirectory. */
             'project_id' => ['required', 'integer', 'exists:projects,id'],
-            'upload_id' => ['nullable', 'integer', 'exists:uploads,id'],
+            /*
+             * Required: a job is the work on a drawing. Without one there is no
+             * takeoff, no estimate, and nothing for the task step that follows
+             * to plan from.
+             */
+            'upload_id' => ['required', 'integer', 'exists:uploads,id'],
         ];
     }
 
@@ -52,6 +58,7 @@ class StoreJobRequest extends FormRequest
             'name.min' => 'Use at least 3 characters',
             'project_id.required' => 'Client is required',
             'project_id.exists' => 'Pick a client from the list',
+            'upload_id.required' => 'Pick the drawing this job is for',
             'address_ids.required' => 'Pick at least one site for this job',
             'address_ids.*.exists' => 'That site is not on the client\'s record',
             'end_date.after_or_equal' => 'End date must be on or after the start date',

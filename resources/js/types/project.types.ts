@@ -118,6 +118,11 @@ export interface ClientOption {
   readonly name: string
   readonly dueDate: string | null
   readonly projectType: JobType | null
+  /**
+   * The drawing this client's work is taken off — chosen on their screen, or
+   * the first on record. Null when they have no drawings yet.
+   */
+  readonly defaultUploadId: number | null
   /** Every site this client has work at. A job picks from these. */
   readonly addresses: readonly ClientAddressOption[]
 }

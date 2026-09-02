@@ -45,7 +45,8 @@ class JobEstimateController extends Controller
             'project' => $job->client ?? 'Unassigned',
             'issued_on' => now()->toDateString(),
             'amount' => $job->budget ?? 0,
-            'status' => 'draft',
+            // Raised against a job that already exists — see Estimate::statusFor().
+            'status' => Estimate::statusFor($job),
             'markup_pct' => (float) config('ai.estimating.markup_pct'),
             'tax_pct' => (float) config('ai.estimating.tax_pct'),
         ]);

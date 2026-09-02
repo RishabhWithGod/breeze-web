@@ -31,6 +31,11 @@ export const ROUTES = {
   estimates: '/estimates',
   estimateCreate: '/estimates/create',
   jobs: '/jobs',
+  /** Under Jobs in the rail: work and the people who run it, across every job. */
+  tasks: '/tasks',
+  taskCreate: '/tasks/create',
+  foremen: '/foremen',
+  foremanCreate: '/foremen/create',
   jobCreate: '/jobs/create',
   /** Most recently reviewed takeoff. */
   results: '/results',
@@ -92,6 +97,13 @@ export const routeTo = {
   clientAddresses: (projectId: number) => `/projects/${projectId}/addresses`,
   /** The step after Create Job: laying the job out in tasks. */
   jobTaskSetup: (jobId: number) => `/jobs/${jobId}/tasks/setup`,
+  /*
+   * The same step, opened to add work to a job already running. `from` is what
+   * Back and the save redirect read — the server turns it into a real URL, so
+   * only these two markers exist.
+   */
+  jobTaskSetupFromList: (jobId: number) => `/jobs/${jobId}/tasks/setup?from=tasks`,
+  jobTaskSetupFromJob: (jobId: number) => `/jobs/${jobId}/tasks/setup?from=job`,
   project: (projectId: number) => `/projects/${projectId}`,
   /** AI Takeoff upload, opened with this client already picked. */
   uploadForProject: (projectId: number) => `/ai-takeoff/upload?project=${projectId}`,
@@ -134,6 +146,14 @@ export const routeTo = {
   jobTasksStore: (jobId: number) => `/jobs/${jobId}/schedule/tasks`,
   jobTasksReorder: (jobId: number) => `/jobs/${jobId}/schedule/reorder`,
   scheduleTask: (taskId: number) => `/schedule-tasks/${taskId}`,
+  /** The setup screen aimed at one task, with where Back should return to. */
+  foreman: (foremanId: number) => `/foremen/${foremanId}`,
+  foremanEdit: (foremanId: number) => `/foremen/${foremanId}/edit`,
+  taskEdit: (taskId: number) => `/tasks/${taskId}/edit?from=tasks`,
+  taskEditFromJob: (taskId: number) => `/tasks/${taskId}/edit?from=job`,
+  /** Removing a task hands its estimate lines back to be planned again. */
+  taskRemove: (taskId: number) => `/tasks/${taskId}`,
+  taskRemoveFromJob: (taskId: number) => `/tasks/${taskId}?from=job`,
   scheduleTaskComplete: (taskId: number) => `/schedule-tasks/${taskId}/complete`,
   scheduleTaskDelay: (taskId: number) => `/schedule-tasks/${taskId}/delay`,
   scheduleTaskMove: (taskId: number) => `/schedule-tasks/${taskId}/move`,
@@ -145,8 +165,23 @@ export const routeTo = {
     `/schedule-tasks/${taskId}/dependencies/${dependencyId}`,
   scheduleTaskComment: (taskId: number) => `/schedule-tasks/${taskId}/comments`,
   estimate: (estimateId: number) => `/estimates/${estimateId}`,
+  /*
+   * The same estimate, opened as a step of the takeoff rather than on its own:
+   * `flow` is what draws the roadmap and the button on to Create Job. Every
+   * link that is part of the flow has to carry it, or the flow ends there.
+   */
+  estimateInFlow: (estimateId: number) => `/estimates/${estimateId}?flow=1`,
   estimateRestore: (estimateId: number) => `/estimates/${estimateId}/restore`,
   estimateEdit: (estimateId: number) => `/estimates/${estimateId}/edit`,
+  /*
+   * Opened from a job's own list. `from_job` is what lets Back come back here
+   * rather than dropping into the estimates index — the server checks the job
+   * really owns the estimate before believing it.
+   */
+  estimateFromJob: (estimateId: number, jobId: number) =>
+    `/estimates/${estimateId}?from_job=${jobId}`,
+  estimateEditFromJob: (estimateId: number, jobId: number) =>
+    `/estimates/${estimateId}/edit?from_job=${jobId}`,
   estimateItems: (estimateId: number) => `/estimates/${estimateId}/items`,
   estimateItem: (estimateId: number, itemId: number) =>
     `/estimates/${estimateId}/items/${itemId}`,

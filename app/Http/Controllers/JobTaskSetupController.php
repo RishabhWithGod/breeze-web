@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\Foreman;
 use App\Models\Job;
@@ -30,7 +31,9 @@ use Inertia\Response;
  * A line belongs to one task. Once it is in one it is out of the picker, so the
  * same priced work cannot be scheduled twice — deleting the task puts it back.
  *
- * Skipping is a real choice: a job can be planned later, or never.
+ * A job needs at least one task, and a task needs a name, a foreman and the
+ * lines it covers. Planning is part of raising a job here, not an optional
+ * extra — the step before this one has already created the job.
  */
 class JobTaskSetupController extends Controller
 {
@@ -43,9 +46,13 @@ class JobTaskSetupController extends Controller
     {
         $this->authorisePlanning($job, $request->user());
 
-        $job->loadMissing(['schedule.tasks.foremen', 'schedule.tasks.estimateItems']);
+        $job->loadMissing(['schedule.tasks.foreman', 'schedule.tasks.estimateItems']);
 
         return Inertia::render('JobTaskSetup', [
+            'returnUrl' => $this->returnUrl($request, $job),
+            // Carries the origin through the save, so finishing lands back
+            // where the planner started rather than always in the flow.
+            'saveUrl' => $this->carryOrigin($request, route('jobs.tasks.setup.store', $job)),
             'job' => [
                 'id' => $job->id,
                 'name' => $job->name,
@@ -53,6 +60,16 @@ class JobTaskSetupController extends Controller
                 'location' => $job->location,
                 'startDate' => $job->start_date?->toDateString(),
                 'endDate' => $job->end_date?->toDateString(),
+                /*
+                 * Only a job raised from a takeoff has an analysis, a review and
+                 * an estimate behind it. A job created by hand has none of that,
+                 * and drawing the takeoff roadmap over it would be a lie.
+                 */
+                'fromTakeoff' => $job->ai_result_id !== null,
+                /** The review summary this job was raised from — the step before. */
+                'takeoffUrl' => $job->ai_result_id === null
+                    ? null
+                    : route('finals.show', $job->ai_result_id),
             ],
             /*
              * Every line on the job's estimates, each saying whether it is
@@ -65,20 +82,10 @@ class JobTaskSetupController extends Controller
             'existingTasks' => $job->schedule?->tasks->map(fn (JobTask $task) => [
                 'id' => $task->id,
                 'title' => $task->title,
-                'category' => $task->category,
-                'estimatedHours' => $task->estimated_hours === null
-                    ? null
-                    : (float) $task->estimated_hours,
-                'foremen' => $task->foremen->map(fn (Foreman $foreman) => [
-                    'id' => $foreman->id,
-                    'name' => $foreman->name,
-                    'initials' => $foreman->initials,
-                ])->values(),
+                'foreman' => $task->foreman?->name,
                 'lineCount' => $task->estimateItems->count(),
             ])->values() ?? [],
             'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
-            'categories' => JobTask::CATEGORIES,
-            'priorities' => JobTask::PRIORITIES,
         ]);
     }
 
@@ -92,22 +99,33 @@ class JobTaskSetupController extends Controller
     {
         $this->authorisePlanning($job, $request->user());
 
+        /*
+         * Lines are required — except on a job that has no estimate at all,
+         * where there is nothing to require. Demanding them there would leave
+         * the screen impossible to complete rather than merely strict.
+         */
+        $hasLines = $this->estimateLineCount($job) > 0;
+
         $data = $request->validate([
             'tasks' => ['required', 'array', 'min:1', 'max:50'],
             'tasks.*.title' => ['required', 'string', 'max:200'],
-            'tasks.*.category' => ['nullable', Rule::in(JobTask::CATEGORIES)],
-            'tasks.*.priority' => ['nullable', Rule::in(JobTask::PRIORITIES)],
-            'tasks.*.estimated_hours' => ['nullable', 'numeric', 'min:0', 'max:9999'],
-            'tasks.*.starts_on' => ['nullable', 'date'],
-            'tasks.*.ends_on' => ['nullable', 'date', 'after_or_equal:tasks.*.starts_on'],
-            'tasks.*.foreman_ids' => ['nullable', 'array', 'max:10'],
-            'tasks.*.foreman_ids.*' => ['integer', 'distinct', 'exists:foremen,id'],
-            'tasks.*.estimate_item_ids' => ['nullable', 'array', 'max:200'],
-            'tasks.*.estimate_item_ids.*' => ['integer', 'distinct'],
+            'tasks.*.foreman_id' => ['required', 'integer', 'exists:foremen,id'],
+            /*
+             * No `distinct`: with a nested wildcard it compares across every
+             * task, not within one, and would report the right refusal under an
+             * unreadable key. Checked below, where the message can say what
+             * actually happened.
+             */
+            'tasks.*.estimate_item_ids' => $hasLines
+                ? ['required', 'array', 'min:1', 'max:200']
+                : ['nullable', 'array', 'max:200'],
+            'tasks.*.estimate_item_ids.*' => ['integer'],
         ], [
-            'tasks.required' => 'Add at least one task, or skip this step.',
+            'tasks.required' => 'A job needs at least one task.',
             'tasks.*.title.required' => 'Give the task a name, or remove the row.',
-            'tasks.*.ends_on.after_or_equal' => 'A task cannot end before it starts.',
+            'tasks.*.foreman_id.required' => 'Pick the foreman running this task.',
+            'tasks.*.estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
+            'tasks.*.estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
 
         /*
@@ -133,29 +151,35 @@ class JobTaskSetupController extends Controller
             foreach ($data['tasks'] as $row) {
                 $position++;
 
+                $lineIds = $row['estimate_item_ids'] ?? [];
+
                 $task = $schedule->tasks()->create([
                     'job_id' => $job->id,
                     'created_by' => $request->user()?->id,
                     'title' => trim($row['title']),
-                    'category' => $row['category'] ?? null,
-                    'priority' => $row['priority'] ?? 'medium',
-                    'estimated_hours' => $row['estimated_hours'] ?? null,
-                    'starts_on' => $row['starts_on'] ?? null,
-                    'ends_on' => $row['ends_on'] ?? null,
+                    'foreman_id' => $row['foreman_id'] ?? null,
+                    /*
+                     * Read off the lines rather than typed: the estimate already
+                     * priced this work in hours, and asking for the number again
+                     * only invites the two to disagree.
+                     */
+                    'estimated_hours' => $this->hoursOn($lineIds),
+                    // Category and dates belong to the schedule screen, where the
+                    // plan is worked rather than started.
+                    'priority' => 'medium',
                     'status' => JobTask::STATUS_PENDING,
                     'position' => $position,
                 ]);
 
-                $task->foremen()->sync($row['foreman_ids'] ?? []);
-
                 // Claiming the lines is what takes them out of the picker.
-                if (($row['estimate_item_ids'] ?? []) !== []) {
-                    EstimateItem::whereIn('id', $row['estimate_item_ids'])
-                        ->update(['job_task_id' => $task->id]);
+                if ($lineIds !== []) {
+                    EstimateItem::whereIn('id', $lineIds)->update(['job_task_id' => $task->id]);
                 }
             }
 
             $this->builder->realignWindow($schedule->refresh());
+
+            $job->refreshEstimatedHours();
         });
 
         $count = count($data['tasks']);
@@ -165,9 +189,252 @@ class JobTaskSetupController extends Controller
             $count.' '.str('task')->plural($count).' added to the schedule',
         );
 
+        /*
+         * The end of the flow. The takeoff has become a job with its work laid
+         * out, so this lands on the jobs list rather than pushing on into
+         * scheduling — that is its own module, worked over days. Opened from
+         * the task list to add work to a job already running, it goes back
+         * there instead: that is where the planner was.
+         */
         return redirect()
-            ->route('jobs.show', $job)
+            ->to($this->returnUrl($request, $job) ?? route('jobs.index'))
             ->with('success', $count.' '.str('task')->plural($count).' added to “'.$job->name.'”.');
+    }
+
+    /**
+     * One task on the same screen that created it.
+     *
+     * Deliberately the same shape as the setup step rather than a smaller form:
+     * a task is its name, its foreman and the estimate lines it covers, and
+     * changing which lines it covers is the whole reason to open it. A narrower
+     * editor would leave the plan and the estimate free to drift apart.
+     */
+    public function edit(Request $request, JobTask $task): Response
+    {
+        $job = $this->jobBehind($task);
+
+        $this->authorisePlanning($job, $request->user());
+
+        $task->loadMissing('estimateItems:id,job_task_id');
+
+        return Inertia::render('JobTaskEdit', [
+            'returnUrl' => $this->returnUrl($request, $job) ?? route('tasks.index'),
+            'saveUrl' => $this->carryOrigin($request, route('tasks.edit.update', $task)),
+            'deleteUrl' => $this->carryOrigin($request, route('tasks.remove', $task)),
+            'job' => [
+                'id' => $job->id,
+                'name' => $job->name,
+                'client' => $job->client,
+            ],
+            'task' => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'status' => $task->status,
+                'foremanId' => $task->foreman_id,
+                'lineIds' => $task->estimateItems->pluck('id')->values(),
+            ],
+            /*
+             * This task's own lines arrive unclaimed. They are claimed — by
+             * this task — but the picker greys out anything with a task on it,
+             * so leaving them marked would make a line impossible to put back
+             * the moment it was unticked.
+             */
+            'estimateLines' => $this->lines($job, $task),
+            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
+            'statuses' => JobTask::STATUSES,
+        ]);
+    }
+
+    /**
+     * Saves the task, and keeps the estimate in step with it.
+     *
+     * Which lines a task covers is the one thing here with consequences beyond
+     * the row: a dropped line goes back into the picker for another task, a
+     * newly taken one comes out of it, the task's hours are re-read off the
+     * labour it now covers, and the job's total is recomputed from its tasks.
+     * All in one transaction, because a plan that half-agrees with its estimate
+     * is worse than one that disagrees outright.
+     */
+    public function update(Request $request, JobTask $task): RedirectResponse
+    {
+        $job = $this->jobBehind($task);
+
+        $this->authorisePlanning($job, $request->user());
+
+        $hasLines = $this->estimateLineCount($job) > 0;
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:200'],
+            'status' => ['required', Rule::in(JobTask::STATUSES)],
+            'foreman_id' => ['required', 'integer', 'exists:foremen,id'],
+            'estimate_item_ids' => $hasLines
+                ? ['required', 'array', 'min:1', 'max:200']
+                : ['nullable', 'array', 'max:200'],
+            'estimate_item_ids.*' => ['integer'],
+        ], [
+            'title.required' => 'Give the task a name.',
+            'foreman_id.required' => 'Pick the foreman running this task.',
+            'estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
+            'estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
+        ]);
+
+        $title = trim($data['title']);
+
+        $clash = JobTask::query()
+            ->where('job_id', $job->id)
+            ->whereKeyNot($task->id)
+            ->whereRaw('lower(title) = ?', [mb_strtolower($title)])
+            ->exists();
+
+        if ($clash) {
+            throw ValidationException::withMessages([
+                'title' => 'This job already has a task with that name.',
+            ]);
+        }
+
+        $ids = array_values(array_unique(array_map(
+            intval(...),
+            $data['estimate_item_ids'] ?? [],
+        )));
+
+        // Free, or already this task's own — anything else belongs elsewhere.
+        $allowed = EstimateItem::query()
+            ->whereIn('estimate_id', $this->estimateIds($job))
+            ->where(fn ($query) => $query
+                ->whereNull('job_task_id')
+                ->orWhere('job_task_id', $task->id))
+            ->pluck('id')
+            ->all();
+
+        if (array_diff($ids, $allowed) !== []) {
+            throw ValidationException::withMessages([
+                'estimate_item_ids' => 'One of those lines is already planned into another task. Reload the page.',
+            ]);
+        }
+
+        DB::transaction(function () use ($task, $job, $title, $data, $ids) {
+            $task->update([
+                'title' => $title,
+                'status' => $data['status'],
+                'foreman_id' => $data['foreman_id'],
+                // Re-read off the labour it now covers, never typed.
+                'estimated_hours' => $this->hoursOn($ids),
+            ]);
+
+            // Dropped lines go back into the picker for another task to take.
+            EstimateItem::query()
+                ->where('job_task_id', $task->id)
+                ->when($ids !== [], fn ($query) => $query->whereNotIn('id', $ids))
+                ->update(['job_task_id' => null]);
+
+            if ($ids !== []) {
+                EstimateItem::whereIn('id', $ids)->update(['job_task_id' => $task->id]);
+            }
+
+            $job->refreshEstimatedHours();
+        });
+
+        return redirect()
+            ->to($this->returnUrl($request, $job) ?? route('tasks.index'))
+            ->with('success', 'Task updated.');
+    }
+
+    /**
+     * The job a task belongs to, or a 404.
+     *
+     * A task outlives its job's delete — the delete is soft, with an Undo — so
+     * this relation really can come back null, and everything below reads the
+     * job. Left unguarded it was a type error rather than a missing page.
+     */
+    private function jobBehind(JobTask $task): Job
+    {
+        return $task->job ?? abort(404);
+    }
+
+    /**
+     * Removing a task.
+     *
+     * The lines it covered go back into the picker for another task to take,
+     * and the job's hours are re-read off what is left. A task deleted without
+     * that would leave its share of the estimate planned into nothing and the
+     * job still billing for hours nobody is working.
+     */
+    public function destroy(Request $request, JobTask $task): RedirectResponse
+    {
+        $job = $this->jobBehind($task);
+
+        $this->authorisePlanning($job, $request->user());
+
+        $title = $task->title;
+
+        DB::transaction(function () use ($task, $job) {
+            EstimateItem::where('job_task_id', $task->id)->update(['job_task_id' => null]);
+
+            // Dependencies cascade, so this cannot leave a dangling edge.
+            $task->delete();
+
+            $job->refreshEstimatedHours();
+        });
+
+        $job->recordActivity('task_deleted', "Task removed: {$title}");
+
+        return redirect()
+            ->to($this->returnUrl($request, $job) ?? route('tasks.index'))
+            ->with('warning', "“{$title}” was removed from “{$job->name}”.");
+    }
+
+    /**
+     * Where the planner was before they opened this screen.
+     *
+     * A whitelisted marker rather than a URL off the query string: the value
+     * decides where a redirect lands, and a redirect that will follow anything
+     * handed to it is an open redirect.
+     */
+    private function returnUrl(Request $request, Job $job): ?string
+    {
+        return match ($request->query('from')) {
+            'tasks' => route('tasks.index'),
+            'job' => route('jobs.show', $job),
+            default => null,
+        };
+    }
+
+    /**
+     * The same marker on the URL the form submits to.
+     *
+     * Without it the origin is lost the moment the screen posts, and a planner
+     * who came from a job's own page would be dropped somewhere else on save.
+     */
+    private function carryOrigin(Request $request, string $url): string
+    {
+        $from = $request->query('from');
+
+        return in_array($from, ['tasks', 'job'], true) ? $url.'?from='.$from : $url;
+    }
+
+    /**
+     * The estimates whose lines are this job's work to plan.
+     *
+     * Its own estimates, plus the one raised from the takeoff it was built
+     * from. Those are not always the same row: the takeoff's estimate is
+     * created when the review is signed off, before any job exists, and it is
+     * linked to whichever job was raised first. A second job off the same
+     * takeoff would otherwise arrive here with nothing to plan from.
+     *
+     * @return Collection<int, int>
+     */
+    private function estimateIds(Job $job): Collection
+    {
+        $own = $job->estimates()->pluck('id');
+
+        if ($job->ai_result_id === null) {
+            return $own;
+        }
+
+        return $own
+            ->merge(Estimate::where('ai_result_id', $job->ai_result_id)->pluck('id'))
+            ->unique()
+            ->values();
     }
 
     /**
@@ -175,10 +442,10 @@ class JobTaskSetupController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private function lines(Job $job): array
+    private function lines(Job $job, ?JobTask $editing = null): array
     {
         return EstimateItem::query()
-            ->whereIn('estimate_id', $job->estimates()->select('id'))
+            ->whereIn('estimate_id', $this->estimateIds($job))
             ->with('task:id,title')
             ->orderBy('estimate_id')
             ->orderBy('position')
@@ -190,10 +457,39 @@ class JobTaskSetupController extends Controller
                 'unit' => $item->unit,
                 'quantity' => (float) $item->quantity,
                 'total' => (float) $item->total,
-                // Null while the line is still free to plan.
-                'taskId' => $item->job_task_id,
-                'taskTitle' => $item->task?->title,
+                // Null while the line is still free to plan — and a line on the
+                // task being edited is free as far as that screen is concerned.
+                'taskId' => $item->job_task_id === $editing?->id ? null : $item->job_task_id,
+                'taskTitle' => $item->job_task_id === $editing?->id ? null : $item->task?->title,
             ])->all();
+    }
+
+    /**
+     * The labour hours the given estimate lines add up to.
+     *
+     * Only labour: a task's estimated hours are hours of work, and adding a
+     * material line's 50 ft of cable to them would be nonsense. Null when the
+     * lines carry no labour at all, because zero would claim the work is free.
+     *
+     * @param  list<int>  $lineIds
+     */
+    private function hoursOn(array $lineIds): ?float
+    {
+        if ($lineIds === []) {
+            return null;
+        }
+
+        $hours = (float) EstimateItem::whereIn('id', $lineIds)
+            ->where('category', EstimateItem::CATEGORY_LABOR)
+            ->sum('quantity');
+
+        return $hours > 0 ? round($hours, 2) : null;
+    }
+
+    /** How many estimate lines this job has at all, claimed or not. */
+    private function estimateLineCount(Job $job): int
+    {
+        return EstimateItem::whereIn('estimate_id', $this->estimateIds($job))->count();
     }
 
     /**
@@ -204,7 +500,7 @@ class JobTaskSetupController extends Controller
     private function claimableLines(Job $job): Collection
     {
         return EstimateItem::query()
-            ->whereIn('estimate_id', $job->estimates()->select('id'))
+            ->whereIn('estimate_id', $this->estimateIds($job))
             ->whereNull('job_task_id')
             ->pluck('id');
     }

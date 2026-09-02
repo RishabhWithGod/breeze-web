@@ -1,19 +1,10 @@
 import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
-import {
-  CheckCheck,
-  Combine,
-  Lock,
-  RotateCcw,
-  Sparkles,
-  Table2,
-  X,
-} from 'lucide-react'
+import { CheckCheck, Combine, RotateCcw, Sparkles, X } from 'lucide-react'
 import {
   Alert,
   Badge,
   Button,
-  ButtonLink,
   Card,
   EmptyState,
   Pagination,
@@ -43,7 +34,6 @@ import type {
   SharedPageProps,
   SymbolReviewRow,
 } from '@/types'
-import { formatDate } from '@/utils'
 
 export interface AiReviewProps {
   result: AiReviewSummary
@@ -97,7 +87,13 @@ export default function AiReview({
   }, [])
 
   const selectedOnPage = selected.filter((id) => rows.some((row) => row.id === id))
-  const locked = result.isFinalised
+
+  /*
+   * Signing off records the decisions; it does not freeze them. The screen is
+   * the same screen whichever way you arrive at it — this only decides what
+   * "continue" does, because finalising twice is not a thing.
+   */
+  const signedOff = result.isFinalised
 
   const bulk = (action: 'approve' | 'reject' | 'reset') => {
     router.post(
@@ -151,34 +147,6 @@ export default function AiReview({
           { label: result.projectName },
           { label: 'Review' },
         ]}
-        /*
-         * Only a signed-off takeoff has header actions. An open one is finished
-         * from the step footer at the bottom of the page, where the rest of the
-         * flow's "continue" lives.
-         */
-        {...(locked
-          ? {
-              actions: (
-                <div className="flex flex-wrap items-center gap-2">
-                  <ButtonLink
-                    href={routeTo.finalSymbols(result.id)}
-                    size="sm"
-                    leftIcon={Table2}
-                  >
-                    Final symbol table
-                  </ButtonLink>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={RotateCcw}
-                    onClick={() => router.post(routeTo.reviewReopen(result.id))}
-                  >
-                    Reopen review
-                  </Button>
-                </div>
-              ),
-            }
-          : {})}
       />
 
       {flash.warning && (
@@ -192,15 +160,7 @@ export default function AiReview({
         </Alert>
       )}
 
-      {locked && (
-        <Alert tone="brand" icon={Lock} className="mb-4">
-          This takeoff was signed off
-          {result.finalisedAt ? ` on ${formatDate(result.finalisedAt)}` : ''}. Reopen the
-          review to change any decision.
-        </Alert>
-      )}
-
-      {selectedOnPage.length > 0 && !locked && (
+      {selectedOnPage.length > 0 && (
         <Card padding="md" variant="solid" className="mb-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
@@ -248,7 +208,6 @@ export default function AiReview({
         overlaySymbols={overlaySymbols}
         pageDimensions={pageDimensions}
         distinctNames={distinctNames}
-        locked={locked}
         initialPage={filters.pageNo}
         selected={selectedOccurrence}
         onSelect={setSelectedOccurrence}
@@ -273,7 +232,6 @@ export default function AiReview({
               row={row}
               selected={selected.includes(row.id)}
               onSelect={toggleSelected}
-              locked={locked}
               index={index}
               focused={selectedOccurrence?.reviewId === row.id}
             />
@@ -304,18 +262,26 @@ export default function AiReview({
       <EstimatingComponents components={estimating} />
 
       {/*
-        The way forward. A signed-off takeoff already has its summary, so the button
-        opens it; an open one has to be finished first, and the reason says so.
+        Forward is always the estimate — the step after review. Signing off is
+        what produces it, so an open review finalises and an already-signed-off
+        one simply opens the estimate it made.
       */}
       <StepFooter
         current="review"
-        continueLabel={locked ? 'Continue to Review Summary' : 'Finish review and continue'}
+        continueLabel="Continue to Estimate"
         isBusy={isFinalising}
-        {...(locked ? { href: routeTo.finalSymbols(result.id) } : {})}
-        {...(!locked && tally.approved === 0
+        {...(signedOff && result.estimateId
+          // In the flow, so the estimate opens with its roadmap and its own way
+          // forward — without this a signed-off review continued to a dead end.
+          ? { href: routeTo.estimateInFlow(result.estimateId) }
+          : {})}
+        {...(signedOff && !result.estimateId
+          ? { href: routeTo.finalSymbols(result.id) }
+          : {})}
+        {...(!signedOff && tally.approved === 0
           ? { blockedReason: 'Approve at least one symbol to continue.' }
           : {})}
-        {...(!locked && tally.approved > 0
+        {...(!signedOff && tally.approved > 0
           ? { onContinue: finalise }
           : {})}
       />

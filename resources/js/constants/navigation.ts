@@ -2,6 +2,7 @@ import {
   Briefcase,
   CalendarCheck,
   ChartColumn,
+  ClipboardList,
   Clock,
   FileText,
   FolderClosed,
@@ -9,6 +10,7 @@ import {
   Gauge,
   ReceiptText,
   Sparkles,
+  Users,
 } from 'lucide-react'
 import { ROUTES } from './routes'
 import type { NavItem } from '@/types'
@@ -28,6 +30,12 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   { label: 'AI Takeoff', href: ROUTES.aiTakeoff, icon: Sparkles },
   { label: 'Estimates', href: ROUTES.estimates, icon: FileText },
   { label: 'Jobs', href: ROUTES.jobs, icon: Briefcase },
+  // Work and the people who run it: both are read across every job rather than
+  // inside one, so they follow Jobs as entries of their own. Only the lists are
+  // here — adding one is a button on its list, the way every other module does
+  // it, rather than a second drawer entry per screen.
+  { label: 'Tasks', href: ROUTES.tasks, icon: ClipboardList },
+  { label: 'Foremen', href: ROUTES.foremen, icon: Users },
   { label: 'Scheduling', href: ROUTES.scheduling, icon: CalendarCheck },
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock },
   { label: 'Billing', href: ROUTES.billing, icon: ReceiptText },

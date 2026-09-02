@@ -6,7 +6,6 @@ use App\Http\Resources\ApprovalHistoryResource;
 use App\Http\Resources\FinalSymbolResource;
 use App\Models\AiResult;
 use App\Models\FinalSymbol;
-use App\Models\Foreman;
 use App\Models\Job;
 use App\Services\Ai\ArtefactStore;
 use App\Services\Clients\ClientDirectory;
@@ -295,14 +294,20 @@ class FinalTakeoffController extends Controller
         try {
             $estimate = $estimateBuilder->fromFinalJson($result->refresh(), $request->user(), $job);
         } catch (RuntimeException $e) {
+            /*
+             * Straight on to breaking the job into tasks, the same as Create Job.
+             * Without the estimate there are no lines to plan from, but the step
+             * still takes typed tasks and can be skipped.
+             */
             return redirect()
-                ->route('jobs.show', $job)
+                ->route('jobs.tasks.setup', $job)
                 ->with('success', "“{$job->name}” was created from the reviewed takeoff.")
                 ->with('warning', "The estimate could not be generated: {$e->getMessage()}");
         }
 
+        // The estimate exists now, so the task step has its lines to plan from.
         return redirect()
-            ->route('jobs.show', $job)
+            ->route('jobs.tasks.setup', $job)
             ->with(
                 'success',
                 "“{$job->name}” was created from the reviewed takeoff, priced as {$estimate->number}."
@@ -342,7 +347,7 @@ class FinalTakeoffController extends Controller
         }
 
         return redirect()
-            ->route('estimates.show', $estimate)
+            ->route('estimates.show', ['estimate' => $estimate, 'flow' => 1])
             ->with('success', "Estimate {$estimate->number} was generated from the reviewed takeoff.");
     }
 }

@@ -8,7 +8,6 @@ import {
   TAKEOFF_STATUS_TONE,
   cn,
   formatDate,
-  formatNumber,
 } from '@/utils'
 
 export interface ProjectHistoryCardProps {
@@ -64,8 +63,6 @@ export function ProjectHistoryCard({
           <dd className="text-white">{formatDate(project.date)}</dd>
         </div>
         <div className="flex gap-2">
-          <dt className="text-white/70">Items</dt>
-          <dd className="tabular-nums text-white">{formatNumber(project.items)}</dd>
         </div>
       </dl>
 

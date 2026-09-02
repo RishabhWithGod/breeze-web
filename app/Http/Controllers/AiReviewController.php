@@ -168,7 +168,7 @@ class AiReviewController extends Controller
             $estimate = $estimateBuilder->fromFinalJson($result, $request->user());
 
             return redirect()
-                ->route('estimates.show', $estimate)
+                ->route('estimates.show', ['estimate' => $estimate, 'flow' => 1])
                 ->with('success', "Review signed off. Estimate {$estimate->number} was generated from it.");
         } catch (RuntimeException) {
             // Nothing priceable (e.g. every approved symbol counted to zero) —

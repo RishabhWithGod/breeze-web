@@ -2,9 +2,6 @@ import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Archive,
-  ArchiveRestore,
-  Copy,
   Eye,
   PencilLine,
   Plus,
@@ -21,7 +18,6 @@ import {
   Checkbox,
   ConfirmDialog,
   EmptyState,
-  FilterTabs,
   IconButton,
   Pagination,
   SearchBox,
@@ -30,14 +26,13 @@ import {
   StatusDot,
   Table,
 } from '@/components/common'
-import { ForemanBadge, JobCard } from '@/components/jobs'
+import { JobCard } from '@/components/jobs'
 import { appLayout, PageTransition } from '@/components/layout'
 import {
   JOB_SORT_OPTIONS,
   JOB_STATUS_FILTERS,
   JOB_STATUS_OPTIONS,
   JOB_TYPE_FILTERS,
-  JOB_VIEW_OPTIONS,
   MOTION,
   ROUTES,
   routeTo,
@@ -49,7 +44,6 @@ import {
 import { useDisclosure } from '@/hooks'
 import type {
   Job,
-  JobForeman,
   Paginated,
   SharedPageProps,
   TableColumn,
@@ -90,8 +84,6 @@ interface JobFilters {
 export interface JobsProps {
   jobs: Paginated<Job>
   filters: JobFilters
-  foremen: readonly JobForeman[]
-  counts: { active: number; archived: number }
 }
 
 /**
@@ -100,7 +92,7 @@ export interface JobsProps {
  * Search, filters, sorting and pagination all run in the database against
  * query-string state. Row actions and bulk actions go through JobController.
  */
-export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
+export default function Jobs({ jobs, filters }: JobsProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   const [query, setQuery] = useState(filters.search)
@@ -125,11 +117,6 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
   // sets local state. Either one makes Undo available.
   const restorableId = lastDeletedId ?? flash.restoreJobId
   const canUndo = restorableId !== null && Boolean(flash.warning)
-
-  const foremanOptions = [
-    { label: 'All Foremen', value: 'all' },
-    ...foremen.map((foreman) => ({ label: foreman.name, value: foreman.name })),
-  ]
 
   /**
    * Merges `changes` into the *current* query string rather than into a props
@@ -182,7 +169,7 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
     )
   }
 
-  const runBulk = (action: 'archive' | 'unarchive' | 'delete' | 'status', status?: string) => {
+  const runBulk = (action: 'delete' | 'status', status?: string) => {
     if (selectedOnPage.length === 0) return
 
     router.post(
@@ -229,7 +216,17 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
   const columns: TableColumn<Job>[] = [
     {
       key: 'select',
-      header: '',
+      // The control belongs to the column it governs, in the header row that
+      // names the columns — not on a line of its own above the table.
+      header: (
+        <Checkbox
+          id="select-all-jobs"
+          label=""
+          aria-label={allOnPageSelected ? 'Clear page selection' : 'Select all on page'}
+          checked={allOnPageSelected}
+          onChange={toggleAll}
+        />
+      ),
       width: 'w-10',
       render: (job) => (
         <Checkbox
@@ -285,16 +282,6 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
       ),
     },
     {
-      key: 'foreman',
-      header: 'Foreman',
-      render: (job) =>
-        job.foreman ? (
-          <ForemanBadge foreman={job.foreman} />
-        ) : (
-          <span className="text-white/70">Unassigned</span>
-        ),
-    },
-    {
       key: 'startDate',
       header: 'Start Date',
       render: (job) => (
@@ -315,7 +302,7 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
     {
       key: 'actions',
       header: 'Actions',
-      width: 'w-52',
+      width: 'w-40',
       render: (job) => (
         <div className="flex items-center gap-1">
           <ButtonLink href={routeTo.job(job.id)} size="sm" leftIcon={Eye}>
@@ -327,30 +314,6 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
             size="sm"
             className="text-white/85 hover:text-brand"
             onClick={() => router.visit(routeTo.jobEdit(job.id))}
-          />
-          <IconButton
-            icon={Copy}
-            label={`Duplicate ${job.name}`}
-            size="sm"
-            className="text-white/85 hover:text-brand"
-            onClick={() =>
-              router.post(routeTo.jobDuplicate(job.id), {}, { preserveScroll: true })
-            }
-          />
-          <IconButton
-            icon={job.isArchived ? ArchiveRestore : Archive}
-            label={`${job.isArchived ? 'Unarchive' : 'Archive'} ${job.name}`}
-            size="sm"
-            className="text-white/85 hover:text-brand"
-            onClick={() =>
-              router.post(
-                job.isArchived
-                  ? routeTo.jobUnarchive(job.id)
-                  : routeTo.jobArchive(job.id),
-                {},
-                { preserveScroll: true },
-              )
-            }
           />
           <IconButton
             icon={Trash2}
@@ -378,45 +341,22 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
             </p>
           </div>
 
-          <ButtonLink
-            href={ROUTES.jobCreate}
-            variant="dark"
-            leftIcon={Plus}
-            className="lg:shrink-0"
-          >
-            Create Job
-          </ButtonLink>
+          <div className="flex flex-wrap items-center gap-3 lg:shrink-0">
+            <Button
+              variant={isFiltersOpen ? 'primary' : 'white'}
+              leftIcon={SlidersHorizontal}
+              aria-expanded={isFiltersOpen}
+              onClick={() => applyFilters({ panel: isFiltersOpen ? '' : 'open' })}
+            >
+              Filters
+            </Button>
+            <ButtonLink href={ROUTES.jobCreate} variant="dark" leftIcon={Plus}>
+              Create Job
+            </ButtonLink>
+          </div>
         </header>
 
         <div className="p-5 sm:p-6">
-          {/* Archive view + filters toggle */}
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <FilterTabs
-              solid
-              options={JOB_VIEW_OPTIONS}
-              value={filters.view}
-              onChange={(view) => applyFilters({ view })}
-              counts={{
-                active: counts.active,
-                archived: counts.archived,
-                all: counts.active + counts.archived,
-              }}
-            />
-
-            <div className="flex items-center gap-3">
-              <span className="text-md text-white/90">View:</span>
-              <Button
-                size="sm"
-                variant={isFiltersOpen ? 'primary' : 'secondary'}
-                leftIcon={SlidersHorizontal}
-                aria-expanded={isFiltersOpen}
-                onClick={() => applyFilters({ panel: isFiltersOpen ? '' : 'open' })}
-              >
-                Filters
-              </Button>
-            </div>
-          </div>
-
           <AnimatePresence initial={false}>
             {isFiltersOpen && (
               <motion.div
@@ -455,13 +395,6 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
                       applyFilters({ type: event.target.value as JobTypeFilter })
                     }
                   />
-                  <SelectField
-                    id="job-foreman-filter"
-                    label="Foreman"
-                    options={foremanOptions}
-                    value={filters.foreman}
-                    onChange={(event) => applyFilters({ foreman: event.target.value })}
-                  />
                   <Button variant="white" onClick={resetFilters}>
                     Reset
                   </Button>
@@ -470,20 +403,18 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
             )}
           </AnimatePresence>
 
-          {/* Sort — the dropdown is wrapped in its own sized container rather
-              than sizing it through `SelectField`'s own `className` (which
-              only narrows the inner `<select>`, not the wrapper the chevron
-              icon is positioned against): otherwise the chevron floats out
-              at the wrapper's full flex-row width instead of sitting on the
-              visible control, and — since that same unconstrained wrapper
-              reports `width: 100%` — this row's `flex-wrap` was pushing the
-              label and the dropdown onto separate lines instead of keeping
-              them together. */}
+          {/* The dropdown is wrapped in its own sized container rather than
+              sized through `SelectField`'s `className`, which narrows the
+              inner `<select>` and leaves the chevron floating at the wrapper's
+              full width. */}
           <div className="mb-5 flex items-center justify-end gap-3">
-            <label htmlFor="job-sort" className="text-md whitespace-nowrap text-white/90">
+            <label
+              htmlFor="job-sort"
+              className="text-md font-medium whitespace-nowrap text-white/90"
+            >
               Sort by:
             </label>
-            <div className="w-56">
+            <div className="w-48">
               <SelectField
                 id="job-sort"
                 options={SORT_OPTIONS}
@@ -517,22 +448,6 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
                   }}
                 />
 
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  leftIcon={Archive}
-                  onClick={() => runBulk('archive')}
-                >
-                  Archive
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  leftIcon={ArchiveRestore}
-                  onClick={() => runBulk('unarchive')}
-                >
-                  Unarchive
-                </Button>
                 <Button
                   variant="danger"
                   size="sm"
@@ -595,14 +510,6 @@ export default function Jobs({ jobs, filters, foremen, counts }: JobsProps) {
             <>
               {/* Table view — xl and up */}
               <div className="hidden xl:block">
-                <div className="mb-3 flex items-center gap-3">
-                  <Checkbox
-                    id="select-all-jobs"
-                    label={allOnPageSelected ? 'Clear page selection' : 'Select all on page'}
-                    checked={allOnPageSelected}
-                    onChange={toggleAll}
-                  />
-                </div>
                 <Table
                   dense
                   variant="lined"

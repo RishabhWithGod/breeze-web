@@ -27,7 +27,6 @@ export interface SymbolBoxProps {
   /** Present for one physical occurrence; absent for a single-box row (e.g. needs-review). */
   occurrenceKey?: string
   occurrenceOrigin?: OccurrenceOrigin
-  locked: boolean
   isSelected: boolean
   onSelect: (ref: OccurrenceRef | null) => void
   /** Reports this box's own name while the pointer is over it, and `null` on leave — drives the matching row's highlight in the legend. */
@@ -61,7 +60,6 @@ export function SymbolBox({
   status,
   occurrenceKey,
   occurrenceOrigin,
-  locked,
   isSelected,
   onSelect,
   onHoverChange,
@@ -98,7 +96,7 @@ export function SymbolBox({
   const [x = 0, y = 0, w = 0, h = 0] = bbox
   const color = symbolColor(name)
   const isRejected = status === 'rejected'
-  const canMove = !locked && containerSize !== null
+  const canMove = containerSize !== null
 
   const ref: OccurrenceRef = { reviewId, occurrenceKey, page }
 
@@ -115,7 +113,6 @@ export function SymbolBox({
 
   /** The quick hover badge: reject an approved box, or reinstate a rejected one — instantly, no popover. */
   const toggle = () => {
-    if (locked) return
 
     const url = occurrenceKey
       ? routeTo.symbolOccurrence(resultId, reviewId, occurrenceKey)
@@ -211,7 +208,6 @@ export function SymbolBox({
           toggle()
         }}
         onPointerDown={(event) => event.stopPropagation()}
-        disabled={locked}
         aria-label={isRejected ? `Reinstate ${name}` : `Reject this ${name}`}
         className={cn(
           'absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full text-white shadow-sm transition-colors duration-150',
@@ -249,7 +245,6 @@ export function SymbolBox({
           name={name}
           status={status}
           finalCount={finalCount}
-          locked={locked}
           onClose={() => onSelect(null)}
           anchorStyle={{
             left: popoverAnchor.left,

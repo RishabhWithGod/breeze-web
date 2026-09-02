@@ -69,6 +69,25 @@ class JobDetailResource extends JsonResource
                 'convertedProjectId' => $estimate->converted_project_id,
             ])->all(),
 
+            /*
+             * The work this job is broken into. Only ever the tasks themselves
+             * — dates and dependencies are the schedule's business, and this
+             * screen answers "what is on this job and who has it".
+             */
+            'tasks' => $this->whenLoaded('tasks', fn () => $this->tasks->map(fn ($task) => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'status' => $task->status,
+                'foreman' => $task->foreman?->name,
+                'estimatedHours' => $task->estimated_hours === null
+                    ? null
+                    : (float) $task->estimated_hours,
+                'actualHours' => $task->actual_hours === null
+                    ? null
+                    : (float) $task->actual_hours,
+                'lineCount' => $task->estimate_items_count ?? 0,
+            ])->values()->all(), []),
+
             'notes' => $this->notes->map(fn ($note) => [
                 'id' => $note->id,
                 'body' => $note->body,

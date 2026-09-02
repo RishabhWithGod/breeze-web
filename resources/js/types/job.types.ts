@@ -1,4 +1,5 @@
 import type { JobAssignmentRow } from './review.types'
+import type { TaskStatus } from './scheduling.types'
 
 export type JobStatus =
   | 'draft'
@@ -60,6 +61,18 @@ export interface JobEstimateSummary {
   readonly status: 'draft' | 'sent' | 'approved' | 'rejected'
   readonly isConverted: boolean
   readonly convertedProjectId: number | null
+}
+
+/** One task on a job, as the detail screen lists it. */
+export interface JobTaskSummary {
+  readonly id: number
+  readonly title: string
+  readonly status: TaskStatus
+  readonly foreman: string | null
+  readonly estimatedHours: number | null
+  readonly actualHours: number | null
+  /** How much of the estimate this task covers. */
+  readonly lineCount: number
 }
 
 export interface JobNote {
@@ -156,6 +169,8 @@ export interface JobDetail extends Omit<Job, 'teamCount' | 'estimateCount'> {
   readonly createdAt: string
   readonly team: readonly JobTeamMember[]
   readonly estimates: readonly JobEstimateSummary[]
+  /** The work the job is broken into, in schedule order. */
+  readonly tasks: readonly JobTaskSummary[]
   readonly notes: readonly JobNote[]
   readonly attachments: readonly JobAttachment[]
   readonly activities: readonly JobActivity[]
@@ -181,7 +196,6 @@ export interface JobDraft {
   start_date: string
   end_date: string
   budget: string
-  foreman_id: string
   save_as_draft: boolean
   /**
    * The client. Clients are projects, so this is a `projects` id — the job's

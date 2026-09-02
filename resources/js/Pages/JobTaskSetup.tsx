@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
-import { ArrowRight, ListChecks, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ListChecks, Plus, Trash2 } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -11,22 +11,31 @@ import {
   SectionHeading,
   SelectField,
   TextInput,
+  WorkflowProgress,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { TaskLinePicker, type EstimateLine } from '@/components/jobs'
 import { ROUTES, routeTo } from '@/constants'
 import type { SharedPageProps } from '@/types'
 import { cn } from '@/utils'
 
 interface TaskRow {
   title: string
-  category: string
-  priority: string
-  estimated_hours: string
-  starts_on: string
-  ends_on: string
+  /** Who runs it. One person — a task with two people in charge has nobody. */
+  foreman_id: string
+  /** The estimate lines this task is the work for. */
+  estimate_item_ids: number[]
 }
 
 export interface JobTaskSetupProps {
+  /**
+   * Set when the step was opened from the task list to add work to a job
+   * already running, rather than reached as part of raising one. Back and a
+   * successful save then go there instead of on through the flow.
+   */
+  returnUrl: string | null
+  /** Where the form posts. Carries the origin so it survives the save. */
+  saveUrl: string
   job: {
     readonly id: number
     readonly name: string
@@ -34,30 +43,28 @@ export interface JobTaskSetupProps {
     readonly location: string | null
     readonly startDate: string | null
     readonly endDate: string | null
+    /** False for a job created by hand — it has no takeoff behind it. */
+    readonly fromTakeoff: boolean
+    /** The review summary this job was raised from, when there was one. */
+    readonly takeoffUrl: string | null
   }
   /** Tasks already planned, so re-opening the step adds to them rather than repeats them. */
   existingTasks: readonly {
     readonly id: number
     readonly title: string
-    readonly category: string | null
-    readonly estimatedHours: number | null
+    readonly foreman: string | null
+    readonly lineCount: number
   }[]
-  categories: readonly string[]
-  priorities: readonly string[]
+  /** Every line on the job's estimates, with whatever already claimed it. */
+  estimateLines: readonly EstimateLine[]
+  foremen: readonly { readonly id: number; readonly name: string; readonly initials: string }[]
 }
 
 const emptyRow = (): TaskRow => ({
   title: '',
-  category: '',
-  priority: 'medium',
-  estimated_hours: '',
-  starts_on: '',
-  ends_on: '',
+  foreman_id: '',
+  estimate_item_ids: [],
 })
-
-/** "rough-in" reads as a machine value; the label should not. */
-const humanise = (value: string) =>
-  value.charAt(0).toUpperCase() + value.slice(1).replaceAll('-', ' ')
 
 /**
  * The step straight after a job is created: breaking it into the work it takes.
@@ -71,10 +78,12 @@ const humanise = (value: string) =>
  * never, and the link out says so plainly.
  */
 export default function JobTaskSetup({
+  returnUrl,
+  saveUrl,
   job,
   existingTasks,
-  categories,
-  priorities,
+  estimateLines,
+  foremen,
 }: JobTaskSetupProps) {
   const [rows, setRows] = useState<TaskRow[]>([emptyRow()])
   const [processing, setProcessing] = useState(false)
@@ -93,22 +102,20 @@ export default function JobTaskSetup({
     )
   }
 
-  const filled = rows.filter((row) => row.title.trim() !== '')
+  /** Every line the *other* rows have taken — a line belongs to one task. */
+  const claimedBy = (index: number) =>
+    new Set(rows.flatMap((row, position) => (position === index ? [] : row.estimate_item_ids)))
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
 
-    // Rows nobody typed into are dropped rather than rejected as missing names.
     router.post(
-      routeTo.jobTaskSetup(job.id),
+      saveUrl,
       {
-        tasks: filled.map((row) => ({
+        tasks: rows.map((row) => ({
           title: row.title,
-          category: row.category || null,
-          priority: row.priority,
-          estimated_hours: row.estimated_hours === '' ? null : Number(row.estimated_hours),
-          starts_on: row.starts_on || null,
-          ends_on: row.ends_on || null,
+          foreman_id: row.foreman_id === '' ? null : Number(row.foreman_id),
+          estimate_item_ids: row.estimate_item_ids,
         })),
       },
       {
@@ -118,15 +125,15 @@ export default function JobTaskSetup({
     )
   }
 
-  const categoryOptions = [
-    { label: 'No category', value: '' },
-    ...categories.map((category) => ({ label: humanise(category), value: category })),
+  /*
+   * A placeholder, not a choice: every task needs a foreman, so "assign later"
+   * was offering something the form goes on to refuse. It still carries no
+   * value, so an unopened select cannot quietly land on whoever is first.
+   */
+  const foremanOptions = [
+    { label: 'Select foreman', value: '' },
+    ...foremen.map((foreman) => ({ label: foreman.name, value: String(foreman.id) })),
   ]
-
-  const priorityOptions = priorities.map((priority) => ({
-    label: humanise(priority),
-    value: priority,
-  }))
 
   return (
     <PageTransition>
@@ -134,18 +141,42 @@ export default function JobTaskSetup({
 
       <PageHeader
         title="Add tasks"
-        subtitle={`Break “${job.name}” into the work it takes. You can do this later instead.`}
+        subtitle={`Break “${job.name}” into the work it takes. Every task needs a name, a foreman and the estimate lines it covers.`}
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
           { label: job.name, href: routeTo.job(job.id) },
           { label: 'Tasks' },
         ]}
         actions={
-          <ButtonLink href={routeTo.job(job.id)} variant="secondary" size="sm">
-            Skip for now
+          /*
+           * The step before: the list this was opened from, the review summary
+           * that raised this job, or the jobs list for one created by hand.
+           * Navigation, not a way out — the job exists either way and still
+           * needs its tasks.
+           */
+          <ButtonLink
+            href={returnUrl ?? job.takeoffUrl ?? ROUTES.jobs}
+            variant="secondary"
+            size="sm"
+            leftIcon={ArrowLeft}
+          >
+            Back
           </ButtonLink>
         }
       />
+
+      {/*
+        Only for a job that came through a takeoff. A job created by hand has no
+        analysis, review or estimate behind it, so the roadmap would be claiming
+        steps that never happened.
+      */}
+      {job.fromTakeoff && returnUrl === null && (
+        <WorkflowProgress
+          current="tasks"
+          done={['analysis', 'review', 'estimate', 'job']}
+          className="mb-6"
+        />
+      )}
 
       {hasErrors && (
         <Alert tone="danger" title="Check the tasks" className="mb-6">
@@ -166,9 +197,16 @@ export default function JobTaskSetup({
                 key={task.id}
                 className="flex items-center justify-between gap-3 rounded-panel border border-hairline bg-white/4 px-3 py-2"
               >
-                <span className="min-w-0 truncate text-md text-white">{task.title}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-md text-white">{task.title}</span>
+                  <span className="text-sm text-white/65">
+                    {task.lineCount > 0
+                      ? `${task.lineCount} estimate ${task.lineCount === 1 ? 'line' : 'lines'}`
+                      : 'No estimate lines'}
+                  </span>
+                </span>
                 <span className="shrink-0 text-sm text-white/70">
-                  {task.estimatedHours === null ? '—' : `${task.estimatedHours}h`}
+                  {task.foreman ?? 'Unassigned'}
                 </span>
               </li>
             ))}
@@ -178,11 +216,7 @@ export default function JobTaskSetup({
 
       <form onSubmit={submit} noValidate>
         <Card padding="lg">
-          <SectionHeading
-            as="h3"
-            title="Tasks"
-            subtitle="Only the name is required — the rest can be filled in on the schedule"
-          />
+          <SectionHeading as="h3" title="Tasks" />
 
           {rows.length === 0 ? (
             <EmptyState
@@ -235,60 +269,32 @@ export default function JobTaskSetup({
                         : {})}
                     />
 
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                      <SelectField
-                        id={`task-category-${index}`}
-                        label="Category"
-                        options={categoryOptions}
-                        value={row.category}
+                    {/* What the task is the work for, taken from the estimate. */}
+                    <div>
+                      <p className="mb-2 text-md font-medium text-white">Estimate lines</p>
+                      <TaskLinePicker
+                        lines={estimateLines}
+                        value={row.estimate_item_ids}
+                        claimedElsewhere={claimedBy(index)}
                         disabled={processing}
-                        onChange={(event) => update(index, { category: event.target.value })}
-                      />
-                      <SelectField
-                        id={`task-priority-${index}`}
-                        label="Priority"
-                        options={priorityOptions}
-                        value={row.priority}
-                        disabled={processing}
-                        onChange={(event) => update(index, { priority: event.target.value })}
-                      />
-                      <TextInput
-                        id={`task-hours-${index}`}
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        step={0.5}
-                        label="Est. hours"
-                        placeholder="8"
-                        value={row.estimated_hours}
-                        disabled={processing}
-                        onChange={(event) =>
-                          update(index, { estimated_hours: event.target.value })
-                        }
-                        {...(errors[`tasks.${index}.estimated_hours`]
-                          ? { error: errors[`tasks.${index}.estimated_hours`] }
+                        onChange={(ids) => update(index, { estimate_item_ids: ids })}
+                        {...(errors[`tasks.${index}.estimate_item_ids`]
+                          ? { error: errors[`tasks.${index}.estimate_item_ids`] }
                           : {})}
-                      />
-                      <TextInput
-                        id={`task-starts-${index}`}
-                        type="date"
-                        label="Starts"
-                        value={row.starts_on}
-                        disabled={processing}
-                        onChange={(event) => update(index, { starts_on: event.target.value })}
                       />
                     </div>
 
-                    <TextInput
-                      id={`task-ends-${index}`}
-                      type="date"
-                      label="Ends"
-                      className="sm:max-w-xs"
-                      value={row.ends_on}
+                    {/* Who runs it. One per task — see JobTask::foreman(). */}
+                    <SelectField
+                      id={`task-foreman-${index}`}
+                      label="Foreman"
+                      className="sm:max-w-sm"
+                      options={foremanOptions}
+                      value={row.foreman_id}
                       disabled={processing}
-                      onChange={(event) => update(index, { ends_on: event.target.value })}
-                      {...(errors[`tasks.${index}.ends_on`]
-                        ? { error: errors[`tasks.${index}.ends_on`] }
+                      onChange={(event) => update(index, { foreman_id: event.target.value })}
+                      {...(errors[`tasks.${index}.foreman_id`]
+                        ? { error: errors[`tasks.${index}.foreman_id`] }
                         : {})}
                     />
                   </div>
@@ -313,21 +319,12 @@ export default function JobTaskSetup({
           {errors['tasks'] && <p className="mt-3 text-sm text-red-300">{errors['tasks']}</p>}
 
           <div className="mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-hairline pt-6">
-            <ButtonLink href={routeTo.job(job.id)} variant="white">
-              Skip for now
-            </ButtonLink>
-            <Button
-              type="submit"
-              rightIcon={ArrowRight}
-              isLoading={processing}
-              disabled={filled.length === 0}
-              {...(filled.length === 0
-                ? { title: 'Name at least one task to save the plan' }
-                : {})}
-            >
-              {filled.length === 0
-                ? 'Save tasks'
-                : `Save ${filled.length} ${filled.length === 1 ? 'task' : 'tasks'}`}
+            {/*
+              The last step of the flow when this is part of raising a job;
+              plain "add these" when the planner came back to a running one.
+            */}
+            <Button type="submit" rightIcon={ArrowRight} isLoading={processing}>
+              {returnUrl === null ? 'Save and finish' : 'Save tasks'}
             </Button>
           </div>
         </Card>

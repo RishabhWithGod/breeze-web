@@ -74,6 +74,7 @@ class JobTask extends Model
     protected $fillable = [
         'job_schedule_id',
         'job_id',
+        'foreman_id',
         'created_by',
         'title',
         'description',
@@ -144,14 +145,14 @@ class JobTask extends Model
     }
 
     /**
-     * Who is running it. A set: a task can need two foremen, and a foreman
-     * runs several tasks.
+     * Who is running it. One person: a task with two people in charge has
+     * nobody in charge.
      *
-     * @return BelongsToMany<Foreman, $this>
+     * @return BelongsTo<Foreman, $this>
      */
-    public function foremen(): BelongsToMany
+    public function foreman(): BelongsTo
     {
-        return $this->belongsToMany(Foreman::class, 'job_task_foremen')->orderBy('name');
+        return $this->belongsTo(Foreman::class);
     }
 
     /** The people on this task. */

@@ -15,7 +15,6 @@ export interface DrawingOverlayProps {
   overlaySymbols: readonly OverlaySymbol[]
   pageDimensions: Readonly<Record<number, PageDimensions>>
   distinctNames: readonly string[]
-  locked: boolean
   /** Seeds the active page from the grid's own page filter, when set. */
   initialPage: number | null
   selected: OccurrenceRef | null
@@ -70,7 +69,6 @@ export function DrawingOverlay({
   overlaySymbols,
   pageDimensions,
   distinctNames,
-  locked,
   initialPage,
   selected,
   onSelect,
@@ -368,7 +366,6 @@ export function DrawingOverlay({
     target === contentRef.current || target.tagName === 'IMG'
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (locked) return
     if (!isEmptySpace(event.target as HTMLElement)) return
 
     const viewport = viewportRef.current
@@ -402,7 +399,7 @@ export function DrawingOverlay({
     panState.current = null
     viewportRef.current?.releasePointerCapture(event.pointerId)
 
-    if (!state || state.dragging || locked || !dims || !contentRef.current) return
+    if (!state || state.dragging || !dims || !contentRef.current) return
 
     // A real click (no drag) on empty space starts a manual-add draft.
     const rect = contentRef.current.getBoundingClientRect()
@@ -632,7 +629,6 @@ export function DrawingOverlay({
                     status={box.status}
                     occurrenceKey={box.occurrenceKey}
                     occurrenceOrigin={box.occurrenceOrigin}
-                    locked={locked}
                     isSelected={
                       selected?.reviewId === box.reviewId
                       && selected?.occurrenceKey === box.occurrenceKey

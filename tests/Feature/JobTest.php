@@ -33,7 +33,7 @@ class JobTest extends TestCase
         $this->foreman = Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW']);
     }
 
-    public function test_jobs_are_listed_with_their_foreman(): void
+    public function test_jobs_are_listed_with_the_foreman_still_on_the_record(): void
     {
         $this->makeJob(['name' => 'Harborview Data Hall']);
 
@@ -43,8 +43,11 @@ class JobTest extends TestCase
                 ->component('Jobs')
                 ->has('jobs.data', 1)
                 ->where('jobs.data.0.name', 'Harborview Data Hall')
+                // Still on the job, and still searchable by — the list simply
+                // does not draw a foreman column or offer the filter any more,
+                // so there are no options to send with it.
                 ->where('jobs.data.0.foreman.initials', 'DW')
-                ->has('foremen', 1));
+                ->missing('foremen'));
     }
 
     public function test_jobs_can_be_searched_by_foreman_name(): void
@@ -74,13 +77,14 @@ class JobTest extends TestCase
 
     public function test_a_job_can_be_created(): void
     {
-        [$project] = $this->makeTakeoffDrawing();
+        [$project, $upload] = $this->makeTakeoffDrawing();
 
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Northgate Retail Fit-out',
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
+                'upload_id' => $upload->id,
                 'job_type' => 'commercial',
                 'foreman_id' => $this->foreman->id,
                 'start_date' => '2026-05-11',
@@ -107,13 +111,14 @@ class JobTest extends TestCase
 
     public function test_a_job_can_be_saved_as_a_draft(): void
     {
-        [$project] = $this->makeTakeoffDrawing();
+        [$project, $upload] = $this->makeTakeoffDrawing();
 
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Exploratory Warehouse Retrofit',
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
+                'upload_id' => $upload->id,
                 'save_as_draft' => true,
             ])
             ->assertSessionHas('success');
@@ -130,17 +135,17 @@ class JobTest extends TestCase
             ->from('/jobs/create')
             ->post('/jobs', [
                 'name' => 'no',
-                'foreman_id' => 9999,
                 'start_date' => '2026-09-04',
                 'end_date' => '2026-05-11',
                 'budget' => '-5',
             ])
             /*
              * `project_id` is the Client field and `address_ids` the sites —
-             * neither a client name nor an address is ever typed here.
+             * neither a client name nor an address is ever typed here. No
+             * foreman either: they are assigned per task, not per job.
              */
             ->assertSessionHasErrors([
-                'name', 'project_id', 'address_ids', 'foreman_id', 'end_date', 'budget',
+                'name', 'project_id', 'address_ids', 'upload_id', 'end_date', 'budget',
             ]);
 
         $this->assertDatabaseCount('work_jobs', 0);

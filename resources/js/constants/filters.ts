@@ -17,7 +17,6 @@ export const HISTORY_SORT_OPTIONS = [
   { label: 'Date (Newest)', value: 'date-desc' },
   { label: 'Date (Oldest)', value: 'date-asc' },
   { label: 'Name (A–Z)', value: 'name-asc' },
-  { label: 'Items (Most)', value: 'items-desc' },
 ] as const
 
 export type HistorySort = (typeof HISTORY_SORT_OPTIONS)[number]['value']

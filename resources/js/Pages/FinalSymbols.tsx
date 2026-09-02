@@ -1,11 +1,11 @@
 import type { FormEvent } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm, usePage } from '@inertiajs/react'
-import { ArrowRight, Table2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ExternalLink } from 'lucide-react'
 import {
   Alert,
-  Button,
   ButtonLink,
+  Button,
   Card,
   RadioGroup,
   SectionHeading,
@@ -15,7 +15,7 @@ import {
   WorkflowProgress,
 } from '@/components/common'
 import { JobSitePicker } from '@/components/jobs'
-import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { appLayout, PageHeader, PageTransition, StepFooter } from '@/components/layout'
 import { JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type {
   ApprovalHistoryEntry,
@@ -26,7 +26,6 @@ import type {
   EngineBoqLine,
   EquipmentRow,
   FinalSymbolRow,
-  JobForeman,
   JobType,
   Paginated,
   PanelScheduleRow,
@@ -48,7 +47,6 @@ interface CreateJobForm {
   start_date: string
   end_date: string
   budget: string
-  foreman_id: string
 }
 
 interface FinalResultSummary {
@@ -106,7 +104,6 @@ export interface FinalSymbolsProps {
   clients: readonly ClientOption[]
   /** The takeoff's own client — where the form starts. */
   defaultClientId: number
-  foremen: readonly JobForeman[]
   history: readonly ApprovalHistoryEntry[]
 }
 
@@ -117,12 +114,7 @@ export interface FinalSymbolsProps {
  * and is what the job and estimate are built from. The AI response is kept for
  * audit only and is never read again past this point.
  */
-export default function FinalSymbols({
-  result,
-  clients,
-  defaultClientId,
-  foremen,
-}: FinalSymbolsProps) {
+export default function FinalSymbols({ result, clients, defaultClientId }: FinalSymbolsProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   const jobForm = useForm<CreateJobForm>({
@@ -141,7 +133,6 @@ export default function FinalSymbols({
     budget: result.engineEstimate.grand_total
       ? String(result.engineEstimate.grand_total)
       : '',
-    foreman_id: '',
   })
 
   const updateJobField = <K extends FormDataKeys<CreateJobForm>>(
@@ -173,11 +164,6 @@ export default function FinalSymbols({
     }))
   }
 
-  const foremanOptions = [
-    { label: 'Assign later', value: '' },
-    ...foremen.map((foreman) => ({ label: foreman.name, value: String(foreman.id) })),
-  ]
-
   const submitJob = (event: FormEvent) => {
     event.preventDefault()
     jobForm.post(routeTo.finalCreateJob(result.id))
@@ -198,16 +184,25 @@ export default function FinalSymbols({
           { label: 'Review summary' },
         ]}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <ButtonLink
-              href={routeTo.review(result.id)}
-              variant="ghost"
-              size="sm"
-              leftIcon={Table2}
-            >
-              Back to Review
-            </ButtonLink>
-          </div>
+          /*
+           * The step before, named outright: the estimate this screen follows,
+           * or the review itself while there is no estimate yet. Not
+           * `history.back()` — a POST that redirects does not always leave the
+           * previous step as the entry behind it.
+           */
+          <ButtonLink
+            href={
+              result.estimateId
+                // Still in the flow: going back a step must not leave it.
+                ? routeTo.estimateInFlow(result.estimateId)
+                : routeTo.review(result.id)
+            }
+            variant="secondary"
+            size="sm"
+            leftIcon={ArrowLeft}
+          >
+            Back
+          </ButtonLink>
         }
       />
 
@@ -222,22 +217,18 @@ export default function FinalSymbols({
         </Alert>
       )}
 
-      {/* Where this takeoff is, before anything else on the page. */}
+      {/*
+        Where this takeoff is, before anything else on the page. This screen is
+        the job step, whether the job is still a form or already raised — the
+        marker stays on it either way rather than pointing at the step after.
+      */}
       <WorkflowProgress
-        current={
-          result.workJobId
-            ? 'schedule'
-            : result.estimateId
-              ? 'job'
-              : result.isFinalised
-                ? 'estimate'
-                : 'review'
-        }
+        current="job"
+        // Never the step you are on: the marker sits there instead of a tick.
         done={[
           'analysis',
           ...(result.isFinalised ? (['review'] as const) : []),
           ...(result.estimateId ? (['estimate'] as const) : []),
-          ...(result.workJobId ? (['job'] as const) : []),
         ]}
         className="mb-6"
       />
@@ -347,21 +338,51 @@ export default function FinalSymbols({
               {...(jobForm.errors.job_type ? { error: jobForm.errors.job_type } : {})}
             />
 
-            <SelectField
-              id="job-foreman"
-              label="Foreman"
-              options={foremanOptions}
-              value={jobForm.data.foreman_id}
-              onChange={(event) => updateJobField('foreman_id', event.target.value)}
-              {...(jobForm.errors.foreman_id ? { error: jobForm.errors.foreman_id } : {})}
-            />
-
             <div className="flex justify-end pt-2">
               <Button type="submit" rightIcon={ArrowRight} isLoading={jobForm.processing}>
                 Create Job
               </Button>
             </div>
           </form>
+        </Card>
+      )}
+
+      {/*
+        The same step once the job exists. Without this the screen was the form
+        or nothing at all: coming back to it from the task step left a summary
+        with no job on it and no way forward, so the flow collapsed backwards
+        into the estimate.
+      */}
+      {result.workJobId && (
+        <Card padding="lg" className="mb-6">
+          <SectionHeading
+            as="h3"
+            title="The job"
+            subtitle="Raised from this takeoff — its quantities and estimate came from here"
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-panel border border-hairline bg-white/4 p-4">
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-white">
+                {result.workJobName ?? 'Untitled job'}
+              </p>
+              <p className="mt-0.5 text-sm text-white/70">{result.projectName}</p>
+            </div>
+            <ButtonLink
+              href={routeTo.job(result.workJobId)}
+              variant="secondary"
+              size="sm"
+              leftIcon={ExternalLink}
+            >
+              Open the job
+            </ButtonLink>
+          </div>
+
+          <StepFooter
+            current="job"
+            href={routeTo.jobTaskSetup(result.workJobId)}
+            continueLabel="Continue to tasks"
+          />
         </Card>
       )}
     </PageTransition>

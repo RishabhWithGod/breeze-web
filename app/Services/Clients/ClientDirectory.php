@@ -26,14 +26,20 @@ class ClientDirectory
      */
     public function options(): Collection
     {
-        return Project::with('addresses')
+        return Project::with(['addresses', 'selectedUpload', 'primaryUpload'])
             ->orderBy('name')
-            ->get(['id', 'name', 'due_date', 'project_type'])
+            ->get(['id', 'name', 'due_date', 'project_type', 'selected_upload_id'])
             ->map(fn (Project $client) => [
                 'id' => $client->id,
                 'name' => $client->name,
                 'dueDate' => $client->due_date?->toDateString(),
                 'projectType' => $client->project_type,
+                /*
+                 * The drawing this client's work is taken off — the one chosen
+                 * on their screen, or the first on record. Picking the client
+                 * fills it in, so the usual case takes no second choice.
+                 */
+                'defaultUploadId' => $client->takeoffDrawing()?->id,
                 // Every site this client has work at. The job form offers these
                 // rather than asking anyone to retype an address already on file.
                 'addresses' => $client->addresses->map(fn ($address) => [

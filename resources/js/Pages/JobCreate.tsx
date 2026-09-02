@@ -13,18 +13,11 @@ import {
 } from '@/components/common'
 import { JobSitePicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { JOB_TYPE_OPTIONS, ROUTES } from '@/constants'
-import type {
-  ClientOption,
-  JobDraft,
-  JobForeman,
-  JobType,
-  TakeoffUploadOption,
-} from '@/types'
+import { JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
+import type { ClientOption, JobDraft, JobType, TakeoffUploadOption } from '@/types'
 import { formatCurrency } from '@/utils'
 
 export interface JobCreateProps {
-  foremen: readonly JobForeman[]
   /** The client register. Clients are projects, so this is one list, not two. */
   clients: readonly ClientOption[]
   /** Their drawings — narrowed to the picked client once one is chosen. */
@@ -38,7 +31,7 @@ export interface JobCreateProps {
  * restates the server's rules. "Save as Draft" and "Create Job" post the same
  * payload — the server picks the status from the `save_as_draft` flag.
  */
-export default function JobCreate({ foremen, clients, uploads }: JobCreateProps) {
+export default function JobCreate({ clients, uploads }: JobCreateProps) {
   const [savingDraft, setSavingDraft] = useState(false)
 
   const { data, setData, post, processing, errors, hasErrors, clearErrors, transform } =
@@ -50,7 +43,6 @@ export default function JobCreate({ foremen, clients, uploads }: JobCreateProps)
       start_date: '',
       end_date: '',
       budget: '',
-      foreman_id: '',
       save_as_draft: false,
       project_id: '',
       upload_id: '',
@@ -95,8 +87,9 @@ export default function JobCreate({ foremen, clients, uploads }: JobCreateProps)
     setData((current) => ({
       ...current,
       project_id: clientId,
-      // Both belong to the old client, so neither survives the change.
-      upload_id: '',
+      // The client's own drawing, so the usual case takes no second choice.
+      // Anything the old client had does not survive the change.
+      upload_id: client?.defaultUploadId ? String(client.defaultUploadId) : '',
       address_ids: client
         ? client.addresses.filter((site) => site.isPrimary).map((site) => site.id)
         : [],
@@ -107,27 +100,18 @@ export default function JobCreate({ foremen, clients, uploads }: JobCreateProps)
       job_type: current.job_type || (client?.projectType ?? ''),
     }))
 
-    clearErrors('project_id', 'address_ids')
+    clearErrors('project_id', 'address_ids', 'upload_id')
   }
 
   const selectedClient = clients.find((option) => String(option.id) === data.project_id)
 
-  const foremanOptions = [
-    { label: 'Assign later', value: '' },
-    ...foremen.map((foreman) => ({
-      label: foreman.name,
-      value: String(foreman.id),
-    })),
-  ]
-
-  /** Only the picked client's drawings — a job never links to someone else's. */
   const uploadsForClient = useMemo(
     () => uploads.filter((upload) => String(upload.projectId) === data.project_id),
     [uploads, data.project_id],
   )
 
   const uploadOptions = [
-    { label: 'No linked drawing', value: '' },
+    { label: 'Select a drawing', value: '' },
     ...uploadsForClient.map((upload) => ({ label: upload.name, value: String(upload.id) })),
   ]
 
@@ -148,7 +132,7 @@ export default function JobCreate({ foremen, clients, uploads }: JobCreateProps)
         ]}
         actions={
           <ButtonLink href={ROUTES.jobs} variant="secondary" leftIcon={ArrowLeft}>
-            Back to jobs
+            Back
           </ButtonLink>
         }
       />
@@ -187,7 +171,12 @@ export default function JobCreate({ foremen, clients, uploads }: JobCreateProps)
                 />
                 <SelectField
                   id="job-upload"
-                  label="AI Takeoff PDF (optional)"
+                  label="AI Takeoff PDF*"
+                  hint={
+                    selectedClient && uploadsForClient.length > 1
+                      ? 'Filled with this client’s drawing — change it if the job is for another.'
+                      : undefined
+                  }
                   options={uploadOptions}
                   value={data.upload_id}
                   disabled={!data.project_id}
@@ -195,6 +184,28 @@ export default function JobCreate({ foremen, clients, uploads }: JobCreateProps)
                   {...(errors.upload_id ? { error: errors.upload_id } : {})}
                 />
               </div>
+
+              {/*
+                A job is the work on a drawing, so one is required — which would
+                be a dead end for a client that has none. Say so, and offer the
+                one screen that fixes it.
+              */}
+              {selectedClient && uploadsForClient.length === 0 && (
+                <Alert tone="warning" title="No drawing on record" className="mt-4">
+                  <p>
+                    {selectedClient.name} has no drawing yet, and a job is raised
+                    against one. Upload it in AI Takeoff, then come back.
+                  </p>
+                  <ButtonLink
+                    href={routeTo.uploadForProject(selectedClient.id)}
+                    variant="secondary"
+                    size="sm"
+                    className="mt-3"
+                  >
+                    Upload a drawing
+                  </ButtonLink>
+                </Alert>
+              )}
 
               {linkedEstimate && (
                 <Alert tone="info" icon={FileCheck2} title="This drawing already has an estimate" className="mt-4">
@@ -286,14 +297,6 @@ export default function JobCreate({ foremen, clients, uploads }: JobCreateProps)
               {...(errors.job_type ? { error: errors.job_type } : {})}
             />
 
-            <SelectField
-              id="job-foreman"
-              label="Foreman"
-              options={foremanOptions}
-              value={data.foreman_id}
-              onChange={(event) => update('foreman_id', event.target.value)}
-              {...(errors.foreman_id ? { error: errors.foreman_id } : {})}
-            />
 
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
               <ButtonLink href={ROUTES.jobs} variant="white">

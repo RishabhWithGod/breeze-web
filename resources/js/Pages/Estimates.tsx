@@ -15,7 +15,6 @@ import {
   Table,
   TextInput,
 } from '@/components/common'
-import { DashboardPanel, IconListRow } from '@/components/dashboard'
 import { EstimateCard } from '@/components/estimates'
 import { appLayout, PageTransition } from '@/components/layout'
 import {
@@ -30,7 +29,6 @@ import {
 import { useDisclosure } from '@/hooks'
 import type {
   Estimate,
-  FeedItem,
   Paginated,
   SharedPageProps,
   TableColumn,
@@ -65,7 +63,6 @@ export interface EstimatesProps {
   estimates: Paginated<Estimate>
   filters: EstimateFilters
   clients: readonly string[]
-  activity: readonly FeedItem[]
 }
 
 /**
@@ -78,7 +75,6 @@ export default function Estimates({
   estimates,
   filters,
   clients,
-  activity,
 }: EstimatesProps) {
   const { flash } = usePage<SharedPageProps>().props
 
@@ -89,7 +85,8 @@ export default function Estimates({
 
   // The reference screen shows its filter bar open; "More Filters" reveals the
   // secondary row beneath it.
-  const filterBar = useDisclosure(true)
+  // Closed by default: most visits are to read the list, not to narrow it.
+  const filterBar = useDisclosure()
   const moreFilters = useDisclosure()
   const deleteDialog = useDisclosure()
 
@@ -249,6 +246,16 @@ export default function Estimates({
       <section className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
         <header className="flex flex-col gap-4 border-b border-hairline grad-ocean-soft px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <h1 className="text-2xl font-bold text-white sm:text-3xl">Estimates</h1>
+
+          <Button
+            variant={filterBar.isOpen ? 'primary' : 'white'}
+            leftIcon={SlidersHorizontal}
+            aria-expanded={filterBar.isOpen}
+            onClick={filterBar.toggle}
+            className="lg:shrink-0"
+          >
+            Filters
+          </Button>
         </header>
 
         <div className="p-5 sm:p-6">
@@ -260,7 +267,7 @@ export default function Estimates({
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: MOTION.base }}
-                className="overflow-hidden"
+                className="mb-5 overflow-hidden"
               >
                 {/* Primary filter row */}
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -355,20 +362,6 @@ export default function Estimates({
             )}
           </AnimatePresence>
 
-          {/* View / Filters toggle */}
-          <div className="my-5 flex items-center justify-end gap-3">
-            <span className="text-md text-white/90">View:</span>
-            <Button
-              size="sm"
-              variant={filterBar.isOpen ? 'primary' : 'secondary'}
-              leftIcon={SlidersHorizontal}
-              aria-expanded={filterBar.isOpen}
-              onClick={filterBar.toggle}
-            >
-              Filters
-            </Button>
-          </div>
-
           {/* Action feedback */}
           <AnimatePresence initial={false}>
             {notice && (
@@ -451,14 +444,6 @@ export default function Estimates({
         </div>
       </section>
 
-      {/* ============================================ Recent activity ======== */}
-      <DashboardPanel title="Recent Activity" className="mt-6" index={1}>
-        <ul className="space-y-4">
-          {activity.map((row, index) => (
-            <IconListRow key={row.id} row={row} index={index} />
-          ))}
-        </ul>
-      </DashboardPanel>
 
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}

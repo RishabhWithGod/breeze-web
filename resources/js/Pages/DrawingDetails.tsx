@@ -1,42 +1,17 @@
 import { useState } from 'react'
 import { Head } from '@inertiajs/react'
+import { Download, FileText, Map, Sparkles } from 'lucide-react'
 import {
-  Briefcase,
-  Download,
-  FileJson,
-  FileText,
-  Map,
-  Receipt,
-  Sparkles,
-  Table2,
-} from 'lucide-react'
-import {
-  Badge,
   ButtonLink,
   Card,
   EmptyState,
   FilterTabs,
   SectionHeading,
 } from '@/components/common'
-import {
-  CircuitsPanel,
-  EngineBoqPanel,
-  EquipmentPanel,
-  PanelSchedulesPanel,
-  WireSizesPanel,
-} from '@/components/finals'
+import { EngineBoqPanel, WireSizesPanel } from '@/components/finals'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ApprovalHistoryPanel } from '@/components/review'
-import { ROUTES, routeTo } from '@/constants'
-import type {
-  ApprovalHistoryEntry,
-  CircuitRow,
-  EngineBoqLine,
-  EquipmentRow,
-  PanelScheduleRow,
-  PipelineStage,
-  WireSizeRow,
-} from '@/types'
+import { ROUTES } from '@/constants'
+import type { EngineBoqLine, PipelineStage, WireSizeRow } from '@/types'
 import { formatCurrency, formatDate, formatFileSize, formatNumber } from '@/utils'
 
 interface DrawingSummary {
@@ -69,8 +44,6 @@ interface EngineSummary {
   readonly receivedAt: string | null
   readonly reviewStatus: string
   readonly isFinalised: boolean
-  readonly detectionCount: number
-  readonly symbolCounts: Readonly<Record<string, number>>
   readonly pipelineStatus: readonly PipelineStage[]
   readonly warnings: readonly string[]
   readonly lifecycleStatistics: Readonly<Record<string, number>> | null
@@ -96,10 +69,6 @@ export interface DrawingDetailsProps {
   engine: EngineSummary | null
   boq: readonly EngineBoqLine[]
   wireSizes: readonly WireSizeRow[]
-  panelSchedules: readonly PanelScheduleRow[]
-  equipment: readonly EquipmentRow[]
-  circuits: readonly CircuitRow[]
-  history: readonly ApprovalHistoryEntry[]
 }
 
 type DocumentView = 'original' | 'annotated'
@@ -116,15 +85,10 @@ export default function DrawingDetails({
   engine,
   boq,
   wireSizes,
-  panelSchedules,
-  equipment,
-  circuits,
-  history,
 }: DrawingDetailsProps) {
   const [view, setView] = useState<DocumentView>('original')
 
   const documentUrl = view === 'annotated' ? drawing.annotatedUrl : drawing.fileUrl
-  const symbolCounts = Object.entries(engine?.symbolCounts ?? {})
 
   const facts: readonly { label: string; value: string }[] = [
     { label: 'Drawing', value: drawing.drawingName ?? '—' },
@@ -161,108 +125,18 @@ export default function DrawingDetails({
           { label: 'Drawing' },
         ]}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {drawing.fileUrl && (
-              <ButtonLink
-                href={drawing.fileUrl}
-                variant="secondary"
-                size="sm"
-                leftIcon={Download}
-              >
-                Original PDF
-              </ButtonLink>
-            )}
-            {drawing.annotatedUrl && (
-              <ButtonLink
-                href={drawing.annotatedUrl}
-                variant="secondary"
-                size="sm"
-                leftIcon={Map}
-              >
-                Annotated PDF
-              </ButtonLink>
-            )}
-            {engine && (
-              <>
-                {engine.finalJsonUrl && (
-                  <ButtonLink
-                    href={engine.finalJsonUrl}
-                    variant="ghost"
-                    size="sm"
-                    leftIcon={FileJson}
-                  >
-                    Final data (JSON)
-                  </ButtonLink>
-                )}
-                <ButtonLink
-                  href={
-                    engine.isFinalised
-                      ? routeTo.finalSymbols(engine.resultId)
-                      : routeTo.review(engine.resultId)
-                  }
-                  size="sm"
-                  leftIcon={engine.isFinalised ? Table2 : Sparkles}
-                >
-                  {engine.isFinalised ? 'Final symbols' : 'Review symbols'}
-                </ButtonLink>
-              </>
-            )}
-          </div>
+          drawing.annotatedUrl ? (
+            <ButtonLink
+              href={drawing.annotatedUrl}
+              variant="secondary"
+              size="sm"
+              leftIcon={Map}
+            >
+              Annotated PDF
+            </ButtonLink>
+          ) : undefined
         }
       />
-
-      {/* Where this drawing is in the workflow, and the one action that moves it on. */}
-      {engine && (
-        <Card padding="md" variant="spotlight" className="mb-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-white">
-                {engine.isFinalised
-                  ? engine.workJobId
-                    ? 'This drawing has been signed off and built into a job'
-                    : 'Reviewed and signed off — ready to become a job'
-                  : 'Waiting on review'}
-              </h2>
-              <p className="mt-1 text-sm text-white/90">
-                {engine.isFinalised
-                  ? 'The job and estimate were built from your reviewed counts.'
-                  : `${engine.detectionCount} symbols are waiting for approve, reject, rename or a count change.`}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {!engine.isFinalised && (
-                <ButtonLink href={routeTo.review(engine.resultId)} leftIcon={Sparkles}>
-                  Continue review
-                </ButtonLink>
-              )}
-              {engine.isFinalised && (
-                <ButtonLink href={routeTo.finalSymbols(engine.resultId)} leftIcon={Table2}>
-                  {engine.workJobId ? 'Final symbol table' : 'Create job & estimate'}
-                </ButtonLink>
-              )}
-              {engine.workJobId && (
-                <ButtonLink
-                  href={routeTo.job(engine.workJobId)}
-                  variant="secondary"
-                  leftIcon={Briefcase}
-                >
-                  {engine.workJobName}
-                </ButtonLink>
-              )}
-              {engine.estimateId && (
-                <ButtonLink
-                  href={routeTo.estimate(engine.estimateId)}
-                  variant="secondary"
-                  leftIcon={Receipt}
-                >
-                  Estimate {engine.estimateNumber}
-                </ButtonLink>
-              )}
-            </div>
-          </div>
-        </Card>
-      )}
 
       {/* Facts read off the file, before anything was interpreted. */}
       <Card padding="md" className="mb-6">
@@ -272,7 +146,10 @@ export default function DrawingDetails({
               <dt className="text-2xs tracking-wide text-white/80 uppercase">
                 {fact.label}
               </dt>
-              <dd className="mt-1 truncate text-md font-semibold text-white" title={fact.value}>
+              <dd
+                className="mt-1 truncate text-md font-semibold text-white"
+                title={fact.value}
+              >
                 {fact.value}
               </dd>
             </div>
@@ -286,220 +163,96 @@ export default function DrawingDetails({
         )}
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-        {/* The document itself. */}
-        <Card padding="lg" className="min-w-0">
-          <SectionHeading
-            as="h3"
-            title="Document"
-            subtitle={
-              view === 'annotated'
-                ? 'The drawing stamped with every reviewed decision'
-                : 'The drawing exactly as uploaded'
-            }
-            actions={
-              drawing.annotatedUrl ? (
-                <FilterTabs
-                  options={[
-                    { value: 'original', label: 'Original' },
-                    { value: 'annotated', label: 'Annotated' },
-                  ]}
-                  value={view}
-                  onChange={(next) => setView(next as DocumentView)}
-                  solid
-                />
-              ) : undefined
-            }
-          />
+      {/* The document itself. */}
+      <Card padding="lg" className="min-w-0">
+        <SectionHeading
+          as="h3"
+          title="Document"
+          subtitle={
+            view === 'annotated'
+              ? 'The drawing stamped with every reviewed decision'
+              : 'The drawing exactly as uploaded'
+          }
+          actions={
+            drawing.annotatedUrl ? (
+              <FilterTabs
+                options={[
+                  { value: 'original', label: 'Original' },
+                  { value: 'annotated', label: 'Annotated' },
+                ]}
+                value={view}
+                onChange={(next) => setView(next as DocumentView)}
+                solid
+              />
+            ) : undefined
+          }
+        />
 
-          {documentUrl ? (
-            <div className="overflow-hidden rounded-panel border border-hairline bg-white/5">
-              {/*
+        {documentUrl ? (
+          <div className="overflow-hidden rounded-panel border border-hairline bg-white/5">
+            {/*
                 The browser's own PDF viewer: pages, zoom, search and print for
                 free, and nothing is re-rendered server-side.
               */}
-              <object
-                data={documentUrl}
-                type="application/pdf"
-                className="h-[38rem] w-full"
-                aria-label={`${drawing.drawingName ?? 'Drawing'} viewer`}
-              >
-                <div className="p-6 text-center">
-                  <p className="text-md text-white/90">
-                    This browser cannot display the PDF inline.
-                  </p>
-                  <ButtonLink href={documentUrl} className="mt-4" leftIcon={Download}>
-                    Open the PDF
-                  </ButtonLink>
-                </div>
-              </object>
-            </div>
-          ) : (
-            <EmptyState
-              icon={FileText}
-              title="The stored drawing is no longer on disk"
-              description="Upload the drawing again to re-run the takeoff."
-            />
-          )}
+            <object
+              data={documentUrl}
+              type="application/pdf"
+              className="h-[38rem] w-full"
+              aria-label={`${drawing.drawingName ?? 'Drawing'} viewer`}
+            >
+              <div className="p-6 text-center">
+                <p className="text-md text-white/90">
+                  This browser cannot display the PDF inline.
+                </p>
+                <ButtonLink href={documentUrl} className="mt-4" leftIcon={Download}>
+                  Open the PDF
+                </ButtonLink>
+              </div>
+            </object>
+          </div>
+        ) : (
+          <EmptyState
+            icon={FileText}
+            title="The stored drawing is no longer on disk"
+            description="Upload the drawing again to re-run the takeoff."
+          />
+        )}
 
-          {drawing.previewUrls.length > 0 && (
-            <div className="mt-4">
-              <p className="mb-2 text-sm font-medium text-white/90">
-                Rendered pages ({drawing.previewUrls.length})
-              </p>
-              <ul className="flex gap-3 overflow-x-auto pb-2">
-                {drawing.previewUrls.map((url, index) => (
-                  <li key={url} className="shrink-0">
-                    <a href={url} target="_blank" rel="noreferrer">
-                      <img
-                        src={url}
-                        alt={`Page ${index + 1}`}
-                        loading="lazy"
-                        className="h-28 rounded-panel border border-hairline bg-white/5 object-cover"
-                      />
-                      <span className="mt-1 block text-center text-2xs text-white/75">
-                        Page {index + 1}
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </Card>
-
-        <div className="flex min-w-0 flex-col gap-6">
-          {engine ? (
-            <>
-              <Card padding="lg">
-                <SectionHeading
-                  as="h3"
-                  title="Symbol counts"
-                  subtitle={`${engine.detectionCount} symbol types detected in this drawing`}
-                />
-                <div className="flex flex-wrap gap-1.5">
-                  {symbolCounts.map(([name, count]) => (
-                    <Badge key={name} tone="neutral" size="sm">
-                      {name} × {count}
-                    </Badge>
-                  ))}
-                  {symbolCounts.length === 0 && (
-                    <span className="text-sm text-white/75">
-                      Nothing was detected on this drawing.
+        {drawing.previewUrls.length > 0 && (
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-medium text-white/90">
+              Rendered pages ({drawing.previewUrls.length})
+            </p>
+            <ul className="flex gap-3 overflow-x-auto pb-2">
+              {drawing.previewUrls.map((url, index) => (
+                <li key={url} className="shrink-0">
+                  <a href={url} target="_blank" rel="noreferrer">
+                    <img
+                      src={url}
+                      alt={`Page ${index + 1}`}
+                      loading="lazy"
+                      className="h-28 rounded-panel border border-hairline bg-white/5 object-cover"
+                    />
+                    <span className="mt-1 block text-center text-2xs text-white/75">
+                      Page {index + 1}
                     </span>
-                  )}
-                </div>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Card>
 
-                <dl className="mt-5 grid gap-4 border-t border-hairline pt-5 sm:grid-cols-2">
-                  {[
-                    {
-                      label: 'Analysed',
-                      value: engine.receivedAt ? formatDate(engine.receivedAt) : '—',
-                    },
-                  ].map((fact) => (
-                    <div key={fact.label} className="min-w-0">
-                      <dt className="text-2xs tracking-wide text-white/80 uppercase">
-                        {fact.label}
-                      </dt>
-                      <dd className="mt-0.5 truncate text-sm text-white" title={fact.value}>
-                        {fact.value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </Card>
-
-              {(engine.estimateTotals.grand_total ?? 0) > 0 && (
-                <Card padding="lg">
-                  <SectionHeading
-                    as="h3"
-                    title="Automatic pricing"
-                    subtitle="What was priced automatically, before your review"
-                  />
-                  <dl className="flex flex-col gap-2">
-                    {[
-                      ['Subtotal', engine.estimateTotals.subtotal ?? 0],
-                      [
-                        `Tax (${Math.round((engine.estimateTotals.tax_rate ?? 0) * 100)}%)`,
-                        engine.estimateTotals.tax ?? 0,
-                      ],
-                      ['Grand total', engine.estimateTotals.grand_total ?? 0],
-                    ].map(([label, value], index) => (
-                      <div
-                        key={label as string}
-                        className={
-                          index === 2
-                            ? 'flex items-center justify-between border-t border-hairline pt-2'
-                            : 'flex items-center justify-between'
-                        }
-                      >
-                        <dt
-                          className={
-                            index === 2
-                              ? 'text-md font-semibold text-white'
-                              : 'text-md text-white/90'
-                          }
-                        >
-                          {label as string}
-                        </dt>
-                        <dd
-                          className={
-                            index === 2
-                              ? 'text-lg font-bold text-white'
-                              : 'text-md text-white/90'
-                          }
-                        >
-                          {formatCurrency(value as number, 2)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <p className="mt-3 text-2xs text-white/70">
-                    {engine.estimateTotals.line_count ?? 0} priced lines ·{' '}
-                    {engine.estimateTotals.currency ?? 'USD'}
-                  </p>
-                </Card>
-              )}
-
-              {(engine.workJobId || engine.estimateId) && (
-                <Card padding="lg">
-                  <SectionHeading as="h3" title="Carried forward" subtitle="Built from this drawing" />
-                  <div className="flex flex-wrap gap-2">
-                    {engine.workJobId && (
-                      <ButtonLink
-                        href={routeTo.job(engine.workJobId)}
-                        variant="secondary"
-                        size="sm"
-                        leftIcon={Briefcase}
-                      >
-                        {engine.workJobName}
-                      </ButtonLink>
-                    )}
-                    {engine.estimateId && (
-                      <ButtonLink
-                        href={routeTo.estimate(engine.estimateId)}
-                        variant="secondary"
-                        size="sm"
-                        leftIcon={Receipt}
-                      >
-                        Estimate {engine.estimateNumber}
-                      </ButtonLink>
-                    )}
-                  </div>
-                </Card>
-              )}
-            </>
-          ) : (
-            <Card padding="lg">
-              <EmptyState
-                icon={Sparkles}
-                title="This drawing has no analysis"
-                description="No results have come back for it yet — resubmit it from the processing screen."
-              />
-            </Card>
-          )}
-        </div>
-      </div>
+      {!engine && (
+        <Card padding="lg" className="mt-6">
+          <EmptyState
+            icon={Sparkles}
+            title="This drawing has no analysis"
+            description="No results have come back for it yet — resubmit it from the processing screen."
+          />
+        </Card>
+      )}
 
       {/* Everything else the engine read off the sheet. */}
       <div className="mt-6">
@@ -510,21 +263,61 @@ export default function DrawingDetails({
         />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+      <div className="mt-6">
         <WireSizesPanel wireSizes={wireSizes} />
-        <EquipmentPanel equipment={equipment} />
-        <PanelSchedulesPanel schedules={panelSchedules} />
-        <CircuitsPanel circuits={circuits} />
       </div>
 
-      {history.length > 0 && (
+      {/*
+        Last, because it is the least trustworthy figure on the page: the
+        engine's own pricing, before anyone reviewed a count.
+      */}
+      {engine && (engine.estimateTotals.grand_total ?? 0) > 0 && (
         <Card padding="lg" className="mt-6">
           <SectionHeading
             as="h3"
-            title="Takeoff history"
-            subtitle="Everything that has happened to this drawing"
+            title="Automatic pricing"
+            subtitle="What was priced automatically, before your review"
           />
-          <ApprovalHistoryPanel entries={history} />
+          <dl className="flex flex-col gap-2">
+            {[
+              ['Subtotal', engine.estimateTotals.subtotal ?? 0],
+              [
+                `Tax (${Math.round((engine.estimateTotals.tax_rate ?? 0) * 100)}%)`,
+                engine.estimateTotals.tax ?? 0,
+              ],
+              ['Grand total', engine.estimateTotals.grand_total ?? 0],
+            ].map(([label, value], index) => (
+              <div
+                key={label as string}
+                className={
+                  index === 2
+                    ? 'flex items-center justify-between border-t border-hairline pt-2'
+                    : 'flex items-center justify-between'
+                }
+              >
+                <dt
+                  className={
+                    index === 2
+                      ? 'text-md font-semibold text-white'
+                      : 'text-md text-white/90'
+                  }
+                >
+                  {label as string}
+                </dt>
+                <dd
+                  className={
+                    index === 2 ? 'text-lg font-bold text-white' : 'text-md text-white/90'
+                  }
+                >
+                  {formatCurrency(value as number, 2)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-3 text-2xs text-white/70">
+            {engine.estimateTotals.line_count ?? 0} priced lines ·{' '}
+            {engine.estimateTotals.currency ?? 'USD'}
+          </p>
         </Card>
       )}
     </PageTransition>

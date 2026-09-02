@@ -208,6 +208,22 @@ class Job extends Model
         return $this->hasMany(JobTask::class)->orderBy('position')->orderBy('id');
     }
 
+    /**
+     * Re-reads the job's estimated hours off its tasks.
+     *
+     * The chain is: the estimate prices the labour, a task carries the hours of
+     * the lines it covers, and the job is what its tasks add up to. Always
+     * recomputed rather than adjusted, so adding, editing or removing a task
+     * all land on the same number and a second pass cannot double-count.
+     */
+    public function refreshEstimatedHours(): void
+    {
+        $hours = (float) $this->tasks()->sum('estimated_hours');
+
+        // Null, not zero: zero would claim the work takes no time.
+        $this->update(['estimated_hours' => $hours > 0 ? round($hours, 2) : null]);
+    }
+
     /** @return HasMany<JobNote, $this> */
     public function notes(): HasMany
     {

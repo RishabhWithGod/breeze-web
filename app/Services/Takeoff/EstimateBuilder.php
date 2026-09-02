@@ -175,7 +175,8 @@ class EstimateBuilder
             'client' => $job?->client ?? ($project->client === 'Unassigned' ? 'Unassigned' : $project->client),
             'project' => $job?->name ?? $project->name,
             'issued_on' => now()->toDateString(),
-            'status' => 'draft',
+            // Draft only while no job has been raised against it yet.
+            'status' => Estimate::statusFor($job),
             'markup_pct' => (float) config('ai.estimating.markup_pct'),
             // The engine reports tax as a fraction; config fills the gap.
             'tax_pct' => $this->taxPercent($engineEstimate),
@@ -217,6 +218,10 @@ class EstimateBuilder
                     'job_id' => $job->id,
                     'client' => $job->client ?? $estimate->client,
                     'project' => $job->name ?? $estimate->project,
+                    // The job it was waiting for has arrived: no longer a draft.
+                    ...($estimate->status === 'draft'
+                        ? ['status' => Estimate::STATUS_FOR_A_LIVE_JOB]
+                        : []),
                 ] : []),
             ]);
             $estimate->recalculateTotals();

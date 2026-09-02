@@ -361,6 +361,9 @@ class JobTaskController extends Controller
         // Dependencies cascade, so removing a task cannot leave a dangling edge.
         $task->delete();
 
+        // The job is the sum of its tasks, so one fewer changes the total.
+        $job?->refreshEstimatedHours();
+
         $this->settle($schedule, $job, 'task_deleted', "Task removed: {$title}");
 
         return back()->with('warning', "“{$title}” was removed from the schedule.");

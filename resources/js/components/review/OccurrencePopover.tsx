@@ -24,7 +24,6 @@ export interface OccurrencePopoverProps {
   anchorStyle: CSSProperties
   /** The whole symbol's reviewed quantity — shared across every occurrence, not just this one. */
   finalCount: number
-  locked: boolean
   onClose: () => void
 }
 
@@ -43,7 +42,6 @@ export function OccurrencePopover({
   status,
   anchorStyle,
   finalCount,
-  locked,
   onClose,
 }: OccurrencePopoverProps) {
   const [renaming, setRenaming] = useState(false)
@@ -133,18 +131,16 @@ export function OccurrencePopover({
           <p className="truncate text-md font-semibold text-white" title={name}>
             {name}
           </p>
-          {!locked && (
-            <IconButton
-              variant="ghost"
-              size="sm"
-              icon={Pencil}
-              label="Rename this symbol"
-              onClick={() => {
-                setNameDraft(name)
-                setRenaming(true)
-              }}
-            />
-          )}
+          <IconButton
+            variant="ghost"
+            size="sm"
+            icon={Pencil}
+            label="Rename this symbol"
+            onClick={() => {
+              setNameDraft(name)
+              setRenaming(true)
+            }}
+          />
         </div>
       )}
 
@@ -156,7 +152,7 @@ export function OccurrencePopover({
             size="sm"
             icon={Minus}
             label="Decrease quantity"
-            disabled={locked || finalCount <= 0}
+            disabled={finalCount <= 0}
             onClick={() => stepCount(-1)}
           />
           <span className="min-w-8 text-center text-sm font-semibold text-white">{finalCount}</span>
@@ -165,7 +161,6 @@ export function OccurrencePopover({
             size="sm"
             icon={Plus}
             label="Increase quantity"
-            disabled={locked}
             onClick={() => stepCount(1)}
           />
         </div>
@@ -177,7 +172,6 @@ export function OccurrencePopover({
           <Button
             size="sm"
             variant={isRejected ? 'secondary' : 'danger'}
-            disabled={locked}
             onClick={toggleThisOccurrence}
           >
             {isRejected ? 'Approve' : 'Reject'}
@@ -186,13 +180,13 @@ export function OccurrencePopover({
             size="sm"
             variant="secondary"
             leftIcon={Copy}
-            disabled={locked || !occurrenceKey}
+            disabled={!occurrenceKey}
             onClick={duplicateThis}
           >
             Duplicate
           </Button>
           {canDeleteThis && (
-            <Button size="sm" variant="danger" leftIcon={Trash2} disabled={locked} onClick={deleteThis}>
+            <Button size="sm" variant="danger" leftIcon={Trash2} onClick={deleteThis}>
               Delete
             </Button>
           )}

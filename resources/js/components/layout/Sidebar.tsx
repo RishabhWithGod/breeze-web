@@ -35,53 +35,82 @@ function isItemActive(item: NavItem, pathname: string): boolean {
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
 }
 
+/**
+ * The one entry to light up, which is the *longest* href that matches.
+ *
+ * Prefix matching alone lit two rows at once now that one entry's href sits
+ * under another's: `/tasks/create` matches both "Tasks" and "Add task". The
+ * more specific entry is the one you are actually on.
+ */
+function activeHref(pathname: string): string | null {
+  return SIDEBAR_ITEMS.reduce<string | null>(
+    (best, item) =>
+      isItemActive(item, pathname) && (best === null || item.href.length > best.length)
+        ? item.href
+        : best,
+    null,
+  )
+}
+
 /** Current path, without the query string. */
 function usePathname(): string {
   const { url } = usePage()
   return url.split('?')[0] ?? url
 }
 
+interface SidebarLinkProps {
+  item: NavItem
+  isActive: boolean
+  onNavigate?: () => void
+}
+
+/** One row of the rail. Every entry is the same row — no nesting, no variants. */
+function SidebarLink({ item, isActive, onNavigate }: SidebarLinkProps) {
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      aria-current={isActive ? 'page' : undefined}
+      className={cn(
+        ITEM_BASE,
+        'text-white',
+        isActive ? 'grad-midnight text-white' : 'hover:bg-white/8 hover:text-brand',
+      )}
+    >
+      {isActive && <span className="absolute inset-y-0 left-0 w-1 bg-brand" aria-hidden />}
+      <item.icon size={20} aria-hidden className={cn('shrink-0', isActive && 'text-brand')} />
+      <span className="truncate">{item.label}</span>
+      {item.badge ? (
+        <span className="ml-auto grid min-w-6 place-items-center rounded-full bg-status-danger px-1.5 py-0.5 text-2xs font-bold text-white">
+          {item.badge}
+        </span>
+      ) : null}
+    </Link>
+  )
+}
+
 function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname()
+  const active = activeHref(pathname)
 
   return (
-    <nav aria-label="Main navigation" className="flex-1 overflow-y-auto py-2">
+    // `overscroll-contain` keeps a flick at the end of the list from scrolling
+    // the page behind it; the bottom padding stops the last entry sitting hard
+    // against the window edge once the rail is long enough to scroll.
+    <nav
+      aria-label="Main navigation"
+      className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain py-2 pb-6"
+    >
       <ul>
-        {SIDEBAR_ITEMS.map((item: NavItem) => {
-          const isActive = isItemActive(item, pathname)
-
-          return (
-            <li key={item.label}>
-              <Link
-                href={item.href}
-                onClick={onNavigate}
-                aria-current={isActive ? 'page' : undefined}
-                className={cn(
-                  ITEM_BASE,
-                  'text-white',
-                  isActive
-                    ? 'grad-midnight text-white'
-                    : 'hover:bg-white/8 hover:text-brand',
-                )}
-              >
-                {isActive && (
-                  <span className="absolute inset-y-0 left-0 w-1 bg-brand" aria-hidden />
-                )}
-                <item.icon
-                  size={20}
-                  aria-hidden
-                  className={cn('shrink-0', isActive && 'text-brand')}
-                />
-                <span className="truncate">{item.label}</span>
-                {item.badge ? (
-                  <span className="ml-auto grid min-w-6 place-items-center rounded-full bg-status-danger px-1.5 py-0.5 text-2xs font-bold text-white">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </Link>
-            </li>
-          )
-        })}
+        {SIDEBAR_ITEMS.map((item: NavItem) => (
+          <li key={item.label}>
+            <SidebarLink
+              item={item}
+              isActive={item.href === active}
+              onNavigate={onNavigate}
+            />
+          </li>
+        ))}
       </ul>
     </nav>
   )

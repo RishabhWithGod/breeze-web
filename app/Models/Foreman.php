@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Foreman extends Model
@@ -11,7 +10,21 @@ class Foreman extends Model
     /** Laravel would otherwise pluralise this to "foremans". */
     protected $table = 'foremen';
 
-    protected $fillable = ['name', 'initials'];
+    protected $fillable = [
+        'name',
+        'initials',
+        'phone',
+        'email',
+        'licence_number',
+        'started_on',
+        'notes',
+    ];
+
+    /** @return array<string, string> */
+    protected function casts(): array
+    {
+        return ['started_on' => 'date'];
+    }
 
     /** @return HasMany<Job, $this> */
     public function jobs(): HasMany
@@ -19,9 +32,9 @@ class Foreman extends Model
         return $this->hasMany(Job::class);
     }
 
-    /** @return BelongsToMany<JobTask, $this> */
-    public function tasks(): BelongsToMany
+    /** @return HasMany<JobTask, $this> */
+    public function tasks(): HasMany
     {
-        return $this->belongsToMany(JobTask::class, 'job_task_foremen');
+        return $this->hasMany(JobTask::class);
     }
 }

@@ -29,7 +29,7 @@ class EstimateDetailController extends Controller
 {
     public function __construct(private readonly ClientDirectory $clients) {}
 
-    public function show(Estimate $estimate): Response
+    public function show(Request $request, Estimate $estimate): Response
     {
         $estimate->load([
             'job', 'takeoffProject', 'items',
@@ -70,6 +70,16 @@ class EstimateDetailController extends Controller
                     ? route('reviews.show', $estimate->ai_result_id)
                     : null,
             ],
+            /*
+             * The roadmap belongs to the takeoff flow, and this screen is
+             * reached from outside it too — from a job's estimates list, from
+             * the estimates index. Only the flow's own links say so, so opening
+             * an estimate to read it does not claim to be a step in anything.
+             */
+            'inFlow' => $request->boolean('flow'),
+            /** Where Back goes — see `backUrl()`. */
+            'backUrl' => $this->backUrl($request, $estimate),
+
             'items' => EstimateItemResource::collection($estimate->items)->resolve(),
             'sections' => EstimateBuilder::summarise($estimate),
             'totals' => EstimateBuilder::totalsFor($estimate),
@@ -111,12 +121,51 @@ class EstimateDetailController extends Controller
     }
 
     /**
+     * The estimate's own address, carrying the origin when it is a real one.
+     *
+     * @return array<string, mixed>
+     */
+    private function showParams(Request $request, Estimate $estimate): array
+    {
+        return array_filter([
+            'estimate' => $estimate->id,
+            'from_job' => $request->integer('from_job') === $estimate->job_id
+                ? $estimate->job_id
+                : null,
+        ]);
+    }
+
+    /**
+     * Where Back goes from an estimate.
+     *
+     * The screen is reached from three places and Back has to mean the one it
+     * was actually reached from. A job's own list says so with `from_job`,
+     * checked against the estimate rather than trusted — an id that does not
+     * own this estimate is somebody guessing at a URL, not navigation.
+     */
+    private function backUrl(Request $request, Estimate $estimate): string
+    {
+        $fromJob = $request->integer('from_job') ?: null;
+
+        if ($fromJob !== null && $fromJob === $estimate->job_id) {
+            return route('jobs.show', $fromJob);
+        }
+
+        // In the flow, the step before is the review these numbers came from.
+        if ($request->boolean('flow') && $estimate->takeoffProject?->drawing_name) {
+            return route('reviews.show', $estimate->ai_result_id);
+        }
+
+        return route('estimates.index');
+    }
+
+    /**
      * Full-page edit form for the estimate's header.
      *
      * A screen rather than an inline panel, matching how a job is edited: the
      * detail screen stays a readable record, and changes are a deliberate step.
      */
-    public function edit(Estimate $estimate): Response
+    public function edit(Request $request, Estimate $estimate): Response
     {
         $estimate->load(['job', 'takeoffProject', 'aiResult']);
 
@@ -140,6 +189,18 @@ class EstimateDetailController extends Controller
                     : null,
             ],
             'statuses' => Estimate::STATUSES,
+            /*
+             * Back from editing is the estimate itself, carrying whatever
+             * brought us here — so the chain out stays one screen at a time.
+             */
+            'backUrl' => route('estimates.show', $this->showParams($request, $estimate)),
+            /*
+             * The form posts here rather than to a bare `/estimates/{id}`, so
+             * the origin survives the save — a PUT carries no query string of
+             * its own to inherit it from.
+             */
+            'saveUrl' => route('estimates.update', $this->showParams($request, $estimate)),
+
             // Shown beside the rate fields so the effect of a change is visible.
             'totals' => EstimateBuilder::totalsFor($estimate),
             'clients' => $this->clients->options(),
@@ -178,8 +239,13 @@ class EstimateDetailController extends Controller
             $this->notifyOfStatusChange($request, $estimate);
         }
 
+        /*
+         * Saving keeps whatever brought you here. Without it the trail ends at
+         * the save: Back from the estimate would drop you in the estimates list
+         * rather than the job whose list you opened it from.
+         */
         return redirect()
-            ->route('estimates.show', $estimate)
+            ->route('estimates.show', $this->showParams($request, $estimate))
             ->with('success', "Estimate {$estimate->number} updated.");
     }
 

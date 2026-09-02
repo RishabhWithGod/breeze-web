@@ -15,7 +15,6 @@ import {
   StatusChip,
   Table,
 } from '@/components/common'
-import { DashboardPanel, IconListRow } from '@/components/dashboard'
 import { ProjectHistoryCard } from '@/components/history'
 import { appLayout, PageTransition } from '@/components/layout'
 import {
@@ -28,7 +27,6 @@ import {
 } from '@/constants'
 import { useDisclosure } from '@/hooks'
 import type {
-  FeedItem,
   Paginated,
   SharedPageProps,
   TableColumn,
@@ -38,7 +36,6 @@ import {
   TAKEOFF_STATUS_LABEL,
   TAKEOFF_STATUS_TONE,
   formatDate,
-  formatNumber,
 } from '@/utils'
 
 interface HistoryFilters {
@@ -50,7 +47,6 @@ interface HistoryFilters {
 export interface HistoryProps {
   projects: Paginated<TakeoffHistoryRow>
   filters: HistoryFilters
-  activity: readonly FeedItem[]
 }
 
 /**
@@ -60,7 +56,7 @@ export interface HistoryProps {
  * database does the work and every view is a shareable URL. Deletes are soft,
  * which is what makes "Undo" a real restore rather than a re-insert.
  */
-export default function History({ projects, filters, activity }: HistoryProps) {
+export default function History({ projects, filters }: HistoryProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   const [query, setQuery] = useState(filters.search)
@@ -150,14 +146,6 @@ export default function History({ projects, filters, activity }: HistoryProps) {
           tone={TAKEOFF_STATUS_TONE[row.status]}
           label={TAKEOFF_STATUS_LABEL[row.status]}
         />
-      ),
-    },
-    {
-      key: 'items',
-      header: 'Items',
-      width: 'w-24',
-      render: (row) => (
-        <span className="tabular-nums text-white">{formatNumber(row.items)}</span>
       ),
     },
     {
@@ -298,7 +286,7 @@ export default function History({ projects, filters, activity }: HistoryProps) {
                 />
               </div>
 
-              {/* Card view — below xl, so status, items and the actions stay
+              {/* Card view — below xl, so status and the actions stay
                   reachable without scrolling the table sideways. */}
               <ul className="space-y-3 xl:hidden">
                 {rows.map((row, rowIndex) => (
@@ -328,15 +316,6 @@ export default function History({ projects, filters, activity }: HistoryProps) {
           />
         </div>
       </section>
-
-      {/* ============================================ Recent activity ======== */}
-      <DashboardPanel title="Recent Activity" className="mt-6" index={1}>
-        <ul className="space-y-4">
-          {activity.map((row, index) => (
-            <IconListRow key={row.id} row={row} index={index} />
-          ))}
-        </ul>
-      </DashboardPanel>
 
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}

@@ -83,7 +83,7 @@ export default function ProjectCreate({ clients }: ProjectCreateProps) {
         ]}
         actions={
           <ButtonLink href={ROUTES.projects} variant="secondary" leftIcon={ArrowLeft}>
-            Back to clients
+            Back
           </ButtonLink>
         }
       />

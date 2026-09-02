@@ -1,5 +1,5 @@
 import { Head, useForm } from '@inertiajs/react'
-import { ArrowLeft, Briefcase, FileText, Save } from 'lucide-react'
+import { ArrowLeft, Save } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -36,6 +36,10 @@ interface EditableEstimate {
 export interface EstimateEditProps {
   estimate: EditableEstimate
   statuses: readonly string[]
+  /** Where Back goes — the estimate, carrying whatever brought us to it. */
+  backUrl: string
+  /** Where the form saves to. Carries the origin so it survives the save. */
+  saveUrl: string
   totals: EstimateTotals
   /** The client register. Clients are projects, so this is one list, not two. */
   clients: readonly ClientOption[]
@@ -56,6 +60,8 @@ export interface EstimateEditProps {
 export default function EstimateEdit({
   estimate,
   statuses,
+  backUrl,
+  saveUrl,
   totals,
   clients,
 }: EstimateEditProps) {
@@ -70,7 +76,7 @@ export default function EstimateEdit({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    form.put(routeTo.estimate(estimate.id))
+    form.put(saveUrl)
   }
 
   /**
@@ -108,36 +114,9 @@ export default function EstimateEdit({
           { label: 'Edit' },
         ]}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <ButtonLink
-              href={routeTo.estimate(estimate.id)}
-              variant="ghost"
-              size="sm"
-              leftIcon={ArrowLeft}
-            >
-              Back to estimate
-            </ButtonLink>
-            {estimate.drawingUrl && (
-              <ButtonLink
-                href={estimate.drawingUrl}
-                variant="secondary"
-                size="sm"
-                leftIcon={FileText}
-              >
-                PDF details
-              </ButtonLink>
-            )}
-            {estimate.jobId && (
-              <ButtonLink
-                href={routeTo.job(estimate.jobId)}
-                variant="ghost"
-                size="sm"
-                leftIcon={Briefcase}
-              >
-                {estimate.jobName}
-              </ButtonLink>
-            )}
-          </div>
+          <ButtonLink href={backUrl} variant="secondary" size="sm" leftIcon={ArrowLeft}>
+            Back
+          </ButtonLink>
         }
       />
 
@@ -224,7 +203,7 @@ export default function EstimateEdit({
             <Button type="submit" leftIcon={Save} isLoading={form.processing}>
               Save changes
             </Button>
-            <ButtonLink href={routeTo.estimate(estimate.id)} variant="secondary">
+            <ButtonLink href={backUrl} variant="secondary">
               Cancel
             </ButtonLink>
           </div>

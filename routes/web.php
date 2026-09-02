@@ -16,6 +16,7 @@ use App\Http\Controllers\DrawingDetailsController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\EstimateDetailController;
 use App\Http\Controllers\FinalTakeoffController;
+use App\Http\Controllers\ForemanController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceDetailController;
@@ -42,6 +43,7 @@ use App\Http\Controllers\SecuritySettingsController;
 use App\Http\Controllers\StatePageController;
 use App\Http\Controllers\SymbolReviewController;
 use App\Http\Controllers\TakeoffHistoryController;
+use App\Http\Controllers\TaskListController;
 use App\Http\Controllers\TimeEntryController;
 use App\Http\Controllers\TimerController;
 use App\Http\Controllers\TimeTrackingController;
@@ -263,6 +265,27 @@ Route::middleware('auth')->group(function () {
     | Job management. `create` and `bulk` are declared before `{job}` so they are
     | never swallowed by the wildcard.
     */
+    /*
+     * Tasks and foremen across every job — the questions you have before you
+     * know which job you are looking for. Both sit under Jobs in the rail.
+     */
+    Route::get('tasks', [TaskListController::class, 'index'])->name('tasks.index');
+    Route::get('tasks/create', [TaskListController::class, 'create'])->name('tasks.create');
+    // Editing a task is the setup screen again, aimed at one row — same fields,
+    // same line picker, so the plan and the estimate stay in step.
+    Route::get('tasks/{task}/edit', [JobTaskSetupController::class, 'edit'])->name('tasks.edit');
+    Route::put('tasks/{task}', [JobTaskSetupController::class, 'update'])->name('tasks.edit.update');
+    Route::delete('tasks/{task}', [JobTaskSetupController::class, 'destroy'])->name('tasks.remove');
+
+    Route::get('foremen', [ForemanController::class, 'index'])->name('foremen.index');
+    Route::get('foremen/create', [ForemanController::class, 'create'])->name('foremen.create');
+    // After `create`, so the literal segment is not read as a foreman's id.
+    Route::get('foremen/{foreman}', [ForemanController::class, 'show'])->name('foremen.show');
+    Route::get('foremen/{foreman}/edit', [ForemanController::class, 'edit'])->name('foremen.edit');
+    Route::put('foremen/{foreman}', [ForemanController::class, 'update'])->name('foremen.update');
+    Route::delete('foremen/{foreman}', [ForemanController::class, 'destroy'])->name('foremen.destroy');
+    Route::post('foremen', [ForemanController::class, 'store'])->name('foremen.store');
+
     Route::get('jobs', [JobController::class, 'index'])->name('jobs.index');
     Route::get('jobs/create', [JobController::class, 'create'])->name('jobs.create');
     Route::post('jobs', [JobController::class, 'store'])->name('jobs.store');

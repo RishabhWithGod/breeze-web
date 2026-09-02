@@ -2,9 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\FeedItemResource;
 use App\Http\Resources\ProjectSummaryResource;
-use App\Models\FeedItem;
 use App\Models\Project;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +18,7 @@ class TakeoffHistoryController extends Controller
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
             'status' => ['nullable', Rule::in(['all', 'draft', 'completed', 'converted'])],
-            'sort' => ['nullable', Rule::in(['date-desc', 'date-asc', 'name-asc', 'items-desc'])],
+            'sort' => ['nullable', Rule::in(['date-desc', 'date-asc', 'name-asc'])],
         ]);
 
         $status = $filters['status'] ?? 'all';
@@ -33,7 +31,6 @@ class TakeoffHistoryController extends Controller
             ->tap(fn ($query) => match ($sort) {
                 'date-asc' => $query->oldest(),
                 'name-asc' => $query->orderBy('name'),
-                'items-desc' => $query->orderByDesc('items_count'),
                 default => $query->latest(),
             })
             ->paginate(config('takeoff.per_page'))
@@ -46,9 +43,6 @@ class TakeoffHistoryController extends Controller
                 'status' => $status,
                 'sort' => $sort,
             ],
-            'activity' => FeedItemResource::collection(
-                FeedItem::scope(FeedItem::HISTORY_ACTIVITY)->get()
-            )->resolve(),
         ]);
     }
 

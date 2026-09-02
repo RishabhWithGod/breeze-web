@@ -6,6 +6,7 @@ use App\Models\AiJob;
 use App\Models\AiResult;
 use App\Models\Job;
 use App\Models\Project;
+use App\Models\Upload;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -201,6 +202,7 @@ class AddressLookupTest extends TestCase
             'name' => 'Harborview Fit-out',
             'project_id' => $client->id,
             'address_ids' => [$site->id],
+            'upload_id' => $this->makeDrawing($client)->id,
         ])->assertSessionHas('success');
 
         $job = Job::latest('id')->firstOrFail();
@@ -229,6 +231,7 @@ class AddressLookupTest extends TestCase
             'name' => 'Harborview Fit-out',
             'project_id' => $client->id,
             'address_ids' => [$theirSite->id],
+            'upload_id' => $this->makeDrawing($client)->id,
         ])->assertSessionHasErrors('address_ids');
 
         $this->assertSame(0, Job::count());
@@ -362,5 +365,17 @@ class AddressLookupTest extends TestCase
                 ->where('clients.0.addresses.0.isPrimary', true)
                 // Label and address as one line, so a list needs no formatting.
                 ->where('clients.0.addresses.1.display', 'Warehouse — 9 Dock Road'));
+    }
+
+    /** A drawing on the client's record — a job is raised against one. */
+    private function makeDrawing(Project $client): Upload
+    {
+        return $client->uploads()->create([
+            'user_id' => $this->user->id,
+            'name' => 'E-101.pdf',
+            'format' => 'PDF',
+            'size_bytes' => 1024,
+            'status' => 'completed',
+        ]);
     }
 }
