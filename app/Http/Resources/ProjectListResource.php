@@ -29,7 +29,6 @@ class ProjectListResource extends JsonResource
             'discipline' => $this->discipline,
             'projectType' => $this->project_type,
             'status' => $this->status,
-            'dueDate' => $this->due_date?->toDateString(),
             // Set by `withCount('uploads')`; counted on demand otherwise.
             'documentsCount' => (int) ($this->uploads_count ?? $this->uploads()->count()),
             'itemsCount' => $this->items_count,

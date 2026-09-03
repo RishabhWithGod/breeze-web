@@ -161,7 +161,7 @@ class AddressLookupTest extends TestCase
     {
         $this->actingAs($this->user)->post('/projects', [
             'name' => 'Rosewood Clinic',
-            'addresses' => [['address' => 'Behind the old mill, Route 9']],
+            'addresses' => [['label' => 'Clinic', 'address' => 'Behind the old mill, Route 9']],
         ])->assertSessionHasNoErrors();
 
         $project = Project::sole();
@@ -177,7 +177,7 @@ class AddressLookupTest extends TestCase
         // located", it is wrong — so it never reaches the database.
         $this->actingAs($this->user)->post('/projects', [
             'name' => 'Harborview Data Hall',
-            'addresses' => [['address' => '41 Harbor Way', 'latitude' => 47.6062]],
+            'addresses' => [['label' => 'Main hall', 'address' => '41 Harbor Way', 'latitude' => 47.6062]],
         ])->assertSessionHasErrors('addresses.0.longitude');
 
         $this->assertDatabaseCount('projects', 0);
@@ -279,12 +279,56 @@ class AddressLookupTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->post(route('projects.addresses.store', $client), ['address' => '9 Dock Road'])
+            ->post(route('projects.addresses.store', $client), [
+                'label' => 'Dock building',
+                'address' => '9 Dock Road',
+            ])
             ->assertSessionHasNoErrors();
 
         $this->assertTrue($client->addresses()->sole()->is_primary);
         // Mirrored onto the client, which is what every list reads.
         $this->assertSame('9 Dock Road', $client->refresh()->location);
+    }
+
+    public function test_a_job_runs_at_one_site(): void
+    {
+        $client = Project::create([
+            'user_id' => $this->user->id,
+            'name' => 'Harborview Data Hall',
+            'client' => 'Harborview Data Hall',
+            'status' => 'draft',
+        ]);
+        $first = $client->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
+        $second = $client->addresses()->create(['address' => '9 Dock Road', 'position' => 1]);
+
+        // The screen offers radios; the rule has to agree with it, or a
+        // hand-made request could still put a job at two addresses.
+        $this->actingAs($this->user)->post('/jobs', [
+            'name' => 'Harborview Fit-out',
+            'project_id' => $client->id,
+            'address_ids' => [$first->id, $second->id],
+            'upload_id' => $this->makeDrawing($client)->id,
+        ])->assertSessionHasErrors('address_ids');
+
+        $this->assertSame(0, Job::count());
+    }
+
+    public function test_a_site_has_to_be_named(): void
+    {
+        $client = Project::create([
+            'user_id' => $this->user->id,
+            'name' => 'Rosewood Clinic',
+            'client' => 'Rosewood Clinic',
+            'status' => 'draft',
+        ]);
+
+        // A client with three sites is read by the names people call them,
+        // and "9 Dock Road" is not one of those names.
+        $this->actingAs($this->user)
+            ->post(route('projects.addresses.store', $client), ['address' => '9 Dock Road'])
+            ->assertSessionHasErrors('label');
+
+        $this->assertSame(0, $client->addresses()->count());
     }
 
     public function test_a_site_cannot_be_added_to_someone_elses_client(): void
@@ -294,7 +338,10 @@ class AddressLookupTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->post(route('projects.addresses.store', $theirs), ['address' => '9 Dock Road'])
+            ->post(route('projects.addresses.store', $theirs), [
+                'label' => 'Dock building',
+                'address' => '9 Dock Road',
+            ])
             ->assertForbidden();
 
         $this->assertSame(0, $theirs->addresses()->count());
@@ -306,6 +353,7 @@ class AddressLookupTest extends TestCase
             'user_id' => $this->user->id,
             'name' => 'Harborview Data Hall',
             'client' => 'Harborview Data Hall',
+            'project_type' => 'commercial',
             'status' => 'completed',
         ]);
         $client->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true, 'position' => 0]);
@@ -339,7 +387,10 @@ class AddressLookupTest extends TestCase
                 ->where('clients.0.name', 'Harborview Data Hall')
                 ->has('clients.0.addresses', 2)
                 ->where('clients.0.addresses.0.isPrimary', true)
-                ->where('clients.0.addresses.1.display', 'Warehouse — 9 Dock Road'));
+                ->where('clients.0.addresses.1.display', 'Warehouse — 9 Dock Road')
+                // Recorded on the client, so the job form fills it in rather
+                // than asking the same question twice.
+                ->where('clients.0.projectType', 'commercial'));
     }
 
     public function test_the_create_job_screen_offers_every_site_a_client_has(): void

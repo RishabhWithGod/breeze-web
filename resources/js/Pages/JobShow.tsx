@@ -6,8 +6,6 @@ import {
   ArrowLeft,
   Building2,
   CalendarDays,
-  Check,
-  HardHat,
   MapPin,
   PencilLine,
   Plus,
@@ -26,7 +24,6 @@ import {
   StatusChip,
 } from '@/components/common'
 import {
-  ForemanBadge,
   JobAttachmentsPanel,
   JobEstimatesPanel,
   JobNotesPanel,
@@ -115,14 +112,6 @@ export default function JobShow({ job, canPlanWork }: JobShowProps) {
             >
               Edit
             </ButtonLink>
-            {/*
-              Every panel on this page writes through its own controller and saves
-              immediately, so there is nothing to submit here — this just closes out
-              the setup and sends the user back to the list.
-            */}
-            <ButtonLink href={ROUTES.jobs} leftIcon={Check}>
-              Finish
-            </ButtonLink>
           </>
         }
       />
@@ -195,22 +184,15 @@ export default function JobShow({ job, canPlanWork }: JobShowProps) {
               </div>
             </dl>
 
-            <div className="mt-5 flex items-center gap-3">
-              <span className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
-                <HardHat size={13} aria-hidden className="text-brand" />
-                Foreman
-              </span>
-              {job.foreman ? (
-                <ForemanBadge foreman={job.foreman} />
-              ) : (
-                <span className="text-md text-white/70">Unassigned</span>
-              )}
-            </div>
-
             {job.description && (
-              <p className="mt-5 max-w-3xl text-md whitespace-pre-line text-white/90">
-                {job.description}
-              </p>
+              <div className="mt-5 max-w-3xl border-t border-hairline pt-4">
+                <p className="text-2xs tracking-wide text-white/70 uppercase">
+                  Description
+                </p>
+                <p className="mt-1 text-md whitespace-pre-line text-white/90">
+                  {job.description}
+                </p>
+              </div>
             )}
           </div>
 

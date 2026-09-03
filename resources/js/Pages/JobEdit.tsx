@@ -16,7 +16,7 @@ import {
 import { JobSitePicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_STATUS_OPTIONS, JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
-import type { ClientOption, JobDetail, JobForeman, JobStatus, JobType } from '@/types'
+import type { ClientOption, JobDetail, JobStatus, JobType } from '@/types'
 
 /** Edit payload — snake_case to match UpdateJobRequest. */
 interface JobEditForm {
@@ -31,7 +31,6 @@ interface JobEditForm {
   start_date: string
   end_date: string
   budget: string
-  foreman_id: string
   create_estimate: boolean
   assign_team: boolean
   notify_client: boolean
@@ -39,7 +38,6 @@ interface JobEditForm {
 
 export interface JobEditProps {
   job: JobDetail
-  foremen: readonly JobForeman[]
   /** The client register. Clients are projects, so this is one list, not two. */
   clients: readonly ClientOption[]
 }
@@ -55,7 +53,7 @@ function toDateInput(iso: string | null): string {
  * Puts to UpdateJobRequest. Status changes made here are recorded in the status
  * history by the controller, exactly as they are from the detail screen.
  */
-export default function JobEdit({ job, foremen, clients }: JobEditProps) {
+export default function JobEdit({ job, clients }: JobEditProps) {
   const { data, setData, put, processing, errors, hasErrors, clearErrors } =
     useForm<JobEditForm>({
       name: job.name,
@@ -67,7 +65,6 @@ export default function JobEdit({ job, foremen, clients }: JobEditProps) {
       start_date: toDateInput(job.startDate),
       end_date: toDateInput(job.endDate),
       budget: job.budget === null ? '' : String(job.budget),
-      foreman_id: job.foreman ? String(job.foreman.id) : '',
       create_estimate: job.options.createEstimate,
       assign_team: job.options.assignTeam,
       notify_client: job.options.notifyClient,
@@ -105,14 +102,6 @@ export default function JobEdit({ job, foremen, clients }: JobEditProps) {
       ? { label: `${job.client} — not yet a client record`, value: '' }
       : { label: 'Select client', value: '' },
     ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
-  ]
-
-  const foremanOptions = [
-    { label: 'Unassigned', value: '' },
-    ...foremen.map((foreman) => ({
-      label: foreman.name,
-      value: String(foreman.id),
-    })),
   ]
 
   return (
@@ -170,7 +159,7 @@ export default function JobEdit({ job, foremen, clients }: JobEditProps) {
 
             {/* Same picker as Create Job, so a site can be added from here too. */}
             <fieldset>
-              <legend className="mb-1 text-md font-medium text-white">Site(s)*</legend>
+              <legend className="mb-1 text-md font-medium text-white">Site Location*</legend>
               <JobSitePicker
                 client={selectedClient}
                 value={data.address_ids}
@@ -191,14 +180,6 @@ export default function JobEdit({ job, foremen, clients }: JobEditProps) {
                 value={data.status}
                 onChange={(event) => update('status', event.target.value as JobStatus)}
                 {...(errors.status ? { error: errors.status } : {})}
-              />
-              <SelectField
-                id="job-foreman"
-                label="Foreman"
-                options={foremanOptions}
-                value={data.foreman_id}
-                onChange={(event) => update('foreman_id', event.target.value)}
-                {...(errors.foreman_id ? { error: errors.foreman_id } : {})}
               />
               <TextInput
                 id="job-budget"

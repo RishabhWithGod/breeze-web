@@ -37,6 +37,14 @@ export interface ActiveTimer {
 }
 
 /** Props present on every page. */
+/** Where to pick a half-finished takeoff back up. */
+export interface ResumableTakeoff {
+  readonly resumeUrl: string
+  /** The step it is up to — "Review", "Estimate", "Job", "Tasks". */
+  readonly stage: string
+  readonly projectName: string
+}
+
 export interface SharedPageProps {
   readonly appName: string
   /** False when no geocoder is configured — the address field says so. */
@@ -45,6 +53,11 @@ export interface SharedPageProps {
   readonly notifications: readonly AppNotification[]
   readonly unreadNotificationCount: number
   readonly activeTimer: ActiveTimer | null
+  /**
+   * The takeoff this person is part-way through, when they are not on one of
+   * its own screens. Null once it is finished, dismissed, or never started.
+   */
+  readonly takeoffFlow: ResumableTakeoff | null
   readonly flash: FlashMessages
   readonly errors: Record<string, string>
   /** Set by Inertia on every response. */

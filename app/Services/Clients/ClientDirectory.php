@@ -28,11 +28,10 @@ class ClientDirectory
     {
         return Project::with(['addresses', 'selectedUpload', 'primaryUpload'])
             ->orderBy('name')
-            ->get(['id', 'name', 'due_date', 'project_type', 'selected_upload_id'])
+            ->get(['id', 'name', 'project_type', 'selected_upload_id'])
             ->map(fn (Project $client) => [
                 'id' => $client->id,
                 'name' => $client->name,
-                'dueDate' => $client->due_date?->toDateString(),
                 'projectType' => $client->project_type,
                 /*
                  * The drawing this client's work is taken off — the one chosen

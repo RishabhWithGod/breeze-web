@@ -14,6 +14,7 @@ use App\Services\Export\AnnotatedPdfWriter;
 use App\Services\Export\SymbolExporter;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\JobFactory;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response as ResponseFactory;
@@ -41,6 +42,11 @@ class FinalTakeoffController extends Controller
     ): Response {
         $this->authorize('view', $result);
 
+        // Remembered so the flow can be left and picked up again.
+        if ($result->project !== null) {
+            app(TakeoffFlow::class)->remember($result->project);
+        }
+
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
             'source' => ['nullable', Rule::in(['all', 'template', 'vector', 'vision', 'ocr'])],
@@ -60,7 +66,7 @@ class FinalTakeoffController extends Controller
             ->withQueryString();
 
         $result->load([
-            'project.addresses', 'workJob', 'estimate', 'upload',
+            'project.addresses', 'workJob.addresses', 'estimate', 'upload',
             'wireSizes', 'panelSchedules', 'equipment', 'circuits', 'boqLines',
         ]);
         $payload = $result->final_payload ?? [];
@@ -77,6 +83,23 @@ class FinalTakeoffController extends Controller
                 'pageCount' => $result->page_count,
                 'workJobId' => $result->work_job_id,
                 'workJobName' => $result->workJob?->name,
+                /*
+                 * The job as it stands, so the form on this screen is the same
+                 * form after it is raised as before — coming back to this step
+                 * shows what was filled in, not a card about it.
+                 */
+                'job' => $result->workJob === null ? null : [
+                    'name' => $result->workJob->name,
+                    'projectId' => $result->workJob->project_id,
+                    'addressIds' => $result->workJob->addresses->pluck('id')->all(),
+                    'description' => $result->workJob->description,
+                    'jobType' => $result->workJob->job_type,
+                    'startDate' => $result->workJob->start_date?->toDateString(),
+                    'endDate' => $result->workJob->end_date?->toDateString(),
+                    'budget' => $result->workJob->budget === null
+                        ? null
+                        : (float) $result->workJob->budget,
+                ],
                 'estimateId' => $result->estimate_id,
                 'estimateNumber' => $result->estimate?->number,
                 'hasAnnotatedPdf' => $store->exists($result->upload?->annotated_path),
@@ -256,7 +279,8 @@ class FinalTakeoffController extends Controller
              * written from the first one picked rather than typed.
              */
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
-            'address_ids' => ['nullable', 'array', 'max:25'],
+            // One site per job — the same rule the standalone job form applies.
+            'address_ids' => ['nullable', 'array', 'max:1'],
             'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
@@ -276,13 +300,23 @@ class FinalTakeoffController extends Controller
             ? collect()
             : $sites->resolve($clientId, $addressIds);
 
+        // A job raised from this takeoff already: the form on this screen is
+        // then that job's own, so re-submitting it saves the edits rather than
+        // quietly doing nothing. `fromFinalJson` only refreshes the counts.
+        $existed = $result->work_job_id !== null;
+
+        $typed = array_filter($attributes, fn ($value) => filled($value));
+
         try {
-            $job = $factory->fromFinalJson($result, $request->user(), array_filter(
-                $attributes,
-                fn ($value) => filled($value),
-            ));
+            $job = $factory->fromFinalJson($result, $request->user(), $typed);
         } catch (RuntimeException $e) {
             return back()->with('warning', $e->getMessage());
+        }
+
+        if ($existed && $typed !== []) {
+            // The client's name is a snapshot on the job, so changing the client
+            // has to rewrite it — every list reads that column, not the join.
+            $job->update(app(ClientDirectory::class)->withClientSnapshot($typed));
         }
 
         if ($addresses->isNotEmpty()) {

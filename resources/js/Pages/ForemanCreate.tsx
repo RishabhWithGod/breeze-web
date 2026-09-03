@@ -69,7 +69,6 @@ export default function ForemanCreate() {
 
       <PageHeader
         title="Add Foreman"
-        subtitle="Someone who runs work on site and can be handed tasks."
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
           { label: 'Foremen', href: ROUTES.foremen },
@@ -92,10 +91,7 @@ export default function ForemanCreate() {
         </AnimatePresence>
 
         <Card padding="lg">
-          <CardHeader
-            title="Foreman details"
-            subtitle="Who they are, and how the office reaches them"
-          />
+          <CardHeader title="Foreman details" />
 
           <div className="space-y-6">
             <TextInput
@@ -123,7 +119,6 @@ export default function ForemanCreate() {
                 label="Licence Number"
                 placeholder="e.g. EC-4471"
                 autoComplete="off"
-                hint="What lets them sign off work on site."
                 value={data.licence_number}
                 onChange={(event) => update('licence_number', event.target.value)}
                 {...(errors.licence_number ? { error: errors.licence_number } : {})}

@@ -8,7 +8,6 @@ import {
   TAKEOFF_STATUS_LABEL,
   TAKEOFF_STATUS_TONE,
   cn,
-  formatDate,
 } from '@/utils'
 
 export interface ProjectListCardProps {
@@ -71,12 +70,6 @@ export function ProjectListCard({
             <dd className="text-white">{JOB_TYPE_LABEL[project.projectType]}</dd>
           </div>
         )}
-        <div className="flex gap-2">
-          <dt className="text-white/70">Due</dt>
-          <dd className="text-white">
-            {project.dueDate ? formatDate(project.dueDate) : 'Not set'}
-          </dd>
-        </div>
       </dl>
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">

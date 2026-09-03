@@ -6,12 +6,11 @@ use App\Http\Requests\StoreProjectRequest;
 use App\Http\Resources\ProjectDocumentResource;
 use App\Http\Resources\ProjectListResource;
 use App\Models\FeedItem;
-use App\Models\Job;
 use App\Models\Project;
 use App\Services\Activity\FeedItemRecorder;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -66,10 +65,15 @@ class ProjectController extends Controller
     }
 
     /** Full-page create form: the client's own details, and nothing else. */
-    public function create(): Response
+    public function create(Request $request): Response
     {
+        /*
+         * A takeoff already on the go is worth saying out loud here: starting a
+         * second client is a normal thing to do, but doing it by accident and
+         * losing track of the first is not.
+         */
         return Inertia::render('ProjectCreate', [
-            'clients' => $this->knownClients(),
+            'unfinishedTakeoff' => app(TakeoffFlow::class)->inProgress($request),
         ]);
     }
 
@@ -99,7 +103,6 @@ class ProjectController extends Controller
             'latitude' => $primary['latitude'] ?? null,
             'longitude' => $primary['longitude'] ?? null,
             'project_type' => $data['project_type'] ?? null,
-            'due_date' => $data['due_date'] ?? null,
             'notes' => $data['notes'] ?? null,
             'status' => 'draft',
             'review_status' => 'none',
@@ -107,7 +110,7 @@ class ProjectController extends Controller
 
         foreach ($addresses as $position => $address) {
             $project->addresses()->create([
-                'label' => $address['label'] ?? null,
+                'label' => trim($address['label']),
                 'address' => $address['address'],
                 'latitude' => $address['latitude'] ?? null,
                 'longitude' => $address['longitude'] ?? null,
@@ -116,6 +119,10 @@ class ProjectController extends Controller
                 'position' => $position,
             ]);
         }
+
+        // The takeoff starts here: this client's drawing is the next step, and
+        // the resume button follows them until its job has tasks.
+        app(TakeoffFlow::class)->remember($project);
 
         $project->activities()->create([
             'title' => 'Client created',
@@ -181,17 +188,5 @@ class ProjectController extends Controller
         return redirect()
             ->route('projects.index')
             ->with('warning', "“{$project->name}” was deleted.");
-    }
-
-    /** Clients already on record, offered in the Client select. */
-    private function knownClients(): Collection
-    {
-        return Project::query()
-            ->whereNotNull('client')
-            ->pluck('client')
-            ->merge(Job::query()->whereNotNull('client')->pluck('client'))
-            ->unique()
-            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
-            ->values();
     }
 }

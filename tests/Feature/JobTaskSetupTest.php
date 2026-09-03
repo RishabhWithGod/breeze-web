@@ -54,6 +54,35 @@ class JobTaskSetupTest extends TestCase
         ]);
     }
 
+    /**
+     * A signed-off takeoff for this client, which is what the job step needs:
+     * a job is built from `final_payload`, not from the engine's first answer.
+     */
+    private function takeoffFor(Project $client): AiResult
+    {
+        $upload = $this->makeDrawing($client);
+
+        $result = AiResult::create([
+            'ai_job_id' => AiJob::create([
+                'project_id' => $client->id,
+                'upload_id' => $upload->id,
+                'user_id' => $this->user->id,
+                'status' => 'completed',
+            ])->id,
+            'project_id' => $client->id,
+            'upload_id' => $upload->id,
+            'original_payload' => [],
+        ]);
+
+        $result->update([
+            'review_status' => AiResult::REVIEW_FINALISED,
+            'finalised_at' => now(),
+            'final_payload' => ['symbols' => [], 'boq' => ['lines' => [], 'totals' => []]],
+        ]);
+
+        return $result;
+    }
+
     /** A drawing on the client's record — a job is raised against one. */
     private function makeDrawing(Project $client): Upload
     {
@@ -95,6 +124,67 @@ class JobTaskSetupTest extends TestCase
                 'unit_cost' => 10, 'total' => 300, 'source' => 'manual', 'position' => 1,
             ]),
         ];
+    }
+
+    public function test_coming_back_to_the_job_step_shows_the_form_as_it_was_filled(): void
+    {
+        $client = Project::sole();
+        $site = $client->addresses()->create(['label' => 'Main', 'address' => '41 Harbor Way', 'is_primary' => true]);
+        $result = $this->takeoffFor($client);
+
+        $this->actingAs($this->user)->post(route('finals.job', $result), [
+            'name' => 'Harborview Fit-out',
+            'project_id' => $client->id,
+            'address_ids' => [$site->id],
+            'description' => 'Rough-in on floors 1 to 3.',
+            'job_type' => 'commercial',
+            'budget' => '12000',
+        ]);
+
+        // Back on the job step, the same form, filled — not a card about it.
+        $this->actingAs($this->user)
+            ->get(route('finals.show', $result))
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('FinalSymbols')
+                ->where('result.job.name', 'Harborview Fit-out')
+                ->where('result.job.description', 'Rough-in on floors 1 to 3.')
+                ->where('result.job.jobType', 'commercial')
+                ->where('result.job.budget', 12000)
+                ->where('result.job.addressIds', [$site->id]));
+    }
+
+    public function test_saving_the_job_step_again_updates_the_job_rather_than_doing_nothing(): void
+    {
+        $client = Project::sole();
+        $site = $client->addresses()->create(['label' => 'Main', 'address' => '41 Harbor Way', 'is_primary' => true]);
+        $result = $this->takeoffFor($client);
+
+        $this->actingAs($this->user)->post(route('finals.job', $result), [
+            'name' => 'Harborview Fit-out',
+            'project_id' => $client->id,
+            'address_ids' => [$site->id],
+            'job_type' => 'commercial',
+        ]);
+
+        $jobId = $result->refresh()->work_job_id;
+        $this->assertNotNull($jobId);
+
+        $this->actingAs($this->user)->post(route('finals.job', $result), [
+            'name' => 'Harborview Fit-out, phase 2',
+            'project_id' => $client->id,
+            'address_ids' => [$site->id],
+            'job_type' => 'industrial',
+            'description' => 'Added after the fact.',
+        ]);
+
+        // The same job, corrected — not a second one.
+        $this->assertSame(1, Job::where('ai_result_id', $result->id)->count());
+
+        $job = Job::findOrFail($jobId);
+
+        $this->assertSame('Harborview Fit-out, phase 2', $job->name);
+        $this->assertSame('industrial', $job->job_type);
+        $this->assertSame('Added after the fact.', $job->description);
     }
 
     /* ------------------------------------------------- editing one task ---- */

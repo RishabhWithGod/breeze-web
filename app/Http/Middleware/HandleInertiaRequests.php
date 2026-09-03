@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Http\Resources\NotificationResource;
 use App\Models\User;
 use App\Services\Geocoding\MapboxGeocoder;
+use App\Services\Takeoff\TakeoffFlow;
 use App\Services\TimeTracking\TimerService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -42,6 +43,14 @@ class HandleInertiaRequests extends Middleware
              * returns nothing.
              */
             'addressLookupEnabled' => app(MapboxGeocoder::class)->configured(),
+
+            /*
+             * The takeoff someone is part-way through, when they are not on one
+             * of its own screens. Shared globally because the point of it is to
+             * be reachable from anywhere — the flow runs over days, and people
+             * step out of it to look at something else.
+             */
+            'takeoffFlow' => fn () => app(TakeoffFlow::class)->current($request),
 
             'auth' => [
                 'user' => $user ? [

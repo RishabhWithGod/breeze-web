@@ -37,7 +37,6 @@ export interface ProjectListRow {
   readonly discipline: string
   readonly projectType: ProjectType | null
   readonly status: TakeoffStatus
-  readonly dueDate: string | null
   readonly documentsCount: number
   readonly itemsCount: number
   readonly createdAt: string
@@ -75,7 +74,6 @@ export interface ProjectDraft {
   /** Every site. The first is the primary, and is mirrored onto `location`. */
   addresses: DraftAddress[]
   project_type: string
-  due_date: string
   notes: string
 }
 
@@ -109,14 +107,13 @@ export interface AddressSuggestion {
  * A client, offered in the single Client select on every intake form.
  *
  * Clients are projects — the same record — so picking one here both names the
- * client and scopes the AI Takeoff drawings offered below it. `location`,
- * `dueDate` and `projectType` are carried over into a blank field on the form
- * rather than retyped.
+ * client and scopes the AI Takeoff drawings offered below it. `location` and
+ * `projectType` are carried over into a blank field on the form rather than
+ * retyped.
  */
 export interface ClientOption {
   readonly id: number
   readonly name: string
-  readonly dueDate: string | null
   readonly projectType: JobType | null
   /**
    * The drawing this client's work is taken off — chosen on their screen, or

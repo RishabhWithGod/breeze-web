@@ -32,6 +32,7 @@ export const ROUTES = {
   estimateCreate: '/estimates/create',
   jobs: '/jobs',
   /** Under Jobs in the rail: work and the people who run it, across every job. */
+  takeoffFlowForget: '/takeoff-flow',
   tasks: '/tasks',
   taskCreate: '/tasks/create',
   foremen: '/foremen',

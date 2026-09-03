@@ -13,6 +13,7 @@ use App\Services\Ai\ArtefactStore;
 use App\Services\Takeoff\CompleteReview;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\EstimatingComponents;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,6 +39,11 @@ class AiReviewController extends Controller
     public function show(Request $request, AiResult $result, EstimatingComponents $components): Response
     {
         $this->authorize('view', $result);
+
+        // Remembered so the flow can be left and picked up again.
+        if ($result->project !== null) {
+            app(TakeoffFlow::class)->remember($result->project);
+        }
 
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],

@@ -33,11 +33,6 @@ class JobDetailResource extends JsonResource
             'description' => $this->description,
             'jobType' => $this->job_type,
             'status' => $this->status,
-            'foreman' => $this->foreman ? [
-                'id' => $this->foreman->id,
-                'name' => $this->foreman->name,
-                'initials' => $this->foreman->initials,
-            ] : null,
             'startDate' => $this->start_date?->toISOString(),
             'endDate' => $this->end_date?->toISOString(),
             'budget' => $this->budget === null ? null : (float) $this->budget,

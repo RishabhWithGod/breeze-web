@@ -21,7 +21,7 @@ class ClientAddressController extends Controller
         $this->authorize('update', $project);
 
         $data = $request->validate([
-            'label' => ['nullable', 'string', 'max:80'],
+            'label' => ['required', 'string', 'max:80'],
             'address' => ['required', 'string', 'max:160'],
             /*
              * Set only when the address was picked from the lookup — but never
@@ -30,6 +30,7 @@ class ClientAddressController extends Controller
             'latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitude'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude'],
         ], [
+            'label.required' => 'Name this site.',
             'address.required' => 'Enter the address.',
         ]);
 
@@ -38,7 +39,7 @@ class ClientAddressController extends Controller
         $isFirst = ! $project->addresses()->exists();
 
         $address = $project->addresses()->create([
-            'label' => $data['label'] ?? null,
+            'label' => trim($data['label']),
             'address' => $data['address'],
             'latitude' => $data['latitude'] ?? null,
             'longitude' => $data['longitude'] ?? null,

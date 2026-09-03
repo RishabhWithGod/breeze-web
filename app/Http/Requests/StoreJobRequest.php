@@ -27,7 +27,9 @@ class StoreJobRequest extends FormRequest
              * addresses. `location` is not posted: it is written from the first
              * of these, so the two can never disagree.
              */
-            'address_ids' => ['required', 'array', 'min:1', 'max:25'],
+            // One site per job: the screen offers radios, and the rule has to
+            // agree with it or a hand-made request could still send several.
+            'address_ids' => ['required', 'array', 'size:1'],
             'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
@@ -59,7 +61,8 @@ class StoreJobRequest extends FormRequest
             'project_id.required' => 'Client is required',
             'project_id.exists' => 'Pick a client from the list',
             'upload_id.required' => 'Pick the drawing this job is for',
-            'address_ids.required' => 'Pick at least one site for this job',
+            'address_ids.required' => 'Pick the site this job runs at',
+            'address_ids.size' => 'A job runs at one site',
             'address_ids.*.exists' => 'That site is not on the client\'s record',
             'end_date.after_or_equal' => 'End date must be on or after the start date',
             'budget.gt' => 'Enter an amount greater than zero',

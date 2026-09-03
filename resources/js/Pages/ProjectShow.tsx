@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import {
-  CalendarClock,
   FileText,
   FolderKanban,
   MapPin,
@@ -32,7 +31,6 @@ import {
   JOB_TYPE_LABEL,
   TAKEOFF_STATUS_LABEL,
   TAKEOFF_STATUS_TONE,
-  formatDate,
 } from '@/utils'
 
 export interface ProjectShowProps {
@@ -109,11 +107,6 @@ export default function ProjectShow({
       value: project.projectType
         ? `${JOB_TYPE_LABEL[project.projectType]} · ${project.discipline}`
         : project.discipline,
-    },
-    {
-      icon: CalendarClock,
-      label: 'Takeoff due',
-      value: project.dueDate ? formatDate(project.dueDate) : 'Not set',
     },
     {
       icon: FileText,

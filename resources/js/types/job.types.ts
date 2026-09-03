@@ -164,7 +164,6 @@ export interface JobDetail extends Omit<Job, 'teamCount' | 'estimateCount'> {
   readonly clientId: number | null
   /** The client sites this job runs at, in the order they were picked. */
   readonly addressIds: readonly number[]
-  readonly foreman: (Pick<JobTeamMember, 'id' | 'name' | 'initials'>) | null
   readonly archivedAt: string | null
   readonly createdAt: string
   readonly team: readonly JobTeamMember[]

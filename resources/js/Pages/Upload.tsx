@@ -2,7 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Head, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import { History, Sparkles, Trash2, TriangleAlert } from 'lucide-react'
-import { Alert, Button, ButtonLink, Card, ConfirmDialog } from '@/components/common'
+import {
+  Alert,
+  Button,
+  ButtonLink,
+  Card,
+  ConfirmDialog,
+  UnfinishedTakeoffNotice,
+} from '@/components/common'
 import { PageHeader, PageTransition, StepWizard, appLayout } from '@/components/layout'
 import { ProjectPickerCard, UploadDropzone, UploadFileList } from '@/components/upload'
 import { ROUTES } from '@/constants'
@@ -10,6 +17,7 @@ import { useDisclosure, useFileUpload } from '@/hooks'
 import { selectHasValidFiles, useUploadStore } from '@/store'
 import type {
   RejectedUploadFile,
+  ResumableTakeoff,
   SharedPageProps,
   UploadLimits,
   UploadTargetProject,
@@ -25,6 +33,11 @@ export interface UploadProps {
   limits: UploadLimits
   /** False when AI_API_BASE_URL is unset — a run cannot be started. */
   aiConfigured: boolean
+  /**
+   * A takeoff already part-way through, when it is not the one this screen
+   * opened for. Sending a different client's drawing forks the flow.
+   */
+  unfinishedTakeoff: ResumableTakeoff | null
   /**
    * Polled for engine readiness. Deliberately not a prop: asking the engine during
    * a render would let a slow or missing engine hold the page up.
@@ -45,6 +58,7 @@ export default function Upload({
   selectedProjectId,
   limits,
   aiConfigured,
+  unfinishedTakeoff,
   engineStatusUrl,
 }: UploadProps) {
   /** `null` while unknown, so the screen never claims the engine is down too early. */
@@ -154,6 +168,12 @@ export default function Upload({
             </Button>
           </>
         }
+      />
+
+      <UnfinishedTakeoffNotice
+        takeoff={unfinishedTakeoff}
+        starting="another takeoff"
+        className="mb-6"
       />
 
       <ProjectPickerCard

@@ -31,7 +31,6 @@ import {
   JOB_TYPE_LABEL,
   TAKEOFF_STATUS_LABEL,
   TAKEOFF_STATUS_TONE,
-  formatDate,
   formatNumber,
 } from '@/utils'
 
@@ -141,15 +140,6 @@ export default function Projects({ projects, filters, counts }: ProjectsProps) {
       width: 'w-24',
       render: (row) => (
         <span className="tabular-nums text-white">{formatNumber(row.documentsCount)}</span>
-      ),
-    },
-    {
-      key: 'due',
-      header: 'Due',
-      render: (row) => (
-        <span className="whitespace-nowrap text-white/90">
-          {row.dueDate ? formatDate(row.dueDate) : '—'}
-        </span>
       ),
     },
     {

@@ -9,7 +9,10 @@ import { cn } from '@/utils'
 export interface JobSitePickerProps {
   /** Null until a client is chosen — there is nothing to pick from before that. */
   client: ClientOption | undefined
-  /** Picked site ids, in the order they were ticked. The first is the job's address. */
+  /**
+   * The picked site, as a list of one — the shape the job form and the server
+   * both speak, so the pivot and every route stay as they are.
+   */
   value: readonly number[]
   onChange: (addressIds: number[]) => void
   error?: string
@@ -19,9 +22,9 @@ export interface JobSitePickerProps {
 /**
  * Which of its client's sites a job runs at.
  *
- * A set, not a field: a fit-out over two buildings is one job at two addresses.
- * The order of ticking matters — the first becomes the job's own address, which
- * is what a job sheet and every list show.
+ * One, so it is radios rather than tick boxes: picking a second site replaces
+ * the first rather than adding to it. The chosen site becomes the job's own
+ * address, which is what a job sheet and every list show.
  *
  * A site can also be added here. Raising a job for an address the client's
  * record does not have yet is normal, and sending someone to the client screen
@@ -50,16 +53,16 @@ export function JobSitePicker({
     setIsAdding(false)
   }
 
-  const toggle = (siteId: number) => {
-    onChange(
-      value.includes(siteId)
-        ? value.filter((id) => id !== siteId)
-        : [...value, siteId],
-    )
-  }
+  /** One site, so choosing replaces rather than adds. */
+  const choose = (siteId: number) => onChange([siteId])
 
   const addSite = () => {
-    if (!client || draft.address.trim() === '') {
+    if (!client || draft.label.trim() === '') {
+      setAddError('Name this site.')
+      return
+    }
+
+    if (draft.address.trim() === '') {
       setAddError('Enter the address.')
       return
     }
@@ -75,18 +78,19 @@ export function JobSitePicker({
       },
       onSuccess: (page) => {
         /*
-         * The visit brings back a refreshed client list. Ticking the site that
-         * was not there before saves the person picking the address they have
-         * just this second typed out.
+         * The visit brings back a refreshed client list. Selecting the site
+         * that was not there before saves the person picking the address they
+         * have just this second typed out.
          */
         const clients = (page.props['clients'] ?? []) as readonly ClientOption[]
         const refreshed = clients.find((option) => option.id === client.id)
         const added = refreshed?.addresses.find((site) => !known.has(site.id))
 
-        if (added) onChange([...value, added.id])
+        if (added) onChange([added.id])
         reset()
       },
-      onError: (errors) => setAddError(errors['address'] ?? 'That address could not be saved.'),
+      onError: (errors) =>
+        setAddError(errors['label'] ?? errors['address'] ?? 'That site could not be saved.'),
       onFinish: () => setSaving(false),
     })
   }
@@ -103,34 +107,29 @@ export function JobSitePicker({
         </p>
       ) : (
         <>
-          <p className="mb-3 text-sm text-white/70">
-            Tick every site this job runs at — the first is the job&apos;s own address.
-          </p>
           <div className="grid gap-2 sm:grid-cols-2">
             {client.addresses.map((site) => {
-              const pickedAt = value.indexOf(site.id)
+              const picked = value.includes(site.id)
 
               return (
                 <label
                   key={site.id}
                   className={cn(
                     'flex cursor-pointer items-start gap-3 rounded-panel border p-3 transition-colors',
-                    pickedAt >= 0
+                    picked
                       ? 'border-brand/60 bg-brand/8'
                       : 'border-hairline bg-white/4 hover:border-brand/35',
                   )}
                 >
                   <input
-                    type="checkbox"
+                    type="radio"
+                    name={`job-site-${client.id}`}
                     className="mt-0.5 size-4 shrink-0 accent-brand"
-                    checked={pickedAt >= 0}
+                    checked={picked}
                     disabled={disabled}
-                    onChange={() => toggle(site.id)}
+                    onChange={() => choose(site.id)}
                   />
-                  <span className="min-w-0">
-                    <span className="block truncate text-md text-white">{site.display}</span>
-                    {pickedAt === 0 && <span className="text-sm text-brand">Job address</span>}
-                  </span>
+                  <span className="min-w-0 truncate text-md text-white">{site.display}</span>
                 </label>
               )
             })}
@@ -157,7 +156,7 @@ export function JobSitePicker({
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
             <TextInput
               id="new-site-label"
-              label="Name (optional)"
+              label="Name*"
               placeholder="e.g. Warehouse"
               value={draft.label}
               disabled={saving}

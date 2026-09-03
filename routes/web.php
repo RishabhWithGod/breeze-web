@@ -42,6 +42,7 @@ use App\Http\Controllers\SchedulingController;
 use App\Http\Controllers\SecuritySettingsController;
 use App\Http\Controllers\StatePageController;
 use App\Http\Controllers\SymbolReviewController;
+use App\Http\Controllers\TakeoffFlowController;
 use App\Http\Controllers\TakeoffHistoryController;
 use App\Http\Controllers\TaskListController;
 use App\Http\Controllers\TimeEntryController;
@@ -269,6 +270,9 @@ Route::middleware('auth')->group(function () {
      * Tasks and foremen across every job — the questions you have before you
      * know which job you are looking for. Both sit under Jobs in the rail.
      */
+    // Dismissing the resume button: the takeoff stays, the reminder goes.
+    Route::delete('takeoff-flow', [TakeoffFlowController::class, 'destroy'])->name('takeoff-flow.forget');
+
     Route::get('tasks', [TaskListController::class, 'index'])->name('tasks.index');
     Route::get('tasks/create', [TaskListController::class, 'create'])->name('tasks.create');
     // Editing a task is the setup screen again, aimed at one row — same fields,

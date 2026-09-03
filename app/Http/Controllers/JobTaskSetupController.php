@@ -11,6 +11,7 @@ use App\Models\JobTask;
 use App\Models\User;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Scheduling\ScheduleBuilder;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -40,11 +41,18 @@ class JobTaskSetupController extends Controller
     public function __construct(
         private readonly ScheduleBuilder $builder,
         private readonly JobSchedulePolicy $policy,
+        private readonly TakeoffFlow $flow,
     ) {}
 
     public function create(Request $request, Job $job): Response
     {
         $this->authorisePlanning($job, $request->user());
+
+        // The last step, and still a step: remembered so leaving it mid-way
+        // leaves a way back.
+        if ($job->project !== null) {
+            $this->flow->remember($job->project);
+        }
 
         $job->loadMissing(['schedule.tasks.foreman', 'schedule.tasks.estimateItems']);
 
@@ -181,6 +189,10 @@ class JobTaskSetupController extends Controller
 
             $job->refreshEstimatedHours();
         });
+
+        // The takeoff has become a job with its work laid out. Nothing left to
+        // resume, so the floating button goes.
+        $this->flow->forget();
 
         $count = count($data['tasks']);
 

@@ -10,11 +10,18 @@ import {
   SelectField,
   TextArea,
   TextInput,
+  UnfinishedTakeoffNotice,
 } from '@/components/common'
 import { JobSitePicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
-import type { ClientOption, JobDraft, JobType, TakeoffUploadOption } from '@/types'
+import type {
+  ClientOption,
+  JobDraft,
+  JobType,
+  ResumableTakeoff,
+  TakeoffUploadOption,
+} from '@/types'
 import { formatCurrency } from '@/utils'
 
 export interface JobCreateProps {
@@ -22,6 +29,11 @@ export interface JobCreateProps {
   clients: readonly ClientOption[]
   /** Their drawings — narrowed to the picked client once one is chosen. */
   uploads: readonly TakeoffUploadOption[]
+  /**
+   * A takeoff already part-way through. Raising a job by hand is a fork of it:
+   * the takeoff's own job is raised from its review summary.
+   */
+  unfinishedTakeoff: ResumableTakeoff | null
 }
 
 /**
@@ -31,7 +43,11 @@ export interface JobCreateProps {
  * restates the server's rules. "Save as Draft" and "Create Job" post the same
  * payload — the server picks the status from the `save_as_draft` flag.
  */
-export default function JobCreate({ clients, uploads }: JobCreateProps) {
+export default function JobCreate({
+  clients,
+  uploads,
+  unfinishedTakeoff,
+}: JobCreateProps) {
   const [savingDraft, setSavingDraft] = useState(false)
 
   const { data, setData, post, processing, errors, hasErrors, clearErrors, transform } =
@@ -96,7 +112,6 @@ export default function JobCreate({ clients, uploads }: JobCreateProps) {
       // Filled from the client, but only into a field still blank — never over
       // something already typed.
       name: current.name || (client?.name ?? ''),
-      start_date: current.start_date || (client?.dueDate ?? ''),
       job_type: current.job_type || (client?.projectType ?? ''),
     }))
 
@@ -137,6 +152,12 @@ export default function JobCreate({ clients, uploads }: JobCreateProps) {
         }
       />
 
+      <UnfinishedTakeoffNotice
+        takeoff={unfinishedTakeoff}
+        starting="a job by hand"
+        className="mb-6"
+      />
+
       <section className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
         <div className="p-6 sm:p-8 xl:p-10">
 
@@ -163,7 +184,6 @@ export default function JobCreate({ clients, uploads }: JobCreateProps) {
                 <SelectField
                   id="job-client"
                   label="Client*"
-                  hint="Not listed? Add them under Clients first."
                   options={clientOptions}
                   value={data.project_id}
                   onChange={(event) => selectClient(event.target.value)}
@@ -172,11 +192,6 @@ export default function JobCreate({ clients, uploads }: JobCreateProps) {
                 <SelectField
                   id="job-upload"
                   label="AI Takeoff PDF*"
-                  hint={
-                    selectedClient && uploadsForClient.length > 1
-                      ? 'Filled with this client’s drawing — change it if the job is for another.'
-                      : undefined
-                  }
                   options={uploadOptions}
                   value={data.upload_id}
                   disabled={!data.project_id}
@@ -230,7 +245,6 @@ export default function JobCreate({ clients, uploads }: JobCreateProps) {
               id="job-name"
               label="Job Name*"
               placeholder="Enter job name"
-              hint="Filled from the client when you pick one — change it to anything."
               value={data.name}
               onChange={(event) => update('name', event.target.value)}
               {...(errors.name ? { error: errors.name } : {})}
@@ -242,7 +256,7 @@ export default function JobCreate({ clients, uploads }: JobCreateProps) {
               without leaving this form.
             */}
             <fieldset>
-              <legend className="mb-1 text-md font-medium text-white">Site(s)*</legend>
+              <legend className="mb-1 text-md font-medium text-white">Site Location*</legend>
               <JobSitePicker
                 client={selectedClient}
                 value={data.address_ids}

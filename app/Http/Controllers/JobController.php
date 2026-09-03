@@ -9,7 +9,6 @@ use App\Http\Resources\JobDetailResource;
 use App\Http\Resources\JobResource;
 use App\Models\Estimate;
 use App\Models\FeedItem;
-use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\JobSchedule;
 use App\Models\TeamMember;
@@ -20,6 +19,7 @@ use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\JobSites;
 use App\Services\JobCosting\JobCostSummary;
+use App\Services\Takeoff\TakeoffFlow;
 use App\Services\Takeoff\TakeoffLinkOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -100,11 +100,14 @@ class JobController extends Controller
     }
 
     /** Full-page create form. */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         return Inertia::render('JobCreate', [
             'clients' => $this->clients->options(),
             'uploads' => $this->linkOptions->uploads(),
+            // Raising a job by hand forks a takeoff mid-flow: its own job is
+            // raised from its review summary, not here.
+            'unfinishedTakeoff' => app(TakeoffFlow::class)->inProgress($request),
         ]);
     }
 
@@ -186,7 +189,6 @@ class JobController extends Controller
     public function show(Request $request, Job $job): Response
     {
         $job->load([
-            'foreman',
             'project',
             'teamMembers',
             'estimates',
@@ -230,8 +232,7 @@ class JobController extends Controller
     public function edit(Job $job): Response
     {
         return Inertia::render('JobEdit', [
-            'job' => (new JobDetailResource($job->load('foreman', 'teamMembers', 'addresses')))->resolve(),
-            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
+            'job' => (new JobDetailResource($job->load('teamMembers', 'addresses')))->resolve(),
             'clients' => $this->clients->options(),
         ]);
     }

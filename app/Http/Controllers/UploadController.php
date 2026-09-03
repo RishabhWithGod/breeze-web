@@ -7,6 +7,7 @@ use App\Jobs\ProcessTakeoffRun;
 use App\Jobs\RenderDrawingPreviews;
 use App\Models\Upload;
 use App\Services\Ai\TakeoffOrchestrator;
+use App\Services\Takeoff\TakeoffFlow;
 use App\Support\UploadLimits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -20,6 +21,17 @@ class UploadController extends Controller
 {
     public function create(Request $request, TakeoffOrchestrator $orchestrator): Response
     {
+        // Opened for a particular client, this is that client's next step.
+        $preselected = $this->preselectedClient($request);
+
+        if ($preselected !== null) {
+            $client = $request->user()->projects()->find($preselected);
+
+            if ($client !== null) {
+                app(TakeoffFlow::class)->remember($client);
+            }
+        }
+
         return Inertia::render('Upload', [
             'projects' => $request->user()->projects()
                 ->orderByDesc('created_at')
@@ -28,7 +40,12 @@ class UploadController extends Controller
                     'id' => $project->id,
                     'name' => $project->name,
                 ]),
-            'selectedProjectId' => $this->preselectedClient($request),
+            'selectedProjectId' => $preselected,
+            /*
+             * A takeoff already running, unless it is the very one this screen
+             * opened for — that is the resume, not a second start.
+             */
+            'unfinishedTakeoff' => app(TakeoffFlow::class)->inProgress($request, $preselected),
             /*
              * The dropzone renders the limit the request actually enforces — the
              * lower of the product's setting and PHP's own ceiling — so it can

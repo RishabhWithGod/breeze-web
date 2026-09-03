@@ -1,11 +1,25 @@
+import { useState, type ReactNode } from 'react'
 import { Head, usePage } from '@inertiajs/react'
-import { ArrowLeft, PencilLine, Sparkles } from 'lucide-react'
+import {
+  ArrowLeft,
+  Boxes,
+  Cable,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  LayoutGrid,
+  FileText,
+  ListChecks,
+  PencilLine,
+  Sparkles,
+  Wallet,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import {
   Alert,
   Badge,
+  Button,
   ButtonLink,
-  Card,
-  SectionHeading,
+  CollapsibleCard,
   StatusChip,
   WorkflowProgress,
 } from '@/components/common'
@@ -25,6 +39,7 @@ import type {
   PanelScheduleRow,
   SelectOption,
   SharedPageProps,
+  Tone,
   WireSizeRow,
 } from '@/types'
 import {
@@ -34,6 +49,17 @@ import {
   formatCurrency,
   formatDate,
 } from '@/utils'
+
+/** One of the reference tables read off the drawing, as its own section. */
+interface DrawingSection {
+  readonly key: string
+  readonly title: string
+  readonly subtitle: string
+  readonly icon: LucideIcon
+  readonly tone: Tone
+  readonly count: number
+  readonly node: ReactNode
+}
 
 interface EstimateSummary {
   readonly id: number
@@ -97,21 +123,56 @@ export default function EstimateShow({
 }: EstimateShowProps) {
   const { flash } = usePage<SharedPageProps>().props
 
-  /** Only the drawing panels that actually have rows — see the layout below. */
-  const drawingPanels: readonly { key: string; node: React.ReactNode }[] = [
+  /**
+   * Only the drawing panels that actually have rows. Each is its own section:
+   * wire is priced by length and schedules describe equipment rather than
+   * count it, so they are reference beside the lines, not part of them.
+   */
+  const drawingPanels: readonly DrawingSection[] = [
     drawingData.wireSizes.length > 0 && {
       key: 'wire-sizes',
-      node: <WireSizesPanel wireSizes={drawingData.wireSizes} />,
+      title: 'Wire sizes',
+      subtitle: 'Conductor sizes read off the drawing — priced by length',
+      icon: Cable,
+      tone: 'warning' as const,
+      count: drawingData.wireSizes.length,
+      node: <WireSizesPanel wireSizes={drawingData.wireSizes} bare />,
     },
     drawingData.equipment.length > 0 && {
       key: 'equipment',
-      node: <EquipmentPanel equipment={drawingData.equipment} />,
+      title: 'Equipment',
+      subtitle: 'Tagged equipment the engine read off the drawing',
+      icon: Boxes,
+      tone: 'warning' as const,
+      count: drawingData.equipment.length,
+      node: <EquipmentPanel equipment={drawingData.equipment} bare />,
     },
     drawingData.panelSchedules.length > 0 && {
       key: 'panel-schedules',
-      node: <PanelSchedulesPanel schedules={drawingData.panelSchedules} />,
+      title: 'Panel schedules',
+      subtitle: 'Schedule tables extracted from the sheet',
+      icon: LayoutGrid,
+      tone: 'info' as const,
+      count: drawingData.panelSchedules.length,
+      node: <PanelSchedulesPanel schedules={drawingData.panelSchedules} bare />,
     },
   ].filter((panel) => panel !== false)
+
+  /*
+   * Every section starts closed. The screen is five or six tables stacked down
+   * a page, and reading any one of them meant scrolling past the rest — each
+   * header says what it holds, so the page is a contents list you open.
+   */
+  const [open, setOpen] = useState<Readonly<Record<string, boolean>>>({})
+
+  const sectionKeys = ['lines', 'details', ...drawingPanels.map((p) => p.key), 'totals']
+  const allOpen = sectionKeys.every((key) => open[key])
+
+  const toggle = (key: string) =>
+    setOpen((current) => ({ ...current, [key]: !current[key] }))
+
+  const setAll = (isOpen: boolean) =>
+    setOpen(Object.fromEntries(sectionKeys.map((key) => [key, isOpen])))
 
   const breakdown: readonly { label: string; value: number; strong?: boolean }[] = [
     { label: 'Materials and fixtures', value: totals.material },
@@ -200,44 +261,73 @@ export default function EstimateShow({
         </Alert>
       )}
 
-      <div className="flex min-w-0 flex-col gap-6">
-        <Card padding="lg">
-          <SectionHeading
-            as="h3"
-            title="Line items"
-            subtitle="Generated from the reviewed takeoff — edit anything"
-            actions={
-              estimate.fromTakeoff ? (
-                <Badge tone="brand">From AI takeoff</Badge>
+      {/* One control for the lot, so a whole estimate can be read at once. */}
+      <div className="mb-4 flex justify-end">
+        <Button
+          variant="secondary"
+          size="sm"
+          leftIcon={allOpen ? ChevronsDownUp : ChevronsUpDown}
+          onClick={() => setAll(!allOpen)}
+        >
+          {allOpen ? 'Collapse all' : 'Expand all'}
+        </Button>
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-4">
+        <CollapsibleCard
+          title="Line items"
+          subtitle="What is being priced, and at what rate"
+          icon={ListChecks}
+          tone="brand"
+          summary={
+            <span className="flex items-center gap-3">
+              <span className="tabular-nums">
+                {items.length} {items.length === 1 ? 'line' : 'lines'}
+              </span>
+              {estimate.fromTakeoff ? (
+                <Badge tone="brand" size="sm">
+                  From AI takeoff
+                </Badge>
               ) : (
-                <Badge tone="neutral">Manual estimate</Badge>
-              )
-            }
-          />
+                <Badge tone="neutral" size="sm">
+                  Manual
+                </Badge>
+              )}
+            </span>
+          }
+          isOpen={Boolean(open['lines'])}
+          onToggle={() => toggle('lines')}
+        >
           <EstimateItemsTable
             estimateId={estimate.id}
             items={items}
             categories={categories}
           />
-        </Card>
+        </CollapsibleCard>
 
-        <Card padding="lg">
-          <SectionHeading
-            as="h3"
-            title="Estimate details"
-            subtitle="The dates and rates these numbers were built on"
-            actions={
-              <ButtonLink
-                href={estimate.editUrl}
-                variant="secondary"
-                size="sm"
-                leftIcon={PencilLine}
-              >
-                Edit details
-              </ButtonLink>
-            }
-          />
-
+        <CollapsibleCard
+          title="Estimate details"
+          subtitle="The dates and rates these numbers were built on"
+          icon={FileText}
+          tone="info"
+          summary={
+            <span className="tabular-nums">
+              {totals.markupPct}% markup · {totals.taxPct}% tax
+            </span>
+          }
+          isOpen={Boolean(open['details'])}
+          onToggle={() => toggle('details')}
+          actions={
+            <ButtonLink
+              href={estimate.editUrl}
+              variant="secondary"
+              size="sm"
+              leftIcon={PencilLine}
+            >
+              Edit details
+            </ButtonLink>
+          }
+        >
           <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
@@ -270,48 +360,41 @@ export default function EstimateShow({
               {estimate.notes}
             </p>
           )}
-        </Card>
+        </CollapsibleCard>
 
         {/*
           Measured off the drawing but not priced by the engine — wire runs are
           priced by length and schedules describe equipment rather than count it.
           Kept beside the estimate so an estimator can price them by hand.
         */}
-        {drawingPanels.length > 0 && (
-          <div
-            className={cn(
-              'grid gap-6',
-              // Only pair them up when there is a pair. One panel sitting in half
-              // the width with nothing beside it just wastes the other half.
-              drawingPanels.length > 1 && 'xl:grid-cols-2',
-            )}
+        {drawingPanels.map((panel) => (
+          <CollapsibleCard
+            key={panel.key}
+            title={panel.title}
+            subtitle={panel.subtitle}
+            icon={panel.icon}
+            tone={panel.tone}
+            summary={<span className="tabular-nums">{panel.count}</span>}
+            isOpen={Boolean(open[panel.key])}
+            onToggle={() => toggle(panel.key)}
           >
-            {drawingPanels.map((panel, index) => (
-              <div
-                key={panel.key}
-                className={cn(
-                  'min-w-0',
-                  // An odd panel last in a two-column grid would be alone on its
-                  // row, so it takes the whole row instead.
-                  drawingPanels.length % 2 === 1 &&
-                    index === drawingPanels.length - 1 &&
-                    'xl:col-span-2',
-                )}
-              >
-                {panel.node}
-              </div>
-            ))}
-          </div>
-        )}
+            {panel.node}
+          </CollapsibleCard>
+        ))}
 
-        {/* ------------------------------------------------------ Totals --- */}
-        <Card padding="lg">
-          <SectionHeading
-            as="h3"
-            title="Totals"
-            subtitle="Recalculated from the lines above on every save"
-          />
-
+        <CollapsibleCard
+          title="Totals"
+          subtitle="Recalculated from the lines above on every save"
+          icon={Wallet}
+          tone="success"
+          summary={
+            <span className="font-semibold tabular-nums text-white">
+              {formatCurrency(totals.grandTotal, 2)}
+            </span>
+          }
+          isOpen={Boolean(open['totals'])}
+          onToggle={() => toggle('totals')}
+        >
           <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-start">
             <dl className="flex flex-col gap-2.5">
               {breakdown.map((row) => (
@@ -365,7 +448,7 @@ export default function EstimateShow({
               </div>
             </div>
           </div>
-        </Card>
+        </CollapsibleCard>
       </div>
 
       {/*

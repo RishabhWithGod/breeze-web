@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm, usePage } from '@inertiajs/react'
-import { ArrowLeft, ArrowRight, ExternalLink } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ExternalLink, Save } from 'lucide-react'
 import {
   Alert,
   ButtonLink,
@@ -60,6 +60,17 @@ interface FinalResultSummary {
   readonly finalisedAt: string | null
   readonly pageCount: number
   readonly workJobId: number | null
+  /** The job as it stands, once it has been raised. */
+  readonly job: {
+    readonly name: string
+    readonly projectId: number | null
+    readonly addressIds: readonly number[]
+    readonly description: string | null
+    readonly jobType: JobType | null
+    readonly startDate: string | null
+    readonly endDate: string | null
+    readonly budget: number | null
+  } | null
   readonly workJobName: string | null
   readonly estimateId: number | null
   readonly estimateNumber: string | null
@@ -117,22 +128,32 @@ export interface FinalSymbolsProps {
 export default function FinalSymbols({ result, clients, defaultClientId }: FinalSymbolsProps) {
   const { flash } = usePage<SharedPageProps>().props
 
+  /*
+   * Seeded from the job once it exists, so coming back to this step shows what
+   * was filled in rather than a card describing it. Before that, from the
+   * takeoff and its client.
+   */
   const jobForm = useForm<CreateJobForm>({
-    name: result.projectName,
-    project_id: String(defaultClientId),
+    name: result.job?.name ?? result.projectName,
+    project_id: String(result.job?.projectId ?? defaultClientId),
     // That client's primary site, exactly as Create Job starts.
     address_ids:
+      result.job?.addressIds.slice() ??
       clients
         .find((option) => option.id === defaultClientId)
         ?.addresses.filter((site) => site.isPrimary)
-        .map((site) => site.id) ?? [],
-    description: '',
-    job_type: '',
-    start_date: '',
-    end_date: '',
-    budget: result.engineEstimate.grand_total
-      ? String(result.engineEstimate.grand_total)
-      : '',
+        .map((site) => site.id) ??
+      [],
+    description: result.job?.description ?? '',
+    // Recorded on the client, so it does not have to be answered twice. It is
+    // still a field: a client's usual type is not every job's type.
+    job_type:
+      result.job?.jobType ??
+      clients.find((option) => option.id === defaultClientId)?.projectType ??
+      '',
+    start_date: result.job?.startDate ?? '',
+    end_date: result.job?.endDate ?? '',
+    budget: String(result.job?.budget ?? result.engineEstimate.grand_total ?? ''),
   })
 
   const updateJobField = <K extends FormDataKeys<CreateJobForm>>(
@@ -161,6 +182,9 @@ export default function FinalSymbols({ result, clients, defaultClientId }: Final
       project_id: clientId,
       address_ids:
         client?.addresses.filter((site) => site.isPrimary).map((site) => site.id) ?? [],
+      // Filled from the client, but only into a field still blank — never over
+      // a type already chosen.
+      job_type: current.job_type || (client?.projectType ?? ''),
     }))
   }
 
@@ -235,156 +259,148 @@ export default function FinalSymbols({ result, clients, defaultClientId }: Final
 
       {/*
         Nothing is raised automatically once the review is signed off — the
-        reviewer fills in the job's details here and creates it explicitly,
-        the same fields as the standalone "Create New Job" screen.
+        reviewer fills in the job's details here and creates it explicitly, the
+        same fields as the standalone "Create New Job" screen.
+
+        The same form afterwards, filled from the job: coming back to this step
+        shows what was entered rather than a card describing it, and saving
+        applies the edits to the job that is already there.
       */}
-      {!result.workJobId && (
-        <Card padding="lg" className="mb-6">
-          <SectionHeading
-            as="h3"
-            title="Create the job"
-            subtitle="Nothing is created until you submit this — fill in what you know."
+      <Card padding="lg" className="mb-6">
+        <SectionHeading
+          as="h3"
+          title={result.workJobId ? 'The job' : 'Create the job'}
+          actions={
+            result.workJobId ? (
+              <ButtonLink
+                href={routeTo.job(result.workJobId)}
+                variant="secondary"
+                size="sm"
+                leftIcon={ExternalLink}
+              >
+                Open the job
+              </ButtonLink>
+            ) : undefined
+          }
+        />
+
+        <form onSubmit={submitJob} noValidate className="mt-4 space-y-6">
+          <TextInput
+            id="job-name"
+            label="Job Name"
+            value={jobForm.data.name}
+            onChange={(event) => updateJobField('name', event.target.value)}
+            {...(jobForm.errors.name ? { error: jobForm.errors.name } : {})}
           />
 
-          <form onSubmit={submitJob} noValidate className="mt-4 space-y-6">
+          {/*
+            Starts on the takeoff's own client, because that is nearly always
+            the answer — but work is sometimes taken off one client's drawing
+            and built for another, so it can be changed. The takeoff itself
+            stays linked either way.
+          */}
+          <SelectField
+            id="job-client"
+            label="Client"
+            options={clientOptions}
+            value={jobForm.data.project_id}
+            onChange={(event) => selectClient(event.target.value)}
+            {...(jobForm.errors.project_id ? { error: jobForm.errors.project_id } : {})}
+          />
+
+          <fieldset>
+            <legend className="mb-1 text-md font-medium text-white">Site Location</legend>
+            <JobSitePicker
+              client={selectedClient}
+              value={jobForm.data.address_ids}
+              onChange={(addressIds) => updateJobField('address_ids', addressIds)}
+              disabled={jobForm.processing}
+              {...(jobForm.errors.address_ids
+                ? { error: jobForm.errors.address_ids }
+                : {})}
+            />
+          </fieldset>
+
+          <div className="grid gap-6 lg:grid-cols-3">
             <TextInput
-              id="job-name"
-              label="Job Name"
-              value={jobForm.data.name}
-              onChange={(event) => updateJobField('name', event.target.value)}
-              {...(jobForm.errors.name ? { error: jobForm.errors.name } : {})}
+              id="job-start"
+              type="date"
+              label="Start Date"
+              value={jobForm.data.start_date}
+              onChange={(event) => updateJobField('start_date', event.target.value)}
+              {...(jobForm.errors.start_date ? { error: jobForm.errors.start_date } : {})}
             />
-
-            {/*
-              Starts on the takeoff's own client, because that is nearly always
-              the answer — but work is sometimes taken off one client's drawing
-              and built for another, so it can be changed. The takeoff itself
-              stays linked either way.
-            */}
-            <SelectField
-              id="job-client"
-              label="Client"
-              hint={
-                jobForm.data.project_id === String(defaultClientId)
-                  ? 'The client this takeoff is for.'
-                  : 'Not this takeoff’s own client — the takeoff stays linked to the job.'
-              }
-              options={clientOptions}
-              value={jobForm.data.project_id}
-              onChange={(event) => selectClient(event.target.value)}
-              {...(jobForm.errors.project_id ? { error: jobForm.errors.project_id } : {})}
+            <TextInput
+              id="job-end"
+              type="date"
+              label="End Date"
+              value={jobForm.data.end_date}
+              onChange={(event) => updateJobField('end_date', event.target.value)}
+              {...(jobForm.errors.end_date ? { error: jobForm.errors.end_date } : {})}
             />
-
-            <fieldset>
-              <legend className="mb-1 text-md font-medium text-white">Site(s)</legend>
-              <JobSitePicker
-                client={selectedClient}
-                value={jobForm.data.address_ids}
-                onChange={(addressIds) => updateJobField('address_ids', addressIds)}
-                disabled={jobForm.processing}
-                {...(jobForm.errors.address_ids
-                  ? { error: jobForm.errors.address_ids }
-                  : {})}
-              />
-            </fieldset>
-
-            <div className="grid gap-6 lg:grid-cols-3">
-              <TextInput
-                id="job-start"
-                type="date"
-                label="Start Date"
-                value={jobForm.data.start_date}
-                onChange={(event) => updateJobField('start_date', event.target.value)}
-                {...(jobForm.errors.start_date ? { error: jobForm.errors.start_date } : {})}
-              />
-              <TextInput
-                id="job-end"
-                type="date"
-                label="End Date"
-                value={jobForm.data.end_date}
-                onChange={(event) => updateJobField('end_date', event.target.value)}
-                {...(jobForm.errors.end_date ? { error: jobForm.errors.end_date } : {})}
-              />
-              <TextInput
-                id="job-budget"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step={50}
-                label="Budget ($)"
-                placeholder="Enter budget amount"
-                value={jobForm.data.budget}
-                onChange={(event) => updateJobField('budget', event.target.value)}
-                {...(jobForm.errors.budget ? { error: jobForm.errors.budget } : {})}
-              />
-            </div>
-
-            <TextArea
-              id="job-description"
-              label="Job Description"
-              rows={4}
-              placeholder="Enter detailed job description"
-              value={jobForm.data.description}
-              onChange={(event) => updateJobField('description', event.target.value)}
-              {...(jobForm.errors.description ? { error: jobForm.errors.description } : {})}
+            <TextInput
+              id="job-budget"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={50}
+              label="Budget ($)"
+              placeholder="Enter budget amount"
+              value={jobForm.data.budget}
+              onChange={(event) => updateJobField('budget', event.target.value)}
+              {...(jobForm.errors.budget ? { error: jobForm.errors.budget } : {})}
             />
-
-            <RadioGroup
-              name="job-type"
-              label="Job Type"
-              options={JOB_TYPE_OPTIONS}
-              value={jobForm.data.job_type}
-              onChange={(value) => updateJobField('job_type', value as JobType)}
-              {...(jobForm.errors.job_type ? { error: jobForm.errors.job_type } : {})}
-            />
-
-            <div className="flex justify-end pt-2">
-              <Button type="submit" rightIcon={ArrowRight} isLoading={jobForm.processing}>
-                Create Job
-              </Button>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      {/*
-        The same step once the job exists. Without this the screen was the form
-        or nothing at all: coming back to it from the task step left a summary
-        with no job on it and no way forward, so the flow collapsed backwards
-        into the estimate.
-      */}
-      {result.workJobId && (
-        <Card padding="lg" className="mb-6">
-          <SectionHeading
-            as="h3"
-            title="The job"
-            subtitle="Raised from this takeoff — its quantities and estimate came from here"
-          />
-
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-panel border border-hairline bg-white/4 p-4">
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-white">
-                {result.workJobName ?? 'Untitled job'}
-              </p>
-              <p className="mt-0.5 text-sm text-white/70">{result.projectName}</p>
-            </div>
-            <ButtonLink
-              href={routeTo.job(result.workJobId)}
-              variant="secondary"
-              size="sm"
-              leftIcon={ExternalLink}
-            >
-              Open the job
-            </ButtonLink>
           </div>
 
+          <TextArea
+            id="job-description"
+            label="Job Description"
+            rows={4}
+            placeholder="Enter detailed job description"
+            value={jobForm.data.description}
+            onChange={(event) => updateJobField('description', event.target.value)}
+            {...(jobForm.errors.description ? { error: jobForm.errors.description } : {})}
+          />
+
+          <RadioGroup
+            name="job-type"
+            label="Job Type"
+            options={JOB_TYPE_OPTIONS}
+            value={jobForm.data.job_type}
+            onChange={(value) => updateJobField('job_type', value as JobType)}
+            {...(jobForm.errors.job_type ? { error: jobForm.errors.job_type } : {})}
+          />
+
+          <div className="flex flex-wrap justify-end gap-3 pt-2">
+            {/*
+              Saving on a job that exists is a save, not a second creation —
+              `storeJob` applies the typed fields to it. Forward is then the
+              task step, which the footer below offers on its own.
+            */}
+            <Button
+              type="submit"
+              {...(result.workJobId ? {} : { rightIcon: ArrowRight })}
+              {...(result.workJobId ? { leftIcon: Save } : {})}
+              isLoading={jobForm.processing}
+            >
+              {result.workJobId ? 'Save job' : 'Create Job'}
+            </Button>
+          </div>
+        </form>
+
+          {/*
+            The way on, once there is a job. Without it, coming back to this
+            step from the tasks left nowhere to go and the flow collapsed
+            backwards into the estimate.
+          */}
+        {result.workJobId && (
           <StepFooter
             current="job"
             href={routeTo.jobTaskSetup(result.workJobId)}
             continueLabel="Continue to tasks"
           />
-        </Card>
-      )}
+        )}
+      </Card>
     </PageTransition>
   )
 }

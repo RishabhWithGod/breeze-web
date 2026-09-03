@@ -10,6 +10,7 @@ use App\Notifications\EstimateStatusChanged;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Export\EstimatePdfWriter;
 use App\Services\Takeoff\EstimateBuilder;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response as ResponseFactory;
@@ -31,6 +32,12 @@ class EstimateDetailController extends Controller
 
     public function show(Request $request, Estimate $estimate): Response
     {
+        // Opened as a step, so the flow is remembered from here too — coming
+        // back to an estimate is a normal way to re-enter it.
+        if ($request->boolean('flow') && $estimate->aiResult?->project !== null) {
+            app(TakeoffFlow::class)->remember($estimate->aiResult->project);
+        }
+
         $estimate->load([
             'job', 'takeoffProject', 'items',
             'aiResult.wireSizes', 'aiResult.equipment', 'aiResult.panelSchedules',
@@ -61,7 +68,9 @@ class EstimateDetailController extends Controller
                     ? route('drawings.show', $estimate->project_id)
                     : null,
                 'drawingName' => $estimate->takeoffProject?->drawing_name,
-                'editUrl' => route('estimates.edit', $estimate),
+                // Carries how the estimate was reached, so editing and saving
+                // land back where the person actually came from.
+                'editUrl' => route('estimates.edit', $this->showParams($request, $estimate)),
                 // False while the lines still carry the engine's own quantities.
                 'reviewed' => $estimate->aiResult === null
                     ? true
@@ -121,18 +130,30 @@ class EstimateDetailController extends Controller
     }
 
     /**
-     * The estimate's own address, carrying the origin when it is a real one.
+     * How this estimate was reached, carried on every link that leads back to
+     * it — Back, the edit form, and the redirect after saving.
      *
-     * @return array<string, mixed>
+     * Two markers, and only one applies at a time: `from_job` for a job's own
+     * list, `flow` for the takeoff roadmap. `from_job` is checked against the
+     * estimate rather than trusted — an id that does not own this estimate is
+     * somebody guessing at a URL, not navigation.
+     *
+     * @return array<string, int>
      */
-    private function showParams(Request $request, Estimate $estimate): array
+    private function originParams(Request $request, Estimate $estimate): array
     {
         return array_filter([
-            'estimate' => $estimate->id,
             'from_job' => $request->integer('from_job') === $estimate->job_id
                 ? $estimate->job_id
                 : null,
+            'flow' => $request->boolean('flow') ? 1 : null,
         ]);
+    }
+
+    /** @return array<string, int> */
+    private function showParams(Request $request, Estimate $estimate): array
+    {
+        return ['estimate' => $estimate->id, ...$this->originParams($request, $estimate)];
     }
 
     /**

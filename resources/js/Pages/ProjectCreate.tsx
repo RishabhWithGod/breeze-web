@@ -9,18 +9,25 @@ import {
   ButtonLink,
   Card,
   CardHeader,
+  ConfirmDialog,
   RadioGroup,
   TextArea,
   TextInput,
+  UnfinishedTakeoffNotice,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { useDisclosure } from '@/hooks'
 import { PROJECT_TYPE_OPTIONS, ROUTES } from '@/constants'
-import type { ProjectDraft, ProjectType } from '@/types'
+import type { ProjectDraft, ProjectType, ResumableTakeoff } from '@/types'
 import { emptyAddress } from '@/utils'
 
 export interface ProjectCreateProps {
-  /** Clients already on record, offered as suggestions on the name field. */
-  clients: readonly string[]
+  /**
+   * A takeoff already part-way through, if there is one. Starting a second
+   * client is normal; doing it by accident and losing track of the first is
+   * not, so this screen says so before it happens.
+   */
+  unfinishedTakeoff: ResumableTakeoff | null
 }
 
 /**
@@ -30,14 +37,15 @@ export interface ProjectCreateProps {
  * PDF is uploaded from AI Takeoff, against a client that already exists, so the
  * product has one upload path rather than three.
  */
-export default function ProjectCreate({ clients }: ProjectCreateProps) {
+export default function ProjectCreate({ unfinishedTakeoff }: ProjectCreateProps) {
+  const confirmNew = useDisclosure()
+
   const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
     useForm<ProjectDraft>({
       name: '',
       code: '',
       addresses: [emptyAddress()],
       project_type: '',
-      due_date: '',
       notes: '',
     })
 
@@ -54,8 +62,8 @@ export default function ProjectCreate({ clients }: ProjectCreateProps) {
     if (errors[field]) clearErrors(field)
   }
 
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault()
+  const create = () => {
+    confirmNew.close()
 
     /*
      * The form always shows one empty row to type into, and a client can be
@@ -64,10 +72,29 @@ export default function ProjectCreate({ clients }: ProjectCreateProps) {
      */
     transform((payload) => ({
       ...payload,
-      addresses: payload.addresses.filter((row) => row.address.trim() !== ''),
+      // Only a row nobody touched at all. One with a name but no address —
+      // or the other way round — is a half-filled row, and dropping it would
+      // throw away what was typed instead of saying what is missing.
+      addresses: payload.addresses.filter(
+        (row) => row.label.trim() !== '' || row.address.trim() !== '',
+      ),
     }))
 
     post(ROUTES.projects)
+  }
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault()
+
+    // Asked once, before anything is created. Saying yes moves the resume
+    // button onto the client about to be made.
+    if (unfinishedTakeoff) {
+      confirmNew.open()
+
+      return
+    }
+
+    create()
   }
 
   return (
@@ -97,45 +124,26 @@ export default function ProjectCreate({ clients }: ProjectCreateProps) {
           )}
         </AnimatePresence>
 
+        <UnfinishedTakeoffNotice takeoff={unfinishedTakeoff} starting="a new client" />
+
         <Card padding="lg">
-          <CardHeader
-            title="Client details"
-            subtitle="Who the client is, and where the work is"
-          />
+          <CardHeader title="Client details" />
 
           <div className="space-y-6">
             {/*
-              One field rather than a separate name + client pair: clients
-              already on record are offered as suggestions via the datalist,
-              and a client new to the workspace is typed straight in.
+              A plain text box. It carried a datalist of the clients already on
+              record, which put a dropdown arrow on a field that is not a
+              choice — this screen exists to name a client that is not on the
+              list yet.
             */}
             <TextInput
               id="project-name"
               label="Client Name*"
               placeholder="e.g. Harborview Data Hall"
-              list="project-known-clients"
               autoComplete="off"
               value={data.name}
               onChange={(event) => update('name', event.target.value)}
-              {...(clients.length > 0
-                ? { hint: 'Existing clients are suggested as you type.' }
-                : {})}
               {...(errors.name ? { error: errors.name } : {})}
-            />
-            <datalist id="project-known-clients">
-              {clients.map((client) => (
-                <option key={client} value={client} />
-              ))}
-            </datalist>
-
-            <TextInput
-              id="project-due"
-              type="date"
-              label="Takeoff Due"
-              className="lg:max-w-xs"
-              value={data.due_date}
-              onChange={(event) => update('due_date', event.target.value)}
-              {...(errors.due_date ? { error: errors.due_date } : {})}
             />
 
             <RadioGroup
@@ -148,11 +156,7 @@ export default function ProjectCreate({ clients }: ProjectCreateProps) {
             />
 
             <div className="border-t border-hairline pt-6">
-              <p className="text-md font-medium text-white">Sites</p>
-              <p className="mt-1 mb-4 text-sm text-white/75">
-                Every address this client has work at. The first is the primary —
-                it names the client in lists, and a job starts on it.
-              </p>
+              <p className="mb-4 text-md font-medium text-white">Site Location(s)</p>
 
               <AddressListField
                 addresses={data.addresses}
@@ -185,6 +189,16 @@ export default function ProjectCreate({ clients }: ProjectCreateProps) {
           </Button>
         </div>
       </form>
+
+      <ConfirmDialog
+        isOpen={confirmNew.isOpen}
+        tone="brand"
+        title="Start a new client?"
+        description={`“${unfinishedTakeoff?.projectName ?? ''}” is still at ${unfinishedTakeoff?.stage ?? ''}. It stays exactly as it is, but the resume button will follow this new client from here.`}
+        confirmLabel="Yes, create it"
+        onConfirm={create}
+        onCancel={confirmNew.close}
+      />
     </PageTransition>
   )
 }

@@ -15,41 +15,78 @@ const ITEM_BASE =
   'text-md font-medium transition-colors duration-200'
 
 /**
- * URL prefixes that belong to the AI Takeoff module. Processing and results are
- * per-project URLs now, so this matches on prefix rather than exact path.
+ * The paths a module owns beyond the one its entry links to.
+ *
+ * A module's screens do not all live under its link. The takeoff flow runs
+ * across `/processing`, `/reviews` and `/takeoffs` and none of those start with
+ * `/ai-takeoff` — so before this, signing off a review lit nothing at all and
+ * the rail stopped saying where you were half way through the flow.
  */
-const TAKEOFF_PREFIXES: readonly string[] = [ROUTES.aiTakeoff, '/processing', '/results']
+const MODULE_PATHS: Readonly<Record<string, readonly string[]>> = {
+  [ROUTES.aiTakeoff]: ['/processing', '/results', '/reviews', '/takeoffs'],
+  // The entry links to the entries list; the module also covers /week,
+  // /reports and /settings.
+  [ROUTES.timeTracking]: ['/time-tracking'],
+  // The entry links straight to the invoices list, which is the module's
+  // landing screen — but the overview at /billing is the same module.
+  [ROUTES.billing]: ['/billing'],
+}
+
+/**
+ * Screens whose module is not the one their URL sits under.
+ *
+ * The takeoff flow's later steps are not takeoff screens. Its job step lives at
+ * `/takeoffs/{id}/final` and its task step at `/jobs/{id}/tasks/setup`, and the
+ * rail has to name the step you are on — the same one the roadmap at the top of
+ * those screens is pointing at. Matched exactly, so the drawing viewer at
+ * `/takeoffs/{id}/pdf` stays where it belongs.
+ */
+const PATH_OVERRIDES: readonly { readonly pattern: RegExp; readonly href: string }[] = [
+  { pattern: /^\/takeoffs\/\d+\/final$/, href: ROUTES.jobs },
+  { pattern: /^\/jobs\/\d+\/tasks\/setup$/, href: ROUTES.tasks },
+]
 
 /** `/` is an alias of the home route, so both must light the Home entry. */
 const HOME_PATHS: readonly string[] = ['/', ROUTES.home]
 
-function isItemActive(item: NavItem, pathname: string): boolean {
-  if (item.href === ROUTES.home) return HOME_PATHS.includes(pathname)
-  if (item.href === ROUTES.aiTakeoff) {
-    return TAKEOFF_PREFIXES.some((prefix) => pathname.startsWith(prefix))
-  }
-  // The item links straight to the entries list (the module's landing
-  // screen), but the module also covers /week, /reports and /settings —
-  // all of those should still light up "Time Tracking" in the sidebar.
-  if (item.href === ROUTES.timeTracking) return pathname.startsWith('/time-tracking')
-  return pathname === item.href || pathname.startsWith(`${item.href}/`)
+/**
+ * How specifically an item claims this path, or -1 for not at all.
+ *
+ * A number rather than a yes/no because two entries can both be right and only
+ * one may light: `/tasks/create` is claimed by "Tasks" and by "Add task", and
+ * the longer claim is the screen you are actually on.
+ */
+function matchStrength(item: NavItem, pathname: string): number {
+  if (item.href === ROUTES.home) return HOME_PATHS.includes(pathname) ? 1 : -1
+
+  const owned = [item.href, ...(MODULE_PATHS[item.href] ?? [])]
+
+  return owned.reduce(
+    (best, path) =>
+      pathname === path || pathname.startsWith(`${path}/`)
+        ? Math.max(best, path.length)
+        : best,
+    -1,
+  )
 }
 
-/**
- * The one entry to light up, which is the *longest* href that matches.
- *
- * Prefix matching alone lit two rows at once now that one entry's href sits
- * under another's: `/tasks/create` matches both "Tasks" and "Add task". The
- * more specific entry is the one you are actually on.
- */
+/** The one entry to light up: whichever claims this path most specifically. */
 function activeHref(pathname: string): string | null {
-  return SIDEBAR_ITEMS.reduce<string | null>(
-    (best, item) =>
-      isItemActive(item, pathname) && (best === null || item.href.length > best.length)
-        ? item.href
-        : best,
-    null,
-  )
+  const override = PATH_OVERRIDES.find(({ pattern }) => pattern.test(pathname))
+
+  if (override) return override.href
+
+  let best: { href: string; strength: number } | null = null
+
+  for (const item of SIDEBAR_ITEMS) {
+    const strength = matchStrength(item, pathname)
+
+    if (strength >= 0 && (best === null || strength > best.strength)) {
+      best = { href: item.href, strength }
+    }
+  }
+
+  return best?.href ?? null
 }
 
 /** Current path, without the query string. */

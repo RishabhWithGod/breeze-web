@@ -114,7 +114,7 @@ export default function JobTaskEdit({
 
       <PageHeader
         title="Edit task"
-        subtitle={`On “${job.name}”. A task is its name, the estimate lines it covers and the foreman running it.`}
+        subtitle={job.name}
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
           { label: 'Tasks', href: ROUTES.tasks },
@@ -135,11 +135,7 @@ export default function JobTaskEdit({
 
       <form onSubmit={submit} noValidate>
         <Card padding="lg">
-          <SectionHeading
-            as="h3"
-            title="Task"
-            subtitle={job.client ?? 'No client on this job'}
-          />
+          <SectionHeading as="h3" title="Task" />
 
           {/*
             The same row the setup screen draws, with one task in it — same

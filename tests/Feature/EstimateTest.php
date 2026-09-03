@@ -224,6 +224,80 @@ class EstimateTest extends TestCase
             ));
     }
 
+    public function test_editing_from_the_roadmap_returns_to_the_roadmap(): void
+    {
+        $estimate = Estimate::create([
+            'number' => 'EST-6003',
+            'client' => 'Harborview',
+            'project' => 'Harborview',
+            'issued_on' => now()->toDateString(),
+            'amount' => 500,
+            'status' => 'draft',
+        ]);
+
+        $client = $this->user->projects()->create([
+            'name' => 'Harborview', 'client' => 'Harborview', 'status' => 'draft',
+        ]);
+        $inFlow = ['estimate' => $estimate->id, 'flow' => 1];
+
+        // Opened as a step, the Edit button has to stay a step.
+        $this->actingAs($this->user)
+            ->get(route('estimates.show', $inFlow))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('estimate.editUrl', route('estimates.edit', $inFlow)));
+
+        // And the edit screen's Back and save both land back in the flow, not
+        // on a bare estimate with no roadmap and no way forward.
+        $this->actingAs($this->user)
+            ->get(route('estimates.edit', $inFlow))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('backUrl', route('estimates.show', $inFlow))
+                ->where('saveUrl', route('estimates.update', $inFlow)));
+
+        $this->actingAs($this->user)
+            ->put(route('estimates.update', $inFlow), [
+                'project_id' => $client->id,
+                'status' => 'sent',
+                'issued_on' => now()->toDateString(),
+                'markup_pct' => 0,
+                'tax_pct' => 0,
+            ])
+            ->assertRedirect(route('estimates.show', $inFlow));
+    }
+
+    public function test_editing_an_estimate_opened_on_its_own_returns_to_it_plainly(): void
+    {
+        $estimate = Estimate::create([
+            'number' => 'EST-6004',
+            'client' => 'Harborview',
+            'project' => 'Harborview',
+            'issued_on' => now()->toDateString(),
+            'amount' => 500,
+            'status' => 'draft',
+        ]);
+
+        $client = $this->user->projects()->create([
+            'name' => 'Harborview', 'client' => 'Harborview', 'status' => 'draft',
+        ]);
+
+        // No roadmap was involved, so none is claimed on the way back.
+        $this->actingAs($this->user)
+            ->get(route('estimates.edit', $estimate))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('backUrl', route('estimates.show', $estimate))
+                ->where('saveUrl', route('estimates.update', $estimate)));
+
+        $this->actingAs($this->user)
+            ->put(route('estimates.update', $estimate), [
+                'project_id' => $client->id,
+                'status' => 'sent',
+                'issued_on' => now()->toDateString(),
+                'markup_pct' => 0,
+                'tax_pct' => 0,
+            ])
+            ->assertRedirect(route('estimates.show', $estimate));
+    }
+
     public function test_a_job_that_does_not_own_the_estimate_is_not_believed(): void
     {
         $theirJob = Job::create([

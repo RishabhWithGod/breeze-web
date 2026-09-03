@@ -83,7 +83,6 @@ export default function ForemanEdit({ foreman }: ForemanEditProps) {
 
       <PageHeader
         title={`Edit ${foreman.name}`}
-        subtitle="Who they are, and how the office reaches them."
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
           { label: 'Foremen', href: ROUTES.foremen },
@@ -111,10 +110,7 @@ export default function ForemanEdit({ foreman }: ForemanEditProps) {
         </AnimatePresence>
 
         <Card padding="lg">
-          <CardHeader
-            title="Foreman details"
-            subtitle={`Initials are re-read from the name — currently “${foreman.initials}”`}
-          />
+          <CardHeader title="Foreman details" />
 
           <div className="space-y-6">
             <TextInput
@@ -142,7 +138,6 @@ export default function ForemanEdit({ foreman }: ForemanEditProps) {
                 label="Licence Number"
                 placeholder="e.g. EC-4471"
                 autoComplete="off"
-                hint="What lets them sign off work on site."
                 value={data.licence_number}
                 onChange={(event) => update('licence_number', event.target.value)}
                 {...(errors.licence_number ? { error: errors.licence_number } : {})}

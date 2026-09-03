@@ -11,7 +11,7 @@ import {
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ROUTES, routeTo } from '@/constants'
+import { ROUTES } from '@/constants'
 import type { ClientOption, EstimateTotals, SelectOption } from '@/types'
 import { ESTIMATE_STATUS_LABEL, formatCurrency } from '@/utils'
 
@@ -110,7 +110,9 @@ export default function EstimateEdit({
         subtitle="Client, status, issue date and the rates applied to the line items."
         breadcrumbs={[
           { label: 'Estimates', href: ROUTES.estimates },
-          { label: estimate.number, href: routeTo.estimate(estimate.id) },
+          // The same address Back uses, so the crumb does not quietly drop
+          // the origin the rest of the screen carries.
+          { label: estimate.number, href: backUrl },
           { label: 'Edit' },
         ]}
         actions={

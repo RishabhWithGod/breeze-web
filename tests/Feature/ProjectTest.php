@@ -82,9 +82,10 @@ class ProjectTest extends TestCase
             ->get('/projects/create')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('ProjectCreate')
-                // Existing clients are suggested on the name field; there is no
-                // drawing picker and no discipline to choose.
-                ->has('clients', 1)
+                // The client's own details, typed. No suggestion list on the
+                // name — this screen exists to name a client that is not on
+                // one — no drawing picker, and no discipline to choose.
+                ->missing('clients')
                 ->missing('limits')
                 ->missing('disciplines'));
     }
@@ -96,7 +97,6 @@ class ProjectTest extends TestCase
             'code' => 'PRJ-2041',
             'location' => '41 Harbor Way',
             'project_type' => 'commercial',
-            'due_date' => '2026-09-01',
             'notes' => 'Revision C only.',
         ]);
 
@@ -107,7 +107,8 @@ class ProjectTest extends TestCase
         $this->assertSame('draft', $project->status);
         $this->assertSame('commercial', $project->project_type);
         $this->assertSame('PRJ-2041', $project->code);
-        $this->assertSame('2026-09-01', $project->due_date->toDateString());
+        // The form no longer asks for a takeoff due date.
+        $this->assertNull($project->due_date);
         // The form leaves discipline unset; the column's default stands.
         $this->assertSame('Electrical', $project->discipline);
 

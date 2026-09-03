@@ -141,7 +141,6 @@ export default function JobTaskSetup({
 
       <PageHeader
         title="Add tasks"
-        subtitle={`Break “${job.name}” into the work it takes. Every task needs a name, a foreman and the estimate lines it covers.`}
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
           { label: job.name, href: routeTo.job(job.id) },
@@ -189,7 +188,6 @@ export default function JobTaskSetup({
           <SectionHeading
             as="h3"
             title="Already planned"
-            subtitle="Anything you add below is appended to these"
           />
           <ul className="grid gap-2 sm:grid-cols-2">
             {existingTasks.map((task) => (

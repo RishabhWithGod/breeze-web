@@ -170,7 +170,6 @@ class JobTest extends TestCase
                 ->has('clients.0.addresses', 1)
                 ->where('clients.0.addresses.0.address', 'Northgate, Seattle')
                 ->where('clients.0.addresses.0.isPrimary', true)
-                ->where('clients.0.dueDate', '2026-05-11')
                 ->where('clients.0.projectType', 'commercial')
                 ->has('uploads', 1)
                 ->where('uploads.0.id', $upload->id)

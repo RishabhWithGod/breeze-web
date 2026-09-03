@@ -44,7 +44,6 @@ export default function TaskCreate({ jobs }: TaskCreateProps) {
 
       <PageHeader
         title="Add task"
-        subtitle="Tasks belong to a job — pick the one this work is for."
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
           { label: 'Tasks', href: ROUTES.tasks },

@@ -31,7 +31,9 @@ class StoreProjectRequest extends FormRequest
              * and is mirrored onto `location` for every list that reads it.
              */
             'addresses' => ['nullable', 'array', 'max:25'],
-            'addresses.*.label' => ['nullable', 'string', 'max:80'],
+            // Named, not just addressed: a client with three sites is read by
+            // the names people call them, and "9 Depot Road" is not one.
+            'addresses.*.label' => ['required', 'string', 'max:80'],
             'addresses.*.address' => ['required', 'string', 'max:160'],
             /*
              * Set only when the address was picked from the lookup, so both are
@@ -41,7 +43,6 @@ class StoreProjectRequest extends FormRequest
             'addresses.*.latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:addresses.*.longitude'],
             'addresses.*.longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:addresses.*.latitude'],
             'project_type' => ['nullable', Rule::in(Project::TYPES)],
-            'due_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }
@@ -52,6 +53,7 @@ class StoreProjectRequest extends FormRequest
         return [
             'name.required' => 'Client name is required',
             'name.min' => 'Use at least 3 characters',
+            'addresses.*.label.required' => 'Name this site, or remove the row.',
             'addresses.*.address.required' => 'Enter the address, or remove the row.',
         ];
     }
@@ -62,7 +64,6 @@ class StoreProjectRequest extends FormRequest
         return [
             'code' => 'project number',
             'project_type' => 'project type',
-            'due_date' => 'due date',
         ];
     }
 }
