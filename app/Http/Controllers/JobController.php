@@ -18,6 +18,7 @@ use App\Policies\JobSchedulePolicy;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\JobSites;
+use App\Services\Clients\ProjectDirectory;
 use App\Services\JobCosting\JobCostSummary;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Services\Takeoff\TakeoffLinkOptions;
@@ -104,6 +105,8 @@ class JobController extends Controller
     {
         return Inertia::render('JobCreate', [
             'clients' => $this->clients->options(),
+            // Their projects, each carrying its sites and its default drawing.
+            'projects' => app(ProjectDirectory::class)->options(),
             'uploads' => $this->linkOptions->uploads(),
             // Raising a job by hand forks a takeoff mid-flow: its own job is
             // raised from its review summary, not here.
@@ -125,7 +128,8 @@ class JobController extends Controller
         $data = $this->clients->withClientSnapshot($data);
 
         // Refused here rather than trusted: the ids must be this client's own.
-        $addresses = $this->sites->resolve((int) $data['project_id'], $data['address_ids']);
+        // Against the client's own book — a project and its job share a place.
+        $addresses = $this->sites->resolve((int) $data['client_id'], $data['address_ids']);
         unset($data['address_ids']);
 
         $job = Job::create([
@@ -234,6 +238,7 @@ class JobController extends Controller
         return Inertia::render('JobEdit', [
             'job' => (new JobDetailResource($job->load('teamMembers', 'addresses')))->resolve(),
             'clients' => $this->clients->options(),
+            'projects' => app(ProjectDirectory::class)->options(),
         ]);
     }
 
@@ -243,7 +248,8 @@ class JobController extends Controller
         $newStatus = $data['status'];
         unset($data['status']);
 
-        $addresses = $this->sites->resolve((int) $data['project_id'], $data['address_ids']);
+        // Against the client's own book — a project and its job share a place.
+        $addresses = $this->sites->resolve((int) $data['client_id'], $data['address_ids']);
         unset($data['address_ids']);
 
         $job->update($data);

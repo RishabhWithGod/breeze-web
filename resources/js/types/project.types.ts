@@ -104,23 +104,36 @@ export interface AddressSuggestion {
 }
 
 /**
- * A client, offered in the single Client select on every intake form.
+ * A client, offered in the Client select on every intake form.
  *
- * Clients are projects — the same record — so picking one here both names the
- * client and scopes the AI Takeoff drawings offered below it. `location` and
- * `projectType` are carried over into a blank field on the form rather than
- * retyped.
+ * Who the work is for, and where they have work. What the work *is* is one of
+ * their projects, which is picked next — see `ProjectOption`.
  */
 export interface ClientOption {
   readonly id: number
   readonly name: string
+  readonly addresses: readonly ClientAddressOption[]
+}
+
+/**
+ * A project a piece of work can be raised against.
+ *
+ * Every drawing, takeoff and estimate hangs off one — the client alone cannot
+ * say which set of drawings a job is on.
+ */
+export interface ProjectOption {
+  readonly id: number
+  readonly clientId: number | null
+  /** Whose it is — a project's name only means something beside its client. */
+  readonly clientName: string | null
+  readonly name: string
   readonly projectType: JobType | null
   /**
-   * The drawing this client's work is taken off — chosen on their screen, or
-   * the first on record. Null when they have no drawings yet.
+   * The drawing this project's work is taken off — chosen on its screen, or
+   * the first on record. Null when it has no drawings yet.
    */
   readonly defaultUploadId: number | null
-  /** Every site this client has work at. A job picks from these. */
+  /** The sites this project stands on. A job is at one of these. */
   readonly addresses: readonly ClientAddressOption[]
 }
 
@@ -134,6 +147,8 @@ export interface TakeoffUploadOption {
   readonly id: number
   readonly name: string
   readonly projectId: number
+  /** Whose drawing it is, for lists that narrow by client rather than project. */
+  readonly clientId: number | null
   readonly estimate: {
     readonly id: number
     readonly number: string

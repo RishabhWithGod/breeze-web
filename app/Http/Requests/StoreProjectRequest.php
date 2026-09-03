@@ -2,20 +2,19 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Project;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 /**
- * Create Client: the client's own details, and nothing else.
+ * Add Project: whose it is, and what it is called.
  *
- * Only the name is required — clients and projects are the same record, so the
- * name *is* the client, and the `client` column is written from it rather than
- * asked for twice.
+ * Nothing else, because nothing else is known yet. The place comes from the
+ * client's address book, and everything about the work itself — its counts,
+ * its bill of quantities, its price — comes from the takeoff that runs against
+ * it. Asking here would be asking someone to guess.
  *
- * No drawings are accepted here. A PDF now only ever arrives through AI
- * Takeoff, which uploads it against a client that already exists, so the
- * product has one upload path rather than three.
+ * No drawings are accepted either. A PDF only ever arrives through AI Takeoff,
+ * uploaded against a project that already exists, so the product has one
+ * upload path rather than three.
  */
 class StoreProjectRequest extends FormRequest
 {
@@ -24,26 +23,13 @@ class StoreProjectRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'min:3', 'max:160'],
-            'code' => ['nullable', 'string', 'max:60'],
+            // A project is always for somebody.
+            'client_id' => ['required', 'integer', 'exists:clients,id'],
             /*
-             * The client's sites. A client can be opened before any is known,
-             * so the list may be empty; the first one given is the primary,
-             * and is mirrored onto `location` for every list that reads it.
+             * No address here. A project and the job on it are at the same
+             * place, and that place is in the client's address book — asking
+             * again on this form would be a second copy free to drift.
              */
-            'addresses' => ['nullable', 'array', 'max:25'],
-            // Named, not just addressed: a client with three sites is read by
-            // the names people call them, and "9 Depot Road" is not one.
-            'addresses.*.label' => ['required', 'string', 'max:80'],
-            'addresses.*.address' => ['required', 'string', 'max:160'],
-            /*
-             * Set only when the address was picked from the lookup, so both are
-             * optional — but never one without the other, or the record would
-             * carry half a point.
-             */
-            'addresses.*.latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:addresses.*.longitude'],
-            'addresses.*.longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:addresses.*.latitude'],
-            'project_type' => ['nullable', Rule::in(Project::TYPES)],
-            'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }
 
@@ -51,19 +37,9 @@ class StoreProjectRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Client name is required',
+            'name.required' => 'Project name is required',
+            'client_id.required' => 'Pick the client this project is for',
             'name.min' => 'Use at least 3 characters',
-            'addresses.*.label.required' => 'Name this site, or remove the row.',
-            'addresses.*.address.required' => 'Enter the address, or remove the row.',
-        ];
-    }
-
-    /** @return array<string, string> */
-    public function attributes(): array
-    {
-        return [
-            'code' => 'project number',
-            'project_type' => 'project type',
         ];
     }
 }

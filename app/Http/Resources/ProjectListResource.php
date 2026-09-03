@@ -24,6 +24,8 @@ class ProjectListResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'code' => $this->code,
+            'clientId' => $this->client_id,
+            // The name snapshot, which is what lists and printed sheets read.
             'client' => $this->client,
             'location' => $this->location,
             'discipline' => $this->discipline,

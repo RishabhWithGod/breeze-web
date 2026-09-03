@@ -1,29 +1,41 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { router } from '@inertiajs/react'
 import { MapPinPlus, Plus, X } from 'lucide-react'
 import { AddressField, Button, TextInput } from '@/components/common'
 import { routeTo } from '@/constants'
-import type { ClientOption } from '@/types'
+import type { ClientAddressOption } from '@/types'
 import { cn } from '@/utils'
 
 export interface JobSitePickerProps {
-  /** Null until a client is chosen — there is nothing to pick from before that. */
-  client: ClientOption | undefined
   /**
-   * The picked site, as a list of one — the shape the job form and the server
-   * both speak, so the pivot and every route stay as they are.
+   * Whose book this is. Null until a client is chosen — there is nothing to
+   * pick from, and nowhere to record a new site, before that.
+   *
+   * Taken as an id rather than read off a passed-in object: one caller has a
+   * client to hand and another only has the project, and a picker that guessed
+   * which was which posted new sites to whichever id it was given.
+   */
+  clientId: number | null
+  clientName: string
+  /** The sites on that book. */
+  sites: readonly ClientAddressOption[]
+  /**
+   * The picked sites. A job is at one, so its list is of one; `multiple` gives
+   * tick boxes for a caller that allows several.
    */
   value: readonly number[]
   onChange: (addressIds: number[]) => void
+  multiple?: boolean
   error?: string
   disabled?: boolean
 }
 
 /**
- * Which of its client's sites a job runs at.
+ * Which of its client's sites a piece of work runs at.
  *
- * One, so it is radios rather than tick boxes: picking a second site replaces
- * the first rather than adding to it. The chosen site becomes the job's own
+ * One for a job, so it is radios: picking a second site replaces the first
+ * rather than adding to it. A project can span several, and passes `multiple`
+ * for tick boxes. Either way the first picked becomes the record's own
  * address, which is what a job sheet and every list show.
  *
  * A site can also be added here. Raising a job for an address the client's
@@ -31,9 +43,12 @@ export interface JobSitePickerProps {
  * to record it would lose everything they had typed on this form.
  */
 export function JobSitePicker({
-  client,
+  clientId,
+  clientName,
+  sites,
   value,
   onChange,
+  multiple = false,
   error,
   disabled = false,
 }: JobSitePickerProps) {
@@ -47,17 +62,54 @@ export function JobSitePicker({
   })
   const [addError, setAddError] = useState<string | null>(null)
 
+  /*
+   * The address just typed, so the site it becomes can be selected the moment
+   * it arrives. A ref rather than state: this drives one call on the next
+   * render and nothing about what is drawn, so re-rendering for it would be a
+   * render nobody asked for.
+   */
+  const justAdded = useRef<string | null>(null)
+
+  /*
+   * The new site comes back as part of the refreshed props, not in the
+   * response — reading it off the response meant knowing which prop the parent
+   * kept its clients under, which is not the picker's business.
+   */
+  useEffect(() => {
+    const typed = justAdded.current
+
+    if (typed === null) return
+
+    const added = sites.find((site) => site.address.trim() === typed)
+
+    if (!added) return
+
+    justAdded.current = null
+
+    if (!value.includes(added.id)) {
+      onChange(multiple ? [...value, added.id] : [added.id])
+    }
+  }, [sites, value, onChange, multiple])
+
   const reset = () => {
     setDraft({ label: '', address: '', latitude: null, longitude: null })
     setAddError(null)
     setIsAdding(false)
   }
 
-  /** One site, so choosing replaces rather than adds. */
-  const choose = (siteId: number) => onChange([siteId])
+  /** One site replaces; several toggle, keeping the order they were picked in. */
+  const choose = (siteId: number) => {
+    if (! multiple) return onChange([siteId])
+
+    onChange(
+      value.includes(siteId)
+        ? value.filter((id) => id !== siteId)
+        : [...value, siteId],
+    )
+  }
 
   const addSite = () => {
-    if (!client || draft.label.trim() === '') {
+    if (clientId === null || draft.label.trim() === '') {
       setAddError('Name this site.')
       return
     }
@@ -67,26 +119,21 @@ export function JobSitePicker({
       return
     }
 
-    const known = new Set(client.addresses.map((site) => site.id))
-
-    router.post(routeTo.clientAddresses(client.id), draft, {
+    router.post(routeTo.clientAddresses(clientId), draft, {
       preserveScroll: true,
       preserveState: true,
       onStart: () => {
         setSaving(true)
         setAddError(null)
       },
-      onSuccess: (page) => {
+      onSuccess: () => {
         /*
-         * The visit brings back a refreshed client list. Selecting the site
-         * that was not there before saves the person picking the address they
-         * have just this second typed out.
+         * The address that was just typed, remembered so the effect below can
+         * select it once the refreshed sites arrive. Reading it off the
+         * response meant knowing which prop the parent kept its clients under,
+         * which is not the picker's business.
          */
-        const clients = (page.props['clients'] ?? []) as readonly ClientOption[]
-        const refreshed = clients.find((option) => option.id === client.id)
-        const added = refreshed?.addresses.find((site) => !known.has(site.id))
-
-        if (added) onChange([added.id])
+        justAdded.current = draft.address.trim()
         reset()
       },
       onError: (errors) =>
@@ -95,20 +142,20 @@ export function JobSitePicker({
     })
   }
 
-  if (!client) {
+  if (clientId === null) {
     return <p className="text-sm text-white/70">Pick a client to see their sites.</p>
   }
 
   return (
     <div>
-      {client.addresses.length === 0 ? (
+      {sites.length === 0 ? (
         <p className="mb-3 text-sm text-white/70">
-          {client.name} has no sites on record yet — add the first one below.
+          {clientName} has no sites on record yet — add the first one below.
         </p>
       ) : (
         <>
           <div className="grid gap-2 sm:grid-cols-2">
-            {client.addresses.map((site) => {
+            {sites.map((site) => {
               const picked = value.includes(site.id)
 
               return (
@@ -122,8 +169,8 @@ export function JobSitePicker({
                   )}
                 >
                   <input
-                    type="radio"
-                    name={`job-site-${client.id}`}
+                    type={multiple ? 'checkbox' : 'radio'}
+                    name={multiple ? undefined : `site-${clientId}`}
                     className="mt-0.5 size-4 shrink-0 accent-brand"
                     checked={picked}
                     disabled={disabled}
@@ -140,7 +187,7 @@ export function JobSitePicker({
       {isAdding ? (
         <div className="mt-3 rounded-panel border border-hairline bg-white/4 p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-white">New site for {client.name}</p>
+            <p className="text-sm font-medium text-white">New site for {clientName}</p>
             <Button
               type="button"
               variant="ghost"

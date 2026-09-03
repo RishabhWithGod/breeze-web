@@ -161,7 +161,9 @@ export default function JobEdit({ job, clients }: JobEditProps) {
             <fieldset>
               <legend className="mb-1 text-md font-medium text-white">Site Location*</legend>
               <JobSitePicker
-                client={selectedClient}
+                clientId={selectedClient?.id ?? null}
+                clientName={selectedClient?.name ?? ''}
+                sites={selectedClient?.addresses ?? []}
                 value={data.address_ids}
                 onChange={(addressIds) => {
                   setData('address_ids', addressIds)

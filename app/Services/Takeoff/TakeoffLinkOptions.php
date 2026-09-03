@@ -27,7 +27,9 @@ class TakeoffLinkOptions
      */
     public function uploads(): Collection
     {
-        $uploads = Upload::orderBy('name')->get(['id', 'name', 'project_id']);
+        $uploads = Upload::with('project:id,client_id')
+            ->orderBy('name')
+            ->get(['id', 'name', 'project_id']);
 
         $estimatesByUpload = AiResult::whereIn('upload_id', $uploads->pluck('id'))
             ->whereNotNull('estimate_id')
@@ -42,6 +44,9 @@ class TakeoffLinkOptions
                 'id' => $upload->id,
                 'name' => $upload->label(),
                 'projectId' => $upload->project_id,
+                // Whose drawing it is. An estimate is raised for a client, so
+                // it narrows the list by that rather than by the project.
+                'clientId' => $upload->project?->client_id,
                 'estimate' => $estimate ? [
                     'id' => $estimate->id,
                     'number' => $estimate->number,

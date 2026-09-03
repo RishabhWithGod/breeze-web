@@ -39,7 +39,7 @@ export interface ProjectShowProps {
 }
 
 /**
- * Client detail: the details it was created with, the drawing PDFs it holds,
+ * Project detail: the details it was opened with, the drawing PDFs it holds,
  * and what has happened to it.
  *
  * Drawings can be opened and removed here but not added — a PDF only ever
@@ -71,7 +71,7 @@ export default function ProjectShow({
 
   /*
    * Choosing is a real write — every later takeoff, and the drawing name shown
-   * on the Clients list, follow it — so it posts rather than being held in the
+   * on the Projects list, follow it — so it posts rather than being held in the
    * page. Only offered with more than one drawing: with one there is nothing
    * to choose, and the fallback already points at it.
    */
@@ -125,7 +125,7 @@ export default function ProjectShow({
         title={project.name}
         {...(project.code ? { subtitle: project.code } : {})}
         breadcrumbs={[
-          { label: 'Clients', href: ROUTES.projects },
+          { label: 'Projects', href: ROUTES.projects },
           { label: project.name },
         ]}
         actions={
@@ -189,7 +189,7 @@ export default function ProjectShow({
       <div className="grid gap-6 xl:grid-cols-3">
         {/* ------------------------------------------------------- Details ---- */}
         <Card padding="lg">
-          <CardHeader title="Client details" />
+          <CardHeader title="Project details" />
 
           <dl className="space-y-4">
             {details.map((detail) => (

@@ -32,6 +32,8 @@ export const ROUTES = {
   estimateCreate: '/estimates/create',
   jobs: '/jobs',
   /** Under Jobs in the rail: work and the people who run it, across every job. */
+  clients: '/clients',
+  clientCreate: '/clients/create',
   takeoffFlowForget: '/takeoff-flow',
   tasks: '/tasks',
   taskCreate: '/tasks/create',
@@ -95,7 +97,9 @@ export const ROUTES = {
 /** Per-record URLs. */
 export const routeTo = {
   /** Adds a site to a client from whichever screen needed it. */
-  clientAddresses: (projectId: number) => `/projects/${projectId}/addresses`,
+  clientAddresses: (clientId: number) => `/clients/${clientId}/addresses`,
+  clientAddress: (clientId: number, addressId: number) =>
+    `/clients/${clientId}/addresses/${addressId}`,
   /** The step after Create Job: laying the job out in tasks. */
   jobTaskSetup: (jobId: number) => `/jobs/${jobId}/tasks/setup`,
   /*
@@ -148,6 +152,10 @@ export const routeTo = {
   jobTasksReorder: (jobId: number) => `/jobs/${jobId}/schedule/reorder`,
   scheduleTask: (taskId: number) => `/schedule-tasks/${taskId}`,
   /** The setup screen aimed at one task, with where Back should return to. */
+  client: (clientId: number) => `/clients/${clientId}`,
+  clientEdit: (clientId: number) => `/clients/${clientId}/edit`,
+  /** Create Project, opened with this client already picked. */
+  projectCreateForClient: (clientId: number) => `/projects/create?client=${clientId}`,
   foreman: (foremanId: number) => `/foremen/${foremanId}`,
   foremanEdit: (foremanId: number) => `/foremen/${foremanId}/edit`,
   taskEdit: (taskId: number) => `/tasks/${taskId}/edit?from=tasks`,

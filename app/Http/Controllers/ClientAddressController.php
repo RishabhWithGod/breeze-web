@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Project;
+use App\Models\Client;
+use App\Models\ClientAddress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -16,9 +17,9 @@ use Illuminate\Http\Request;
  */
 class ClientAddressController extends Controller
 {
-    public function store(Request $request, Project $project): RedirectResponse
+    public function store(Request $request, Client $client): RedirectResponse
     {
-        $this->authorize('update', $project);
+        abort_unless($client->user_id === $request->user()->id, 403);
 
         $data = $request->validate([
             'label' => ['required', 'string', 'max:80'],
@@ -34,27 +35,57 @@ class ClientAddressController extends Controller
             'address.required' => 'Enter the address.',
         ]);
 
-        // The first site a client gets is its primary, and is mirrored onto the
-        // client itself — that is what every list and search reads.
-        $isFirst = ! $project->addresses()->exists();
+        // The first site a client gets is its primary — the one a project and
+        // then a job default to.
+        $isFirst = ! $client->addresses()->exists();
 
-        $address = $project->addresses()->create([
+        $address = $client->addresses()->create([
             'label' => trim($data['label']),
             'address' => $data['address'],
             'latitude' => $data['latitude'] ?? null,
             'longitude' => $data['longitude'] ?? null,
             'is_primary' => $isFirst,
-            'position' => (int) $project->addresses()->max('position') + ($isFirst ? 0 : 1),
+            'position' => (int) $client->addresses()->max('position') + ($isFirst ? 0 : 1),
         ]);
 
-        if ($isFirst) {
-            $project->update([
-                'location' => $address->address,
-                'latitude' => $address->latitude,
-                'longitude' => $address->longitude,
-            ]);
+        return back()->with('success', "“{$address->display()}” was added to {$client->name}.");
+    }
+
+    /**
+     * Removing a site from the book.
+     *
+     * Refused while a job is standing on it. `job_addresses` cascades, so the
+     * delete would go through and quietly take that job's site with it — the
+     * job would keep its printed `location` and have nothing behind it.
+     *
+     * Removing the primary promotes the next one, because "the site everything
+     * defaults to" has to be a site that exists.
+     */
+    public function destroy(Request $request, Client $client, ClientAddress $address): RedirectResponse
+    {
+        abort_unless($client->user_id === $request->user()->id, 403);
+        abort_unless($address->client_id === $client->id, 404);
+
+        $jobs = $address->jobs()->count();
+
+        if ($jobs > 0) {
+            return back()->with(
+                'warning',
+                "“{$address->display()}” is where ".$jobs.' '.str('job')->plural($jobs).
+                ' runs. Move those first, or keep the site.',
+            );
         }
 
-        return back()->with('success', "“{$address->display()}” was added to {$project->name}.");
+        $display = $address->display();
+        $wasPrimary = $address->is_primary;
+
+        $address->delete();
+
+        if ($wasPrimary) {
+            $client->addresses()->oldest('position')->oldest('id')->first()
+                ?->update(['is_primary' => true]);
+        }
+
+        return back()->with('warning', "“{$display}” was removed from {$client->name}.");
     }
 }

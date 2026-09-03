@@ -1,58 +1,57 @@
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { ArrowLeft, FolderKanban } from 'lucide-react'
+import { ArrowLeft, FolderKanban, MapPin } from 'lucide-react'
 import {
-  AddressListField,
   Alert,
   Button,
   ButtonLink,
   Card,
   CardHeader,
-  ConfirmDialog,
-  RadioGroup,
-  TextArea,
+  SelectField,
   TextInput,
   UnfinishedTakeoffNotice,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { useDisclosure } from '@/hooks'
-import { PROJECT_TYPE_OPTIONS, ROUTES } from '@/constants'
-import type { ProjectDraft, ProjectType, ResumableTakeoff } from '@/types'
-import { emptyAddress } from '@/utils'
+import { ROUTES, routeTo } from '@/constants'
+import type { ClientOption, ResumableTakeoff } from '@/types'
+
+interface ProjectDraft {
+  client_id: string
+  name: string
+}
 
 export interface ProjectCreateProps {
-  /**
-   * A takeoff already part-way through, if there is one. Starting a second
-   * client is normal; doing it by accident and losing track of the first is
-   * not, so this screen says so before it happens.
-   */
+  /** The client register, each with the sites it has on file. */
+  clients: readonly ClientOption[]
+  /** Set when the form was opened from a client's own screen. */
+  defaultClientId: number | null
   unfinishedTakeoff: ResumableTakeoff | null
 }
 
 /**
- * Create New Client.
+ * Add Project.
  *
- * The client's own details and nothing else — no drawings are attached here. A
- * PDF is uploaded from AI Takeoff, against a client that already exists, so the
- * product has one upload path rather than three.
+ * A project is a piece of work for a client — what a drawing is taken off, and
+ * what every takeoff, estimate and job is raised against. No drawings arrive
+ * here: a PDF is uploaded from AI Takeoff against a project that exists, so
+ * the product has one upload path rather than three.
  */
-export default function ProjectCreate({ unfinishedTakeoff }: ProjectCreateProps) {
-  const confirmNew = useDisclosure()
-
-  const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
+export default function ProjectCreate({
+  clients,
+  defaultClientId,
+  unfinishedTakeoff,
+}: ProjectCreateProps) {
+  const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<ProjectDraft>({
+      client_id: defaultClientId === null ? '' : String(defaultClientId),
       name: '',
-      code: '',
-      addresses: [emptyAddress()],
-      project_type: '',
-      notes: '',
     })
 
   /**
    * Inertia keeps server errors until the next request, which would leave
-   * "Client name is required" sitting under a field the user has just filled
-   * in, so each edit clears its own message.
+   * "Project name is required" sitting under a field just filled in, so each
+   * edit clears its own message.
    */
   const update = <K extends FormDataKeys<ProjectDraft>>(
     field: K,
@@ -62,54 +61,41 @@ export default function ProjectCreate({ unfinishedTakeoff }: ProjectCreateProps)
     if (errors[field]) clearErrors(field)
   }
 
-  const create = () => {
-    confirmNew.close()
+  const selectClient = (clientId: string) => update('client_id', clientId)
 
-    /*
-     * The form always shows one empty row to type into, and a client can be
-     * opened before any site is known — so a row nobody filled in is dropped
-     * rather than rejected as a missing address.
-     */
-    transform((payload) => ({
-      ...payload,
-      // Only a row nobody touched at all. One with a name but no address —
-      // or the other way round — is a half-filled row, and dropping it would
-      // throw away what was typed instead of saying what is missing.
-      addresses: payload.addresses.filter(
-        (row) => row.label.trim() !== '' || row.address.trim() !== '',
-      ),
-    }))
+  const selectedClient = clients.find((option) => String(option.id) === data.client_id)
+  const primarySite = selectedClient?.addresses.find((site) => site.isPrimary)
 
-    post(ROUTES.projects)
-  }
+  const clientOptions = [
+    { label: 'Select client', value: '' },
+    ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
+  ]
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-
-    // Asked once, before anything is created. Saying yes moves the resume
-    // button onto the client about to be made.
-    if (unfinishedTakeoff) {
-      confirmNew.open()
-
-      return
-    }
-
-    create()
+    post(ROUTES.projects)
   }
 
   return (
     <PageTransition>
-      <Head title="Create New Client" />
+      <Head title="Add Project" />
 
       <PageHeader
-        title="Create New Client"
-        subtitle="Record the client, then run their drawings through AI Takeoff."
+        title="Add Project"
         breadcrumbs={[
-          { label: 'Clients', href: ROUTES.projects },
-          { label: 'New Client' },
+          { label: 'Projects', href: ROUTES.projects },
+          { label: 'New Project' },
         ]}
         actions={
-          <ButtonLink href={ROUTES.projects} variant="secondary" leftIcon={ArrowLeft}>
+          <ButtonLink
+            href={
+              defaultClientId === null
+                ? ROUTES.projects
+                : routeTo.client(defaultClientId)
+            }
+            variant="secondary"
+            leftIcon={ArrowLeft}
+          >
             Back
           </ButtonLink>
         }
@@ -119,64 +105,60 @@ export default function ProjectCreate({ unfinishedTakeoff }: ProjectCreateProps)
         <AnimatePresence initial={false}>
           {hasErrors && (
             <Alert key="form-error" tone="danger" title="Check the form">
-              Some fields need attention before this client can be created.
+              Some fields need attention before this project can be opened.
             </Alert>
           )}
         </AnimatePresence>
 
-        <UnfinishedTakeoffNotice takeoff={unfinishedTakeoff} starting="a new client" />
+        <UnfinishedTakeoffNotice takeoff={unfinishedTakeoff} starting="another project" />
 
         <Card padding="lg">
-          <CardHeader title="Client details" />
+          <CardHeader title="Project details" />
 
           <div className="space-y-6">
-            {/*
-              A plain text box. It carried a datalist of the clients already on
-              record, which put a dropdown arrow on a field that is not a
-              choice — this screen exists to name a client that is not on the
-              list yet.
-            */}
+            <SelectField
+              id="project-client"
+              label="Client*"
+              options={clientOptions}
+              value={data.client_id}
+              onChange={(event) => selectClient(event.target.value)}
+              {...(errors.client_id ? { error: errors.client_id } : {})}
+            />
+
             <TextInput
               id="project-name"
-              label="Client Name*"
-              placeholder="e.g. Harborview Data Hall"
+              label="Project Name*"
+              placeholder="e.g. Harborview Phase 2"
               autoComplete="off"
               value={data.name}
               onChange={(event) => update('name', event.target.value)}
               {...(errors.name ? { error: errors.name } : {})}
             />
 
-            <RadioGroup
-              name="project-type"
-              label="Client Type"
-              options={PROJECT_TYPE_OPTIONS}
-              value={data.project_type}
-              onChange={(value) => update('project_type', value as ProjectType)}
-              {...(errors.project_type ? { error: errors.project_type } : {})}
-            />
+            {/*
+              Told, not asked. A project and the job on it are at the same
+              place, and that place is already in the client's book — so it is
+              shown here rather than entered a second time.
+            */}
+            {selectedClient && (
+              <div className="flex items-start gap-3 rounded-panel border border-hairline bg-white/4 p-4">
+                <MapPin size={16} aria-hidden className="mt-0.5 shrink-0 text-white/60" />
+                <span className="min-w-0">
+                  <span className="block text-2xs tracking-wide text-white/70 uppercase">
+                    Site location
+                  </span>
+                  <span className="mt-0.5 block truncate text-md text-white">
+                    {primarySite?.display ?? 'No site on this client yet'}
+                  </span>
+                  {!primarySite && (
+                    <span className="mt-1 block text-sm text-white/60">
+                      One is added the first time a job needs it.
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
 
-            <div className="border-t border-hairline pt-6">
-              <p className="mb-4 text-md font-medium text-white">Site Location(s)</p>
-
-              <AddressListField
-                addresses={data.addresses}
-                onChange={(addresses) => setData('addresses', addresses)}
-                errors={errors as Record<string, string>}
-                disabled={processing}
-              />
-            </div>
-
-            <TextArea
-              id="project-notes"
-              label="Notes for the takeoff"
-              rows={4}
-              maxLength={2000}
-              placeholder="Anything the estimator should know before counting — revisions, exclusions, scope splits."
-              value={data.notes}
-              onChange={(event) => update('notes', event.target.value)}
-              addon={`${data.notes.length}/2000`}
-              {...(errors.notes ? { error: errors.notes } : {})}
-            />
           </div>
         </Card>
 
@@ -185,20 +167,10 @@ export default function ProjectCreate({ unfinishedTakeoff }: ProjectCreateProps)
             Cancel
           </ButtonLink>
           <Button type="submit" leftIcon={FolderKanban} isLoading={processing}>
-            Create Client
+            Add Project
           </Button>
         </div>
       </form>
-
-      <ConfirmDialog
-        isOpen={confirmNew.isOpen}
-        tone="brand"
-        title="Start a new client?"
-        description={`“${unfinishedTakeoff?.projectName ?? ''}” is still at ${unfinishedTakeoff?.stage ?? ''}. It stays exactly as it is, but the resume button will follow this new client from here.`}
-        confirmLabel="Yes, create it"
-        onConfirm={create}
-        onCancel={confirmNew.close}
-      />
     </PageTransition>
   )
 }

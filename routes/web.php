@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\BreezeBucksController;
 use App\Http\Controllers\ClientAddressController;
+use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFolderController;
@@ -195,13 +196,29 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:address-lookup')
         ->name('address.lookup');
 
+    /*
+     * The client register. A client is who the work is for; the work itself is
+     * their projects, which live under `projects` below.
+     */
+    Route::get('clients', [ClientController::class, 'index'])->name('clients.index');
+    Route::get('clients/create', [ClientController::class, 'create'])->name('clients.create');
+    Route::post('clients', [ClientController::class, 'store'])->name('clients.store');
+    Route::get('clients/{client}', [ClientController::class, 'show'])->name('clients.show');
+    Route::get('clients/{client}/edit', [ClientController::class, 'edit'])->name('clients.edit');
+    Route::put('clients/{client}', [ClientController::class, 'update'])->name('clients.update');
+    Route::delete('clients/{client}', [ClientController::class, 'destroy'])->name('clients.destroy');
+
     Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
     Route::get('projects/create', [ProjectController::class, 'create'])->name('projects.create');
     Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::get('projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
     // Recorded from whichever screen needed the site — usually Create Job.
-    Route::post('projects/{project}/addresses', [ClientAddressController::class, 'store'])
-        ->name('projects.addresses.store');
+    // The address book belongs to the client, and every project of theirs
+    // picks from it.
+    Route::post('clients/{client}/addresses', [ClientAddressController::class, 'store'])
+        ->name('clients.addresses.store');
+    Route::delete('clients/{client}/addresses/{address}', [ClientAddressController::class, 'destroy'])
+        ->name('clients.addresses.destroy');
     Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 
     // Starts the first AI takeoff run against the project's drawing already on

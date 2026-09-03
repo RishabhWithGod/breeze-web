@@ -24,7 +24,7 @@ export interface InvoiceEditProps {
 
 interface InvoiceEditForm {
   /** The client. Clients are projects, so this is a `projects` id. */
-  project_id: string
+  client_id: string
   job_id: string
   invoice_date: string
   due_date: string
@@ -39,7 +39,7 @@ interface InvoiceEditForm {
 export default function InvoiceEdit({ invoice, clients, jobs }: InvoiceEditProps) {
   const { data, setData, put, processing, errors, hasErrors, clearErrors } =
     useForm<InvoiceEditForm>({
-      project_id: invoice.projectId === null ? '' : String(invoice.projectId),
+      client_id: invoice.clientId === null ? '' : String(invoice.clientId),
       job_id: invoice.jobId ? String(invoice.jobId) : '',
       invoice_date: invoice.invoiceDate,
       due_date: invoice.dueDate ?? '',
@@ -67,7 +67,7 @@ export default function InvoiceEdit({ invoice, clients, jobs }: InvoiceEditProps
    * but the placeholder has no value, so saving still requires a real one.
    */
   const clientOptions = [
-    invoice.projectId === null
+    invoice.clientId === null
       ? { label: `${invoice.client} — not yet a client record`, value: '' }
       : { label: 'Select client', value: '' },
     ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
@@ -109,9 +109,9 @@ export default function InvoiceEdit({ invoice, clients, jobs }: InvoiceEditProps
               label="Client *"
               hint="Not listed? Add them under Clients first."
               options={clientOptions}
-              value={data.project_id}
-              onChange={(event) => update('project_id', event.target.value)}
-              {...(errors.project_id ? { error: errors.project_id } : {})}
+              value={data.client_id}
+              onChange={(event) => update('client_id', event.target.value)}
+              {...(errors.client_id ? { error: errors.client_id } : {})}
             />
 
             <SelectField

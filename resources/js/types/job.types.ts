@@ -184,10 +184,12 @@ export interface JobDetail extends Omit<Job, 'teamCount' | 'estimateCount'> {
  * `status` is derived server-side from `save_as_draft`.
  */
 export interface JobDraft {
+  /** Who the work is for. */
+  client_id: string
   name: string
   /**
-   * The client sites this job is at, in the order picked. The first one's
-   * address becomes the job's own `location` snapshot, server-side.
+   * The site this job is at, one of its project's own. Its address becomes the
+   * job's `location` snapshot, server-side.
    */
   address_ids: number[]
   description: string
@@ -197,8 +199,9 @@ export interface JobDraft {
   budget: string
   save_as_draft: boolean
   /**
-   * The client. Clients are projects, so this is a `projects` id — the job's
-   * own `client` name column is a snapshot the server writes from it.
+   * Which of the client's projects the work is on. Every drawing, takeoff and
+   * estimate hangs off one, so the job does too. The job's own `client` name
+   * column is a snapshot the server writes from `client_id`.
    */
   project_id: string
   upload_id: string

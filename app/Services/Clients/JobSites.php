@@ -8,11 +8,11 @@ use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 /**
- * The client sites a job is at.
+ * The sites a job is at.
  *
- * A job's addresses always come from its own client's address book, never from
- * anywhere else — the form only offers that client's sites, and this refuses
- * anything else rather than trusting the ids that arrived.
+ * A job's address always comes from its own client's book, never from anywhere
+ * else — the form only offers those, and this refuses anything else rather
+ * than trusting the ids that arrived.
  */
 class JobSites
 {
@@ -27,7 +27,7 @@ class JobSites
     public function resolve(int $clientId, array $addressIds): Collection
     {
         $addresses = ClientAddress::whereIn('id', $addressIds)
-            ->where('project_id', $clientId)
+            ->where('client_id', $clientId)
             ->get()
             ->keyBy('id');
 

@@ -18,15 +18,21 @@ class UpdateJobRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'min:3', 'max:160'],
-            /** The client, picked from the client register — see ClientDirectory. */
+            /** Who the work is for, from the client register. */
+            'client_id' => ['required', 'integer', 'exists:clients,id'],
+            /*
+             * And which of their projects it is on. Every drawing, takeoff and
+             * estimate hangs off a project, so the job does too — the client
+             * alone cannot say which set of drawings this is.
+             */
             'project_id' => ['required', 'integer', 'exists:projects,id'],
             /*
-             * The client sites this job is at — one or more of the client's own
-             * addresses. `location` is not posted: it is written from the first
-             * of these, so the two can never disagree.
+             * The site this job is at, one of its project's own. `location` is
+             * not posted: it is written from this, so the two cannot disagree.
+             *
+             * One site per job: the screen offers radios, and the rule has to
+             * agree with it or a hand-made request could still send several.
              */
-            // One site per job: the screen offers radios, and the rule has to
-            // agree with it or a hand-made request could still send several.
             'address_ids' => ['required', 'array', 'size:1'],
             'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -49,11 +55,13 @@ class UpdateJobRequest extends FormRequest
         return [
             'name.required' => 'Job name is required',
             'name.min' => 'Use at least 3 characters',
-            'project_id.required' => 'Client is required',
-            'project_id.exists' => 'Pick a client from the list',
+            'client_id.required' => 'Client is required',
+            'client_id.exists' => 'Pick a client from the list',
+            'project_id.required' => 'Pick the project this job is on',
+            'project_id.exists' => 'Pick a project from the list',
             'address_ids.required' => 'Pick the site this job runs at',
             'address_ids.size' => 'A job runs at one site',
-            'address_ids.*.exists' => 'That site is not on the client\'s record',
+            'address_ids.*.exists' => 'That site is not on the project\'s record',
             'end_date.after_or_equal' => 'End date must be on or after the start date',
             'budget.gt' => 'Enter an amount greater than zero',
         ];

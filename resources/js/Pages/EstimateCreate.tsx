@@ -57,7 +57,7 @@ export default function EstimateCreate({
       issued_on: '',
       amount: '',
       status: 'draft',
-      project_id: '',
+      client_id: '',
       upload_id: '',
     })
 
@@ -89,8 +89,8 @@ export default function EstimateCreate({
 
   /** Only the picked client's drawings — an estimate never links to someone else's. */
   const uploadsForClient = useMemo(
-    () => uploads.filter((upload) => String(upload.projectId) === data.project_id),
-    [uploads, data.project_id],
+    () => uploads.filter((upload) => String(upload.clientId) === data.client_id),
+    [uploads, data.client_id],
   )
 
   const uploadOptions = [
@@ -104,11 +104,11 @@ export default function EstimateCreate({
 
   /** Changing the client invalidates whatever drawing was picked under the old one. */
   const selectClient = (clientId: string) => {
-    setData((current) => ({ ...current, project_id: clientId, upload_id: '' }))
-    if (errors.project_id) clearErrors('project_id')
+    setData((current) => ({ ...current, client_id: clientId, upload_id: '' }))
+    if (errors.client_id) clearErrors('client_id')
   }
 
-  const clientName = clients.find((option) => String(option.id) === data.project_id)?.name
+  const clientName = clients.find((option) => String(option.id) === data.client_id)?.name
 
   return (
     <PageTransition>
@@ -150,16 +150,16 @@ export default function EstimateCreate({
                   label="Client*"
                   hint="Not listed? Add them under Clients first."
                   options={clientOptions}
-                  value={data.project_id}
+                  value={data.client_id}
                   onChange={(event) => selectClient(event.target.value)}
-                  {...(errors.project_id ? { error: errors.project_id } : {})}
+                  {...(errors.client_id ? { error: errors.client_id } : {})}
                 />
                 <SelectField
                   id="estimate-linked-upload"
                   label="AI Takeoff drawing (optional)"
                   options={uploadOptions}
                   value={data.upload_id}
-                  disabled={!data.project_id}
+                  disabled={!data.client_id}
                   onChange={(event) => update('upload_id', event.target.value)}
                   {...(errors.upload_id ? { error: errors.upload_id } : {})}
                 />

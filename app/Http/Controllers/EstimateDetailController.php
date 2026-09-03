@@ -53,7 +53,7 @@ class EstimateDetailController extends Controller
                 'notes' => $estimate->notes,
                 'jobId' => $estimate->job_id,
                 'jobName' => $estimate->job?->name,
-                'projectId' => $estimate->project_id,
+                'clientId' => $estimate->client_id,
                 'aiResultId' => $estimate->ai_result_id,
                 'fromTakeoff' => $estimate->ai_result_id !== null,
                 'convertedProjectId' => $estimate->converted_project_id,
@@ -195,7 +195,7 @@ class EstimateDetailController extends Controller
                 'id' => $estimate->id,
                 'number' => $estimate->number,
                 'client' => $estimate->client,
-                'projectId' => $estimate->project_id,
+                'clientId' => $estimate->client_id,
                 'status' => $estimate->status,
                 'issuedOn' => $estimate->issued_on?->toDateString(),
                 'markupPct' => (float) $estimate->markup_pct,
@@ -233,7 +233,7 @@ class EstimateDetailController extends Controller
     {
         $validated = $request->validate([
             /** The client, picked from the client register — see ClientDirectory. */
-            'project_id' => ['required', 'integer', 'exists:projects,id'],
+            'client_id' => ['required', 'integer', 'exists:clients,id'],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
             'issued_on' => ['required', 'date'],
             'markup_pct' => ['required', 'numeric', 'min:0', 'max:200'],

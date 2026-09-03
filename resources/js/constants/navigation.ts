@@ -4,6 +4,7 @@ import {
   ChartColumn,
   ClipboardList,
   Clock,
+  Contact,
   FileText,
   FolderClosed,
   FolderKanban,
@@ -23,9 +24,13 @@ import type { NavItem } from '@/types'
  */
 export const SIDEBAR_ITEMS: readonly NavItem[] = [
   { label: 'Dashboard', href: ROUTES.home, icon: Gauge },
-  // Sits directly under Dashboard: a project is what every takeoff, estimate and
-  // job is raised against.
-  { label: 'Clients', href: ROUTES.projects, icon: FolderKanban },
+  /*
+   * Who the work is for, and then the work itself. A client has projects; a
+   * project is what a drawing is taken off, and what every takeoff, estimate
+   * and job is raised against.
+   */
+  { label: 'Clients', href: ROUTES.clients, icon: Contact },
+  { label: 'Projects', href: ROUTES.projects, icon: FolderKanban },
   // Lands on the takeoff history, matching the reference product.
   { label: 'AI Takeoff', href: ROUTES.aiTakeoff, icon: Sparkles },
   { label: 'Estimates', href: ROUTES.estimates, icon: FileText },

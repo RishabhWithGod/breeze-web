@@ -7,9 +7,11 @@ use App\Http\Resources\FinalSymbolResource;
 use App\Models\AiResult;
 use App\Models\FinalSymbol;
 use App\Models\Job;
+use App\Models\Project;
 use App\Services\Ai\ArtefactStore;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\JobSites;
+use App\Services\Clients\ProjectDirectory;
 use App\Services\Export\AnnotatedPdfWriter;
 use App\Services\Export\SymbolExporter;
 use App\Services\Takeoff\EstimateBuilder;
@@ -38,7 +40,6 @@ class FinalTakeoffController extends Controller
         Request $request,
         AiResult $result,
         ArtefactStore $store,
-        ClientDirectory $clients,
     ): Response {
         $this->authorize('view', $result);
 
@@ -175,8 +176,13 @@ class FinalTakeoffController extends Controller
              * sometimes taken off one client's drawing and built for another —
              * and `ai_result_id` still records where the numbers came from.
              */
-            'clients' => $clients->options(),
-            'defaultClientId' => $result->project_id,
+            /*
+             * Every project, so the job can be raised against another one —
+             * work is sometimes taken off one project's drawing and built under
+             * a different one. The takeoff's own is where the form starts.
+             */
+            'projects' => app(ProjectDirectory::class)->options(),
+            'defaultProjectId' => $result->project_id,
             'history' => ApprovalHistoryResource::collection(
                 $result->history()->with('actor')->take(20)->get()
             )->resolve(),
@@ -292,10 +298,14 @@ class FinalTakeoffController extends Controller
         $addressIds = $attributes['address_ids'] ?? [];
         unset($attributes['address_ids']);
 
-        $clientId = (int) ($attributes['project_id'] ?? $result->project_id);
+        $projectId = (int) ($attributes['project_id'] ?? $result->project_id);
 
-        // Refused before the job is written: the sites must belong to whichever
-        // client the job is being raised for, whatever ids arrived.
+        // The client is whoever that project is for — not asked for twice.
+        $clientId = (int) Project::whereKey($projectId)->value('client_id');
+        $attributes['client_id'] = $clientId ?: null;
+
+        // Refused before the job is written: the sites must belong to that
+        // client's book, whatever ids arrived.
         $addresses = $addressIds === []
             ? collect()
             : $sites->resolve($clientId, $addressIds);

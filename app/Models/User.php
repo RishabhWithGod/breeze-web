@@ -74,6 +74,12 @@ class User extends Authenticatable
             ->implode('');
     }
 
+    /** @return HasMany<Client, $this> */
+    public function clients(): HasMany
+    {
+        return $this->hasMany(Client::class)->orderBy('name');
+    }
+
     /** @return HasMany<Project, $this> */
     public function projects(): HasMany
     {

@@ -28,7 +28,7 @@ export interface InvoiceCreateProps {
 
 interface InvoiceDraft {
   /** The client. Clients are projects, so this is a `projects` id. */
-  project_id: string
+  client_id: string
   job_id: string
   estimate_id: string
   invoice_date: string
@@ -45,7 +45,7 @@ interface InvoiceDraft {
 export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: InvoiceCreateProps) {
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<InvoiceDraft>({
-      project_id: '',
+      client_id: '',
       job_id: '',
       estimate_id: '',
       invoice_date: new Date().toISOString().slice(0, 10),
@@ -67,7 +67,7 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
     setData({
       ...data,
       estimate_id: estimateId,
-      project_id: estimate?.project_id ? String(estimate.project_id) : data.project_id,
+      client_id: estimate?.client_id ? String(estimate.client_id) : data.client_id,
       job_id: estimate?.job_id ? String(estimate.job_id) : data.job_id,
     })
   }
@@ -78,8 +78,8 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
     setData({
       ...data,
       job_id: jobId,
-      project_id:
-        job?.project_id && !data.project_id ? String(job.project_id) : data.project_id,
+      client_id:
+        job?.client_id && !data.client_id ? String(job.client_id) : data.client_id,
     })
   }
 
@@ -95,7 +95,7 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
     ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
   ]
 
-  const clientName = clients.find((option) => String(option.id) === data.project_id)?.name
+  const clientName = clients.find((option) => String(option.id) === data.client_id)?.name
 
   return (
     <PageTransition>
@@ -157,9 +157,9 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
                 label="Client *"
                 hint="Not listed? Add them under Clients first."
                 options={clientOptions}
-                value={data.project_id}
-                onChange={(event) => update('project_id', event.target.value)}
-                {...(errors.project_id ? { error: errors.project_id } : {})}
+                value={data.client_id}
+                onChange={(event) => update('client_id', event.target.value)}
+                {...(errors.client_id ? { error: errors.client_id } : {})}
               />
 
               <SelectField

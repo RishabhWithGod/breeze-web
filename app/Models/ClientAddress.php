@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class ClientAddress extends Model
 {
     protected $fillable = [
-        'project_id',
+        'client_id',
         'label',
         'address',
         'latitude',
@@ -34,10 +34,10 @@ class ClientAddress extends Model
         ];
     }
 
-    /** The client this site belongs to. Clients are projects. */
+    /** @return BelongsTo<Client, $this> */
     public function client(): BelongsTo
     {
-        return $this->belongsTo(Project::class, 'project_id');
+        return $this->belongsTo(Client::class);
     }
 
     /** @return BelongsToMany<Job, $this> */

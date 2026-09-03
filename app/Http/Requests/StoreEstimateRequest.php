@@ -16,7 +16,9 @@ class StoreEstimateRequest extends FormRequest
             'amount' => ['required', 'numeric', 'min:0', 'max:99999999'],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
             /** The client, picked from the client register — see ClientDirectory. */
-            'project_id' => ['required', 'integer', 'exists:projects,id'],
+            // Who the work is for. What it is on is the project, which an
+            // estimate or invoice inherits from the job it belongs to.
+            'client_id' => ['required', 'integer', 'exists:clients,id'],
             'upload_id' => ['nullable', 'integer', 'exists:uploads,id'],
         ];
     }
@@ -25,8 +27,8 @@ class StoreEstimateRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'project_id.required' => 'Client is required',
-            'project_id.exists' => 'Pick a client from the list',
+            'client_id.required' => 'Client is required',
+            'client_id.exists' => 'Pick a client from the list',
             'issued_on.required' => 'Date is required',
             'amount.required' => 'Amount is required',
         ];

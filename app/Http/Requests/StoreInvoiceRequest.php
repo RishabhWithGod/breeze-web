@@ -17,7 +17,9 @@ class StoreInvoiceRequest extends FormRequest
     {
         return [
             /** The client, picked from the client register — see ClientDirectory. */
-            'project_id' => ['required', 'integer', 'exists:projects,id'],
+            // Who the work is for. What it is on is the project, which an
+            // estimate or invoice inherits from the job it belongs to.
+            'client_id' => ['required', 'integer', 'exists:clients,id'],
             'job_id' => ['nullable', 'integer', 'exists:work_jobs,id'],
             'estimate_id' => ['nullable', 'integer', 'exists:estimates,id'],
             'invoice_date' => ['required', 'date'],
@@ -31,8 +33,8 @@ class StoreInvoiceRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'project_id.required' => 'Client is required',
-            'project_id.exists' => 'Pick a client from the list',
+            'client_id.required' => 'Client is required',
+            'client_id.exists' => 'Pick a client from the list',
             'invoice_date.required' => 'Invoice date is required',
             'due_date.after_or_equal' => 'Due date cannot be before the invoice date',
         ];

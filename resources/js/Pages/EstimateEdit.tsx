@@ -20,7 +20,7 @@ interface EditableEstimate {
   readonly number: string
   readonly client: string
   /** The client's own id — clients are projects, so this is a `projects` id. */
-  readonly projectId: number | null
+  readonly clientId: number | null
   readonly status: string
   readonly issuedOn: string | null
   readonly markupPct: number
@@ -66,7 +66,7 @@ export default function EstimateEdit({
   clients,
 }: EstimateEditProps) {
   const form = useForm({
-    project_id: estimate.projectId === null ? '' : String(estimate.projectId),
+    client_id: estimate.clientId === null ? '' : String(estimate.clientId),
     status: estimate.status,
     issued_on: estimate.issuedOn ?? '',
     markup_pct: String(estimate.markupPct),
@@ -85,7 +85,7 @@ export default function EstimateEdit({
    * select shows who the estimate is for rather than a blank "Select client" —
    * but the placeholder has no value, so saving still requires a real one.
    */
-  const isUnlinked = estimate.projectId === null
+  const isUnlinked = estimate.clientId === null
 
   const clientOptions: readonly SelectOption[] = [
     isUnlinked
@@ -144,9 +144,9 @@ export default function EstimateEdit({
               className="sm:col-span-2"
               hint="Not listed? Add them under Clients first."
               options={clientOptions}
-              value={form.data.project_id}
-              onChange={(event) => form.setData('project_id', event.target.value)}
-              {...(form.errors.project_id ? { error: form.errors.project_id } : {})}
+              value={form.data.client_id}
+              onChange={(event) => form.setData('client_id', event.target.value)}
+              {...(form.errors.client_id ? { error: form.errors.client_id } : {})}
             />
             <SelectField
               id="estimate-status"

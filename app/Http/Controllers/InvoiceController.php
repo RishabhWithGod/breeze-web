@@ -85,14 +85,14 @@ class InvoiceController extends Controller
         return Inertia::render('InvoiceCreate', [
             'nextNumber' => Invoice::nextNumber(),
             'clients' => $this->clients->options(),
-            'jobs' => Job::query()->orderBy('name')->get(['id', 'name', 'client', 'project_id']),
+            'jobs' => Job::query()->orderBy('name')->get(['id', 'name', 'client', 'client_id']),
             // Sent/approved estimates not yet converted into an invoice — the
             // real "generate invoice from estimate" starting point.
             'estimates' => Estimate::query()
                 ->whereIn('status', ['sent', 'approved'])
                 ->whereDoesntHave('invoices')
                 ->orderByDesc('issued_on')
-                ->get(['id', 'number', 'client', 'project_id', 'job_id', 'grand_total']),
+                ->get(['id', 'number', 'client', 'client_id', 'job_id', 'grand_total']),
         ]);
     }
 

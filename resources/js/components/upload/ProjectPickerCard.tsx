@@ -13,9 +13,12 @@ export interface ProjectPickerCardProps {
 
 /**
  * Which project this takeoff run belongs to — required before a run can
- * start. Picking "New Project" leaves the queued files behind and hands the
- * user to the deliberate project-creation screen instead of guessing a name
- * from the first file, like the upload flow used to.
+ * start. A drawing is taken off a project, not off a client: a client with
+ * four projects has four sets of drawings.
+ *
+ * "New Project" leaves the queued files behind and hands the user to the
+ * deliberate creation screen instead of guessing a name from the first file,
+ * like the upload flow used to.
  */
 export function ProjectPickerCard({
   projects,
@@ -24,22 +27,29 @@ export function ProjectPickerCard({
   error,
   index,
 }: ProjectPickerCardProps) {
+  /*
+   * Named with its client, because a project's name only means something
+   * beside it — two clients can both have a "Phase 2", and the person
+   * uploading has to be able to tell them apart.
+   */
   const options = [
-    { value: '', label: projects.length > 0 ? 'Select a client…' : 'No clients yet' },
+    { value: '', label: projects.length > 0 ? 'Select a project…' : 'No projects yet' },
     ...projects.map((project) => ({
       value: String(project.id),
-      label: project.name,
+      label: project.clientName
+        ? `${project.clientName} — ${project.name}`
+        : project.name,
     })),
   ]
 
   return (
     <Card {...(index !== undefined ? { index } : {})}>
       <CardHeader
-        title="Client"
-        subtitle="Choose which client this takeoff belongs to"
+        title="Project"
+        subtitle="Which project's drawing this is"
         actions={
           <ButtonLink href={ROUTES.projectCreate} variant="secondary" size="sm" leftIcon={Plus}>
-            New Client
+            New Project
           </ButtonLink>
         }
       />

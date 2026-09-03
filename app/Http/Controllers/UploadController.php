@@ -33,12 +33,19 @@ class UploadController extends Controller
         }
 
         return Inertia::render('Upload', [
+            /*
+             * A drawing is taken off a project, not off a client — a client
+             * with four projects has four sets of drawings. The client's name
+             * comes along so the picker can say whose project it is.
+             */
             'projects' => $request->user()->projects()
+                ->with('clientRecord:id,name')
                 ->orderByDesc('created_at')
-                ->get(['id', 'name'])
+                ->get(['id', 'client_id', 'name'])
                 ->map(fn ($project) => [
                     'id' => $project->id,
                     'name' => $project->name,
+                    'clientName' => $project->clientRecord?->name,
                 ]),
             'selectedProjectId' => $preselected,
             /*

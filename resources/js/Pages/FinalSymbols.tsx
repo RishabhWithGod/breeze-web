@@ -9,7 +9,6 @@ import {
   Card,
   RadioGroup,
   SectionHeading,
-  SelectField,
   TextArea,
   TextInput,
   WorkflowProgress,
@@ -22,7 +21,7 @@ import type {
   BoqLine,
   BoqMaterial,
   CircuitRow,
-  ClientOption,
+  ProjectOption,
   EngineBoqLine,
   EquipmentRow,
   FinalSymbolRow,
@@ -111,10 +110,10 @@ export interface FinalSymbolsProps {
   panelSchedules: readonly PanelScheduleRow[]
   equipment: readonly EquipmentRow[]
   circuits: readonly CircuitRow[]
-  /** The client register, and its sites, exactly as Create Job offers them. */
-  clients: readonly ClientOption[]
+  /** Every project, with its sites, exactly as Create Job offers them. */
+  projects: readonly ProjectOption[]
   /** The takeoff's own client — where the form starts. */
-  defaultClientId: number
+  defaultProjectId: number
   history: readonly ApprovalHistoryEntry[]
 }
 
@@ -125,7 +124,7 @@ export interface FinalSymbolsProps {
  * and is what the job and estimate are built from. The AI response is kept for
  * audit only and is never read again past this point.
  */
-export default function FinalSymbols({ result, clients, defaultClientId }: FinalSymbolsProps) {
+export default function FinalSymbols({ result, projects, defaultProjectId }: FinalSymbolsProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   /*
@@ -135,12 +134,12 @@ export default function FinalSymbols({ result, clients, defaultClientId }: Final
    */
   const jobForm = useForm<CreateJobForm>({
     name: result.job?.name ?? result.projectName,
-    project_id: String(result.job?.projectId ?? defaultClientId),
+    project_id: String(result.job?.projectId ?? defaultProjectId),
     // That client's primary site, exactly as Create Job starts.
     address_ids:
       result.job?.addressIds.slice() ??
-      clients
-        .find((option) => option.id === defaultClientId)
+      projects
+        .find((option) => option.id === defaultProjectId)
         ?.addresses.filter((site) => site.isPrimary)
         .map((site) => site.id) ??
       [],
@@ -149,7 +148,7 @@ export default function FinalSymbols({ result, clients, defaultClientId }: Final
     // still a field: a client's usual type is not every job's type.
     job_type:
       result.job?.jobType ??
-      clients.find((option) => option.id === defaultClientId)?.projectType ??
+      projects.find((option) => option.id === defaultProjectId)?.projectType ??
       '',
     start_date: result.job?.startDate ?? '',
     end_date: result.job?.endDate ?? '',
@@ -164,29 +163,9 @@ export default function FinalSymbols({ result, clients, defaultClientId }: Final
     if (jobForm.errors[field]) jobForm.clearErrors(field)
   }
 
-  const selectedClient = clients.find(
+  const selectedProject = projects.find(
     (option) => String(option.id) === jobForm.data.project_id,
   )
-
-  const clientOptions = clients.map((option) => ({
-    label: option.id === defaultClientId ? `${option.name} (this takeoff)` : option.name,
-    value: String(option.id),
-  }))
-
-  /** Changing the client drops sites that belonged to the old one. */
-  const selectClient = (clientId: string) => {
-    const client = clients.find((option) => String(option.id) === clientId)
-
-    jobForm.setData((current) => ({
-      ...current,
-      project_id: clientId,
-      address_ids:
-        client?.addresses.filter((site) => site.isPrimary).map((site) => site.id) ?? [],
-      // Filled from the client, but only into a field still blank — never over
-      // a type already chosen.
-      job_type: current.job_type || (client?.projectType ?? ''),
-    }))
-  }
 
   const submitJob = (event: FormEvent) => {
     event.preventDefault()
@@ -294,24 +273,28 @@ export default function FinalSymbols({ result, clients, defaultClientId }: Final
           />
 
           {/*
-            Starts on the takeoff's own client, because that is nearly always
-            the answer — but work is sometimes taken off one client's drawing
-            and built for another, so it can be changed. The takeoff itself
-            stays linked either way.
+            Stated, not chosen. This is the takeoff's own project, and the
+            takeoff is what the job is being built from — offering to change it
+            here would raise a job under a client whose drawing it is not.
+            Changing either is done from the project's own screen.
           */}
-          <SelectField
-            id="job-client"
-            label="Client"
-            options={clientOptions}
-            value={jobForm.data.project_id}
-            onChange={(event) => selectClient(event.target.value)}
-            {...(jobForm.errors.project_id ? { error: jobForm.errors.project_id } : {})}
-          />
+          <div className="rounded-panel border border-hairline bg-white/4 p-4">
+            <p className="text-2xs tracking-wide text-white/70 uppercase">
+              Client and project
+            </p>
+            <p className="mt-1 truncate text-md text-white">
+              {selectedProject
+                ? `${selectedProject.clientName ?? 'Unassigned'} — ${selectedProject.name}`
+                : 'This takeoff has no project on record'}
+            </p>
+          </div>
 
           <fieldset>
             <legend className="mb-1 text-md font-medium text-white">Site Location</legend>
             <JobSitePicker
-              client={selectedClient}
+              clientId={selectedProject?.clientId ?? null}
+              clientName={selectedProject?.clientName ?? ''}
+              sites={selectedProject?.addresses ?? []}
               value={jobForm.data.address_ids}
               onChange={(addressIds) => updateJobField('address_ids', addressIds)}
               disabled={jobForm.processing}

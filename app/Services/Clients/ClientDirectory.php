@@ -2,45 +2,40 @@
 
 namespace App\Services\Clients;
 
-use App\Models\Project;
+use App\Models\Client;
 use Illuminate\Support\Collection;
 
 /**
- * Clients are projects.
+ * The client register.
  *
- * The `projects` table is the client register — a project's `name` *is* the
- * client's name (Create Client writes both from one field). Jobs, estimates
- * and invoices therefore pick a client from here instead of repeating the
- * name as free text: they post a `project_id`, and their own `client` column
- * is a snapshot written from this directory, never typed by hand.
+ * A client is who the work is for. Their projects are the pieces of work, and
+ * every drawing, takeoff, estimate and job hangs off one of those — not off the
+ * client. So this answers only the two questions a form asks about a client:
+ * who is on the register, and where do they have work.
  *
- * The snapshot columns stay because they are what every list, filter and
- * printed document already reads, and because a client renamed later should
- * not silently rewrite invoices that were already sent under the old name.
+ * Jobs, estimates and invoices keep a `client` name snapshot of their own. It
+ * stays because it is what every list, filter and printed document reads, and
+ * because renaming a client should not silently rewrite invoices already sent
+ * under the old name.
  */
 class ClientDirectory
 {
     /**
-     * Options for the single Client select every intake form now shows, each
-     * carrying what the form fills in once that client is picked.
+     * Options for the Client select every intake form shows, each carrying what
+     * the form fills in once that client is picked.
      */
     public function options(): Collection
     {
-        return Project::with(['addresses', 'selectedUpload', 'primaryUpload'])
+        return Client::with('addresses')
             ->orderBy('name')
-            ->get(['id', 'name', 'project_type', 'selected_upload_id'])
-            ->map(fn (Project $client) => [
+            ->get(['id', 'name'])
+            ->map(fn (Client $client) => [
                 'id' => $client->id,
                 'name' => $client->name,
-                'projectType' => $client->project_type,
                 /*
-                 * The drawing this client's work is taken off — the one chosen
-                 * on their screen, or the first on record. Picking the client
-                 * fills it in, so the usual case takes no second choice.
+                 * Every site this client has work at — one book, shared by all
+                 * their projects, so an address on file is never retyped.
                  */
-                'defaultUploadId' => $client->takeoffDrawing()?->id,
-                // Every site this client has work at. The job form offers these
-                // rather than asking anyone to retype an address already on file.
                 'addresses' => $client->addresses->map(fn ($address) => [
                     'id' => $address->id,
                     'label' => $address->label,
@@ -58,20 +53,20 @@ class ClientDirectory
             return null;
         }
 
-        return Project::whereKey($clientId)->value('name');
+        return Client::whereKey($clientId)->value('name');
     }
 
     /**
-     * Fills a validated intake payload's `client` snapshot from its
-     * `project_id`. Leaves an existing snapshot alone when no client is
-     * picked, so legacy records edited without one keep the name they have.
+     * Fills a validated payload's `client` snapshot from its `client_id`.
+     * Leaves an existing snapshot alone when no client is picked, so a record
+     * edited without one keeps the name it has.
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     public function withClientSnapshot(array $data): array
     {
-        $name = $this->nameFor($data['project_id'] ?? null);
+        $name = $this->nameFor($data['client_id'] ?? null);
 
         if ($name !== null) {
             $data['client'] = $name;

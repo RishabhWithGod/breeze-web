@@ -19,14 +19,17 @@ import type {
   ClientOption,
   JobDraft,
   JobType,
+  ProjectOption,
   ResumableTakeoff,
   TakeoffUploadOption,
 } from '@/types'
 import { formatCurrency } from '@/utils'
 
 export interface JobCreateProps {
-  /** The client register. Clients are projects, so this is one list, not two. */
+  /** The client register — who the work is for. */
   clients: readonly ClientOption[]
+  /** Their projects — what the work is. Each carries its sites and drawing. */
+  projects: readonly ProjectOption[]
   /** Their drawings — narrowed to the picked client once one is chosen. */
   uploads: readonly TakeoffUploadOption[]
   /**
@@ -45,6 +48,7 @@ export interface JobCreateProps {
  */
 export default function JobCreate({
   clients,
+  projects,
   uploads,
   unfinishedTakeoff,
 }: JobCreateProps) {
@@ -52,6 +56,7 @@ export default function JobCreate({
 
   const { data, setData, post, processing, errors, hasErrors, clearErrors, transform } =
     useForm<JobDraft>({
+      client_id: '',
       name: '',
       address_ids: [],
       description: '',
@@ -93,44 +98,75 @@ export default function JobCreate({
     ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
   ]
 
+
   /**
-   * Picking the client also carries over its location, due date and type —
-   * but only into a field still blank, never over something already typed.
+   * Choosing the client narrows everything below it. Their projects are the
+   * next question, and nothing of the old client's survives the change.
    */
   const selectClient = (clientId: string) => {
-    const client = clients.find((option) => String(option.id) === clientId)
+    setData((current) => ({
+      ...current,
+      client_id: clientId,
+      project_id: '',
+      upload_id: '',
+      address_ids: [],
+    }))
+
+    clearErrors('client_id', 'project_id', 'address_ids', 'upload_id')
+  }
+
+  /**
+   * And the project answers the rest: its drawing, its sites, its type. Filled
+   * only into fields still blank — never over something already typed.
+   */
+  const selectProject = (projectId: string) => {
+    const project = projects.find((option) => String(option.id) === projectId)
 
     setData((current) => ({
       ...current,
-      project_id: clientId,
-      // The client's own drawing, so the usual case takes no second choice.
-      // Anything the old client had does not survive the change.
-      upload_id: client?.defaultUploadId ? String(client.defaultUploadId) : '',
-      address_ids: client
-        ? client.addresses.filter((site) => site.isPrimary).map((site) => site.id)
+      project_id: projectId,
+      // The project's own drawing, so the usual case takes no second choice.
+      upload_id: project?.defaultUploadId ? String(project.defaultUploadId) : '',
+      address_ids: project
+        ? project.addresses.filter((site) => site.isPrimary).map((site) => site.id)
         : [],
-      // Filled from the client, but only into a field still blank — never over
-      // something already typed.
-      name: current.name || (client?.name ?? ''),
-      job_type: current.job_type || (client?.projectType ?? ''),
+      name: current.name || (project?.name ?? ''),
+      job_type: current.job_type || (project?.projectType ?? ''),
     }))
 
     clearErrors('project_id', 'address_ids', 'upload_id')
   }
 
-  const selectedClient = clients.find((option) => String(option.id) === data.project_id)
+  const projectsForClient = useMemo(
+    () => projects.filter((project) => String(project.clientId) === data.client_id),
+    [projects, data.client_id],
+  )
 
-  const uploadsForClient = useMemo(
+  const projectOptions = [
+    {
+      label: data.client_id === '' ? 'Pick a client first' : 'Select project',
+      value: '',
+    },
+    ...projectsForClient.map((project) => ({
+      label: project.name,
+      value: String(project.id),
+    })),
+  ]
+
+  const selectedClient = clients.find((option) => String(option.id) === data.client_id)
+  const selectedProject = projects.find((option) => String(option.id) === data.project_id)
+
+  const uploadsForProject = useMemo(
     () => uploads.filter((upload) => String(upload.projectId) === data.project_id),
     [uploads, data.project_id],
   )
 
   const uploadOptions = [
     { label: 'Select a drawing', value: '' },
-    ...uploadsForClient.map((upload) => ({ label: upload.name, value: String(upload.id) })),
+    ...uploadsForProject.map((upload) => ({ label: upload.name, value: String(upload.id) })),
   ]
 
-  const linkedEstimate = uploadsForClient.find(
+  const linkedEstimate = uploadsForProject.find(
     (upload) => String(upload.id) === data.upload_id,
   )?.estimate
 
@@ -175,23 +211,42 @@ export default function JobCreate({
             noValidate
             className="space-y-6"
           >
-            {/* Picked first — location, schedule and job type below all carry
-                over from the client the moment it's chosen (and only fill a
-                field that's still blank), so this has to come before them. */}
+            {/*
+              Picked first, and each narrows the next: the client says which
+              projects, the project says which drawing, which sites and which
+              type. Everything below carries over from the project the moment
+              it is chosen — and only into a field still blank — so this has to
+              come before them.
+            */}
             <fieldset>
-              <legend className="mb-3 text-md font-medium text-white">Client</legend>
+              <legend className="mb-3 text-md font-medium text-white">
+                Client and project
+              </legend>
               <div className="grid gap-6 lg:grid-cols-2">
                 <SelectField
                   id="job-client"
                   label="Client*"
                   options={clientOptions}
-                  value={data.project_id}
+                  value={data.client_id}
                   onChange={(event) => selectClient(event.target.value)}
+                  {...(errors.client_id ? { error: errors.client_id } : {})}
+                />
+                <SelectField
+                  id="job-project"
+                  label="Project*"
+                  options={projectOptions}
+                  value={data.project_id}
+                  disabled={!data.client_id}
+                  onChange={(event) => selectProject(event.target.value)}
                   {...(errors.project_id ? { error: errors.project_id } : {})}
                 />
+              </div>
+
+              <div className="mt-6">
                 <SelectField
                   id="job-upload"
                   label="AI Takeoff PDF*"
+                  className="lg:max-w-md"
                   options={uploadOptions}
                   value={data.upload_id}
                   disabled={!data.project_id}
@@ -202,17 +257,17 @@ export default function JobCreate({
 
               {/*
                 A job is the work on a drawing, so one is required — which would
-                be a dead end for a client that has none. Say so, and offer the
+                be a dead end for a project that has none. Say so, and offer the
                 one screen that fixes it.
               */}
-              {selectedClient && uploadsForClient.length === 0 && (
+              {selectedProject && uploadsForProject.length === 0 && (
                 <Alert tone="warning" title="No drawing on record" className="mt-4">
                   <p>
-                    {selectedClient.name} has no drawing yet, and a job is raised
-                    against one. Upload it in AI Takeoff, then come back.
+                    {selectedProject.name} has no drawing yet, and a job is
+                    raised against one. Upload it in AI Takeoff, then come back.
                   </p>
                   <ButtonLink
-                    href={routeTo.uploadForProject(selectedClient.id)}
+                    href={routeTo.uploadForProject(selectedProject.id)}
                     variant="secondary"
                     size="sm"
                     className="mt-3"
@@ -251,14 +306,16 @@ export default function JobCreate({
             />
 
             {/*
-              Sites come from the client's own address book, so an address on
-              file is never retyped — and one that is not on it yet can be added
+              The sites come from the client's own book, so an address on file
+              is never retyped — and one the book does not have yet is added
               without leaving this form.
             */}
             <fieldset>
               <legend className="mb-1 text-md font-medium text-white">Site Location*</legend>
               <JobSitePicker
-                client={selectedClient}
+                clientId={selectedClient?.id ?? null}
+                clientName={selectedClient?.name ?? ''}
+                sites={selectedClient?.addresses ?? []}
                 value={data.address_ids}
                 onChange={(addressIds) => {
                   setData('address_ids', addressIds)

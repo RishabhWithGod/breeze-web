@@ -25,6 +25,6 @@ export interface EstimateDraft {
    * estimate's own `client`/`project` name columns are snapshots the server
    * writes from it, never typed here.
    */
-  project_id: string
+  client_id: string
   upload_id: string
 }

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -23,6 +24,7 @@ class Project extends Model
 
     protected $fillable = [
         'user_id',
+        'client_id',
         'name',
         'code',
         'client',
@@ -89,25 +91,41 @@ class Project extends Model
     }
 
     /**
-     * The sites this client has work at.
+     * Who this project is for.
      *
-     * `location` on the client itself is the primary one's snapshot — kept
-     * because every list and search already reads it.
+     * Not called `client`: `projects.client` is a column holding the client's
+     * *name*, and Eloquent reads an attribute before a relation — so
+     * `$project->client` is that string, and a relation of the same name would
+     * be permanently shadowed. The column stays because search, every list
+     * resource and the estimate builder already read it.
      *
-     * @return HasMany<ClientAddress, $this>
+     * @return BelongsTo<Client, $this>
      */
-    public function addresses(): HasMany
+    public function clientRecord(): BelongsTo
     {
-        return $this->hasMany(ClientAddress::class)->orderBy('position')->orderBy('id');
+        return $this->belongsTo(Client::class, 'client_id');
     }
 
-    /** @return HasOne<ClientAddress, $this> */
-    public function primaryAddress(): HasOne
+    /**
+     * The sites available to this project — its client's whole book.
+     *
+     * A project and the job on it are at the same place, so the project does
+     * not keep a list of its own. `location` on the project is the client's
+     * primary site, snapshotted: a printed sheet must not change when the book
+     * is later corrected.
+     *
+     * @return HasManyThrough<ClientAddress, Client, $this>
+     */
+    public function addresses(): HasManyThrough
     {
-        return $this->hasOne(ClientAddress::class)->ofMany([
-            'is_primary' => 'max',
-            'position' => 'min',
-        ]);
+        return $this->hasManyThrough(
+            ClientAddress::class,
+            Client::class,
+            'id',
+            'client_id',
+            'client_id',
+            'id',
+        )->orderByDesc('is_primary')->orderBy('position')->orderBy('id');
     }
 
     /** @return HasMany<Upload, $this> */
