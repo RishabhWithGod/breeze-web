@@ -1,48 +1,38 @@
 import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import {
   Archive,
   ArchiveRestore,
+  ArrowLeft,
   Download,
   Eye,
   FilePlus2,
-  FolderPlus,
   History as HistoryIcon,
   SearchX,
   Share2,
-  SlidersHorizontal,
   Sparkles,
   Star,
   Upload as UploadIcon,
 } from 'lucide-react'
 import {
   Alert,
+  Badge,
   Button,
   ButtonLink,
+  ConfirmDialog,
   EmptyState,
-  FilterTabs,
   MoreMenu,
   Pagination,
-  SearchBox,
-  SelectField,
-  StatusChip,
   Table,
-  ConfirmDialog,
 } from '@/components/common'
 import {
   DocumentHistoryModal,
-  NewFolderModal,
   ShareDocumentModal,
   UploadVersionModal,
 } from '@/components/documents'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import {
-  DOCUMENT_MODIFIED_FILTERS,
-  DOCUMENT_TABS,
-  DOCUMENT_TYPE_FILTERS,
-  DOCUMENT_VERSION_STATUS_FILTERS,
-  MOTION,
   ROUTES,
   routeTo,
 } from '@/constants'
@@ -51,10 +41,6 @@ import type {
   Document,
   DocumentAbilities,
   DocumentFilters,
-  DocumentFolderOption,
-  DocumentJobOption,
-  DocumentTab,
-  DocumentTabCounts,
   Paginated,
   SharedPageProps,
   TableColumn,
@@ -70,39 +56,39 @@ export interface DocumentsProps {
   documents: Paginated<Document>
   filters: DocumentFilters
   documentTypes: readonly string[]
-  jobs: readonly DocumentJobOption[]
-  folders: readonly DocumentFolderOption[]
-  tabCounts: DocumentTabCounts
   can: DocumentAbilities
   maxFileSizeMb: number
   shareableUsers: readonly ShareableUser[]
+  /**
+   * The takeoff this list belongs to, when it was opened from one. Null means
+   * the whole workspace's paperwork rather than one takeoff's.
+   */
+  takeoff: {
+    readonly id: number
+    readonly name: string
+    readonly clientName: string | null
+    readonly url: string
+  } | null
 }
 
 /**
  * Documents — every drawing, spec and project file in one place: filterable,
  * versioned, favoritable and archivable, filed against real jobs, estimates
- * and folders. Nothing here is a mock row; every action persists.
+ * Nothing here is a mock row; every action persists.
  */
 export default function Documents({
   documents,
-  filters,
-  jobs,
-  folders,
-  tabCounts,
   can,
   maxFileSizeMb,
   shareableUsers,
+  takeoff,
 }: DocumentsProps) {
   const { flash } = usePage<SharedPageProps>().props
 
-  const [query, setQuery] = useState(filters.search)
-  const [draft, setDraft] = useState(filters)
   const [dismissed, setDismissed] = useState<string | null>(null)
   const [activeDocument, setActiveDocument] = useState<Document | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Document | null>(null)
 
-  const filterBar = useDisclosure(false)
-  const folderModal = useDisclosure()
   const historyModal = useDisclosure()
   const shareModal = useDisclosure()
   const versionModal = useDisclosure()
@@ -114,38 +100,20 @@ export default function Documents({
   const rows = documents.data
   const { meta } = documents
 
-  const applyFilters = useCallback((changes: Partial<DocumentFilters & { page: number }>) => {
+  /**
+   * Merged into the current query string rather than replacing it, so the
+   * takeoff this list belongs to survives a page turn.
+   */
+  const goToPage = useCallback((page: number) => {
     const params = new URLSearchParams(window.location.search)
+    params.set('page', String(page))
 
-    for (const [key, value] of Object.entries(changes)) {
-      // `version_status=all` means "any version" and must stay explicit — the
-      // server's default when the key is absent is 'latest', not 'all'.
-      if (value === '' || value === null || value === undefined || (value === 'all' && key !== 'version_status')) {
-        params.delete(key)
-      } else {
-        params.set(key, String(value))
-      }
-    }
-
-    if (!('page' in changes)) params.delete('page')
-
-    const queryString = params.toString()
-
-    router.get(queryString ? `${ROUTES.documents}?${queryString}` : ROUTES.documents, {}, {
+    router.get(`${ROUTES.documents}?${params.toString()}`, {}, {
       preserveState: true,
       preserveScroll: true,
       replace: true,
     })
   }, [])
-
-  const resetFilters = useCallback(() => {
-    setQuery('')
-    // 'latest' matches the server's default when `version_status` is absent from the URL below.
-    setDraft({ ...filters, search: '', document_type: 'all', job_id: null, modified: 'all', version_status: 'latest' })
-    router.get(ROUTES.documents, { tab: filters.tab }, { preserveState: true, preserveScroll: true, replace: true })
-  }, [filters])
-
-  const changeTab = (tab: DocumentTab) => applyFilters({ tab })
 
   const toggleFavorite = (document: Document) => {
     router.post(routeTo.documentFavorite(document.id), {}, { preserveScroll: true })
@@ -210,19 +178,20 @@ export default function Documents({
               <Sparkles size={14} aria-hidden />
             </span>
           )}
+          {/*
+            The list has no tabs any more, so an archived document is shown
+            here rather than filed behind one — marked, so it reads as put
+            away rather than current, and still restorable from its row.
+          */}
+          {document.isArchived && (
+            <Badge tone="neutral" size="sm" className="shrink-0">
+              Archived
+            </Badge>
+          )}
         </div>
       ),
     },
-    {
-      key: 'type',
-      header: 'Type',
-      render: (document) => <StatusChip hideDot tone="info" label={document.documentType} />,
-    },
-    {
-      key: 'job',
-      header: 'Job',
-      render: (document) => <span className="text-white/90">{document.jobName ?? '—'}</span>,
-    },
+
     {
       key: 'modified',
       header: 'Modified',
@@ -284,22 +253,42 @@ export default function Documents({
 
   return (
     <PageTransition>
-      <Head title="Documents" />
+      <Head title={takeoff ? `Documents — ${takeoff.name}` : 'Documents'} />
 
       <PageHeader
         title="Documents"
-        subtitle="Manage client documents, blueprints, and specifications"
+        subtitle={
+          takeoff
+            ? `${takeoff.clientName ? `${takeoff.clientName} — ` : ''}${takeoff.name}`
+            : 'Manage client documents, blueprints, and specifications'
+        }
+        {...(takeoff
+          ? {
+              breadcrumbs: [
+                { label: 'AI Takeoff', href: ROUTES.aiTakeoff },
+                { label: takeoff.name, href: takeoff.url },
+                { label: 'Documents' },
+              ],
+            }
+          : {})}
         actions={
           <>
-            <Button variant="secondary" leftIcon={SlidersHorizontal} aria-expanded={filterBar.isOpen} onClick={filterBar.toggle}>
-              Filter
-            </Button>
-            <Button variant="white" leftIcon={FolderPlus} onClick={folderModal.open}>
-              New Folder
-            </Button>
-            <ButtonLink href={ROUTES.documentsCreate} leftIcon={UploadIcon}>
+            {/* Uploading from a takeoff files the document under it. */}
+            <ButtonLink
+              href={
+                takeoff
+                  ? routeTo.projectDocumentCreate(takeoff.id)
+                  : ROUTES.documentsCreate
+              }
+              leftIcon={UploadIcon}
+            >
               Upload Document
             </ButtonLink>
+            {takeoff && (
+              <ButtonLink href={takeoff.url} variant="secondary" leftIcon={ArrowLeft}>
+                Back
+              </ButtonLink>
+            )}
           </>
         }
       />
@@ -312,89 +301,14 @@ export default function Documents({
         )}
       </AnimatePresence>
 
-      {/* ==================================================== Filters ========= */}
-      <AnimatePresence initial={false}>
-        {filterBar.isOpen && (
-          <motion.div
-            key="filter-bar"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: MOTION.base }}
-            className="mb-6 overflow-hidden rounded-card border border-hairline glass p-5 shadow-panel sm:p-6"
-          >
-            <div className="mb-4">
-              <SearchBox
-                value={query}
-                onValueChange={setQuery}
-                onSearch={(value) => applyFilters({ search: value })}
-                placeholder="Search Documents…"
-                aria-label="Search documents"
-                className="max-w-sm"
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <SelectField
-                id="document-type-filter"
-                label="Document Type"
-                options={DOCUMENT_TYPE_FILTERS}
-                value={draft.document_type}
-                onChange={(event) => setDraft({ ...draft, document_type: event.target.value })}
-              />
-              <SelectField
-                id="document-job-filter"
-                label="Jobs"
-                options={[{ label: 'All Jobs', value: 'all' }, ...jobs.map((job) => ({ label: job.name, value: String(job.id) }))]}
-                value={draft.job_id !== null ? String(draft.job_id) : 'all'}
-                onChange={(event) => setDraft({ ...draft, job_id: event.target.value === 'all' ? null : Number(event.target.value) })}
-              />
-              <SelectField
-                id="document-modified-filter"
-                label="Date Modified"
-                options={DOCUMENT_MODIFIED_FILTERS}
-                value={draft.modified}
-                onChange={(event) => setDraft({ ...draft, modified: event.target.value as DocumentFilters['modified'] })}
-              />
-              <SelectField
-                id="document-version-filter"
-                label="Version Status"
-                options={DOCUMENT_VERSION_STATUS_FILTERS}
-                value={draft.version_status}
-                onChange={(event) => setDraft({ ...draft, version_status: event.target.value as DocumentFilters['version_status'] })}
-              />
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Button size="sm" onClick={() => applyFilters({ ...draft })}>
-                Apply Filters
-              </Button>
-              <Button variant="white" size="sm" onClick={resetFilters}>
-                Reset
-              </Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ==================================================== Tabs ============ */}
-      <div className="mb-6">
-        <FilterTabs options={DOCUMENT_TABS} value={filters.tab} onChange={changeTab} counts={tabCounts} solid />
-      </div>
-
       {/* ================================================= Documents table ===== */}
       <div className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
         <div className="p-5 sm:p-6">
           {rows.length === 0 ? (
             <EmptyState
               icon={SearchX}
-              title="No documents found"
-              description="No documents match your current filters. Try another type or clear the search."
-              actions={
-                <Button variant="secondary" onClick={resetFilters}>
-                  Reset filters
-                </Button>
-              }
+              title="Nothing filed here yet"
+              description="Upload a contract, submittal or photo and it will appear here."
             />
           ) : (
             <Table
@@ -414,13 +328,12 @@ export default function Documents({
             className="mt-6"
             page={meta.current_page}
             pageCount={meta.last_page}
-            onPageChange={(page) => applyFilters({ page })}
+            onPageChange={goToPage}
             summary={meta.total === 0 ? 'No documents to display' : `Showing ${rows.length} of ${meta.total} documents`}
           />
         </div>
       </div>
 
-      <NewFolderModal isOpen={folderModal.isOpen} onClose={folderModal.close} jobs={jobs} folders={folders} />
       <DocumentHistoryModal
         key={activeDocument?.id ?? 'none'}
         isOpen={historyModal.isOpen}

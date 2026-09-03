@@ -73,6 +73,9 @@ class JobSites
             'location' => $primary?->address,
             'latitude' => $primary?->latitude,
             'longitude' => $primary?->longitude,
+            // Carried so the mobile app can identify the site by place rather
+            // than by matching a string.
+            'place_id' => $primary?->place_id,
         ]);
     }
 }

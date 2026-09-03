@@ -28,7 +28,7 @@ return new class extends Migration
             $table->string('label')->nullable();
             $table->string('address');
             // Set only when the address was picked from the lookup — see
-            // MapboxGeocoder. Never half of a pair.
+            // the address lookup. Never half of a pair.
             $table->decimal('latitude', 10, 7)->nullable();
             $table->decimal('longitude', 10, 7)->nullable();
             /** The one a job defaults to, and the one mirrored onto the client. */

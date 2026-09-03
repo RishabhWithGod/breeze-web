@@ -144,11 +144,16 @@ export default function FinalSymbols({ result, projects, defaultProjectId }: Fin
         .map((site) => site.id) ??
       [],
     description: result.job?.description ?? '',
-    // Recorded on the client, so it does not have to be answered twice. It is
-    // still a field: a client's usual type is not every job's type.
+    /*
+     * Recorded against the site, so it does not have to be answered twice — it
+     * is the building that decides the type, and a client can own a house and a
+     * warehouse. Still a field: this site's usual type is not every job's.
+     */
     job_type:
       result.job?.jobType ??
-      projects.find((option) => option.id === defaultProjectId)?.projectType ??
+      projects
+        .find((option) => option.id === defaultProjectId)
+        ?.addresses.find((site) => site.isPrimary)?.siteType ??
       '',
     start_date: result.job?.startDate ?? '',
     end_date: result.job?.endDate ?? '',
@@ -296,7 +301,21 @@ export default function FinalSymbols({ result, projects, defaultProjectId }: Fin
               clientName={selectedProject?.clientName ?? ''}
               sites={selectedProject?.addresses ?? []}
               value={jobForm.data.address_ids}
-              onChange={(addressIds) => updateJobField('address_ids', addressIds)}
+              onChange={(addressIds) => {
+                // Changing the site changes the kind of building, so the type
+                // follows it. A site with none recorded leaves it alone.
+                const picked = (selectedProject?.addresses ?? []).find(
+                  (site) => site.id === addressIds[0],
+                )
+
+                jobForm.setData((current) => ({
+                  ...current,
+                  address_ids: addressIds,
+                  job_type: picked?.siteType ?? current.job_type,
+                }))
+
+                if (jobForm.errors.address_ids) jobForm.clearErrors('address_ids')
+              }}
               disabled={jobForm.processing}
               {...(jobForm.errors.address_ids
                 ? { error: jobForm.errors.address_ids }

@@ -4,6 +4,8 @@ import type { DraftAddress } from '@/types'
 export const emptyAddress = (): DraftAddress => ({
   label: '',
   address: '',
+  site_type: '',
   latitude: null,
   longitude: null,
+  place_id: null,
 })

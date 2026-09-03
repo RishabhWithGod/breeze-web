@@ -64,7 +64,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Address lookup fires as someone types, so the budget has to cover a
         // few real searches a minute without letting a stuck field hammer a
-        // metered geocoder. The field debounces on its side; this bounds it.
+        // metered lookup. The field debounces on its side; this bounds it.
         RateLimiter::for('address-lookup', function (Request $request) {
             return Limit::perMinute(60)->by('address-lookup:'.($request->user()?->id ?? $request->ip()));
         });

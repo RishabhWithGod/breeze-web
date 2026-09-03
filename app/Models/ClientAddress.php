@@ -10,16 +10,26 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * One site a client has work at.
  *
  * Coordinates are set only when the address was picked from the lookup, so both
- * are null far more often than not — see MapboxGeocoder.
+ * are null far more often than not — see GooglePlaces.
  */
 class ClientAddress extends Model
 {
+    /**
+     * What kind of building a site is.
+     *
+     * The same three a job and a project use — a job raised here takes its type
+     * from the site, so the two vocabularies have to be one.
+     */
+    public const TYPES = Job::TYPES;
+
     protected $fillable = [
         'client_id',
         'label',
         'address',
+        'site_type',
         'latitude',
         'longitude',
+        'place_id',
         'is_primary',
         'position',
     ];

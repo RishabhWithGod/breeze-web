@@ -30,6 +30,9 @@ class DocumentResource extends JsonResource
             'description' => $this->description,
             'jobId' => $this->job_id,
             'jobName' => $this->whenLoaded('job', fn () => $this->job?->name),
+            // The takeoff it is filed under. Its name is not sent: the list is
+            // opened per takeoff and says so in its own header.
+            'projectId' => $this->project_id,
             'estimateId' => $this->estimate_id,
             'estimateNumber' => $this->whenLoaded('estimate', fn () => $this->estimate?->number),
             'folderId' => $this->folder_id,

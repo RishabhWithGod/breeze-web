@@ -164,6 +164,10 @@ export interface JobDetail extends Omit<Job, 'teamCount' | 'estimateCount'> {
   readonly clientId: number | null
   /** The client sites this job runs at, in the order they were picked. */
   readonly addressIds: readonly number[]
+  /** The site's point, for GPS check-in on the crew app. */
+  readonly latitude: number | null
+  readonly longitude: number | null
+  readonly placeId: string | null
   readonly archivedAt: string | null
   readonly createdAt: string
   readonly team: readonly JobTeamMember[]

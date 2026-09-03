@@ -4,7 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Http\Resources\NotificationResource;
 use App\Models\User;
-use App\Services\Geocoding\MapboxGeocoder;
+use App\Services\Places\GooglePlaces;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Services\TimeTracking\TimerService;
 use Illuminate\Http\Request;
@@ -42,7 +42,7 @@ class HandleInertiaRequests extends Middleware
              * the lookup is off, instead of looking broken while it silently
              * returns nothing.
              */
-            'addressLookupEnabled' => app(MapboxGeocoder::class)->configured(),
+            'addressLookupEnabled' => app(GooglePlaces::class)->configured(),
 
             /*
              * The takeoff someone is part-way through, when they are not on one

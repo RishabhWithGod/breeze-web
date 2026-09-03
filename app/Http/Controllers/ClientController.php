@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\ClientAddress;
 use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -81,9 +82,15 @@ class ClientController extends Controller
 
         $this->writeAddresses($client, $data['addresses'] ?? []);
 
+        /*
+         * Straight on to the project form, with the client already filled in.
+         * A client on its own is not the point — the work hangs off a project,
+         * so the next step is offered rather than waiting behind a button on a
+         * screen that has nothing on it yet.
+         */
         return redirect()
-            ->route('clients.show', $client)
-            ->with('success', "“{$client->name}” was added.");
+            ->route('projects.create', ['client' => $client->id])
+            ->with('success', "“{$client->name}” was added. Add their first project.");
     }
 
     public function show(Request $request, Client $client): Response
@@ -108,7 +115,11 @@ class ClientController extends Controller
                     'label' => $address->label,
                     'address' => $address->address,
                     'display' => $address->display(),
+                    'siteType' => $address->site_type,
                     'isPrimary' => $address->is_primary,
+                    'latitude' => $address->latitude === null ? null : (float) $address->latitude,
+                    'longitude' => $address->longitude === null ? null : (float) $address->longitude,
+                    'placeId' => $address->place_id,
                     // `job_addresses` cascades, so a site with work on it
                     // cannot go — see ClientAddressController::destroy.
                     'jobCount' => $address->jobs_count,
@@ -216,12 +227,24 @@ class ClientController extends Controller
             'addresses.*.label' => ['required', 'string', 'max:80'],
             'addresses.*.address' => ['required', 'string', 'max:160'],
             /*
+             * What kind of building it is. Optional, because a site can be
+             * recorded before anyone has been to it — a job raised there then
+             * asks the question instead of guessing.
+             */
+            'addresses.*.site_type' => ['nullable', Rule::in(ClientAddress::TYPES)],
+            /*
              * Set only when the address was picked from the lookup, so both are
              * optional — but never one without the other, or the record would
              * carry half a point.
              */
             'addresses.*.latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:addresses.*.longitude'],
             'addresses.*.longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:addresses.*.latitude'],
+            /*
+             * Google's ids are opaque, so the only honest check is shape: a
+             * bounded printable string. Never trusted as proof of anything —
+             * the coordinates beside it are range-checked on their own.
+             */
+            'addresses.*.place_id' => ['nullable', 'string', 'max:512', 'regex:/^[A-Za-z0-9_\\-]+$/'],
         ], [
             'name.required' => 'Client name is required',
             'name.unique' => 'A client with that name is already on the register',
@@ -237,8 +260,10 @@ class ClientController extends Controller
             $client->addresses()->create([
                 'label' => trim($address['label']),
                 'address' => $address['address'],
+                'site_type' => $address['site_type'] ?? null,
                 'latitude' => $address['latitude'] ?? null,
                 'longitude' => $address['longitude'] ?? null,
+                'place_id' => $address['place_id'] ?? null,
                 // The first one given is the one a project defaults to.
                 'is_primary' => $position === 0,
                 'position' => $position,

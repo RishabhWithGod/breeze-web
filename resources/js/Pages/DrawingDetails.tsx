@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Head } from '@inertiajs/react'
-import { ArrowLeft, Download, FileText, Map, Sparkles } from 'lucide-react'
+import { ArrowLeft, Download, FileText, FolderClosed, Map, Sparkles } from 'lucide-react'
 import {
   ButtonLink,
   Card,
@@ -10,7 +10,7 @@ import {
 } from '@/components/common'
 import { EngineBoqPanel, WireSizesPanel } from '@/components/finals'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ROUTES } from '@/constants'
+import { ROUTES, routeTo } from '@/constants'
 import type { EngineBoqLine, PipelineStage, WireSizeRow } from '@/types'
 import { formatCurrency, formatDate, formatFileSize, formatNumber } from '@/utils'
 
@@ -126,6 +126,15 @@ export default function DrawingDetails({
         ]}
         actions={
           <>
+            {/* This takeoff's own paperwork — contracts, submittals, RFIs. */}
+            <ButtonLink
+              href={routeTo.projectDocuments(drawing.projectId)}
+              variant="secondary"
+              size="sm"
+              leftIcon={FolderClosed}
+            >
+              Documents
+            </ButtonLink>
             {drawing.annotatedUrl && (
               <ButtonLink
                 href={drawing.annotatedUrl}
