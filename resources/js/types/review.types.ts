@@ -155,8 +155,8 @@ export interface PipelineStage {
 export interface AiReviewSummary {
   readonly id: number
   readonly projectId: number
+  /** The client's name — `Project.client` holds the same string. */
   readonly projectName: string
-  readonly client: string | null
   readonly drawingName: string | null
   readonly modelVersion: string | null
   readonly pageCount: number
@@ -354,4 +354,29 @@ export interface RunState {
    * server can hold the request until this changes.
    */
   readonly signature?: string
+}
+
+/** One row of an estimating component's figures, when the run returned any. */
+export interface EstimatingComponentItem {
+  readonly label: string | null
+  readonly detail: string | null
+  readonly value: string | null
+  readonly page: number | null
+}
+
+/**
+ * One thing the estimate needs from a takeoff.
+ *
+ * `pending` means the pipeline does not produce it yet — it is listed so the
+ * reviewer knows what the estimate will not carry, never with an invented
+ * figure standing in for the real one.
+ */
+export interface EstimatingComponent {
+  readonly key: string
+  readonly label: string
+  readonly status: 'available' | 'pending'
+  readonly summary: string
+  readonly items: readonly EstimatingComponentItem[]
+  /** Rows beyond the handful shown here. */
+  readonly moreCount: number
 }

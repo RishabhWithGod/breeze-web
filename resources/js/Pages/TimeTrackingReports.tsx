@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { Head, router } from '@inertiajs/react'
-import { Download } from 'lucide-react'
-import { Button, Card, CardHeader, ProgressBar, TextInput } from '@/components/common'
+import { ArrowLeft, Download } from 'lucide-react'
+import {
+  Button,
+  ButtonLink,
+  Card,
+  CardHeader,
+  ProgressBar,
+  TextInput,
+} from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { TimeTrackingReportsData } from '@/types'
@@ -61,6 +68,9 @@ export default function TimeTrackingReports({
             >
               Export Excel
             </Button>
+                      <ButtonLink href={ROUTES.timeTracking} variant="secondary" leftIcon={ArrowLeft}>
+              Back
+            </ButtonLink>
           </>
         }
       />

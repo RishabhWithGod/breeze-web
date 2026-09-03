@@ -1,4 +1,5 @@
 import type { JobAssignmentRow } from './review.types'
+import type { TaskStatus } from './scheduling.types'
 
 export type JobStatus =
   | 'draft'
@@ -54,13 +55,24 @@ export interface JobTeamMember {
 export interface JobEstimateSummary {
   readonly id: number
   readonly number: string
-  readonly project: string
   readonly client: string
   readonly date: string
   readonly amount: number
   readonly status: 'draft' | 'sent' | 'approved' | 'rejected'
   readonly isConverted: boolean
   readonly convertedProjectId: number | null
+}
+
+/** One task on a job, as the detail screen lists it. */
+export interface JobTaskSummary {
+  readonly id: number
+  readonly title: string
+  readonly status: TaskStatus
+  readonly foreman: string | null
+  readonly estimatedHours: number | null
+  readonly actualHours: number | null
+  /** How much of the estimate this task covers. */
+  readonly lineCount: number
 }
 
 export interface JobNote {
@@ -148,11 +160,16 @@ export interface JobTakeoff {
 
 /** The full record rendered by the job detail screen. */
 export interface JobDetail extends Omit<Job, 'teamCount' | 'estimateCount'> {
-  readonly foreman: (Pick<JobTeamMember, 'id' | 'name' | 'initials'>) | null
+  /** The client's own id — clients are projects, so this is a `projects` id. */
+  readonly clientId: number | null
+  /** The client sites this job runs at, in the order they were picked. */
+  readonly addressIds: readonly number[]
   readonly archivedAt: string | null
   readonly createdAt: string
   readonly team: readonly JobTeamMember[]
   readonly estimates: readonly JobEstimateSummary[]
+  /** The work the job is broken into, in schedule order. */
+  readonly tasks: readonly JobTaskSummary[]
   readonly notes: readonly JobNote[]
   readonly attachments: readonly JobAttachment[]
   readonly activities: readonly JobActivity[]
@@ -167,17 +184,25 @@ export interface JobDetail extends Omit<Job, 'teamCount' | 'estimateCount'> {
  * `status` is derived server-side from `save_as_draft`.
  */
 export interface JobDraft {
+  /** Who the work is for. */
+  client_id: string
   name: string
-  client: string
-  location: string
+  /**
+   * The site this job is at, one of its project's own. Its address becomes the
+   * job's `location` snapshot, server-side.
+   */
+  address_ids: number[]
   description: string
   job_type: JobType | ''
   start_date: string
   end_date: string
   budget: string
-  foreman_id: string
   save_as_draft: boolean
-  /** Links this job back to a drawing already run through AI Takeoff. */
+  /**
+   * Which of the client's projects the work is on. Every drawing, takeoff and
+   * estimate hangs off one, so the job does too. The job's own `client` name
+   * column is a snapshot the server writes from `client_id`.
+   */
   project_id: string
   upload_id: string
 }

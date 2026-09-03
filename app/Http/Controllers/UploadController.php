@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreUploadRequest;
-use App\Http\Resources\UploadResource;
 use App\Jobs\ProcessTakeoffRun;
 use App\Jobs\RenderDrawingPreviews;
 use App\Models\Upload;
 use App\Services\Ai\TakeoffOrchestrator;
+use App\Services\Takeoff\TakeoffFlow;
 use App\Support\UploadLimits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -21,18 +21,38 @@ class UploadController extends Controller
 {
     public function create(Request $request, TakeoffOrchestrator $orchestrator): Response
     {
+        // Opened for a particular client, this is that client's next step.
+        $preselected = $this->preselectedClient($request);
+
+        if ($preselected !== null) {
+            $client = $request->user()->projects()->find($preselected);
+
+            if ($client !== null) {
+                app(TakeoffFlow::class)->remember($client);
+            }
+        }
+
         return Inertia::render('Upload', [
+            /*
+             * A drawing is taken off a project, not off a client — a client
+             * with four projects has four sets of drawings. The client's name
+             * comes along so the picker can say whose project it is.
+             */
             'projects' => $request->user()->projects()
+                ->with('clientRecord:id,name')
                 ->orderByDesc('created_at')
-                ->get(['id', 'name', 'client'])
+                ->get(['id', 'client_id', 'name'])
                 ->map(fn ($project) => [
                     'id' => $project->id,
                     'name' => $project->name,
-                    'client' => $project->client,
+                    'clientName' => $project->clientRecord?->name,
                 ]),
-            'recentUploads' => UploadResource::collection(
-                $request->user()->uploads()->latest()->take(3)->get()
-            )->resolve(),
+            'selectedProjectId' => $preselected,
+            /*
+             * A takeoff already running, unless it is the very one this screen
+             * opened for — that is the resume, not a second start.
+             */
+            'unfinishedTakeoff' => app(TakeoffFlow::class)->inProgress($request, $preselected),
             /*
              * The dropzone renders the limit the request actually enforces — the
              * lower of the product's setting and PHP's own ceiling — so it can
@@ -51,6 +71,32 @@ class UploadController extends Controller
             'aiConfigured' => $orchestrator->configured(),
             'engineStatusUrl' => route('ai.engine-status'),
         ]);
+    }
+
+    /**
+     * The client the picker should open on.
+     *
+     * Either named outright by a link that came from a client's own screen, or
+     * remembered from creating one — someone who has just made a client and
+     * come here to upload its drawing means that client. Both are checked
+     * against the signed-in user's own clients, so neither can point the
+     * picker at someone else's record.
+     *
+     * The remembered one is read once and cleared: it answers "the client you
+     * just created", not "the client you always want".
+     */
+    private function preselectedClient(Request $request): ?int
+    {
+        $requested = $request->integer('project') ?: null;
+        $remembered = $request->session()->pull('takeoff.preselected_client');
+
+        $candidate = $requested ?? $remembered;
+
+        if ($candidate === null) {
+            return null;
+        }
+
+        return $request->user()->projects()->whereKey($candidate)->value('id');
     }
 
     /**
@@ -101,7 +147,6 @@ class UploadController extends Controller
                 'drawing_name' => $files[0]->getClientOriginalName(),
                 'status' => 'processing',
                 'review_status' => 'none',
-                'notes' => $request->input('notes'),
                 'started_at' => $project->started_at ?? now(),
             ]);
 
@@ -130,6 +175,11 @@ class UploadController extends Controller
             // The drawing the analysis runs against: the first PDF if there is
             // one, otherwise the first file uploaded.
             $primary = collect($uploads)->firstWhere('format', 'PDF') ?? $uploads[0];
+
+            // Uploading a drawing to run a takeoff on it *is* choosing it, so
+            // the client screen shows it selected rather than still pointing at
+            // whatever was there before.
+            $project->update(['selected_upload_id' => $primary->id]);
 
             return [$project, $primary];
         });

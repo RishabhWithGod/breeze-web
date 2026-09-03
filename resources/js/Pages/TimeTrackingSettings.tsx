@@ -1,8 +1,17 @@
 import { useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { Save } from 'lucide-react'
-import { Alert, Button, Card, CardHeader, Checkbox, SelectField, TextInput } from '@/components/common'
+import { ArrowLeft, Save } from 'lucide-react'
+import {
+  Alert,
+  Button,
+  ButtonLink,
+  Card,
+  CardHeader,
+  Checkbox,
+  SelectField,
+  TextInput,
+} from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
 import type { SharedPageProps, TimeTrackingSettingsState } from '@/types'
@@ -64,6 +73,11 @@ export default function TimeTrackingSettings({ settings, timezones }: TimeTracki
         title="Time Tracking Settings"
         subtitle="Overtime rules and default labor rates for the whole company."
         breadcrumbs={[{ label: 'Time Tracking', href: ROUTES.timeTracking }, { label: 'Settings' }]}
+        actions={
+          <ButtonLink href={ROUTES.timeTracking} variant="secondary" leftIcon={ArrowLeft}>
+            Back
+          </ButtonLink>
+        }
       />
 
       <AnimatePresence initial={false}>

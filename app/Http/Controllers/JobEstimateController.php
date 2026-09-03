@@ -40,11 +40,13 @@ class JobEstimateController extends Controller
             'job_id' => $job->id,
             'project_id' => $job->project_id,
             'number' => Estimate::nextNumber(),
+            // Both name columns are the client's — see ClientDirectory.
             'client' => $job->client ?? 'Unassigned',
-            'project' => $job->name,
+            'project' => $job->client ?? 'Unassigned',
             'issued_on' => now()->toDateString(),
             'amount' => $job->budget ?? 0,
-            'status' => 'draft',
+            // Raised against a job that already exists — see Estimate::statusFor().
+            'status' => Estimate::statusFor($job),
             'markup_pct' => (float) config('ai.estimating.markup_pct'),
             'tax_pct' => (float) config('ai.estimating.tax_pct'),
         ]);
@@ -73,7 +75,8 @@ class JobEstimateController extends Controller
 
         $project = Project::create([
             'user_id' => Auth::id(),
-            'name' => $estimate->project,
+            // A client's name and its `client` column are the same string.
+            'name' => $estimate->client,
             'client' => $estimate->client,
             'discipline' => 'Electrical',
             'status' => 'draft',

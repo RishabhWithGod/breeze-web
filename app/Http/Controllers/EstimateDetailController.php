@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\ApprovalHistoryResource;
 use App\Http\Resources\EstimateItemResource;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\JobAssignment;
 use App\Notifications\EstimateStatusChanged;
+use App\Services\Clients\ClientDirectory;
 use App\Services\Export\EstimatePdfWriter;
 use App\Services\Takeoff\EstimateBuilder;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response as ResponseFactory;
@@ -27,8 +28,16 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class EstimateDetailController extends Controller
 {
-    public function show(Estimate $estimate): Response
+    public function __construct(private readonly ClientDirectory $clients) {}
+
+    public function show(Request $request, Estimate $estimate): Response
     {
+        // Opened as a step, so the flow is remembered from here too — coming
+        // back to an estimate is a normal way to re-enter it.
+        if ($request->boolean('flow') && $estimate->aiResult?->project !== null) {
+            app(TakeoffFlow::class)->remember($estimate->aiResult->project);
+        }
+
         $estimate->load([
             'job', 'takeoffProject', 'items',
             'aiResult.wireSizes', 'aiResult.equipment', 'aiResult.panelSchedules',
@@ -39,23 +48,29 @@ class EstimateDetailController extends Controller
                 'id' => $estimate->id,
                 'number' => $estimate->number,
                 'client' => $estimate->client,
-                'project' => $estimate->project,
                 'status' => $estimate->status,
                 'issuedOn' => $estimate->issued_on?->toDateString(),
                 'notes' => $estimate->notes,
                 'jobId' => $estimate->job_id,
                 'jobName' => $estimate->job?->name,
-                'projectId' => $estimate->project_id,
+                'clientId' => $estimate->client_id,
                 'aiResultId' => $estimate->ai_result_id,
                 'fromTakeoff' => $estimate->ai_result_id !== null,
                 'convertedProjectId' => $estimate->converted_project_id,
                 'createdAt' => $estimate->created_at->toISOString(),
-                // Where the numbers came from: the drawing, and the reviewed table.
-                'drawingUrl' => $estimate->project_id
+                /*
+                 * Where the numbers came from: the drawing, and the reviewed
+                 * table. Guarded on the drawing itself, not on `project_id` —
+                 * that now names the client, and a client without a takeoff has
+                 * no drawing to open.
+                 */
+                'drawingUrl' => $estimate->takeoffProject?->drawing_name
                     ? route('drawings.show', $estimate->project_id)
                     : null,
                 'drawingName' => $estimate->takeoffProject?->drawing_name,
-                'editUrl' => route('estimates.edit', $estimate),
+                // Carries how the estimate was reached, so editing and saving
+                // land back where the person actually came from.
+                'editUrl' => route('estimates.edit', $this->showParams($request, $estimate)),
                 // False while the lines still carry the engine's own quantities.
                 'reviewed' => $estimate->aiResult === null
                     ? true
@@ -64,6 +79,16 @@ class EstimateDetailController extends Controller
                     ? route('reviews.show', $estimate->ai_result_id)
                     : null,
             ],
+            /*
+             * The roadmap belongs to the takeoff flow, and this screen is
+             * reached from outside it too — from a job's estimates list, from
+             * the estimates index. Only the flow's own links say so, so opening
+             * an estimate to read it does not claim to be a step in anything.
+             */
+            'inFlow' => $request->boolean('flow'),
+            /** Where Back goes — see `backUrl()`. */
+            'backUrl' => $this->backUrl($request, $estimate),
+
             'items' => EstimateItemResource::collection($estimate->items)->resolve(),
             'sections' => EstimateBuilder::summarise($estimate),
             'totals' => EstimateBuilder::totalsFor($estimate),
@@ -101,13 +126,58 @@ class EstimateDetailController extends Controller
                     'rawHeaders' => $panel->raw_headers ?? [],
                 ])->all() ?? [],
             ],
-
-            'history' => $estimate->aiResult
-                ? ApprovalHistoryResource::collection(
-                    $estimate->aiResult->history()->with('actor')->take(15)->get()
-                )->resolve()
-                : [],
         ]);
+    }
+
+    /**
+     * How this estimate was reached, carried on every link that leads back to
+     * it — Back, the edit form, and the redirect after saving.
+     *
+     * Two markers, and only one applies at a time: `from_job` for a job's own
+     * list, `flow` for the takeoff roadmap. `from_job` is checked against the
+     * estimate rather than trusted — an id that does not own this estimate is
+     * somebody guessing at a URL, not navigation.
+     *
+     * @return array<string, int>
+     */
+    private function originParams(Request $request, Estimate $estimate): array
+    {
+        return array_filter([
+            'from_job' => $request->integer('from_job') === $estimate->job_id
+                ? $estimate->job_id
+                : null,
+            'flow' => $request->boolean('flow') ? 1 : null,
+        ]);
+    }
+
+    /** @return array<string, int> */
+    private function showParams(Request $request, Estimate $estimate): array
+    {
+        return ['estimate' => $estimate->id, ...$this->originParams($request, $estimate)];
+    }
+
+    /**
+     * Where Back goes from an estimate.
+     *
+     * The screen is reached from three places and Back has to mean the one it
+     * was actually reached from. A job's own list says so with `from_job`,
+     * checked against the estimate rather than trusted — an id that does not
+     * own this estimate is somebody guessing at a URL, not navigation.
+     */
+    private function backUrl(Request $request, Estimate $estimate): string
+    {
+        $fromJob = $request->integer('from_job') ?: null;
+
+        if ($fromJob !== null && $fromJob === $estimate->job_id) {
+            return route('jobs.show', $fromJob);
+        }
+
+        // In the flow, the step before is the review these numbers came from.
+        if ($request->boolean('flow') && $estimate->takeoffProject?->drawing_name) {
+            return route('reviews.show', $estimate->ai_result_id);
+        }
+
+        return route('estimates.index');
     }
 
     /**
@@ -116,7 +186,7 @@ class EstimateDetailController extends Controller
      * A screen rather than an inline panel, matching how a job is edited: the
      * detail screen stays a readable record, and changes are a deliberate step.
      */
-    public function edit(Estimate $estimate): Response
+    public function edit(Request $request, Estimate $estimate): Response
     {
         $estimate->load(['job', 'takeoffProject', 'aiResult']);
 
@@ -125,7 +195,7 @@ class EstimateDetailController extends Controller
                 'id' => $estimate->id,
                 'number' => $estimate->number,
                 'client' => $estimate->client,
-                'project' => $estimate->project,
+                'clientId' => $estimate->client_id,
                 'status' => $estimate->status,
                 'issuedOn' => $estimate->issued_on?->toDateString(),
                 'markupPct' => (float) $estimate->markup_pct,
@@ -134,18 +204,27 @@ class EstimateDetailController extends Controller
                 'jobId' => $estimate->job_id,
                 'jobName' => $estimate->job?->name,
                 'fromTakeoff' => $estimate->ai_result_id !== null,
-                'drawingUrl' => $estimate->project_id
+                // Guarded on the drawing, not the client link — see show().
+                'drawingUrl' => $estimate->takeoffProject?->drawing_name
                     ? route('drawings.show', $estimate->project_id)
                     : null,
             ],
             'statuses' => Estimate::STATUSES,
+            /*
+             * Back from editing is the estimate itself, carrying whatever
+             * brought us here — so the chain out stays one screen at a time.
+             */
+            'backUrl' => route('estimates.show', $this->showParams($request, $estimate)),
+            /*
+             * The form posts here rather than to a bare `/estimates/{id}`, so
+             * the origin survives the save — a PUT carries no query string of
+             * its own to inherit it from.
+             */
+            'saveUrl' => route('estimates.update', $this->showParams($request, $estimate)),
+
             // Shown beside the rate fields so the effect of a change is visible.
             'totals' => EstimateBuilder::totalsFor($estimate),
-            'clients' => Estimate::query()
-                ->whereNotNull('client')
-                ->distinct()
-                ->orderBy('client')
-                ->pluck('client'),
+            'clients' => $this->clients->options(),
         ]);
     }
 
@@ -153,14 +232,18 @@ class EstimateDetailController extends Controller
     public function update(Request $request, Estimate $estimate): RedirectResponse
     {
         $validated = $request->validate([
-            'client' => ['required', 'string', 'max:160'],
-            'project' => ['required', 'string', 'max:160'],
+            /** The client, picked from the client register — see ClientDirectory. */
+            'client_id' => ['required', 'integer', 'exists:clients,id'],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
             'issued_on' => ['required', 'date'],
             'markup_pct' => ['required', 'numeric', 'min:0', 'max:200'],
             'tax_pct' => ['required', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        // `client` and `project` are both snapshots of the picked client's name.
+        $validated = $this->clients->withClientSnapshot($validated);
+        $validated['project'] = $validated['client'];
 
         $previousStatus = $estimate->status;
         $estimate->update($validated);
@@ -177,8 +260,13 @@ class EstimateDetailController extends Controller
             $this->notifyOfStatusChange($request, $estimate);
         }
 
+        /*
+         * Saving keeps whatever brought you here. Without it the trail ends at
+         * the save: Back from the estimate would drop you in the estimates list
+         * rather than the job whose list you opened it from.
+         */
         return redirect()
-            ->route('estimates.show', $estimate)
+            ->route('estimates.show', $this->showParams($request, $estimate))
             ->with('success', "Estimate {$estimate->number} updated.");
     }
 

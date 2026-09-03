@@ -21,15 +21,18 @@ class JobDetailResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'client' => $this->client,
+            /** The client's own id — clients are projects, so this is a `projects` id. */
+            'clientId' => $this->project_id,
             'location' => $this->location,
+            /** The client sites this job runs at, in the order they were picked. */
+            'addressIds' => $this->whenLoaded(
+                'addresses',
+                fn () => $this->addresses->pluck('id')->all(),
+                [],
+            ),
             'description' => $this->description,
             'jobType' => $this->job_type,
             'status' => $this->status,
-            'foreman' => $this->foreman ? [
-                'id' => $this->foreman->id,
-                'name' => $this->foreman->name,
-                'initials' => $this->foreman->initials,
-            ] : null,
             'startDate' => $this->start_date?->toISOString(),
             'endDate' => $this->end_date?->toISOString(),
             'budget' => $this->budget === null ? null : (float) $this->budget,
@@ -52,7 +55,7 @@ class JobDetailResource extends JsonResource
             'estimates' => $this->estimates->map(fn ($estimate) => [
                 'id' => $estimate->id,
                 'number' => $estimate->number,
-                'project' => $estimate->project,
+                // `project` holds the same snapshot and is not sent twice.
                 'client' => $estimate->client,
                 'date' => $estimate->issued_on->toISOString(),
                 'amount' => (float) $estimate->amount,
@@ -60,6 +63,25 @@ class JobDetailResource extends JsonResource
                 'isConverted' => $estimate->isConverted(),
                 'convertedProjectId' => $estimate->converted_project_id,
             ])->all(),
+
+            /*
+             * The work this job is broken into. Only ever the tasks themselves
+             * — dates and dependencies are the schedule's business, and this
+             * screen answers "what is on this job and who has it".
+             */
+            'tasks' => $this->whenLoaded('tasks', fn () => $this->tasks->map(fn ($task) => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'status' => $task->status,
+                'foreman' => $task->foreman?->name,
+                'estimatedHours' => $task->estimated_hours === null
+                    ? null
+                    : (float) $task->estimated_hours,
+                'actualHours' => $task->actual_hours === null
+                    ? null
+                    : (float) $task->actual_hours,
+                'lineCount' => $task->estimate_items_count ?? 0,
+            ])->values()->all(), []),
 
             'notes' => $this->notes->map(fn ($note) => [
                 'id' => $note->id,

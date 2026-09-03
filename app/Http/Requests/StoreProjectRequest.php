@@ -2,38 +2,34 @@
 
 namespace App\Http\Requests;
 
-use App\Http\Requests\Concerns\DefinesProjectDocuments;
-use App\Models\Project;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 /**
- * Create Project: the project's own details, plus the drawing PDFs defined with
- * it.
+ * Add Project: whose it is, and what it is called.
  *
- * Only the name and the client are required — a project is opened before its
- * drawing set is complete, and PDFs can be added from the project screen
- * afterwards. Whatever is sent is held to the same file rules the AI takeoff
- * upload enforces, so a drawing defined here can be analysed as it stands.
+ * Nothing else, because nothing else is known yet. The place comes from the
+ * client's address book, and everything about the work itself — its counts,
+ * its bill of quantities, its price — comes from the takeoff that runs against
+ * it. Asking here would be asking someone to guess.
+ *
+ * No drawings are accepted either. A PDF only ever arrives through AI Takeoff,
+ * uploaded against a project that already exists, so the product has one
+ * upload path rather than three.
  */
 class StoreProjectRequest extends FormRequest
 {
-    use DefinesProjectDocuments;
-
     /** @return array<string, mixed> */
     public function rules(): array
     {
         return [
             'name' => ['required', 'string', 'min:3', 'max:160'],
-            'code' => ['nullable', 'string', 'max:60'],
-            'client' => ['required', 'string', 'max:120'],
-            'location' => ['nullable', 'string', 'max:160'],
-            'discipline' => ['nullable', 'string', 'max:60'],
-            'project_type' => ['nullable', Rule::in(Project::TYPES)],
-            'due_date' => ['nullable', 'date'],
-            'notes' => ['nullable', 'string', 'max:2000'],
-
-            ...$this->documentRules(required: false),
+            // A project is always for somebody.
+            'client_id' => ['required', 'integer', 'exists:clients,id'],
+            /*
+             * No address here. A project and the job on it are at the same
+             * place, and that place is in the client's address book — asking
+             * again on this form would be a second copy free to drift.
+             */
         ];
     }
 
@@ -42,19 +38,8 @@ class StoreProjectRequest extends FormRequest
     {
         return [
             'name.required' => 'Project name is required',
+            'client_id.required' => 'Pick the client this project is for',
             'name.min' => 'Use at least 3 characters',
-            'client.required' => 'Client is required',
-            ...$this->documentMessages(),
-        ];
-    }
-
-    /** @return array<string, string> */
-    public function attributes(): array
-    {
-        return [
-            'code' => 'project number',
-            'project_type' => 'project type',
-            'due_date' => 'due date',
         ];
     }
 }

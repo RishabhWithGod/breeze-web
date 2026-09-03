@@ -59,6 +59,27 @@ class Estimate extends Model
         ];
     }
 
+    /**
+     * The status an estimate holds once a job has been raised against it.
+     *
+     * Raising the job *is* the act of accepting the estimate — the work is
+     * going ahead and someone is being sent to do it. Leaving it "draft" said
+     * the opposite on every screen that showed it.
+     */
+    public const STATUS_FOR_A_LIVE_JOB = 'approved';
+
+    /**
+     * The status a new estimate should carry, given whether it already has a
+     * job behind it.
+     *
+     * One rule in one place: an estimate is raised from four different points
+     * in the flow, and they were each deciding this for themselves.
+     */
+    public static function statusFor(?Job $job): string
+    {
+        return $job === null ? 'draft' : self::STATUS_FOR_A_LIVE_JOB;
+    }
+
     /** @return BelongsTo<Job, $this> */
     public function job(): BelongsTo
     {
@@ -84,10 +105,11 @@ class Estimate extends Model
     }
 
     /**
-     * The takeoff this estimate was generated from, when it came from one.
+     * The client this estimate is for — and, when it came from one, the takeoff
+     * it was generated from. Clients are projects, so both are the same record.
      *
      * Named `takeoffProject` because `project` is already a column on this table
-     * (the free-text project name), and an attribute always shadows a relation.
+     * (the client-name snapshot), and an attribute always shadows a relation.
      */
     public function takeoffProject(): BelongsTo
     {

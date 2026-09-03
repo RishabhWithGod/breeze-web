@@ -15,9 +15,9 @@ class EstimateResource extends JsonResource
         return [
             'id' => $this->id,
             'number' => $this->number,
+            // `project` holds the same snapshot and is not sent twice.
             'client' => $this->client,
-            'project' => $this->project,
-            // ISO strings throughout — the client formats with date-fns.
+            // ISO strings throughout — the browser formats with date-fns.
             'date' => $this->issued_on->toISOString(),
             'amount' => (float) $this->amount,
             'status' => $this->status,

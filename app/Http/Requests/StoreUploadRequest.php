@@ -28,7 +28,6 @@ class StoreUploadRequest extends FormRequest
                 'max:'.(UploadLimits::effectiveMb() * 1024),
                 Rule::file()->extensions($limits['extensions']),
             ],
-            'notes' => ['nullable', 'string', 'max:500'],
         ];
     }
 
@@ -38,8 +37,8 @@ class StoreUploadRequest extends FormRequest
         $limits = config('takeoff.uploads');
 
         return [
-            'project_id.required' => 'Select a project before running a takeoff.',
-            'project_id.exists' => 'That project could not be found.',
+            'project_id.required' => 'Select a client before running a takeoff.',
+            'project_id.exists' => 'That client could not be found.',
             'files.required' => 'Add at least one supported drawing file before running a takeoff.',
             'files.max' => $limits['max_files'] === 1
                 ? 'Only one file can be queued at a time.'
@@ -51,7 +50,6 @@ class StoreUploadRequest extends FormRequest
                 .UploadLimits::phpMb().' MB upload limit.',
             'files.*.extensions' => 'Unsupported format — accepted types are '
                 .implode(', ', array_map(fn (string $ext) => ".{$ext}", $limits['extensions'])),
-            'notes.max' => 'Notes are limited to 500 characters',
         ];
     }
 }

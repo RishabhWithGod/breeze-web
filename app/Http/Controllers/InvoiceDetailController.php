@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateInvoiceRequest;
 use App\Http\Resources\InvoiceItemResource;
-use App\Models\Estimate;
 use App\Models\FeedItem;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -14,6 +13,7 @@ use App\Models\PaymentTransaction;
 use App\Notifications\InvoiceStatusChanged;
 use App\Policies\InvoicePolicy;
 use App\Services\Activity\FeedItemRecorder;
+use App\Services\Clients\ClientDirectory;
 use App\Services\Export\InvoicePdfWriter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,7 +35,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class InvoiceDetailController extends Controller
 {
-    public function __construct(private readonly FeedItemRecorder $activity) {}
+    public function __construct(
+        private readonly FeedItemRecorder $activity,
+        private readonly ClientDirectory $clients,
+    ) {}
 
     public function show(Request $request, Invoice $invoice): Response
     {
@@ -69,17 +72,15 @@ class InvoiceDetailController extends Controller
 
         return Inertia::render('InvoiceEdit', [
             'invoice' => $this->present($invoice),
-            'clients' => Job::query()->whereNotNull('client')->pluck('client')
-                ->merge(Estimate::query()->whereNotNull('client')->pluck('client'))
-                ->merge(Invoice::query()->pluck('client'))
-                ->unique()->sort()->values(),
+            'clients' => $this->clients->options(),
             'jobs' => Job::query()->orderBy('name')->get(['id', 'name', 'client']),
         ]);
     }
 
     public function update(UpdateInvoiceRequest $request, Invoice $invoice): RedirectResponse
     {
-        $invoice->update($request->validated());
+        // `client` is a snapshot of the picked client's name, never typed.
+        $invoice->update($this->clients->withClientSnapshot($request->validated()));
         $invoice->recalculateTotals();
 
         return redirect()
@@ -221,6 +222,7 @@ class InvoiceDetailController extends Controller
             'id' => $invoice->id,
             'invoiceNumber' => $invoice->invoice_number,
             'client' => $invoice->client,
+            'projectId' => $invoice->project_id,
             'jobId' => $invoice->job_id,
             'jobName' => $invoice->job?->name,
             'estimateId' => $invoice->estimate_id,

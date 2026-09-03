@@ -6,13 +6,17 @@ use App\Http\Resources\ApprovalHistoryResource;
 use App\Http\Resources\FinalSymbolResource;
 use App\Models\AiResult;
 use App\Models\FinalSymbol;
-use App\Models\Foreman;
 use App\Models\Job;
+use App\Models\Project;
 use App\Services\Ai\ArtefactStore;
+use App\Services\Clients\ClientDirectory;
+use App\Services\Clients\JobSites;
+use App\Services\Clients\ProjectDirectory;
 use App\Services\Export\AnnotatedPdfWriter;
 use App\Services\Export\SymbolExporter;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\JobFactory;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response as ResponseFactory;
@@ -32,9 +36,17 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class FinalTakeoffController extends Controller
 {
-    public function show(Request $request, AiResult $result, ArtefactStore $store): Response
-    {
+    public function show(
+        Request $request,
+        AiResult $result,
+        ArtefactStore $store,
+    ): Response {
         $this->authorize('view', $result);
+
+        // Remembered so the flow can be left and picked up again.
+        if ($result->project !== null) {
+            app(TakeoffFlow::class)->remember($result->project);
+        }
 
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
@@ -55,7 +67,7 @@ class FinalTakeoffController extends Controller
             ->withQueryString();
 
         $result->load([
-            'project', 'workJob', 'estimate', 'upload',
+            'project.addresses', 'workJob.addresses', 'estimate', 'upload',
             'wireSizes', 'panelSchedules', 'equipment', 'circuits', 'boqLines',
         ]);
         $payload = $result->final_payload ?? [];
@@ -65,7 +77,6 @@ class FinalTakeoffController extends Controller
                 'id' => $result->id,
                 'projectId' => $result->project_id,
                 'projectName' => $result->project->name,
-                'client' => $result->project->client,
                 'drawingName' => $result->project->drawing_name,
                 'modelVersion' => $result->model_version,
                 'isFinalised' => $result->isFinalised(),
@@ -73,6 +84,23 @@ class FinalTakeoffController extends Controller
                 'pageCount' => $result->page_count,
                 'workJobId' => $result->work_job_id,
                 'workJobName' => $result->workJob?->name,
+                /*
+                 * The job as it stands, so the form on this screen is the same
+                 * form after it is raised as before — coming back to this step
+                 * shows what was filled in, not a card about it.
+                 */
+                'job' => $result->workJob === null ? null : [
+                    'name' => $result->workJob->name,
+                    'projectId' => $result->workJob->project_id,
+                    'addressIds' => $result->workJob->addresses->pluck('id')->all(),
+                    'description' => $result->workJob->description,
+                    'jobType' => $result->workJob->job_type,
+                    'startDate' => $result->workJob->start_date?->toDateString(),
+                    'endDate' => $result->workJob->end_date?->toDateString(),
+                    'budget' => $result->workJob->budget === null
+                        ? null
+                        : (float) $result->workJob->budget,
+                ],
                 'estimateId' => $result->estimate_id,
                 'estimateNumber' => $result->estimate?->number,
                 'hasAnnotatedPdf' => $store->exists($result->upload?->annotated_path),
@@ -142,7 +170,19 @@ class FinalTakeoffController extends Controller
                 'breaker' => $circuit->breaker,
                 'panel' => $circuit->panel,
             ])->all(),
-            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
+            /*
+             * The whole register, and which of them this takeoff is for. The
+             * takeoff's own client is the default rather than a rule — work is
+             * sometimes taken off one client's drawing and built for another —
+             * and `ai_result_id` still records where the numbers came from.
+             */
+            /*
+             * Every project, so the job can be raised against another one —
+             * work is sometimes taken off one project's drawing and built under
+             * a different one. The takeoff's own is where the form starts.
+             */
+            'projects' => app(ProjectDirectory::class)->options(),
+            'defaultProjectId' => $result->project_id,
             'history' => ApprovalHistoryResource::collection(
                 $result->history()->with('actor')->take(20)->get()
             )->resolve(),
@@ -224,6 +264,7 @@ class FinalTakeoffController extends Controller
         AiResult $result,
         JobFactory $factory,
         EstimateBuilder $estimateBuilder,
+        JobSites $sites,
     ): RedirectResponse {
         $this->authorize('view', $result);
 
@@ -238,23 +279,58 @@ class FinalTakeoffController extends Controller
 
         $attributes = $request->validate([
             'name' => ['nullable', 'string', 'max:160'],
-            'client' => ['nullable', 'string', 'max:160'],
-            'location' => ['nullable', 'string', 'max:200'],
+            /*
+             * Defaults to the takeoff's own client, but can name another. The
+             * sites must then be that client's, and the job's own address is
+             * written from the first one picked rather than typed.
+             */
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            // One site per job — the same rule the standalone job form applies.
+            'address_ids' => ['nullable', 'array', 'max:1'],
+            'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'foreman_id' => ['nullable', 'integer', 'exists:foremen,id'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'budget' => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
         ]);
 
+        $addressIds = $attributes['address_ids'] ?? [];
+        unset($attributes['address_ids']);
+
+        $projectId = (int) ($attributes['project_id'] ?? $result->project_id);
+
+        // The client is whoever that project is for — not asked for twice.
+        $clientId = (int) Project::whereKey($projectId)->value('client_id');
+        $attributes['client_id'] = $clientId ?: null;
+
+        // Refused before the job is written: the sites must belong to that
+        // client's book, whatever ids arrived.
+        $addresses = $addressIds === []
+            ? collect()
+            : $sites->resolve($clientId, $addressIds);
+
+        // A job raised from this takeoff already: the form on this screen is
+        // then that job's own, so re-submitting it saves the edits rather than
+        // quietly doing nothing. `fromFinalJson` only refreshes the counts.
+        $existed = $result->work_job_id !== null;
+
+        $typed = array_filter($attributes, fn ($value) => filled($value));
+
         try {
-            $job = $factory->fromFinalJson($result, $request->user(), array_filter(
-                $attributes,
-                fn ($value) => filled($value),
-            ));
+            $job = $factory->fromFinalJson($result, $request->user(), $typed);
         } catch (RuntimeException $e) {
             return back()->with('warning', $e->getMessage());
+        }
+
+        if ($existed && $typed !== []) {
+            // The client's name is a snapshot on the job, so changing the client
+            // has to rewrite it — every list reads that column, not the join.
+            $job->update(app(ClientDirectory::class)->withClientSnapshot($typed));
+        }
+
+        if ($addresses->isNotEmpty()) {
+            $sites->attach($job, $addresses);
         }
 
         $estimate = null;
@@ -262,14 +338,20 @@ class FinalTakeoffController extends Controller
         try {
             $estimate = $estimateBuilder->fromFinalJson($result->refresh(), $request->user(), $job);
         } catch (RuntimeException $e) {
+            /*
+             * Straight on to breaking the job into tasks, the same as Create Job.
+             * Without the estimate there are no lines to plan from, but the step
+             * still takes typed tasks and can be skipped.
+             */
             return redirect()
-                ->route('jobs.show', $job)
+                ->route('jobs.tasks.setup', $job)
                 ->with('success', "“{$job->name}” was created from the reviewed takeoff.")
                 ->with('warning', "The estimate could not be generated: {$e->getMessage()}");
         }
 
+        // The estimate exists now, so the task step has its lines to plan from.
         return redirect()
-            ->route('jobs.show', $job)
+            ->route('jobs.tasks.setup', $job)
             ->with(
                 'success',
                 "“{$job->name}” was created from the reviewed takeoff, priced as {$estimate->number}."
@@ -309,7 +391,7 @@ class FinalTakeoffController extends Controller
         }
 
         return redirect()
-            ->route('estimates.show', $estimate)
+            ->route('estimates.show', ['estimate' => $estimate, 'flow' => 1])
             ->with('success', "Estimate {$estimate->number} was generated from the reviewed takeoff.");
     }
 }

@@ -15,24 +15,78 @@ const ITEM_BASE =
   'text-md font-medium transition-colors duration-200'
 
 /**
- * URL prefixes that belong to the AI Takeoff module. Processing and results are
- * per-project URLs now, so this matches on prefix rather than exact path.
+ * The paths a module owns beyond the one its entry links to.
+ *
+ * A module's screens do not all live under its link. The takeoff flow runs
+ * across `/processing`, `/reviews` and `/takeoffs` and none of those start with
+ * `/ai-takeoff` — so before this, signing off a review lit nothing at all and
+ * the rail stopped saying where you were half way through the flow.
  */
-const TAKEOFF_PREFIXES: readonly string[] = [ROUTES.aiTakeoff, '/processing', '/results']
+const MODULE_PATHS: Readonly<Record<string, readonly string[]>> = {
+  [ROUTES.aiTakeoff]: ['/processing', '/results', '/reviews', '/takeoffs'],
+  // The entry links to the entries list; the module also covers /week,
+  // /reports and /settings.
+  [ROUTES.timeTracking]: ['/time-tracking'],
+  // The entry links straight to the invoices list, which is the module's
+  // landing screen — but the overview at /billing is the same module.
+  [ROUTES.billing]: ['/billing'],
+}
+
+/**
+ * Screens whose module is not the one their URL sits under.
+ *
+ * The takeoff flow's later steps are not takeoff screens. Its job step lives at
+ * `/takeoffs/{id}/final` and its task step at `/jobs/{id}/tasks/setup`, and the
+ * rail has to name the step you are on — the same one the roadmap at the top of
+ * those screens is pointing at. Matched exactly, so the drawing viewer at
+ * `/takeoffs/{id}/pdf` stays where it belongs.
+ */
+const PATH_OVERRIDES: readonly { readonly pattern: RegExp; readonly href: string }[] = [
+  { pattern: /^\/takeoffs\/\d+\/final$/, href: ROUTES.jobs },
+  { pattern: /^\/jobs\/\d+\/tasks\/setup$/, href: ROUTES.tasks },
+]
 
 /** `/` is an alias of the home route, so both must light the Home entry. */
 const HOME_PATHS: readonly string[] = ['/', ROUTES.home]
 
-function isItemActive(item: NavItem, pathname: string): boolean {
-  if (item.href === ROUTES.home) return HOME_PATHS.includes(pathname)
-  if (item.href === ROUTES.aiTakeoff) {
-    return TAKEOFF_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+/**
+ * How specifically an item claims this path, or -1 for not at all.
+ *
+ * A number rather than a yes/no because two entries can both be right and only
+ * one may light: `/tasks/create` is claimed by "Tasks" and by "Add task", and
+ * the longer claim is the screen you are actually on.
+ */
+function matchStrength(item: NavItem, pathname: string): number {
+  if (item.href === ROUTES.home) return HOME_PATHS.includes(pathname) ? 1 : -1
+
+  const owned = [item.href, ...(MODULE_PATHS[item.href] ?? [])]
+
+  return owned.reduce(
+    (best, path) =>
+      pathname === path || pathname.startsWith(`${path}/`)
+        ? Math.max(best, path.length)
+        : best,
+    -1,
+  )
+}
+
+/** The one entry to light up: whichever claims this path most specifically. */
+function activeHref(pathname: string): string | null {
+  const override = PATH_OVERRIDES.find(({ pattern }) => pattern.test(pathname))
+
+  if (override) return override.href
+
+  let best: { href: string; strength: number } | null = null
+
+  for (const item of SIDEBAR_ITEMS) {
+    const strength = matchStrength(item, pathname)
+
+    if (strength >= 0 && (best === null || strength > best.strength)) {
+      best = { href: item.href, strength }
+    }
   }
-  // The item links straight to the entries list (the module's landing
-  // screen), but the module also covers /week, /reports and /settings —
-  // all of those should still light up "Time Tracking" in the sidebar.
-  if (item.href === ROUTES.timeTracking) return pathname.startsWith('/time-tracking')
-  return pathname === item.href || pathname.startsWith(`${item.href}/`)
+
+  return best?.href ?? null
 }
 
 /** Current path, without the query string. */
@@ -41,47 +95,59 @@ function usePathname(): string {
   return url.split('?')[0] ?? url
 }
 
+interface SidebarLinkProps {
+  item: NavItem
+  isActive: boolean
+  onNavigate?: () => void
+}
+
+/** One row of the rail. Every entry is the same row — no nesting, no variants. */
+function SidebarLink({ item, isActive, onNavigate }: SidebarLinkProps) {
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      aria-current={isActive ? 'page' : undefined}
+      className={cn(
+        ITEM_BASE,
+        'text-white',
+        isActive ? 'grad-midnight text-white' : 'hover:bg-white/8 hover:text-brand',
+      )}
+    >
+      {isActive && <span className="absolute inset-y-0 left-0 w-1 bg-brand" aria-hidden />}
+      <item.icon size={20} aria-hidden className={cn('shrink-0', isActive && 'text-brand')} />
+      <span className="truncate">{item.label}</span>
+      {item.badge ? (
+        <span className="ml-auto grid min-w-6 place-items-center rounded-full bg-status-danger px-1.5 py-0.5 text-2xs font-bold text-white">
+          {item.badge}
+        </span>
+      ) : null}
+    </Link>
+  )
+}
+
 function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname()
+  const active = activeHref(pathname)
 
   return (
-    <nav aria-label="Main navigation" className="flex-1 overflow-y-auto py-2">
+    // `overscroll-contain` keeps a flick at the end of the list from scrolling
+    // the page behind it; the bottom padding stops the last entry sitting hard
+    // against the window edge once the rail is long enough to scroll.
+    <nav
+      aria-label="Main navigation"
+      className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain py-2 pb-6"
+    >
       <ul>
-        {SIDEBAR_ITEMS.map((item: NavItem) => {
-          const isActive = isItemActive(item, pathname)
-
-          return (
-            <li key={item.label}>
-              <Link
-                href={item.href}
-                onClick={onNavigate}
-                aria-current={isActive ? 'page' : undefined}
-                className={cn(
-                  ITEM_BASE,
-                  'text-white',
-                  isActive
-                    ? 'grad-midnight text-white'
-                    : 'hover:bg-white/8 hover:text-brand',
-                )}
-              >
-                {isActive && (
-                  <span className="absolute inset-y-0 left-0 w-1 bg-brand" aria-hidden />
-                )}
-                <item.icon
-                  size={20}
-                  aria-hidden
-                  className={cn('shrink-0', isActive && 'text-brand')}
-                />
-                <span className="truncate">{item.label}</span>
-                {item.badge ? (
-                  <span className="ml-auto grid min-w-6 place-items-center rounded-full bg-status-danger px-1.5 py-0.5 text-2xs font-bold text-white">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </Link>
-            </li>
-          )
-        })}
+        {SIDEBAR_ITEMS.map((item: NavItem) => (
+          <li key={item.label}>
+            <SidebarLink
+              item={item}
+              isActive={item.href === active}
+              onNavigate={onNavigate}
+            />
+          </li>
+        ))}
       </ul>
     </nav>
   )

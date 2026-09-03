@@ -348,6 +348,30 @@
   animation: var(--animate-shimmer);
 }
 
+/*
+  The rail's own scrollbar. The global one draws a light 10px channel, which cut
+  across the navigation rows' borders; here it is thin and trackless so a long
+  drawer scrolls without a visible gutter beside the entries.
+*/
+@utility sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 0.18);
+    border-radius: 999px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--color-brand);
+  }
+}
+
 /* Faint blueprint grid used behind drawing previews. */
 @utility blueprint-grid {
   background-image:

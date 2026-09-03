@@ -62,7 +62,7 @@ export function ProjectListItem({
           <div className="min-w-0 flex-1">
             <p className="truncate text-md font-semibold text-white">{project.name}</p>
             <p className="mt-0.5 truncate text-sm text-white/80">
-              {project.client} · {formatDate(project.date)}
+              {formatDate(project.date)}
             </p>
           </div>
 

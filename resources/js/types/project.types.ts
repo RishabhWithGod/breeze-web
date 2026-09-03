@@ -37,7 +37,6 @@ export interface ProjectListRow {
   readonly discipline: string
   readonly projectType: ProjectType | null
   readonly status: TakeoffStatus
-  readonly dueDate: string | null
   readonly documentsCount: number
   readonly itemsCount: number
   readonly createdAt: string
@@ -47,6 +46,11 @@ export interface ProjectListRow {
 export interface ProjectRecord extends ProjectListRow {
   readonly notes: string | null
   readonly drawingName: string | null
+  /**
+   * The drawing the next takeoff runs against — chosen on this screen, or the
+   * first on record when nothing has been chosen. Null with no drawings at all.
+   */
+  readonly selectedUploadId: number | null
   readonly pageCount: number
   readonly startedAt: string | null
   readonly completedAt: string | null
@@ -58,45 +62,83 @@ export interface ProjectRecord extends ProjectListRow {
 export type ProjectActivityEntry = ActivityEntry
 
 /**
- * The Create Project payload.
+ * The Create Client payload.
  *
- * `documents` and `document_titles` are parallel arrays — index `i` of one is the
- * label for index `i` of the other — because that is what a multipart form can
- * express.
+ * No drawings: a PDF is uploaded through AI Takeoff, against a client that
+ * already exists, so this is a plain JSON post rather than a multipart one.
  */
 export interface ProjectDraft {
+  /** The client's name. The `client` column is written from it server-side. */
   name: string
   code: string
-  client: string
-  location: string
-  discipline: string
+  /** Every site. The first is the primary, and is mirrored onto `location`. */
+  addresses: DraftAddress[]
   project_type: string
-  due_date: string
   notes: string
-  documents: File[]
-  document_titles: string[]
 }
 
-/** Limits the server enforces on the PDFs, mirrored to the picker as props. */
-export interface ProjectDocumentLimits {
-  readonly maxFiles: number
-  readonly maxFileSizeMb: number
-  /** Set when PHP's own limit is the binding one, explaining how to lift it. */
-  readonly serverHint: string | null
+/** One site being typed into the Create Client form, before it is saved. */
+export interface DraftAddress {
+  label: string
+  address: string
+  /** Set only when the address was picked from the lookup, never when typed. */
+  latitude: number | null
+  longitude: number | null
 }
 
-/** An existing project, offered on the Create Job / Create Estimate screens. */
-export interface TakeoffProjectOption {
+/** One site already on a client's record. */
+export interface ClientAddressOption {
   readonly id: number
-  readonly name: string
-  readonly client: string | null
-  readonly location: string | null
-  readonly dueDate: string | null
-  readonly projectType: JobType | null
+  readonly label: string | null
+  readonly address: string
+  /** Label and address as one line, for a list. */
+  readonly display: string
+  readonly isPrimary: boolean
+}
+
+/** One address the geocoder matched, with the point behind it. */
+export interface AddressSuggestion {
+  readonly label: string
+  readonly latitude: number
+  readonly longitude: number
 }
 
 /**
- * A drawing already run through AI Takeoff, offered once its project is
+ * A client, offered in the Client select on every intake form.
+ *
+ * Who the work is for, and where they have work. What the work *is* is one of
+ * their projects, which is picked next — see `ProjectOption`.
+ */
+export interface ClientOption {
+  readonly id: number
+  readonly name: string
+  readonly addresses: readonly ClientAddressOption[]
+}
+
+/**
+ * A project a piece of work can be raised against.
+ *
+ * Every drawing, takeoff and estimate hangs off one — the client alone cannot
+ * say which set of drawings a job is on.
+ */
+export interface ProjectOption {
+  readonly id: number
+  readonly clientId: number | null
+  /** Whose it is — a project's name only means something beside its client. */
+  readonly clientName: string | null
+  readonly name: string
+  readonly projectType: JobType | null
+  /**
+   * The drawing this project's work is taken off — chosen on its screen, or
+   * the first on record. Null when it has no drawings yet.
+   */
+  readonly defaultUploadId: number | null
+  /** The sites this project stands on. A job is at one of these. */
+  readonly addresses: readonly ClientAddressOption[]
+}
+
+/**
+ * A drawing already run through AI Takeoff, offered once its client is
  * picked. Carries the estimate already raised against it, if there is one —
  * picking it is how a manual Job/Estimate create form links back to the
  * takeoff pipeline instead of starting a duplicate record.
@@ -105,6 +147,8 @@ export interface TakeoffUploadOption {
   readonly id: number
   readonly name: string
   readonly projectId: number
+  /** Whose drawing it is, for lists that narrow by client rather than project. */
+  readonly clientId: number | null
   readonly estimate: {
     readonly id: number
     readonly number: string

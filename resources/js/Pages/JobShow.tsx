@@ -6,10 +6,9 @@ import {
   ArrowLeft,
   Building2,
   CalendarDays,
-  Check,
-  HardHat,
   MapPin,
   PencilLine,
+  Plus,
   Trash2,
   Wallet,
 } from 'lucide-react'
@@ -25,17 +24,16 @@ import {
   StatusChip,
 } from '@/components/common'
 import {
-  ForemanBadge,
   JobAttachmentsPanel,
   JobEstimatesPanel,
   JobNotesPanel,
   JobTakeoffPanel,
+  JobTasksPanel,
 } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_STATUS_OPTIONS, ROUTES, routeTo } from '@/constants'
 import { useDisclosure, useEchoConnectionState, usePrivateChannel } from '@/hooks'
 import type {
-  ApprovalHistoryEntry,
   JobCostRow,
   JobDetail,
   JobStatus,
@@ -51,10 +49,10 @@ import {
 
 export interface JobShowProps {
   job: JobDetail
-  /** The takeoff's audit trail, when the job came from one. */
-  takeoffHistory: readonly ApprovalHistoryEntry[]
   canViewTimeCosts: boolean
   jobCosting: JobCostRow
+  /** False for anyone who cannot plan work — the tasks are still readable. */
+  canPlanWork: boolean
 }
 
 /**
@@ -63,7 +61,7 @@ export interface JobShowProps {
  * Every panel writes through its own controller and the page reloads with the
  * updated relationships, so what is on screen always matches the database.
  */
-export default function JobShow({ job }: JobShowProps) {
+export default function JobShow({ job, canPlanWork }: JobShowProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
@@ -113,14 +111,6 @@ export default function JobShow({ job }: JobShowProps) {
               leftIcon={PencilLine}
             >
               Edit
-            </ButtonLink>
-            {/*
-              Every panel on this page writes through its own controller and saves
-              immediately, so there is nothing to submit here — this just closes out
-              the setup and sends the user back to the list.
-            */}
-            <ButtonLink href={ROUTES.jobs} leftIcon={Check}>
-              Finish
             </ButtonLink>
           </>
         }
@@ -194,22 +184,15 @@ export default function JobShow({ job }: JobShowProps) {
               </div>
             </dl>
 
-            <div className="mt-5 flex items-center gap-3">
-              <span className="flex items-center gap-2 text-xs tracking-wide text-white/70 uppercase">
-                <HardHat size={13} aria-hidden className="text-brand" />
-                Foreman
-              </span>
-              {job.foreman ? (
-                <ForemanBadge foreman={job.foreman} />
-              ) : (
-                <span className="text-md text-white/70">Unassigned</span>
-              )}
-            </div>
-
             {job.description && (
-              <p className="mt-5 max-w-3xl text-md whitespace-pre-line text-white/90">
-                {job.description}
-              </p>
+              <div className="mt-5 max-w-3xl border-t border-hairline pt-4">
+                <p className="text-2xs tracking-wide text-white/70 uppercase">
+                  Description
+                </p>
+                <p className="mt-1 text-md whitespace-pre-line text-white/90">
+                  {job.description}
+                </p>
+              </div>
             )}
           </div>
 
@@ -235,6 +218,32 @@ export default function JobShow({ job }: JobShowProps) {
           <JobTakeoffPanel takeoff={job.takeoff} />
         </div>
       )}
+
+      {/* ======================================================= Tasks ======= */}
+      <Card padding="lg" className="mt-6">
+        <SectionHeading
+          title="Tasks"
+          subtitle={`${job.tasks.length} on this job`}
+          actions={
+            /*
+             * The same step that laid the job out in the first place, aimed at
+             * this job — its estimate lines, its foremen, and what is already
+             * planned listed above the new rows.
+             */
+            canPlanWork ? (
+              <ButtonLink
+                href={routeTo.jobTaskSetupFromJob(job.id)}
+                variant="secondary"
+                size="sm"
+                leftIcon={Plus}
+              >
+                Add task
+              </ButtonLink>
+            ) : undefined
+          }
+        />
+        <JobTasksPanel tasks={job.tasks} canPlan={canPlanWork} />
+      </Card>
 
       {/* =================================================== Estimates ======= */}
       <Card padding="lg" className="mt-6">

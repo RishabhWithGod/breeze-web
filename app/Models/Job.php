@@ -63,6 +63,8 @@ class Job extends Model
         'name',
         'client',
         'location',
+        'latitude',
+        'longitude',
         'description',
         'job_type',
         'status',
@@ -86,6 +88,8 @@ class Job extends Model
         return [
             'start_date' => 'date',
             'end_date' => 'date',
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
             'budget' => 'decimal:2',
             'estimated_hours' => 'decimal:2',
             'required_skills' => 'array',
@@ -135,6 +139,21 @@ class Job extends Model
     public function isFromTakeoff(): bool
     {
         return $this->ai_result_id !== null;
+    }
+
+    /**
+     * The client sites this job is at. A job can run across more than one.
+     *
+     * `location` on the job is the first one's snapshot — a printed job sheet
+     * must not change when someone later edits the client's address book.
+     *
+     * @return BelongsToMany<ClientAddress, $this>
+     */
+    public function addresses(): BelongsToMany
+    {
+        return $this->belongsToMany(ClientAddress::class, 'job_addresses')
+            ->withPivot('position')
+            ->orderBy('job_addresses.position');
     }
 
     /** @return BelongsToMany<TeamMember, $this> */
@@ -187,6 +206,22 @@ class Job extends Model
     public function tasks(): HasMany
     {
         return $this->hasMany(JobTask::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * Re-reads the job's estimated hours off its tasks.
+     *
+     * The chain is: the estimate prices the labour, a task carries the hours of
+     * the lines it covers, and the job is what its tasks add up to. Always
+     * recomputed rather than adjusted, so adding, editing or removing a task
+     * all land on the same number and a second pass cannot double-count.
+     */
+    public function refreshEstimatedHours(): void
+    {
+        $hours = (float) $this->tasks()->sum('estimated_hours');
+
+        // Null, not zero: zero would claim the work takes no time.
+        $this->update(['estimated_hours' => $hours > 0 ? round($hours, 2) : null]);
     }
 
     /** @return HasMany<JobNote, $this> */

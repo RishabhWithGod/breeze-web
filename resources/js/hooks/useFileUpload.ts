@@ -20,7 +20,6 @@ export function useFileUpload(): {
   const startUpload = useCallback(() => {
     const {
       files,
-      notes,
       projectId,
       setFileStatus,
       setFileProgress,
@@ -49,7 +48,6 @@ export function useFileUpload(): {
       {
         project_id: projectId,
         files: targets.map((file) => file.source),
-        notes,
       },
       {
         forceFormData: true,
@@ -66,7 +64,7 @@ export function useFileUpload(): {
             const message = errors[`files.${index}`] ?? errors['files']
             setFileStatus(file.id, message ? 'error' : 'ready', 0)
           })
-          setFormError(errors['project_id'] ?? errors['files'] ?? errors['notes'] ?? null)
+          setFormError(errors['project_id'] ?? errors['files'] ?? null)
         },
         onFinish: () => {
           setIsUploading(false)

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AiJob;
 use App\Models\AiResult;
 use App\Models\Estimate;
+use App\Models\Job;
 use App\Models\Project;
 use App\Models\Upload;
 use App\Models\User;
@@ -13,8 +14,11 @@ use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 /**
- * The standalone Create Estimate screen — a client-facing record on its own,
- * or one linked back to a drawing already run through AI Takeoff.
+ * The Create Estimate screen.
+ *
+ * The client is picked from the client register rather than typed: clients are
+ * projects, so `project_id` names the client and the estimate's own
+ * `client`/`project` columns are snapshots the server writes from it.
  */
 class EstimateTest extends TestCase
 {
@@ -28,12 +32,13 @@ class EstimateTest extends TestCase
         $this->user = User::factory()->create();
     }
 
-    public function test_an_estimate_can_be_created_without_any_takeoff_link(): void
+    public function test_an_estimate_can_be_created_without_any_takeoff_drawing(): void
     {
+        [$project] = $this->makeTakeoffDrawing();
+
         $this->actingAs($this->user)
             ->post('/estimates', [
-                'client' => 'Westview Properties',
-                'project' => 'Office Building Renovation',
+                'project_id' => $project->id,
                 'issued_on' => '2026-08-10',
                 'amount' => '24850',
                 'status' => 'draft',
@@ -41,12 +46,27 @@ class EstimateTest extends TestCase
             ->assertSessionHas('success');
 
         $estimate = Estimate::latest('id')->firstOrFail();
-        $this->assertSame('Westview Properties', $estimate->client);
-        $this->assertNull($estimate->project_id);
+        // Both name columns are snapshots of the picked client, not typed input.
+        $this->assertSame('Northgate Fit-out', $estimate->client);
+        $this->assertSame('Northgate Fit-out', $estimate->project);
+        $this->assertSame($project->id, $estimate->project_id);
         $this->assertNull($estimate->ai_result_id);
     }
 
-    public function test_the_create_screen_offers_takeoff_projects_and_their_drawings(): void
+    public function test_an_estimate_cannot_be_created_without_a_client(): void
+    {
+        $this->actingAs($this->user)
+            ->post('/estimates', [
+                'issued_on' => '2026-08-10',
+                'amount' => '24850',
+                'status' => 'draft',
+            ])
+            ->assertSessionHasErrors('project_id');
+
+        $this->assertDatabaseCount('estimates', 0);
+    }
+
+    public function test_the_create_screen_offers_the_client_register_and_their_drawings(): void
     {
         [$project, $upload] = $this->makeTakeoffDrawing();
 
@@ -54,8 +74,9 @@ class EstimateTest extends TestCase
             ->get('/estimates/create')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('EstimateCreate')
-                ->has('projects', 1)
-                ->where('projects.0.id', $project->id)
+                ->has('clients', 1)
+                ->where('clients.0.id', $project->id)
+                ->where('clients.0.name', $project->name)
                 ->has('uploads', 1)
                 ->where('uploads.0.id', $upload->id)
                 ->where('uploads.0.estimate', null));
@@ -67,8 +88,6 @@ class EstimateTest extends TestCase
 
         $this->actingAs($this->user)
             ->post('/estimates', [
-                'client' => 'Northgate Retail',
-                'project' => 'Northgate Fit-out',
                 'issued_on' => '2026-08-10',
                 'amount' => '5000',
                 'status' => 'draft',
@@ -100,8 +119,6 @@ class EstimateTest extends TestCase
 
         $this->actingAs($this->user)
             ->post('/estimates', [
-                'client' => 'Northgate Retail',
-                'project' => 'Northgate Fit-out',
                 'issued_on' => '2026-08-10',
                 'amount' => '5000',
                 'status' => 'draft',
@@ -149,5 +166,242 @@ class EstimateTest extends TestCase
         ]);
 
         return [$project, $upload, $result];
+    }
+
+    public function test_the_estimate_screen_shows_the_roadmap_only_when_the_flow_sent_you(): void
+    {
+        [$project] = $this->makeTakeoffDrawing();
+
+        $estimate = Estimate::create([
+            'project_id' => $project->id,
+            'number' => 'EST-5001',
+            'client' => $project->name,
+            'project' => $project->name,
+            'issued_on' => now()->toDateString(),
+            'amount' => 500,
+            'status' => 'draft',
+        ]);
+
+        // Opened from a job or the estimates list: a record to read.
+        $this->actingAs($this->user)
+            ->get(route('estimates.show', $estimate))
+            ->assertInertia(fn (Assert $page) => $page->where('inFlow', false));
+
+        // Handed over by the flow itself: a step, with its roadmap.
+        $this->actingAs($this->user)
+            ->get(route('estimates.show', ['estimate' => $estimate, 'flow' => 1]))
+            ->assertInertia(fn (Assert $page) => $page->where('inFlow', true));
+    }
+
+    public function test_back_from_an_estimate_returns_to_the_job_it_was_opened_from(): void
+    {
+        $job = Job::create([
+            'name' => 'Harborview Fit-out',
+            'client' => 'Harborview',
+            'location' => '41 Harbor Way',
+            'status' => 'planning',
+        ]);
+        $estimate = Estimate::create([
+            'job_id' => $job->id,
+            'number' => 'EST-6001',
+            'client' => 'Harborview',
+            'project' => 'Harborview',
+            'issued_on' => now()->toDateString(),
+            'amount' => 500,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($this->user)
+            ->get(route('estimates.show', ['estimate' => $estimate, 'from_job' => $job->id]))
+            ->assertInertia(fn (Assert $page) => $page->where('backUrl', route('jobs.show', $job)));
+
+        // Editing keeps the trail, so the way out stays one screen at a time.
+        $this->actingAs($this->user)
+            ->get(route('estimates.edit', ['estimate' => $estimate, 'from_job' => $job->id]))
+            ->assertInertia(fn (Assert $page) => $page->where(
+                'backUrl',
+                route('estimates.show', ['estimate' => $estimate->id, 'from_job' => $job->id]),
+            ));
+    }
+
+    public function test_editing_from_the_roadmap_returns_to_the_roadmap(): void
+    {
+        $estimate = Estimate::create([
+            'number' => 'EST-6003',
+            'client' => 'Harborview',
+            'project' => 'Harborview',
+            'issued_on' => now()->toDateString(),
+            'amount' => 500,
+            'status' => 'draft',
+        ]);
+
+        $client = $this->user->projects()->create([
+            'name' => 'Harborview', 'client' => 'Harborview', 'status' => 'draft',
+        ]);
+        $inFlow = ['estimate' => $estimate->id, 'flow' => 1];
+
+        // Opened as a step, the Edit button has to stay a step.
+        $this->actingAs($this->user)
+            ->get(route('estimates.show', $inFlow))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('estimate.editUrl', route('estimates.edit', $inFlow)));
+
+        // And the edit screen's Back and save both land back in the flow, not
+        // on a bare estimate with no roadmap and no way forward.
+        $this->actingAs($this->user)
+            ->get(route('estimates.edit', $inFlow))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('backUrl', route('estimates.show', $inFlow))
+                ->where('saveUrl', route('estimates.update', $inFlow)));
+
+        $this->actingAs($this->user)
+            ->put(route('estimates.update', $inFlow), [
+                'project_id' => $client->id,
+                'status' => 'sent',
+                'issued_on' => now()->toDateString(),
+                'markup_pct' => 0,
+                'tax_pct' => 0,
+            ])
+            ->assertRedirect(route('estimates.show', $inFlow));
+    }
+
+    public function test_editing_an_estimate_opened_on_its_own_returns_to_it_plainly(): void
+    {
+        $estimate = Estimate::create([
+            'number' => 'EST-6004',
+            'client' => 'Harborview',
+            'project' => 'Harborview',
+            'issued_on' => now()->toDateString(),
+            'amount' => 500,
+            'status' => 'draft',
+        ]);
+
+        $client = $this->user->projects()->create([
+            'name' => 'Harborview', 'client' => 'Harborview', 'status' => 'draft',
+        ]);
+
+        // No roadmap was involved, so none is claimed on the way back.
+        $this->actingAs($this->user)
+            ->get(route('estimates.edit', $estimate))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('backUrl', route('estimates.show', $estimate))
+                ->where('saveUrl', route('estimates.update', $estimate)));
+
+        $this->actingAs($this->user)
+            ->put(route('estimates.update', $estimate), [
+                'project_id' => $client->id,
+                'status' => 'sent',
+                'issued_on' => now()->toDateString(),
+                'markup_pct' => 0,
+                'tax_pct' => 0,
+            ])
+            ->assertRedirect(route('estimates.show', $estimate));
+    }
+
+    public function test_a_job_that_does_not_own_the_estimate_is_not_believed(): void
+    {
+        $theirJob = Job::create([
+            'name' => 'Someone Else', 'client' => 'Someone Else',
+            'location' => 'Elsewhere', 'status' => 'planning',
+        ]);
+        $estimate = Estimate::create([
+            'number' => 'EST-6002', 'client' => 'Harborview', 'project' => 'Harborview',
+            'issued_on' => now()->toDateString(), 'amount' => 500, 'status' => 'draft',
+        ]);
+
+        // An id that does not own this estimate is somebody guessing at a URL,
+        // not navigation — so Back falls back to the list.
+        $this->actingAs($this->user)
+            ->get(route('estimates.show', ['estimate' => $estimate, 'from_job' => $theirJob->id]))
+            ->assertInertia(fn (Assert $page) => $page->where('backUrl', route('estimates.index')));
+    }
+
+    public function test_saving_an_edit_keeps_the_trail_back_to_the_job(): void
+    {
+        $job = Job::create([
+            'name' => 'Harborview Fit-out', 'client' => 'Harborview',
+            'location' => '41 Harbor Way', 'status' => 'planning',
+        ]);
+        $estimate = Estimate::create([
+            'job_id' => $job->id,
+            'project_id' => $this->makeTakeoffDrawing()[0]->id,
+            'number' => 'EST-7001',
+            'client' => 'Harborview',
+            'project' => 'Harborview',
+            'issued_on' => now()->toDateString(),
+            'amount' => 500,
+            'status' => 'draft',
+        ]);
+
+        // The edit form posts to a URL carrying the origin, because a PUT has
+        // no query string of its own to inherit it from.
+        $this->actingAs($this->user)
+            ->get(route('estimates.edit', ['estimate' => $estimate, 'from_job' => $job->id]))
+            ->assertInertia(fn (Assert $page) => $page->where(
+                'saveUrl',
+                route('estimates.update', ['estimate' => $estimate->id, 'from_job' => $job->id]),
+            ));
+
+        $this->actingAs($this->user)
+            ->put(route('estimates.update', ['estimate' => $estimate, 'from_job' => $job->id]), [
+                'project_id' => $estimate->project_id,
+                'status' => 'sent',
+                'issued_on' => now()->toDateString(),
+                'markup_pct' => 0,
+                'tax_pct' => 0,
+            ])
+            // Back on the estimate, still knowing where it came from.
+            ->assertRedirect(route('estimates.show', [
+                'estimate' => $estimate->id,
+                'from_job' => $job->id,
+            ]));
+    }
+
+    public function test_an_estimate_raised_against_a_job_is_not_a_draft(): void
+    {
+        [$project, $upload] = $this->makeTakeoffDrawing();
+        $site = $project->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
+
+        $existing = Estimate::create([
+            'ai_result_id' => $project->latestAiResult->id,
+            'number' => 'EST-8001',
+            'client' => $project->name,
+            'project' => $project->name,
+            'issued_on' => now()->toDateString(),
+            'amount' => 500,
+            // Raised at sign-off, before any job existed.
+            'status' => 'draft',
+        ]);
+        $project->latestAiResult->update(['estimate_id' => $existing->id]);
+
+        $this->actingAs($this->user)->post('/jobs', [
+            'name' => 'Harborview Fit-out',
+            'project_id' => $project->id,
+            'address_ids' => [$site->id],
+            'upload_id' => $upload->id,
+        ])->assertSessionHas('success');
+
+        /*
+         * Raising the job is the act of accepting the estimate — a crew is
+         * being scheduled against it, so calling it a draft says the opposite.
+         */
+        $this->assertSame(Estimate::STATUS_FOR_A_LIVE_JOB, $existing->refresh()->status);
+        $this->assertNotNull($existing->job_id);
+    }
+
+    public function test_an_estimate_with_no_job_behind_it_is_still_a_draft(): void
+    {
+        [$project] = $this->makeTakeoffDrawing();
+
+        $this->actingAs($this->user)
+            ->post('/estimates', [
+                'project_id' => $project->id,
+                'issued_on' => now()->toDateString(),
+                'amount' => '500',
+                'status' => 'draft',
+            ])
+            ->assertSessionHas('success');
+
+        $this->assertSame('draft', Estimate::latest('id')->first()->status);
     }
 }

@@ -4,8 +4,8 @@ import type { BoqMaterial } from '@/types'
 import { cn, formatCurrency, formatNumber } from '@/utils'
 
 export interface ReviewSummaryPanelProps {
+  /** The client's name — `Project.client` holds the same string. */
   projectName: string
-  client: string | null
   drawingName: string | null
   pageCount: number
   totals: {
@@ -46,7 +46,6 @@ export interface ReviewSummaryPanelProps {
  */
 export function ReviewSummaryPanel({
   projectName,
-  client,
   drawingName,
   pageCount,
   totals,
@@ -100,8 +99,8 @@ export function ReviewSummaryPanel({
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="text-md text-white/80">Client</p>
+            {/* `client` holds the same string as the name, so it is not repeated. */}
             <h2 className="mt-1 text-2xl font-bold text-white">{projectName}</h2>
-            {client && <p className="mt-1 text-md text-white/85">{client}</p>}
 
             <div className="mt-5 flex items-center gap-2.5 text-md text-white/90">
               <FileText size={16} aria-hidden className="text-white/65" />

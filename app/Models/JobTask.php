@@ -74,6 +74,7 @@ class JobTask extends Model
     protected $fillable = [
         'job_schedule_id',
         'job_id',
+        'foreman_id',
         'created_by',
         'title',
         'description',
@@ -131,6 +132,27 @@ class JobTask extends Model
     public function assignments(): HasMany
     {
         return $this->hasMany(JobTaskAssignment::class)->orderBy('role');
+    }
+
+    /**
+     * The estimate lines this task is the work for.
+     *
+     * @return HasMany<EstimateItem, $this>
+     */
+    public function estimateItems(): HasMany
+    {
+        return $this->hasMany(EstimateItem::class)->orderBy('position');
+    }
+
+    /**
+     * Who is running it. One person: a task with two people in charge has
+     * nobody in charge.
+     *
+     * @return BelongsTo<Foreman, $this>
+     */
+    public function foreman(): BelongsTo
+    {
+        return $this->belongsTo(Foreman::class);
     }
 
     /** The people on this task. */

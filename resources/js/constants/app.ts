@@ -18,7 +18,9 @@ export const WORKFLOW_STEPS = [
   { key: 'review', label: 'Review' },
   { key: 'estimate', label: 'Estimate' },
   { key: 'job', label: 'Job' },
-  { key: 'schedule', label: 'Schedule' },
+  // The flow ends here. Scheduling a job is its own module, worked over days
+  // rather than in one pass — it is not the last step of a takeoff.
+  { key: 'tasks', label: 'Tasks' },
 ] as const
 
 export type WorkflowStep = (typeof WORKFLOW_STEPS)[number]['key']
@@ -29,8 +31,12 @@ export const WORKFLOW_STAGES = [
   { key: 'review', label: 'Review' },
   { key: 'estimate', label: 'Estimate' },
   { key: 'job', label: 'Job' },
-  { key: 'schedule', label: 'Schedule' },
-  { key: 'complete', label: 'Complete' },
+  /*
+   * The last stage. A job is raised, then broken into the work it takes, and
+   * the takeoff is done. Scheduling that work is its own module — the roadmap
+   * used to promise two more stages the flow never actually walked you through.
+   */
+  { key: 'tasks', label: 'Tasks' },
 ] as const
 
 export type WorkflowStage = (typeof WORKFLOW_STAGES)[number]['key']

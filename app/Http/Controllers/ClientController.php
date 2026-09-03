@@ -1,0 +1,261 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Client;
+use App\Services\Takeoff\TakeoffFlow;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
+
+/**
+ * The client register.
+ *
+ * A client is who the work is for, and nothing more: a name, a note, and the
+ * address book their projects draw on. Everything that has a drawing, a
+ * takeoff, an estimate or a job behind it belongs to one of their projects,
+ * not to them — which is why this screen is short and their detail screen is
+ * mostly a list of projects.
+ */
+class ClientController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $filters = $request->validate(['search' => ['nullable', 'string', 'max:120']]);
+        $search = trim($filters['search'] ?? '');
+
+        $clients = $request->user()->clients()
+            ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%"))
+            // What the list is for: who has work on, and where.
+            ->withCount(['projects', 'addresses'])
+            ->with('primaryAddress')
+            /*
+             * Most recently touched first. `User::clients()` orders by name,
+             * which is a fine way to look someone up and a poor way to find
+             * what you were just working on — so this reorders.
+             */
+            ->reorder()
+            ->latest('updated_at')
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString()
+            ->through(fn (Client $client) => [
+                'id' => $client->id,
+                'name' => $client->name,
+                'projectCount' => $client->projects_count,
+                'siteCount' => $client->addresses_count,
+                'primarySite' => $client->primaryAddress?->display(),
+            ]);
+
+        return Inertia::render('Clients', [
+            // Wrapped, not handed over raw: a bare paginator serialises flat
+            // and the screen reads `meta.current_page` to draw its pager.
+            'clients' => JsonResource::collection($clients),
+            'filters' => ['search' => $search],
+        ]);
+    }
+
+    public function create(Request $request): Response
+    {
+        return Inertia::render('ClientCreate', [
+            /*
+             * A takeoff already on the go is worth saying out loud here:
+             * starting a second client is a normal thing to do, but doing it by
+             * accident and losing track of the first is not.
+             */
+            'unfinishedTakeoff' => app(TakeoffFlow::class)->inProgress($request),
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $data = $this->validated($request);
+
+        $client = $request->user()->clients()->create([
+            'name' => $data['name'],
+            'notes' => $this->orNull($data['notes'] ?? null),
+        ]);
+
+        $this->writeAddresses($client, $data['addresses'] ?? []);
+
+        return redirect()
+            ->route('clients.show', $client)
+            ->with('success', "“{$client->name}” was added.");
+    }
+
+    public function show(Request $request, Client $client): Response
+    {
+        $this->authoriseOwner($request, $client);
+
+        $client->load([
+            // The count is what lets the screen grey out a site it cannot
+            // remove, instead of offering the button and refusing afterwards.
+            'addresses' => fn ($query) => $query->withCount('jobs'),
+            'projects' => fn ($query) => $query->withCount(['uploads', 'aiResults']),
+        ]);
+
+        return Inertia::render('ClientShow', [
+            'client' => [
+                'id' => $client->id,
+                'name' => $client->name,
+                'notes' => $client->notes,
+                'createdAt' => $client->created_at?->toISOString(),
+                'addresses' => $client->addresses->map(fn ($address) => [
+                    'id' => $address->id,
+                    'label' => $address->label,
+                    'address' => $address->address,
+                    'display' => $address->display(),
+                    'isPrimary' => $address->is_primary,
+                    // `job_addresses` cascades, so a site with work on it
+                    // cannot go — see ClientAddressController::destroy.
+                    'jobCount' => $address->jobs_count,
+                ])->values(),
+            ],
+            /*
+             * The reason this screen exists. A client's work is their projects,
+             * the way a job's work is its tasks — so they are listed here, not
+             * hidden behind another click.
+             */
+            'projects' => $client->projects->map(fn ($project) => [
+                'id' => $project->id,
+                'name' => $project->name,
+                'code' => $project->code,
+                'status' => $project->status,
+                'projectType' => $project->project_type,
+                'drawingCount' => $project->uploads_count,
+                'takeoffCount' => $project->ai_results_count,
+                'createdAt' => $project->created_at?->toISOString(),
+            ])->values(),
+        ]);
+    }
+
+    public function edit(Request $request, Client $client): Response
+    {
+        $this->authoriseOwner($request, $client);
+
+        return Inertia::render('ClientEdit', [
+            'client' => [
+                'id' => $client->id,
+                'name' => $client->name,
+                'notes' => $client->notes,
+            ],
+        ]);
+    }
+
+    public function update(Request $request, Client $client): RedirectResponse
+    {
+        $this->authoriseOwner($request, $client);
+
+        $data = $this->validated($request, $client);
+
+        $client->update([
+            'name' => $data['name'],
+            'notes' => $this->orNull($data['notes'] ?? null),
+        ]);
+
+        return redirect()
+            ->route('clients.show', $client)
+            ->with('success', "“{$client->name}” was updated.");
+    }
+
+    /**
+     * Removing a client from the register.
+     *
+     * Only one with no projects. Deleting anyone else would take their
+     * drawings, takeoffs, estimates and jobs with them — a delete that looks
+     * tidy and quietly removes years of work.
+     */
+    public function destroy(Request $request, Client $client): RedirectResponse
+    {
+        $this->authoriseOwner($request, $client);
+
+        $projects = $client->projects()->count();
+
+        if ($projects > 0) {
+            return back()->with(
+                'warning',
+                "“{$client->name}” has ".$projects.' '.str('project')->plural($projects).
+                '. Remove those first, or keep the client.',
+            );
+        }
+
+        $name = $client->name;
+        $client->delete();
+
+        return redirect()
+            ->route('clients.index')
+            ->with('warning', "“{$name}” was removed from the register.");
+    }
+
+    /**
+     * The same rules whether the client is being added or corrected.
+     *
+     * @return array<string, mixed>
+     */
+    private function validated(Request $request, ?Client $client = null): array
+    {
+        return $request->validate([
+            'name' => [
+                'required', 'string', 'min:2', 'max:160',
+                // A client renaming themselves is not a clash with themselves.
+                Rule::unique('clients', 'name')
+                    ->where('user_id', $request->user()->id)
+                    ->ignore($client),
+            ],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            /*
+             * The address book, filled in as the client is opened. It can be
+             * empty — a client can be on the register before anyone knows where
+             * their work is — and sites are added later from wherever they are
+             * needed.
+             */
+            'addresses' => ['nullable', 'array', 'max:25'],
+            'addresses.*.label' => ['required', 'string', 'max:80'],
+            'addresses.*.address' => ['required', 'string', 'max:160'],
+            /*
+             * Set only when the address was picked from the lookup, so both are
+             * optional — but never one without the other, or the record would
+             * carry half a point.
+             */
+            'addresses.*.latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:addresses.*.longitude'],
+            'addresses.*.longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:addresses.*.latitude'],
+        ], [
+            'name.required' => 'Client name is required',
+            'name.unique' => 'A client with that name is already on the register',
+            'addresses.*.label.required' => 'Name this site, or remove the row.',
+            'addresses.*.address.required' => 'Enter the address, or remove the row.',
+        ]);
+    }
+
+    /** @param  array<int, array<string, mixed>>  $addresses */
+    private function writeAddresses(Client $client, array $addresses): void
+    {
+        foreach ($addresses as $position => $address) {
+            $client->addresses()->create([
+                'label' => trim($address['label']),
+                'address' => $address['address'],
+                'latitude' => $address['latitude'] ?? null,
+                'longitude' => $address['longitude'] ?? null,
+                // The first one given is the one a project defaults to.
+                'is_primary' => $position === 0,
+                'position' => $position,
+            ]);
+        }
+    }
+
+    /** An untyped optional field is nothing, not an empty string. */
+    private function orNull(?string $value): ?string
+    {
+        $trimmed = trim((string) $value);
+
+        return $trimmed === '' ? null : $trimmed;
+    }
+
+    private function authoriseOwner(Request $request, Client $client): void
+    {
+        abort_unless($client->user_id === $request->user()->id, 403);
+    }
+}

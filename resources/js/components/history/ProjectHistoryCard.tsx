@@ -8,7 +8,6 @@ import {
   TAKEOFF_STATUS_TONE,
   cn,
   formatDate,
-  formatNumber,
 } from '@/utils'
 
 export interface ProjectHistoryCardProps {
@@ -46,8 +45,8 @@ export function ProjectHistoryCard({
         </span>
 
         <div className="min-w-0 flex-1">
+          {/* The client's name — `client` holds the same string, so it is not repeated. */}
           <p className="font-bold text-white">{project.name}</p>
-          <p className="mt-0.5 truncate text-sm text-white/80">{project.client}</p>
         </div>
 
         <StatusChip
@@ -64,8 +63,6 @@ export function ProjectHistoryCard({
           <dd className="text-white">{formatDate(project.date)}</dd>
         </div>
         <div className="flex gap-2">
-          <dt className="text-white/70">Items</dt>
-          <dd className="tabular-nums text-white">{formatNumber(project.items)}</dd>
         </div>
       </dl>
 

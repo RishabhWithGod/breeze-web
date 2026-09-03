@@ -1,14 +1,6 @@
 import { useState } from 'react'
 import { Head } from '@inertiajs/react'
-import {
-  BadgeCheck,
-  Clock4,
-  Download,
-  FileSpreadsheet,
-  Layers3,
-  Share2,
-  Zap,
-} from 'lucide-react'
+import { ArrowLeft, BadgeCheck, Clock4, Download, FileSpreadsheet, Layers3, Share2, Zap } from 'lucide-react'
 import { Button, ButtonLink, Card, CardHeader } from '@/components/common'
 import { ActivityFeed, StatCard } from '@/components/dashboard'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
@@ -55,6 +47,9 @@ export default function Results({ project }: ResultsProps) {
             </Button>
             <ButtonLink href={ROUTES.upload} variant="dark" leftIcon={Layers3}>
               New takeoff
+            </ButtonLink>
+                      <ButtonLink href={ROUTES.aiTakeoff} variant="secondary" leftIcon={ArrowLeft}>
+              Back
             </ButtonLink>
           </>
         }

@@ -1,6 +1,10 @@
 import { Head, router } from '@inertiajs/react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { Button, Card } from '@/components/common'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Button,
+  ButtonLink,
+  Card,
+} from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { WeekGrid } from '@/components/timeTracking'
 import { ROUTES } from '@/constants'
@@ -44,6 +48,9 @@ export default function TimeTrackingWeek({
             <Button variant="secondary" rightIcon={ChevronRight} onClick={() => goTo(nextWeekDate)}>
               Next
             </Button>
+                      <ButtonLink href={ROUTES.timeTracking} variant="secondary" leftIcon={ArrowLeft}>
+              Back
+            </ButtonLink>
           </>
         }
       />

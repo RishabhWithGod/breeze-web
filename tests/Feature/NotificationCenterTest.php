@@ -8,6 +8,7 @@ use App\Models\Foreman;
 use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\JobAssignment;
+use App\Models\Project;
 use App\Models\TeamMember;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -47,7 +48,7 @@ class NotificationCenterTest extends TestCase
 
         $notification = AppNotification::where('user_id', $this->other->id)->where('type', 'job-assigned')->first();
         $this->assertNotNull($notification);
-        $this->assertSame('jobs', \App\Models\AppNotification::categoryFor($notification->type));
+        $this->assertSame('jobs', AppNotification::categoryFor($notification->type));
         $this->assertEquals([['label' => 'View Job', 'href' => "/jobs/{$job->id}"]], $notification->data['actions']);
 
         // The manager who made the assignment doesn't notify themselves.
@@ -65,8 +66,7 @@ class NotificationCenterTest extends TestCase
         $estimate = $this->makeEstimate($job);
 
         $this->actingAs($this->other)->put("/estimates/{$estimate->id}", [
-            'client' => $estimate->client,
-            'project' => $estimate->project,
+            'project_id' => $this->makeClient($estimate->client)->id,
             'status' => 'approved',
             'issued_on' => now()->toDateString(),
             'markup_pct' => 0,
@@ -75,13 +75,13 @@ class NotificationCenterTest extends TestCase
 
         $notification = AppNotification::where('user_id', $this->manager->id)->where('type', 'estimate-approved')->first();
         $this->assertNotNull($notification);
-        $this->assertSame('estimates', \App\Models\AppNotification::categoryFor($notification->type));
+        $this->assertSame('estimates', AppNotification::categoryFor($notification->type));
     }
 
     public function test_marking_an_invoice_paid_notifies_its_creator(): void
     {
         $this->actingAs($this->manager)->post('/invoices', [
-            'client' => 'Apex Construction',
+            'project_id' => $this->makeClient()->id,
             'invoice_date' => now()->toDateString(),
             'due_date' => null,
             'tax_pct' => 0,
@@ -202,6 +202,17 @@ class NotificationCenterTest extends TestCase
             'client' => 'Riverside Properties LLC',
             'status' => 'in-progress',
             ...$attributes,
+        ]);
+    }
+
+    /** A client to raise an estimate or invoice for. Clients are projects. */
+    private function makeClient(string $name = 'Apex Construction'): Project
+    {
+        return Project::create([
+            'user_id' => $this->manager->id,
+            'name' => $name,
+            'client' => $name,
+            'status' => 'draft',
         ]);
     }
 

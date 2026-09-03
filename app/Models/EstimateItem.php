@@ -35,6 +35,7 @@ class EstimateItem extends Model
 
     protected $fillable = [
         'estimate_id',
+        'job_task_id',
         'final_symbol_id',
         'category',
         'description',
@@ -67,6 +68,19 @@ class EstimateItem extends Model
     public function estimate(): BelongsTo
     {
         return $this->belongsTo(Estimate::class);
+    }
+
+    /**
+     * The task this line's work was planned into, when it has been.
+     *
+     * At most one: a line is either scheduled or it is not, and a line counted
+     * twice would price work once and plan it twice.
+     *
+     * @return BelongsTo<JobTask, $this>
+     */
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(JobTask::class, 'job_task_id');
     }
 
     /** @return BelongsTo<FinalSymbol, $this> */

@@ -15,6 +15,8 @@ export const ROUTES = {
   home: '/home',
   /** AI Takeoff module landing screen — the takeoff history. */
   aiTakeoff: '/ai-takeoff',
+  /** Address suggestions for the Site / Location field. JSON, not a page. */
+  addressLookup: '/address-lookup',
   /**
    * Semantic alias of `aiTakeoff`: history *is* the module landing screen.
    * Kept so "view history" links read clearly at their call sites.
@@ -29,6 +31,14 @@ export const ROUTES = {
   estimates: '/estimates',
   estimateCreate: '/estimates/create',
   jobs: '/jobs',
+  /** Under Jobs in the rail: work and the people who run it, across every job. */
+  clients: '/clients',
+  clientCreate: '/clients/create',
+  takeoffFlowForget: '/takeoff-flow',
+  tasks: '/tasks',
+  taskCreate: '/tasks/create',
+  foremen: '/foremen',
+  foremanCreate: '/foremen/create',
   jobCreate: '/jobs/create',
   /** Most recently reviewed takeoff. */
   results: '/results',
@@ -86,13 +96,30 @@ export const ROUTES = {
 
 /** Per-record URLs. */
 export const routeTo = {
+  /** Adds a site to a client from whichever screen needed it. */
+  clientAddresses: (clientId: number) => `/clients/${clientId}/addresses`,
+  clientAddress: (clientId: number, addressId: number) =>
+    `/clients/${clientId}/addresses/${addressId}`,
+  /** The step after Create Job: laying the job out in tasks. */
+  jobTaskSetup: (jobId: number) => `/jobs/${jobId}/tasks/setup`,
+  /*
+   * The same step, opened to add work to a job already running. `from` is what
+   * Back and the save redirect read — the server turns it into a real URL, so
+   * only these two markers exist.
+   */
+  jobTaskSetupFromList: (jobId: number) => `/jobs/${jobId}/tasks/setup?from=tasks`,
+  jobTaskSetupFromJob: (jobId: number) => `/jobs/${jobId}/tasks/setup?from=job`,
   project: (projectId: number) => `/projects/${projectId}`,
+  /** AI Takeoff upload, opened with this client already picked. */
+  uploadForProject: (projectId: number) => `/ai-takeoff/upload?project=${projectId}`,
   /** Starts an AI takeoff run against the project's drawing already on file. */
   projectTakeoffStart: (projectId: number) => `/projects/${projectId}/takeoff`,
-  /** Adds drawing PDFs to a project. */
-  projectDocuments: (projectId: number) => `/projects/${projectId}/documents`,
+  /** One of a client's drawing PDFs — opened, or removed. */
   projectDocument: (projectId: number, documentId: number) =>
     `/projects/${projectId}/documents/${documentId}`,
+  /** Makes this the drawing the next takeoff runs against. */
+  projectDocumentSelect: (projectId: number, documentId: number) =>
+    `/projects/${projectId}/documents/${documentId}/select`,
 
   processing: (projectId: number) => `/processing/${projectId}`,
   processingCancel: (projectId: number) => `/processing/${projectId}/cancel`,
@@ -124,6 +151,18 @@ export const routeTo = {
   jobTasksStore: (jobId: number) => `/jobs/${jobId}/schedule/tasks`,
   jobTasksReorder: (jobId: number) => `/jobs/${jobId}/schedule/reorder`,
   scheduleTask: (taskId: number) => `/schedule-tasks/${taskId}`,
+  /** The setup screen aimed at one task, with where Back should return to. */
+  client: (clientId: number) => `/clients/${clientId}`,
+  clientEdit: (clientId: number) => `/clients/${clientId}/edit`,
+  /** Create Project, opened with this client already picked. */
+  projectCreateForClient: (clientId: number) => `/projects/create?client=${clientId}`,
+  foreman: (foremanId: number) => `/foremen/${foremanId}`,
+  foremanEdit: (foremanId: number) => `/foremen/${foremanId}/edit`,
+  taskEdit: (taskId: number) => `/tasks/${taskId}/edit?from=tasks`,
+  taskEditFromJob: (taskId: number) => `/tasks/${taskId}/edit?from=job`,
+  /** Removing a task hands its estimate lines back to be planned again. */
+  taskRemove: (taskId: number) => `/tasks/${taskId}`,
+  taskRemoveFromJob: (taskId: number) => `/tasks/${taskId}?from=job`,
   scheduleTaskComplete: (taskId: number) => `/schedule-tasks/${taskId}/complete`,
   scheduleTaskDelay: (taskId: number) => `/schedule-tasks/${taskId}/delay`,
   scheduleTaskMove: (taskId: number) => `/schedule-tasks/${taskId}/move`,
@@ -135,8 +174,23 @@ export const routeTo = {
     `/schedule-tasks/${taskId}/dependencies/${dependencyId}`,
   scheduleTaskComment: (taskId: number) => `/schedule-tasks/${taskId}/comments`,
   estimate: (estimateId: number) => `/estimates/${estimateId}`,
+  /*
+   * The same estimate, opened as a step of the takeoff rather than on its own:
+   * `flow` is what draws the roadmap and the button on to Create Job. Every
+   * link that is part of the flow has to carry it, or the flow ends there.
+   */
+  estimateInFlow: (estimateId: number) => `/estimates/${estimateId}?flow=1`,
   estimateRestore: (estimateId: number) => `/estimates/${estimateId}/restore`,
   estimateEdit: (estimateId: number) => `/estimates/${estimateId}/edit`,
+  /*
+   * Opened from a job's own list. `from_job` is what lets Back come back here
+   * rather than dropping into the estimates index — the server checks the job
+   * really owns the estimate before believing it.
+   */
+  estimateFromJob: (estimateId: number, jobId: number) =>
+    `/estimates/${estimateId}?from_job=${jobId}`,
+  estimateEditFromJob: (estimateId: number, jobId: number) =>
+    `/estimates/${estimateId}/edit?from_job=${jobId}`,
   estimateItems: (estimateId: number) => `/estimates/${estimateId}/items`,
   estimateItem: (estimateId: number, itemId: number) =>
     `/estimates/${estimateId}/items/${itemId}`,

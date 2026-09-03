@@ -33,7 +33,6 @@ export interface SymbolCardProps {
   selected: boolean
   onSelect: (id: number, selected: boolean) => void
   /** A finalised takeoff is read-only until it is reopened. */
-  locked?: boolean
   index?: number
   /** Highlighted because its marker is selected on the drawing — distinct from `selected`, which is merge-checkbox state. */
   focused?: boolean
@@ -56,7 +55,6 @@ export function SymbolCard({
   row,
   selected,
   onSelect,
-  locked = false,
   index = 0,
   focused = false,
 }: SymbolCardProps) {
@@ -229,7 +227,7 @@ export function SymbolCard({
               size="sm"
               icon={Minus}
               label={`Decrease the quantity of ${row.name}`}
-              disabled={locked || row.finalCount <= 0}
+              disabled={row.finalCount <= 0}
               onClick={() => step(-1)}
               className="size-8 shrink-0 rounded-none border-0 hover:bg-white/10"
             />
@@ -239,7 +237,6 @@ export function SymbolCard({
               min={0}
               inputMode="numeric"
               value={countDraft ?? String(row.finalCount)}
-              disabled={locked}
               onChange={(event) => setCountDraft(event.target.value)}
               onBlur={commitCount}
               onKeyDown={(event) => {
@@ -255,7 +252,6 @@ export function SymbolCard({
               size="sm"
               icon={Plus}
               label={`Increase the quantity of ${row.name}`}
-              disabled={locked}
               onClick={() => step(1)}
               className="size-8 shrink-0 rounded-none border-0 hover:bg-white/10"
             />
@@ -415,7 +411,6 @@ export function SymbolCard({
               size="sm"
               icon={RotateCcw}
               label="Undo"
-              disabled={locked}
               onClick={() => post(routeTo.symbolReset(resultId, row.id))}
               className="mx-auto rounded-panel"
             />
@@ -425,7 +420,6 @@ export function SymbolCard({
               size="sm"
               icon={Check}
               label="Approve"
-              disabled={locked}
               onClick={() => post(routeTo.symbolApprove(resultId, row.id))}
               className="mx-auto rounded-panel"
             />
@@ -436,7 +430,6 @@ export function SymbolCard({
               variant="secondary"
               size="sm"
               leftIcon={RotateCcw}
-              disabled={locked}
               onClick={() => post(routeTo.symbolReset(resultId, row.id))}
             >
               Reinstate
@@ -446,7 +439,6 @@ export function SymbolCard({
               variant="danger"
               size="sm"
               leftIcon={X}
-              disabled={locked}
               onClick={() => post(routeTo.symbolReject(resultId, row.id))}
             >
               Reject
@@ -458,7 +450,6 @@ export function SymbolCard({
             size="sm"
             icon={Pencil}
             label="Rename"
-            disabled={locked}
             onClick={() => {
               setRenameDraft(row.name)
               setMode('rename')

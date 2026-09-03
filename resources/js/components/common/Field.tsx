@@ -146,16 +146,25 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
 export interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string
   options: readonly SelectOption[]
+  hint?: ReactNode
   error?: string
 }
 
 export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(
-  function SelectField({ label, options, error, id, className, ...props }, ref) {
+  function SelectField({ label, options, hint, error, id, className, ...props }, ref) {
     return (
+      /*
+       * `className` sizes the whole field, not the `<select>`. Every caller
+       * passes a width or a grid span, and putting those on the control left
+       * the shell full-width — with the chevron, positioned against the shell,
+       * stranded far to the right of the box it belongs to.
+       */
       <FieldShell
         {...(label ? { label } : {})}
         {...(id ? { htmlFor: id } : {})}
+        {...(hint ? { hint } : {})}
         {...(error ? { error } : {})}
+        {...(className ? { className } : {})}
       >
         <div className="relative">
           <select
@@ -165,7 +174,6 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(
               CONTROL_BASE,
               'appearance-none pr-10 [&>option]:bg-navy-900 [&>option]:text-white',
               error && INVALID,
-              className,
             )}
             {...props}
           >

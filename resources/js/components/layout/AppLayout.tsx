@@ -3,6 +3,7 @@ import { usePage } from '@inertiajs/react'
 import { Footer } from './Footer'
 import { Navbar } from './Navbar'
 import { RealtimeUserSync } from './RealtimeUserSync'
+import { ResumeTakeoffButton } from './ResumeTakeoffButton'
 import { Sidebar } from './Sidebar'
 
 /**
@@ -43,6 +44,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <Footer />
         </main>
       </div>
+
+      {/* Above the content, below modals and the mobile drawer. */}
+      <ResumeTakeoffButton />
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Badge, Card, EmptyState, SectionHeading, Table } from '@/components/common'
 import type {
   CircuitRow,
@@ -7,7 +8,31 @@ import type {
   WireSizeRow,
 } from '@/types'
 
+interface FrameProps {
+  bare: boolean
+  title: string
+  subtitle: string
+  children: ReactNode
+}
+
+/**
+ * The card and heading each panel draws around itself — unless the caller has
+ * already drawn both, as a collapsible section does.
+ */
+function Frame({ bare, title, subtitle, children }: FrameProps) {
+  if (bare) return <>{children}</>
+
+  return (
+    <Card padding="lg">
+      <SectionHeading as="h3" title={title} subtitle={subtitle} />
+      {children}
+    </Card>
+  )
+}
+
 export interface WireSizesPanelProps {
+  /** Drop the card and heading — a caller that already has both. */
+  bare?: boolean
   wireSizes: readonly WireSizeRow[]
 }
 
@@ -17,7 +42,7 @@ export interface WireSizesPanelProps {
  * Its own section because wire is priced by length, not by symbol count — these
  * rows are evidence for the estimator, not part of the device takeoff.
  */
-export function WireSizesPanel({ wireSizes }: WireSizesPanelProps) {
+export function WireSizesPanel({ wireSizes, bare = false }: WireSizesPanelProps) {
   const columns: readonly TableColumn<WireSizeRow>[] = [
     {
       key: 'size',
@@ -48,12 +73,7 @@ export function WireSizesPanel({ wireSizes }: WireSizesPanelProps) {
   ]
 
   return (
-    <Card padding="lg">
-      <SectionHeading
-        as="h3"
-        title="Wire sizes"
-        subtitle={`${wireSizes.length} conductor ${wireSizes.length === 1 ? 'size' : 'sizes'} found on the drawing`}
-      />
+    <Frame bare={bare} title="Wire sizes" subtitle={`${wireSizes.length} conductor ${wireSizes.length === 1 ? 'size' : 'sizes'} found on the drawing`}>
       <Table
         columns={columns}
         rows={wireSizes}
@@ -68,23 +88,20 @@ export function WireSizesPanel({ wireSizes }: WireSizesPanelProps) {
           />
         }
       />
-    </Card>
+    </Frame>
   )
 }
 
 export interface PanelSchedulesPanelProps {
+  /** Drop the card and heading — a caller that already has both. */
+  bare?: boolean
   schedules: readonly PanelScheduleRow[]
 }
 
 /** Panel schedule tables the engine lifted off the drawing, as read. */
-export function PanelSchedulesPanel({ schedules }: PanelSchedulesPanelProps) {
+export function PanelSchedulesPanel({ schedules, bare = false }: PanelSchedulesPanelProps) {
   return (
-    <Card padding="lg">
-      <SectionHeading
-        as="h3"
-        title="Panel schedules"
-        subtitle={`${schedules.length} ${schedules.length === 1 ? 'schedule' : 'schedules'} extracted`}
-      />
+    <Frame bare={bare} title="Panel schedules" subtitle={`${schedules.length} ${schedules.length === 1 ? 'schedule' : 'schedules'} extracted`}>
 
       {schedules.length === 0 ? (
         <EmptyState
@@ -138,16 +155,18 @@ export function PanelSchedulesPanel({ schedules }: PanelSchedulesPanelProps) {
           ))}
         </ul>
       )}
-    </Card>
+    </Frame>
   )
 }
 
 export interface EquipmentPanelProps {
+  /** Drop the card and heading — a caller that already has both. */
+  bare?: boolean
   equipment: readonly EquipmentRow[]
 }
 
 /** Equipment schedule rows the engine extracted. */
-export function EquipmentPanel({ equipment }: EquipmentPanelProps) {
+export function EquipmentPanel({ equipment, bare = false }: EquipmentPanelProps) {
   const columns: readonly TableColumn<EquipmentRow>[] = [
     {
       key: 'tag',
@@ -168,12 +187,7 @@ export function EquipmentPanel({ equipment }: EquipmentPanelProps) {
   ]
 
   return (
-    <Card padding="lg">
-      <SectionHeading
-        as="h3"
-        title="Equipment"
-        subtitle={`${equipment.length} ${equipment.length === 1 ? 'item' : 'items'} extracted`}
-      />
+    <Frame bare={bare} title="Equipment" subtitle={`${equipment.length} ${equipment.length === 1 ? 'item' : 'items'} extracted`}>
       <Table
         columns={columns}
         rows={equipment}
@@ -188,16 +202,18 @@ export function EquipmentPanel({ equipment }: EquipmentPanelProps) {
           />
         }
       />
-    </Card>
+    </Frame>
   )
 }
 
 export interface CircuitsPanelProps {
+  /** Drop the card and heading — a caller that already has both. */
+  bare?: boolean
   circuits: readonly CircuitRow[]
 }
 
 /** Circuits the engine read from schedules or homerun notes. */
-export function CircuitsPanel({ circuits }: CircuitsPanelProps) {
+export function CircuitsPanel({ circuits, bare = false }: CircuitsPanelProps) {
   const columns: readonly TableColumn<CircuitRow>[] = [
     {
       key: 'number',
@@ -212,12 +228,7 @@ export function CircuitsPanel({ circuits }: CircuitsPanelProps) {
   ]
 
   return (
-    <Card padding="lg">
-      <SectionHeading
-        as="h3"
-        title="Circuits"
-        subtitle={`${circuits.length} ${circuits.length === 1 ? 'circuit' : 'circuits'} extracted`}
-      />
+    <Frame bare={bare} title="Circuits" subtitle={`${circuits.length} ${circuits.length === 1 ? 'circuit' : 'circuits'} extracted`}>
       <Table
         columns={columns}
         rows={circuits}
@@ -232,6 +243,6 @@ export function CircuitsPanel({ circuits }: CircuitsPanelProps) {
           />
         }
       />
-    </Card>
+    </Frame>
   )
 }

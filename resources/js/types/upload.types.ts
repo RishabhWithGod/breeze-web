@@ -37,7 +37,8 @@ export interface RecentUpload {
 export interface UploadTargetProject {
   readonly id: number
   readonly name: string
-  readonly client: string
+  /** Whose project it is — two clients can both have a "Phase 2". */
+  readonly clientName: string | null
 }
 
 /** Upload limits, mirrored from config/takeoff.php as page props. */

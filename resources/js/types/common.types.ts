@@ -30,7 +30,8 @@ export interface BreadcrumbItem {
 
 export interface TableColumn<T> {
   readonly key: string
-  readonly header: string
+  /** Usually a label, but a control when the column is one — a select-all box. */
+  readonly header: React.ReactNode
   readonly align?: 'left' | 'center' | 'right'
   /** Tailwind width utility, e.g. `w-40`. */
   readonly width?: string

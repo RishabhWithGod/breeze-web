@@ -1,30 +1,30 @@
 import type { FormEvent } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm, usePage } from '@inertiajs/react'
-import { ArrowRight, Table2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ExternalLink, Save } from 'lucide-react'
 import {
   Alert,
-  Button,
   ButtonLink,
+  Button,
   Card,
   RadioGroup,
   SectionHeading,
-  SelectField,
   TextArea,
   TextInput,
   WorkflowProgress,
 } from '@/components/common'
-import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { JobSitePicker } from '@/components/jobs'
+import { appLayout, PageHeader, PageTransition, StepFooter } from '@/components/layout'
 import { JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type {
   ApprovalHistoryEntry,
   BoqLine,
   BoqMaterial,
   CircuitRow,
+  ProjectOption,
   EngineBoqLine,
   EquipmentRow,
   FinalSymbolRow,
-  JobForeman,
   JobType,
   Paginated,
   PanelScheduleRow,
@@ -37,27 +37,39 @@ import { formatDate } from '@/utils'
 /** Payload for the "Create the job" form below — mirrors `FinalTakeoffController::storeJob`. */
 interface CreateJobForm {
   name: string
-  client: string
-  location: string
+  /** The client this job is for. Defaults to the takeoff's, but can be another. */
+  project_id: string
+  /** The client sites this job is at. Its `location` is written from the first. */
+  address_ids: number[]
   description: string
   job_type: JobType | ''
   start_date: string
   end_date: string
   budget: string
-  foreman_id: string
 }
 
 interface FinalResultSummary {
   readonly id: number
   readonly projectId: number
+  /** The client's name — `Project.client` holds the same string. */
   readonly projectName: string
-  readonly client: string | null
   readonly drawingName: string | null
   readonly modelVersion: string | null
   readonly isFinalised: boolean
   readonly finalisedAt: string | null
   readonly pageCount: number
   readonly workJobId: number | null
+  /** The job as it stands, once it has been raised. */
+  readonly job: {
+    readonly name: string
+    readonly projectId: number | null
+    readonly addressIds: readonly number[]
+    readonly description: string | null
+    readonly jobType: JobType | null
+    readonly startDate: string | null
+    readonly endDate: string | null
+    readonly budget: number | null
+  } | null
   readonly workJobName: string | null
   readonly estimateId: number | null
   readonly estimateNumber: string | null
@@ -98,7 +110,10 @@ export interface FinalSymbolsProps {
   panelSchedules: readonly PanelScheduleRow[]
   equipment: readonly EquipmentRow[]
   circuits: readonly CircuitRow[]
-  foremen: readonly JobForeman[]
+  /** Every project, with its sites, exactly as Create Job offers them. */
+  projects: readonly ProjectOption[]
+  /** The takeoff's own client — where the form starts. */
+  defaultProjectId: number
   history: readonly ApprovalHistoryEntry[]
 }
 
@@ -109,21 +124,35 @@ export interface FinalSymbolsProps {
  * and is what the job and estimate are built from. The AI response is kept for
  * audit only and is never read again past this point.
  */
-export default function FinalSymbols({ result, foremen }: FinalSymbolsProps) {
+export default function FinalSymbols({ result, projects, defaultProjectId }: FinalSymbolsProps) {
   const { flash } = usePage<SharedPageProps>().props
 
+  /*
+   * Seeded from the job once it exists, so coming back to this step shows what
+   * was filled in rather than a card describing it. Before that, from the
+   * takeoff and its client.
+   */
   const jobForm = useForm<CreateJobForm>({
-    name: result.projectName,
-    client: result.client ?? '',
-    location: '',
-    description: '',
-    job_type: '',
-    start_date: '',
-    end_date: '',
-    budget: result.engineEstimate.grand_total
-      ? String(result.engineEstimate.grand_total)
-      : '',
-    foreman_id: '',
+    name: result.job?.name ?? result.projectName,
+    project_id: String(result.job?.projectId ?? defaultProjectId),
+    // That client's primary site, exactly as Create Job starts.
+    address_ids:
+      result.job?.addressIds.slice() ??
+      projects
+        .find((option) => option.id === defaultProjectId)
+        ?.addresses.filter((site) => site.isPrimary)
+        .map((site) => site.id) ??
+      [],
+    description: result.job?.description ?? '',
+    // Recorded on the client, so it does not have to be answered twice. It is
+    // still a field: a client's usual type is not every job's type.
+    job_type:
+      result.job?.jobType ??
+      projects.find((option) => option.id === defaultProjectId)?.projectType ??
+      '',
+    start_date: result.job?.startDate ?? '',
+    end_date: result.job?.endDate ?? '',
+    budget: String(result.job?.budget ?? result.engineEstimate.grand_total ?? ''),
   })
 
   const updateJobField = <K extends FormDataKeys<CreateJobForm>>(
@@ -134,14 +163,13 @@ export default function FinalSymbols({ result, foremen }: FinalSymbolsProps) {
     if (jobForm.errors[field]) jobForm.clearErrors(field)
   }
 
-  const foremanOptions = [
-    { label: 'Assign later', value: '' },
-    ...foremen.map((foreman) => ({ label: foreman.name, value: String(foreman.id) })),
-  ]
+  const selectedProject = projects.find(
+    (option) => String(option.id) === jobForm.data.project_id,
+  )
 
   const submitJob = (event: FormEvent) => {
     event.preventDefault()
-    jobForm.post(routeTo.finalCreateJob(result.id), { preserveScroll: true })
+    jobForm.post(routeTo.finalCreateJob(result.id))
   }
 
   return (
@@ -159,16 +187,25 @@ export default function FinalSymbols({ result, foremen }: FinalSymbolsProps) {
           { label: 'Review summary' },
         ]}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <ButtonLink
-              href={routeTo.review(result.id)}
-              variant="ghost"
-              size="sm"
-              leftIcon={Table2}
-            >
-              Back to Review
-            </ButtonLink>
-          </div>
+          /*
+           * The step before, named outright: the estimate this screen follows,
+           * or the review itself while there is no estimate yet. Not
+           * `history.back()` — a POST that redirects does not always leave the
+           * previous step as the entry behind it.
+           */
+          <ButtonLink
+            href={
+              result.estimateId
+                // Still in the flow: going back a step must not leave it.
+                ? routeTo.estimateInFlow(result.estimateId)
+                : routeTo.review(result.id)
+            }
+            variant="secondary"
+            size="sm"
+            leftIcon={ArrowLeft}
+          >
+            Back
+          </ButtonLink>
         }
       />
 
@@ -183,133 +220,170 @@ export default function FinalSymbols({ result, foremen }: FinalSymbolsProps) {
         </Alert>
       )}
 
-      {/* Where this takeoff is, before anything else on the page. */}
+      {/*
+        Where this takeoff is, before anything else on the page. This screen is
+        the job step, whether the job is still a form or already raised — the
+        marker stays on it either way rather than pointing at the step after.
+      */}
       <WorkflowProgress
-        current={
-          result.workJobId
-            ? 'schedule'
-            : result.estimateId
-              ? 'job'
-              : result.isFinalised
-                ? 'estimate'
-                : 'review'
-        }
+        current="job"
+        // Never the step you are on: the marker sits there instead of a tick.
         done={[
           'analysis',
           ...(result.isFinalised ? (['review'] as const) : []),
           ...(result.estimateId ? (['estimate'] as const) : []),
-          ...(result.workJobId ? (['job'] as const) : []),
         ]}
         className="mb-6"
       />
 
       {/*
         Nothing is raised automatically once the review is signed off — the
-        reviewer fills in the job's details here and creates it explicitly,
-        the same fields as the standalone "Create New Job" screen.
+        reviewer fills in the job's details here and creates it explicitly, the
+        same fields as the standalone "Create New Job" screen.
+
+        The same form afterwards, filled from the job: coming back to this step
+        shows what was entered rather than a card describing it, and saving
+        applies the edits to the job that is already there.
       */}
-      {!result.workJobId && (
-        <Card padding="lg" className="mb-6">
-          <SectionHeading
-            as="h3"
-            title="Create the job"
-            subtitle="Nothing is created until you submit this — fill in what you know."
+      <Card padding="lg" className="mb-6">
+        <SectionHeading
+          as="h3"
+          title={result.workJobId ? 'The job' : 'Create the job'}
+          actions={
+            result.workJobId ? (
+              <ButtonLink
+                href={routeTo.job(result.workJobId)}
+                variant="secondary"
+                size="sm"
+                leftIcon={ExternalLink}
+              >
+                Open the job
+              </ButtonLink>
+            ) : undefined
+          }
+        />
+
+        <form onSubmit={submitJob} noValidate className="mt-4 space-y-6">
+          <TextInput
+            id="job-name"
+            label="Job Name"
+            value={jobForm.data.name}
+            onChange={(event) => updateJobField('name', event.target.value)}
+            {...(jobForm.errors.name ? { error: jobForm.errors.name } : {})}
           />
 
-          <form onSubmit={submitJob} noValidate className="mt-4 space-y-6">
+          {/*
+            Stated, not chosen. This is the takeoff's own project, and the
+            takeoff is what the job is being built from — offering to change it
+            here would raise a job under a client whose drawing it is not.
+            Changing either is done from the project's own screen.
+          */}
+          <div className="rounded-panel border border-hairline bg-white/4 p-4">
+            <p className="text-2xs tracking-wide text-white/70 uppercase">
+              Client and project
+            </p>
+            <p className="mt-1 truncate text-md text-white">
+              {selectedProject
+                ? `${selectedProject.clientName ?? 'Unassigned'} — ${selectedProject.name}`
+                : 'This takeoff has no project on record'}
+            </p>
+          </div>
+
+          <fieldset>
+            <legend className="mb-1 text-md font-medium text-white">Site Location</legend>
+            <JobSitePicker
+              clientId={selectedProject?.clientId ?? null}
+              clientName={selectedProject?.clientName ?? ''}
+              sites={selectedProject?.addresses ?? []}
+              value={jobForm.data.address_ids}
+              onChange={(addressIds) => updateJobField('address_ids', addressIds)}
+              disabled={jobForm.processing}
+              {...(jobForm.errors.address_ids
+                ? { error: jobForm.errors.address_ids }
+                : {})}
+            />
+          </fieldset>
+
+          <div className="grid gap-6 lg:grid-cols-3">
             <TextInput
-              id="job-name"
-              label="Job Name"
-              value={jobForm.data.name}
-              onChange={(event) => updateJobField('name', event.target.value)}
-              {...(jobForm.errors.name ? { error: jobForm.errors.name } : {})}
+              id="job-start"
+              type="date"
+              label="Start Date"
+              value={jobForm.data.start_date}
+              onChange={(event) => updateJobField('start_date', event.target.value)}
+              {...(jobForm.errors.start_date ? { error: jobForm.errors.start_date } : {})}
             />
-
-            <div className="grid gap-6 lg:grid-cols-2">
-              <TextInput
-                id="job-client"
-                label="Client"
-                value={jobForm.data.client}
-                onChange={(event) => updateJobField('client', event.target.value)}
-                {...(jobForm.errors.client ? { error: jobForm.errors.client } : {})}
-              />
-              <TextInput
-                id="job-location"
-                label="Location"
-                placeholder="Enter job location"
-                value={jobForm.data.location}
-                onChange={(event) => updateJobField('location', event.target.value)}
-                {...(jobForm.errors.location ? { error: jobForm.errors.location } : {})}
-              />
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-3">
-              <TextInput
-                id="job-start"
-                type="date"
-                label="Start Date"
-                value={jobForm.data.start_date}
-                onChange={(event) => updateJobField('start_date', event.target.value)}
-                {...(jobForm.errors.start_date ? { error: jobForm.errors.start_date } : {})}
-              />
-              <TextInput
-                id="job-end"
-                type="date"
-                label="End Date"
-                value={jobForm.data.end_date}
-                onChange={(event) => updateJobField('end_date', event.target.value)}
-                {...(jobForm.errors.end_date ? { error: jobForm.errors.end_date } : {})}
-              />
-              <TextInput
-                id="job-budget"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step={50}
-                label="Budget ($)"
-                placeholder="Enter budget amount"
-                value={jobForm.data.budget}
-                onChange={(event) => updateJobField('budget', event.target.value)}
-                {...(jobForm.errors.budget ? { error: jobForm.errors.budget } : {})}
-              />
-            </div>
-
-            <TextArea
-              id="job-description"
-              label="Job Description"
-              rows={4}
-              placeholder="Enter detailed job description"
-              value={jobForm.data.description}
-              onChange={(event) => updateJobField('description', event.target.value)}
-              {...(jobForm.errors.description ? { error: jobForm.errors.description } : {})}
+            <TextInput
+              id="job-end"
+              type="date"
+              label="End Date"
+              value={jobForm.data.end_date}
+              onChange={(event) => updateJobField('end_date', event.target.value)}
+              {...(jobForm.errors.end_date ? { error: jobForm.errors.end_date } : {})}
             />
-
-            <RadioGroup
-              name="job-type"
-              label="Job Type"
-              options={JOB_TYPE_OPTIONS}
-              value={jobForm.data.job_type}
-              onChange={(value) => updateJobField('job_type', value as JobType)}
-              {...(jobForm.errors.job_type ? { error: jobForm.errors.job_type } : {})}
+            <TextInput
+              id="job-budget"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={50}
+              label="Budget ($)"
+              placeholder="Enter budget amount"
+              value={jobForm.data.budget}
+              onChange={(event) => updateJobField('budget', event.target.value)}
+              {...(jobForm.errors.budget ? { error: jobForm.errors.budget } : {})}
             />
+          </div>
 
-            <SelectField
-              id="job-foreman"
-              label="Foreman"
-              options={foremanOptions}
-              value={jobForm.data.foreman_id}
-              onChange={(event) => updateJobField('foreman_id', event.target.value)}
-              {...(jobForm.errors.foreman_id ? { error: jobForm.errors.foreman_id } : {})}
-            />
+          <TextArea
+            id="job-description"
+            label="Job Description"
+            rows={4}
+            placeholder="Enter detailed job description"
+            value={jobForm.data.description}
+            onChange={(event) => updateJobField('description', event.target.value)}
+            {...(jobForm.errors.description ? { error: jobForm.errors.description } : {})}
+          />
 
-            <div className="flex justify-end pt-2">
-              <Button type="submit" rightIcon={ArrowRight} isLoading={jobForm.processing}>
-                Create Job
-              </Button>
-            </div>
-          </form>
-        </Card>
-      )}
+          <RadioGroup
+            name="job-type"
+            label="Job Type"
+            options={JOB_TYPE_OPTIONS}
+            value={jobForm.data.job_type}
+            onChange={(value) => updateJobField('job_type', value as JobType)}
+            {...(jobForm.errors.job_type ? { error: jobForm.errors.job_type } : {})}
+          />
+
+          <div className="flex flex-wrap justify-end gap-3 pt-2">
+            {/*
+              Saving on a job that exists is a save, not a second creation —
+              `storeJob` applies the typed fields to it. Forward is then the
+              task step, which the footer below offers on its own.
+            */}
+            <Button
+              type="submit"
+              {...(result.workJobId ? {} : { rightIcon: ArrowRight })}
+              {...(result.workJobId ? { leftIcon: Save } : {})}
+              isLoading={jobForm.processing}
+            >
+              {result.workJobId ? 'Save job' : 'Create Job'}
+            </Button>
+          </div>
+        </form>
+
+          {/*
+            The way on, once there is a job. Without it, coming back to this
+            step from the tasks left nowhere to go and the flow collapsed
+            backwards into the estimate.
+          */}
+        {result.workJobId && (
+          <StepFooter
+            current="job"
+            href={routeTo.jobTaskSetup(result.workJobId)}
+            continueLabel="Continue to tasks"
+          />
+        )}
+      </Card>
     </PageTransition>
   )
 }

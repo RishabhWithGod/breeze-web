@@ -169,8 +169,9 @@ export default function JobSchedule({
                 Schedule Settings
               </Button>
             )}
+            {/* Back is top-right on every screen. */}
             <ButtonLink href={routeTo.job(job.id)} variant="secondary" leftIcon={ArrowLeft}>
-              Back to Job
+              Back
             </ButtonLink>
           </div>
         }
@@ -329,12 +330,15 @@ export default function JobSchedule({
                       {task.description && <p className="mt-1 text-sm text-white/70">{task.description}</p>}
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <StatusChip hideDot tone={TASK_STATUS_TONE[task.status]} label={TASK_STATUS_LABEL[task.status]} />
-                        <StatusChip hideDot tone={TASK_PRIORITY_TONE[task.priority]} label={TASK_PRIORITY_LABEL[task.priority]} />
                         {task.category && <Badge>{task.category}</Badge>}
                         <span className="text-sm text-white/70">
                           {task.startsOn ? formatDate(task.startsOn) : '—'} → {task.endsOn ? formatDate(task.endsOn) : '—'}
                         </span>
-                        <span className="text-sm text-white/70">{formatHours(task.actualHours)} / {task.estimatedHours !== null ? formatHours(task.estimatedHours) : '—'}</span>
+                        {/* Hours worked against the hours the estimate priced. */}
+                        <span className="text-sm text-white/70">
+                          {formatHours(task.actualHours)} /{' '}
+                          {task.estimatedHours !== null ? formatHours(task.estimatedHours) : '—'} est.
+                        </span>
                       </div>
                       {task.assignments.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2">

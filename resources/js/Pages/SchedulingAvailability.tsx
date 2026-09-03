@@ -1,17 +1,15 @@
 import { useCallback, useState } from 'react'
 import { Head, Link, router } from '@inertiajs/react'
+import { AlertTriangle, ArrowLeft, CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, ClipboardList, Clock, Gauge, Users } from 'lucide-react'
 import {
-  AlertTriangle,
-  CalendarDays,
-  CalendarPlus,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
-  Clock,
-  Gauge,
-  Users,
-} from 'lucide-react'
-import { Alert, Badge, Button, Card, EmptyState, ProgressBar } from '@/components/common'
+  Alert,
+  Badge,
+  Button,
+  ButtonLink,
+  Card,
+  EmptyState,
+  ProgressBar,
+} from '@/components/common'
 import { StatCard } from '@/components/dashboard'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { CrewHoursBreakdown } from '@/components/scheduling'
@@ -136,6 +134,9 @@ export default function SchedulingAvailability({
             >
               Go to Calendar
             </Button>
+                      <ButtonLink href={ROUTES.scheduling} variant="secondary" leftIcon={ArrowLeft}>
+              Back
+            </ButtonLink>
           </>
         }
       />

@@ -4,23 +4,26 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreJobRequest;
 use App\Http\Requests\UpdateJobRequest;
-use App\Http\Resources\ApprovalHistoryResource;
 use App\Http\Resources\FeedItemResource;
 use App\Http\Resources\JobDetailResource;
 use App\Http\Resources\JobResource;
 use App\Models\Estimate;
 use App\Models\FeedItem;
-use App\Models\Foreman;
 use App\Models\Job;
+use App\Models\JobSchedule;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
 use App\Models\Upload;
+use App\Policies\JobSchedulePolicy;
 use App\Services\Activity\FeedItemRecorder;
+use App\Services\Clients\ClientDirectory;
+use App\Services\Clients\JobSites;
+use App\Services\Clients\ProjectDirectory;
 use App\Services\JobCosting\JobCostSummary;
+use App\Services\Takeoff\TakeoffFlow;
 use App\Services\Takeoff\TakeoffLinkOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -31,6 +34,8 @@ class JobController extends Controller
         private readonly JobCostSummary $costSummary,
         private readonly FeedItemRecorder $activity,
         private readonly TakeoffLinkOptions $linkOptions,
+        private readonly ClientDirectory $clients,
+        private readonly JobSites $sites,
     ) {}
 
     public function index(Request $request): Response
@@ -51,7 +56,14 @@ class JobController extends Controller
         $foreman = $filters['foreman'] ?? 'all';
         $type = $filters['type'] ?? 'all';
         $sort = $filters['sort'] ?? 'recent';
-        $view = $filters['view'] ?? 'active';
+        /*
+         * Everything, archived included. The list no longer offers archiving,
+         * so defaulting to the active view would leave anything archived
+         * earlier invisible with nothing on the screen to bring it back. The
+         * row still carries its Archived badge, which is what explains why a
+         * job is missing from the job pickers.
+         */
+        $view = $filters['view'] ?? 'all';
 
         $jobs = Job::query()
             ->with(['foreman', 'activeAssignments.assigner'])
@@ -80,11 +92,8 @@ class JobController extends Controller
                 'view' => $view,
                 'panel' => $filters['panel'] ?? '',
             ],
-            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
-            'counts' => [
-                'active' => Job::query()->active()->count(),
-                'archived' => Job::query()->archived()->count(),
-            ],
+            // No foreman column or filter on the list, so no options to offer.
+            // `?foreman=` is still honoured for a deep link.
             'activity' => FeedItemResource::collection(
                 FeedItem::scope(FeedItem::HISTORY_ACTIVITY)->get()
             )->resolve(),
@@ -92,13 +101,16 @@ class JobController extends Controller
     }
 
     /** Full-page create form. */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         return Inertia::render('JobCreate', [
-            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
-            'clients' => $this->knownClients(),
-            'projects' => $this->linkOptions->projects(),
+            'clients' => $this->clients->options(),
+            // Their projects, each carrying its sites and its default drawing.
+            'projects' => app(ProjectDirectory::class)->options(),
             'uploads' => $this->linkOptions->uploads(),
+            // Raising a job by hand forks a takeoff mid-flow: its own job is
+            // raised from its review summary, not here.
+            'unfinishedTakeoff' => app(TakeoffFlow::class)->inProgress($request),
         ]);
     }
 
@@ -112,11 +124,21 @@ class JobController extends Controller
         $aiResult = $upload?->latestAiResult;
         unset($data['upload_id']);
 
+        // `client` is a snapshot of the picked client's name, never typed.
+        $data = $this->clients->withClientSnapshot($data);
+
+        // Refused here rather than trusted: the ids must be this client's own.
+        // Against the client's own book — a project and its job share a place.
+        $addresses = $this->sites->resolve((int) $data['client_id'], $data['address_ids']);
+        unset($data['address_ids']);
+
         $job = Job::create([
             ...$data,
             'ai_result_id' => $aiResult?->id,
             'status' => $isDraft ? 'draft' : 'planning',
         ]);
+
+        $this->sites->attach($job, $addresses);
 
         $job->recordInitialStatus();
         $job->recordActivity('created', $isDraft ? 'Job saved as a draft' : 'Job created');
@@ -130,7 +152,13 @@ class JobController extends Controller
         $linkedEstimate = $aiResult?->estimate;
 
         if ($linkedEstimate && $linkedEstimate->job_id === null) {
-            $linkedEstimate->update(['job_id' => $job->id]);
+            $linkedEstimate->update([
+                'job_id' => $job->id,
+                // The job it was waiting for has arrived: no longer a draft.
+                ...($linkedEstimate->status === 'draft'
+                    ? ['status' => Estimate::STATUS_FOR_A_LIVE_JOB]
+                    : []),
+            ]);
             $job->recordActivity(
                 'estimate_created',
                 "Estimate {$linkedEstimate->number} linked from {$upload->label()}",
@@ -146,8 +174,13 @@ class JobController extends Controller
             );
         }
 
+        /*
+         * Straight on to laying the job out in tasks. A draft is not ready to be
+         * planned, so it opens on the job itself; anything else goes to the step
+         * that turns a job into a plan, which can still be skipped there.
+         */
         return redirect()
-            ->route('jobs.show', $job)
+            ->route($isDraft ? 'jobs.show' : 'jobs.tasks.setup', $job)
             ->with(
                 'success',
                 $isDraft
@@ -160,10 +193,16 @@ class JobController extends Controller
     public function show(Request $request, Job $job): Response
     {
         $job->load([
-            'foreman',
             'project',
             'teamMembers',
             'estimates',
+            // Ordered the way the schedule holds them, with the count of what
+            // each covers — the detail the panel states without the lines.
+            'tasks' => fn ($query) => $query
+                ->with('foreman:id,name')
+                ->withCount('estimateItems')
+                ->orderBy('position')
+                ->orderBy('id'),
             'notes.author',
             'attachments.uploader',
             'activities.actor',
@@ -186,34 +225,35 @@ class JobController extends Controller
             // Assignments are role-based, so anyone can hold one — including
             // someone already on the crew list.
             'crew' => TeamMember::orderBy('name')->get(['id', 'name', 'initials', 'role']),
-            // The takeoff's audit trail, so the job carries the reasoning behind
-            // its numbers rather than just the numbers.
-            'takeoffHistory' => $job->aiResult
-                ? ApprovalHistoryResource::collection(
-                    $job->aiResult->history()->with('actor')->take(25)->get()
-                )->resolve()
-                : [],
             'canViewTimeCosts' => $canViewTimeCosts,
             'jobCosting' => $canViewTimeCosts ? $jobCosting : JobCostSummary::redact($jobCosting),
+            // Whoever plans the work may add to it; everyone else still reads.
+            'canPlanWork' => app(JobSchedulePolicy::class)
+                ->createTask($request->user(), $job->schedule ?? new JobSchedule),
         ]);
     }
 
     public function edit(Job $job): Response
     {
         return Inertia::render('JobEdit', [
-            'job' => (new JobDetailResource($job->load('foreman', 'teamMembers')))->resolve(),
-            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
-            'clients' => $this->knownClients(),
+            'job' => (new JobDetailResource($job->load('teamMembers', 'addresses')))->resolve(),
+            'clients' => $this->clients->options(),
+            'projects' => app(ProjectDirectory::class)->options(),
         ]);
     }
 
     public function update(UpdateJobRequest $request, Job $job): RedirectResponse
     {
-        $data = $request->validated();
+        $data = $this->clients->withClientSnapshot($request->validated());
         $newStatus = $data['status'];
         unset($data['status']);
 
+        // Against the client's own book — a project and its job share a place.
+        $addresses = $this->sites->resolve((int) $data['client_id'], $data['address_ids']);
+        unset($data['address_ids']);
+
         $job->update($data);
+        $this->sites->attach($job, $addresses);
         $job->recordActivity('updated', 'Job details updated');
 
         // Recorded separately so the status trail stays authoritative.
@@ -267,6 +307,7 @@ class JobController extends Controller
     {
         $copy = Job::create([
             'name' => "{$job->name} (Copy)",
+            'project_id' => $job->project_id,
             'client' => $job->client,
             'location' => $job->location,
             'description' => $job->description,
@@ -350,27 +391,20 @@ class JobController extends Controller
         );
     }
 
-    /** Distinct clients already on record, for the intake selects. */
-    private function knownClients(): Collection
-    {
-        return Job::query()
-            ->whereNotNull('client')
-            ->distinct()
-            ->orderBy('client')
-            ->pluck('client');
-    }
-
     /** Creates a linked estimate carrying the job's client and budget. */
     private function makeEstimateFor(Job $job): Estimate
     {
         return Estimate::create([
             'job_id' => $job->id,
+            'project_id' => $job->project_id,
             'number' => Estimate::nextNumber(),
+            // Both name columns are the client's — see ClientDirectory.
             'client' => $job->client ?? 'Unassigned',
-            'project' => $job->name,
+            'project' => $job->client ?? 'Unassigned',
             'issued_on' => now()->toDateString(),
             'amount' => $job->budget ?? 0,
-            'status' => 'draft',
+            // Raised against a job that already exists — see Estimate::statusFor().
+            'status' => Estimate::statusFor($job),
         ]);
     }
 }

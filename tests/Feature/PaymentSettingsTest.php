@@ -2,12 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Models\AppNotification;
 use App\Models\BillingSetting;
 use App\Models\Invoice;
 use App\Models\PaymentMethod;
 use App\Models\PaymentProcessor;
 use App\Models\PaymentTransaction;
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -210,8 +210,16 @@ class PaymentSettingsTest extends TestCase
 
     public function test_marking_an_invoice_paid_records_a_real_transaction_that_appears_in_payment_history(): void
     {
-        $this->actingAs($this->manager)->post('/invoices', [
+        // Clients are projects, so an invoice picks one rather than naming it.
+        $client = Project::create([
+            'user_id' => $this->manager->id,
+            'name' => 'Apex Construction',
             'client' => 'Apex Construction',
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($this->manager)->post('/invoices', [
+            'project_id' => $client->id,
             'invoice_date' => now()->toDateString(),
             'due_date' => null,
             'tax_pct' => 0,

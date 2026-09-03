@@ -1,5 +1,5 @@
 import { Head, useForm } from '@inertiajs/react'
-import { ArrowLeft, Briefcase, FileText, Save } from 'lucide-react'
+import { ArrowLeft, Save } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -11,15 +11,16 @@ import {
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ROUTES, routeTo } from '@/constants'
-import type { EstimateTotals, SelectOption } from '@/types'
+import { ROUTES } from '@/constants'
+import type { ClientOption, EstimateTotals, SelectOption } from '@/types'
 import { ESTIMATE_STATUS_LABEL, formatCurrency } from '@/utils'
 
 interface EditableEstimate {
   readonly id: number
   readonly number: string
   readonly client: string
-  readonly project: string
+  /** The client's own id — clients are projects, so this is a `projects` id. */
+  readonly clientId: number | null
   readonly status: string
   readonly issuedOn: string | null
   readonly markupPct: number
@@ -35,12 +36,17 @@ interface EditableEstimate {
 export interface EstimateEditProps {
   estimate: EditableEstimate
   statuses: readonly string[]
+  /** Where Back goes — the estimate, carrying whatever brought us to it. */
+  backUrl: string
+  /** Where the form saves to. Carries the origin so it survives the save. */
+  saveUrl: string
   totals: EstimateTotals
-  clients: readonly string[]
+  /** The client register. Clients are projects, so this is one list, not two. */
+  clients: readonly ClientOption[]
 }
 
 /**
- * Edit an estimate's header: client, project, status, issue date, markup and tax.
+ * Edit an estimate's header: client, status, issue date, markup and tax.
  *
  * A full screen rather than an inline panel, matching how a job is edited — the
  * detail screen stays a readable record and a change is a deliberate step. Line
@@ -54,12 +60,13 @@ export interface EstimateEditProps {
 export default function EstimateEdit({
   estimate,
   statuses,
+  backUrl,
+  saveUrl,
   totals,
   clients,
 }: EstimateEditProps) {
   const form = useForm({
-    client: estimate.client,
-    project: estimate.project,
+    client_id: estimate.clientId === null ? '' : String(estimate.clientId),
     status: estimate.status,
     issued_on: estimate.issuedOn ?? '',
     markup_pct: String(estimate.markupPct),
@@ -69,12 +76,22 @@ export default function EstimateEdit({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    form.put(routeTo.estimate(estimate.id))
+    form.put(saveUrl)
   }
 
+  /**
+   * An estimate raised before clients and projects were merged may name a client
+   * that never became a record. Its stored name becomes the placeholder, so the
+   * select shows who the estimate is for rather than a blank "Select client" —
+   * but the placeholder has no value, so saving still requires a real one.
+   */
+  const isUnlinked = estimate.clientId === null
+
   const clientOptions: readonly SelectOption[] = [
-    { value: '', label: 'Type a client name' },
-    ...clients.map((client) => ({ value: client, label: client })),
+    isUnlinked
+      ? { value: '', label: `${estimate.client} — not yet a client record` }
+      : { value: '', label: 'Select client' },
+    ...clients.map((client) => ({ value: String(client.id), label: client.name })),
   ]
 
   /** Preview of the effect of the rates being typed, before saving. */
@@ -93,40 +110,15 @@ export default function EstimateEdit({
         subtitle="Client, status, issue date and the rates applied to the line items."
         breadcrumbs={[
           { label: 'Estimates', href: ROUTES.estimates },
-          { label: estimate.number, href: routeTo.estimate(estimate.id) },
+          // The same address Back uses, so the crumb does not quietly drop
+          // the origin the rest of the screen carries.
+          { label: estimate.number, href: backUrl },
           { label: 'Edit' },
         ]}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <ButtonLink
-              href={routeTo.estimate(estimate.id)}
-              variant="ghost"
-              size="sm"
-              leftIcon={ArrowLeft}
-            >
-              Back to estimate
-            </ButtonLink>
-            {estimate.drawingUrl && (
-              <ButtonLink
-                href={estimate.drawingUrl}
-                variant="secondary"
-                size="sm"
-                leftIcon={FileText}
-              >
-                PDF details
-              </ButtonLink>
-            )}
-            {estimate.jobId && (
-              <ButtonLink
-                href={routeTo.job(estimate.jobId)}
-                variant="ghost"
-                size="sm"
-                leftIcon={Briefcase}
-              >
-                {estimate.jobName}
-              </ButtonLink>
-            )}
-          </div>
+          <ButtonLink href={backUrl} variant="secondary" size="sm" leftIcon={ArrowLeft}>
+            Back
+          </ButtonLink>
         }
       />
 
@@ -146,29 +138,15 @@ export default function EstimateEdit({
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <TextInput
+            <SelectField
               id="estimate-client"
               label="Client"
-              value={form.data.client}
-              onChange={(event) => form.setData('client', event.target.value)}
-              {...(form.errors.client ? { error: form.errors.client } : {})}
-            />
-            <SelectField
-              id="estimate-client-known"
-              label="Or pick an existing client"
-              options={clientOptions}
-              value=""
-              onChange={(event) => {
-                if (event.target.value) form.setData('client', event.target.value)
-              }}
-            />
-            <TextInput
-              id="estimate-project"
-              label="Client"
               className="sm:col-span-2"
-              value={form.data.project}
-              onChange={(event) => form.setData('project', event.target.value)}
-              {...(form.errors.project ? { error: form.errors.project } : {})}
+              hint="Not listed? Add them under Clients first."
+              options={clientOptions}
+              value={form.data.client_id}
+              onChange={(event) => form.setData('client_id', event.target.value)}
+              {...(form.errors.client_id ? { error: form.errors.client_id } : {})}
             />
             <SelectField
               id="estimate-status"
@@ -227,7 +205,7 @@ export default function EstimateEdit({
             <Button type="submit" leftIcon={Save} isLoading={form.processing}>
               Save changes
             </Button>
-            <ButtonLink href={routeTo.estimate(estimate.id)} variant="secondary">
+            <ButtonLink href={backUrl} variant="secondary">
               Cancel
             </ButtonLink>
           </div>

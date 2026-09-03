@@ -10,6 +10,7 @@ use App\Models\AiJob;
 use App\Models\Project;
 use App\Services\Ai\AiRunStatePresenter;
 use App\Services\Ai\TakeoffOrchestrator;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,6 +36,9 @@ class ProcessingController extends Controller
     public function show(Request $request, Project $project): Response
     {
         $this->authorize('view', $project);
+
+        // Remembered so the flow can be left and picked up again.
+        app(TakeoffFlow::class)->remember($project);
 
         $aiJob = $project->latestAiJob;
 
@@ -219,7 +223,7 @@ class ProcessingController extends Controller
             return back()->with('warning', 'The AI takeoff service is not configured.');
         }
 
-        $upload = $project->primaryUpload;
+        $upload = $project->takeoffDrawing();
 
         if (! $upload) {
             return back()->with('warning', 'Add a drawing PDF before running an AI takeoff.');
@@ -257,7 +261,7 @@ class ProcessingController extends Controller
             return back()->with('warning', 'The AI takeoff service is not configured.');
         }
 
-        $upload = $project->primaryUpload;
+        $upload = $project->takeoffDrawing();
 
         if (! $upload) {
             return back()->with('warning', 'The original drawing is no longer available.');

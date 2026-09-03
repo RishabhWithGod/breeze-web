@@ -1,0 +1,77 @@
+<?php
+
+namespace App\Services\Clients;
+
+use App\Models\Client;
+use Illuminate\Support\Collection;
+
+/**
+ * The client register.
+ *
+ * A client is who the work is for. Their projects are the pieces of work, and
+ * every drawing, takeoff, estimate and job hangs off one of those — not off the
+ * client. So this answers only the two questions a form asks about a client:
+ * who is on the register, and where do they have work.
+ *
+ * Jobs, estimates and invoices keep a `client` name snapshot of their own. It
+ * stays because it is what every list, filter and printed document reads, and
+ * because renaming a client should not silently rewrite invoices already sent
+ * under the old name.
+ */
+class ClientDirectory
+{
+    /**
+     * Options for the Client select every intake form shows, each carrying what
+     * the form fills in once that client is picked.
+     */
+    public function options(): Collection
+    {
+        return Client::with('addresses')
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Client $client) => [
+                'id' => $client->id,
+                'name' => $client->name,
+                /*
+                 * Every site this client has work at — one book, shared by all
+                 * their projects, so an address on file is never retyped.
+                 */
+                'addresses' => $client->addresses->map(fn ($address) => [
+                    'id' => $address->id,
+                    'label' => $address->label,
+                    'address' => $address->address,
+                    'display' => $address->display(),
+                    'isPrimary' => $address->is_primary,
+                ])->all(),
+            ]);
+    }
+
+    /** The picked client's name, for the snapshot column. Null when nothing is picked. */
+    public function nameFor(int|string|null $clientId): ?string
+    {
+        if (blank($clientId)) {
+            return null;
+        }
+
+        return Client::whereKey($clientId)->value('name');
+    }
+
+    /**
+     * Fills a validated payload's `client` snapshot from its `client_id`.
+     * Leaves an existing snapshot alone when no client is picked, so a record
+     * edited without one keeps the name it has.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function withClientSnapshot(array $data): array
+    {
+        $name = $this->nameFor($data['client_id'] ?? null);
+
+        if ($name !== null) {
+            $data['client'] = $name;
+        }
+
+        return $data;
+    }
+}

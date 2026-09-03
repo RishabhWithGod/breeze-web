@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AiJob;
 use App\Models\AiResult;
+use App\Models\ClientAddress;
 use App\Models\Estimate;
 use App\Models\Foreman;
 use App\Models\Job;
@@ -22,6 +23,9 @@ class JobTest extends TestCase
 
     private Foreman $foreman;
 
+    /** The client site a job is raised against. Set by `makeTakeoffDrawing`. */
+    private ClientAddress $site;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -29,7 +33,7 @@ class JobTest extends TestCase
         $this->foreman = Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW']);
     }
 
-    public function test_jobs_are_listed_with_their_foreman(): void
+    public function test_jobs_are_listed_with_the_foreman_still_on_the_record(): void
     {
         $this->makeJob(['name' => 'Harborview Data Hall']);
 
@@ -39,8 +43,11 @@ class JobTest extends TestCase
                 ->component('Jobs')
                 ->has('jobs.data', 1)
                 ->where('jobs.data.0.name', 'Harborview Data Hall')
+                // Still on the job, and still searchable by — the list simply
+                // does not draw a foreman column or offer the filter any more,
+                // so there are no options to send with it.
                 ->where('jobs.data.0.foreman.initials', 'DW')
-                ->has('foremen', 1));
+                ->missing('foremen'));
     }
 
     public function test_jobs_can_be_searched_by_foreman_name(): void
@@ -70,11 +77,14 @@ class JobTest extends TestCase
 
     public function test_a_job_can_be_created(): void
     {
+        [$project, $upload] = $this->makeTakeoffDrawing();
+
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Northgate Retail Fit-out',
-                'client' => 'Northgate Retail',
-                'location' => 'Northgate, Seattle',
+                'project_id' => $project->id,
+                'address_ids' => [$this->site->id],
+                'upload_id' => $upload->id,
                 'job_type' => 'commercial',
                 'foreman_id' => $this->foreman->id,
                 'start_date' => '2026-05-11',
@@ -89,6 +99,10 @@ class JobTest extends TestCase
         $this->assertDatabaseHas('work_jobs', [
             'id' => $job->id,
             'name' => 'Northgate Retail Fit-out',
+            // Both are snapshots of what was picked, never typed.
+            'client' => $project->name,
+            'location' => 'Northgate, Seattle',
+            'project_id' => $project->id,
             // Status is derived: a submitted form plans, a draft stays a draft.
             'status' => 'planning',
             'budget' => '42300.00',
@@ -97,11 +111,14 @@ class JobTest extends TestCase
 
     public function test_a_job_can_be_saved_as_a_draft(): void
     {
+        [$project, $upload] = $this->makeTakeoffDrawing();
+
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Exploratory Warehouse Retrofit',
-                'client' => 'Pier 9 Logistics',
-                'location' => 'Tacoma',
+                'project_id' => $project->id,
+                'address_ids' => [$this->site->id],
+                'upload_id' => $upload->id,
                 'save_as_draft' => true,
             ])
             ->assertSessionHas('success');
@@ -118,19 +135,23 @@ class JobTest extends TestCase
             ->from('/jobs/create')
             ->post('/jobs', [
                 'name' => 'no',
-                'foreman_id' => 9999,
                 'start_date' => '2026-09-04',
                 'end_date' => '2026-05-11',
                 'budget' => '-5',
             ])
+            /*
+             * `project_id` is the Client field and `address_ids` the sites —
+             * neither a client name nor an address is ever typed here. No
+             * foreman either: they are assigned per task, not per job.
+             */
             ->assertSessionHasErrors([
-                'name', 'client', 'location', 'foreman_id', 'end_date', 'budget',
+                'name', 'project_id', 'address_ids', 'upload_id', 'end_date', 'budget',
             ]);
 
         $this->assertDatabaseCount('work_jobs', 0);
     }
 
-    public function test_the_create_screen_offers_takeoff_projects_and_their_drawings(): void
+    public function test_the_create_screen_offers_the_client_register_and_their_drawings(): void
     {
         [$project, $upload] = $this->makeTakeoffDrawing();
 
@@ -138,8 +159,18 @@ class JobTest extends TestCase
             ->get('/jobs/create')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('JobCreate')
-                ->has('projects', 1)
-                ->where('projects.0.id', $project->id)
+                ->has('clients', 1)
+                ->where('clients.0.id', $project->id)
+                ->where('clients.0.name', $project->name)
+                /*
+                 * The form fills the sites, Schedule and Job Type from these the
+                 * moment the client is picked, so they ship with the options
+                 * rather than being fetched afterwards.
+                 */
+                ->has('clients.0.addresses', 1)
+                ->where('clients.0.addresses.0.address', 'Northgate, Seattle')
+                ->where('clients.0.addresses.0.isPrimary', true)
+                ->where('clients.0.projectType', 'commercial')
                 ->has('uploads', 1)
                 ->where('uploads.0.id', $upload->id)
                 ->where('uploads.0.projectId', $project->id)
@@ -153,9 +184,8 @@ class JobTest extends TestCase
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Northgate Retail Fit-out',
-                'client' => 'Northgate Retail',
-                'location' => 'Northgate, Seattle',
                 'project_id' => $project->id,
+                'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
             ])
             ->assertSessionHas('success');
@@ -183,9 +213,8 @@ class JobTest extends TestCase
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Northgate Retail Fit-out',
-                'client' => 'Northgate Retail',
-                'location' => 'Northgate, Seattle',
                 'project_id' => $project->id,
+                'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
                 // Ticked regardless — the linked estimate takes priority over this.
                 'create_estimate' => true,
@@ -242,8 +271,17 @@ class JobTest extends TestCase
         $project = Project::create([
             'user_id' => $this->user->id,
             'name' => 'Northgate Fit-out',
-            'client' => 'Northgate Retail',
+            'client' => 'Northgate Fit-out',
+            // Mirrors the primary site below, as the client screen writes it.
+            'location' => 'Northgate, Seattle',
+            'due_date' => '2026-05-11',
+            'project_type' => 'commercial',
             'status' => 'completed',
+        ]);
+        $this->site = $project->addresses()->create([
+            'address' => 'Northgate, Seattle',
+            'is_primary' => true,
+            'position' => 0,
         ]);
         $upload = Upload::create([
             'project_id' => $project->id,

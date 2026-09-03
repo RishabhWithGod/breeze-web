@@ -24,12 +24,13 @@ class ProjectListResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'code' => $this->code,
+            'clientId' => $this->client_id,
+            // The name snapshot, which is what lists and printed sheets read.
             'client' => $this->client,
             'location' => $this->location,
             'discipline' => $this->discipline,
             'projectType' => $this->project_type,
             'status' => $this->status,
-            'dueDate' => $this->due_date?->toDateString(),
             // Set by `withCount('uploads')`; counted on demand otherwise.
             'documentsCount' => (int) ($this->uploads_count ?? $this->uploads()->count()),
             'itemsCount' => $this->items_count,

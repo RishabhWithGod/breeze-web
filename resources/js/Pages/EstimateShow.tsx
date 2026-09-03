@@ -1,16 +1,25 @@
+import { useState, type ReactNode } from 'react'
 import { Head, usePage } from '@inertiajs/react'
 import {
-  ArrowRight,
-  Briefcase,
+  ArrowLeft,
+  Boxes,
+  Cable,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  LayoutGrid,
+  FileText,
+  ListChecks,
   PencilLine,
   Sparkles,
+  Wallet,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import {
   Alert,
   Badge,
+  Button,
   ButtonLink,
-  Card,
-  SectionHeading,
+  CollapsibleCard,
   StatusChip,
   WorkflowProgress,
 } from '@/components/common'
@@ -20,11 +29,9 @@ import {
   PanelSchedulesPanel,
   WireSizesPanel,
 } from '@/components/finals'
-import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ApprovalHistoryPanel } from '@/components/review'
+import { appLayout, PageHeader, PageTransition, StepFooter } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type {
-  ApprovalHistoryEntry,
   EquipmentRow,
   EstimateItemRow,
   EstimateStatus,
@@ -32,20 +39,32 @@ import type {
   PanelScheduleRow,
   SelectOption,
   SharedPageProps,
+  Tone,
   WireSizeRow,
 } from '@/types'
 import {
+  cn,
   ESTIMATE_STATUS_LABEL,
   ESTIMATE_STATUS_TONE,
   formatCurrency,
   formatDate,
 } from '@/utils'
 
+/** One of the reference tables read off the drawing, as its own section. */
+interface DrawingSection {
+  readonly key: string
+  readonly title: string
+  readonly subtitle: string
+  readonly icon: LucideIcon
+  readonly tone: Tone
+  readonly count: number
+  readonly node: ReactNode
+}
+
 interface EstimateSummary {
   readonly id: number
   readonly number: string
   readonly client: string
-  readonly project: string
   readonly status: string
   readonly issuedOn: string | null
   readonly notes: string | null
@@ -68,6 +87,13 @@ export interface EstimateShowProps {
   estimate: EstimateSummary
   items: readonly EstimateItemRow[]
   sections: Record<string, { label: string; lines: number; total: number }>
+  /**
+   * True only when the takeoff flow itself handed over to this screen. Opened
+   * from a job or the estimates list it is a record to read, not a step.
+   */
+  inFlow: boolean
+  /** Where Back goes — the screen this one was actually reached from. */
+  backUrl: string
   totals: EstimateTotals
   categories: readonly SelectOption[]
   statuses: readonly string[]
@@ -77,7 +103,6 @@ export interface EstimateShowProps {
     equipment: readonly EquipmentRow[]
     panelSchedules: readonly PanelScheduleRow[]
   }
-  history: readonly ApprovalHistoryEntry[]
 }
 
 /**
@@ -90,45 +115,110 @@ export interface EstimateShowProps {
 export default function EstimateShow({
   estimate,
   items,
+  inFlow,
+  backUrl,
   totals,
   categories,
   drawingData,
-  history,
 }: EstimateShowProps) {
   const { flash } = usePage<SharedPageProps>().props
 
-  const totalRows: readonly { label: string; value: number; strong?: boolean }[] = [
+  /**
+   * Only the drawing panels that actually have rows. Each is its own section:
+   * wire is priced by length and schedules describe equipment rather than
+   * count it, so they are reference beside the lines, not part of them.
+   */
+  const drawingPanels: readonly DrawingSection[] = [
+    drawingData.wireSizes.length > 0 && {
+      key: 'wire-sizes',
+      title: 'Wire sizes',
+      subtitle: 'Conductor sizes read off the drawing — priced by length',
+      icon: Cable,
+      tone: 'warning' as const,
+      count: drawingData.wireSizes.length,
+      node: <WireSizesPanel wireSizes={drawingData.wireSizes} bare />,
+    },
+    drawingData.equipment.length > 0 && {
+      key: 'equipment',
+      title: 'Equipment',
+      subtitle: 'Tagged equipment the engine read off the drawing',
+      icon: Boxes,
+      tone: 'warning' as const,
+      count: drawingData.equipment.length,
+      node: <EquipmentPanel equipment={drawingData.equipment} bare />,
+    },
+    drawingData.panelSchedules.length > 0 && {
+      key: 'panel-schedules',
+      title: 'Panel schedules',
+      subtitle: 'Schedule tables extracted from the sheet',
+      icon: LayoutGrid,
+      tone: 'info' as const,
+      count: drawingData.panelSchedules.length,
+      node: <PanelSchedulesPanel schedules={drawingData.panelSchedules} bare />,
+    },
+  ].filter((panel) => panel !== false)
+
+  /*
+   * Every section starts closed. The screen is five or six tables stacked down
+   * a page, and reading any one of them meant scrolling past the rest — each
+   * header says what it holds, so the page is a contents list you open.
+   */
+  const [open, setOpen] = useState<Readonly<Record<string, boolean>>>({})
+
+  const sectionKeys = ['lines', 'details', ...drawingPanels.map((p) => p.key), 'totals']
+  const allOpen = sectionKeys.every((key) => open[key])
+
+  const toggle = (key: string) =>
+    setOpen((current) => ({ ...current, [key]: !current[key] }))
+
+  const setAll = (isOpen: boolean) =>
+    setOpen(Object.fromEntries(sectionKeys.map((key) => [key, isOpen])))
+
+  const breakdown: readonly { label: string; value: number; strong?: boolean }[] = [
     { label: 'Materials and fixtures', value: totals.material },
     { label: 'Labor', value: totals.labor },
     { label: 'Equipment', value: totals.equipment },
     { label: 'Subtotal', value: totals.subtotal, strong: true },
     { label: `Markup (${totals.markupPct}%)`, value: totals.markup },
     { label: `Tax (${totals.taxPct}%)`, value: totals.tax },
-    { label: 'Grand total', value: totals.grandTotal, strong: true },
   ]
 
   return (
     <PageTransition>
       <Head title={`Estimate ${estimate.number}`} />
 
+      {/* Status sits in the header, where this app puts it on every other
+          detail screen — visible without reading down the page for it. */}
       <PageHeader
         title={`Estimate ${estimate.number}`}
-        subtitle={`${estimate.client} · ${estimate.project}`}
+        subtitle={estimate.client}
         breadcrumbs={[
           { label: 'Estimates', href: ROUTES.estimates },
           { label: estimate.number },
         ]}
         actions={
-          estimate.jobId ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusChip
+              tone={ESTIMATE_STATUS_TONE[estimate.status as EstimateStatus] ?? 'neutral'}
+              label={
+                ESTIMATE_STATUS_LABEL[estimate.status as EstimateStatus] ?? estimate.status
+              }
+            />
+            {/*
+              Back is top-right on every screen, and goes to the one this was
+              reached from — the job whose list it was opened from, the review
+              in the flow, or the estimates index. Worked out server-side, where
+              the claim can be checked.
+            */}
             <ButtonLink
-              href={routeTo.job(estimate.jobId)}
-              variant="ghost"
+              href={backUrl}
+              variant="secondary"
               size="sm"
-              leftIcon={Briefcase}
+              leftIcon={ArrowLeft}
             >
-              {estimate.jobName}
+              Back
             </ButtonLink>
-          ) : undefined
+          </div>
         }
       />
 
@@ -143,32 +233,15 @@ export default function EstimateShow({
         </Alert>
       )}
 
-      {/* Where this takeoff is, carried over from the review summary screen so
-          the roadmap travels with it instead of resetting between pages. */}
-      {estimate.aiResultId && (
+      {/* Where this takeoff is. The marker sits on the stage this screen *is*,
+          never on the next one — a page you are reading is not finished work,
+          and ticking it while pointing further along reads as both at once. */}
+      {inFlow && estimate.aiResultId && (
         <WorkflowProgress
-          current={estimate.jobId ? 'schedule' : 'job'}
-          done={['analysis', 'review', 'estimate', ...(estimate.jobId ? (['job'] as const) : [])]}
+          current="estimate"
+          done={['analysis', 'review', ...(estimate.jobId ? (['job'] as const) : [])]}
           className="mb-6"
         />
-      )}
-
-      {/* The next step after a takeoff's estimate — raising the job, back on
-          the review summary screen — until one exists. */}
-      {estimate.aiResultId && !estimate.jobId && (
-        <Alert tone="info" className="mb-4" title="Estimate ready">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span>Check the numbers above, then continue to create the job.</span>
-            <ButtonLink
-              href={routeTo.finalSymbols(estimate.aiResultId)}
-              size="sm"
-              className="ml-auto"
-              rightIcon={ArrowRight}
-            >
-              Continue
-            </ButtonLink>
-          </div>
-        </Alert>
       )}
 
       {/* Whose quantities these are, before anyone prices work off them. */}
@@ -188,105 +261,149 @@ export default function EstimateShow({
         </Alert>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-        <div className="flex min-w-0 flex-col gap-6">
-          <Card padding="lg">
-            <SectionHeading
-              as="h3"
-              title="Line items"
-              subtitle="Generated from the reviewed takeoff — edit anything"
-              actions={
-                estimate.fromTakeoff ? (
-                  <Badge tone="brand">From AI takeoff</Badge>
-                ) : (
-                  <Badge tone="neutral">Manual estimate</Badge>
-                )
-              }
-            />
-            <EstimateItemsTable
-              estimateId={estimate.id}
-              items={items}
-              categories={categories}
-            />
-          </Card>
+      {/* One control for the lot, so a whole estimate can be read at once. */}
+      <div className="mb-4 flex justify-end">
+        <Button
+          variant="secondary"
+          size="sm"
+          leftIcon={allOpen ? ChevronsDownUp : ChevronsUpDown}
+          onClick={() => setAll(!allOpen)}
+        >
+          {allOpen ? 'Collapse all' : 'Expand all'}
+        </Button>
+      </div>
 
-          <Card padding="lg">
-            <SectionHeading
-              as="h3"
-              title="Estimate details"
-              subtitle="Client, status and the rates applied"
-              actions={
-                <ButtonLink
-                  href={estimate.editUrl}
-                  variant="secondary"
-                  size="sm"
-                  leftIcon={PencilLine}
-                >
-                  Edit details
-                </ButtonLink>
-              }
-            />
+      <div className="flex min-w-0 flex-col gap-4">
+        <CollapsibleCard
+          title="Line items"
+          subtitle="What is being priced, and at what rate"
+          icon={ListChecks}
+          tone="brand"
+          summary={
+            <span className="flex items-center gap-3">
+              <span className="tabular-nums">
+                {items.length} {items.length === 1 ? 'line' : 'lines'}
+              </span>
+              {estimate.fromTakeoff ? (
+                <Badge tone="brand" size="sm">
+                  From AI takeoff
+                </Badge>
+              ) : (
+                <Badge tone="neutral" size="sm">
+                  Manual
+                </Badge>
+              )}
+            </span>
+          }
+          isOpen={Boolean(open['lines'])}
+          onToggle={() => toggle('lines')}
+        >
+          <EstimateItemsTable
+            estimateId={estimate.id}
+            items={items}
+            categories={categories}
+          />
+        </CollapsibleCard>
 
-            <dl className="grid gap-4 sm:grid-cols-2">
-              {[
-                { label: 'Client', value: estimate.client },
-                { label: 'Client', value: estimate.project },
-                {
-                  label: 'Issued on',
-                  value: estimate.issuedOn ? formatDate(estimate.issuedOn) : '—',
-                },
-                { label: 'Markup', value: `${totals.markupPct}%` },
-                { label: 'Tax', value: `${totals.taxPct}%` },
-                {
-                  label: 'Drawing',
-                  value: estimate.drawingName ?? 'Not from a drawing',
-                },
-              ].map((field) => (
-                <div key={field.label} className="min-w-0">
-                  <dt className="text-2xs tracking-wide text-white/80 uppercase">
-                    {field.label}
-                  </dt>
-                  <dd className="mt-1 truncate text-md text-white" title={field.value}>
-                    {field.value}
-                  </dd>
-                </div>
-              ))}
-
-              <div className="min-w-0">
-                <dt className="text-2xs tracking-wide text-white/80 uppercase">Status</dt>
-                <dd className="mt-1">
-                  <StatusChip
-                    tone={ESTIMATE_STATUS_TONE[estimate.status as EstimateStatus] ?? 'neutral'}
-                    label={
-                      ESTIMATE_STATUS_LABEL[estimate.status as EstimateStatus] ??
-                      estimate.status
-                    }
-                  />
+        <CollapsibleCard
+          title="Estimate details"
+          subtitle="The dates and rates these numbers were built on"
+          icon={FileText}
+          tone="info"
+          summary={
+            <span className="tabular-nums">
+              {totals.markupPct}% markup · {totals.taxPct}% tax
+            </span>
+          }
+          isOpen={Boolean(open['details'])}
+          onToggle={() => toggle('details')}
+          actions={
+            <ButtonLink
+              href={estimate.editUrl}
+              variant="secondary"
+              size="sm"
+              leftIcon={PencilLine}
+            >
+              Edit details
+            </ButtonLink>
+          }
+        >
+          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                label: 'Issued on',
+                value: estimate.issuedOn ? formatDate(estimate.issuedOn) : '—',
+              },
+              { label: 'Markup', value: `${totals.markupPct}%` },
+              { label: 'Tax', value: `${totals.taxPct}%` },
+              {
+                label: 'Drawing',
+                value: estimate.drawingName ?? 'Not from a drawing',
+              },
+            ].map((field) => (
+              <div
+                key={field.label}
+                className="min-w-0 rounded-panel border border-hairline bg-white/4 p-4"
+              >
+                <dt className="text-2xs tracking-wide text-white/80 uppercase">
+                  {field.label}
+                </dt>
+                <dd className="mt-1 truncate text-md text-white" title={field.value}>
+                  {field.value}
                 </dd>
               </div>
-            </dl>
+            ))}
+          </dl>
 
-            {estimate.notes && (
-              <p className="mt-4 border-t border-hairline pt-4 text-sm text-white/90">
-                {estimate.notes}
-              </p>
-            )}
-          </Card>
-        </div>
+          {estimate.notes && (
+            <p className="mt-4 border-t border-hairline pt-4 text-sm text-white/90">
+              {estimate.notes}
+            </p>
+          )}
+        </CollapsibleCard>
 
-        <div className="flex min-w-0 flex-col gap-6">
-          <Card padding="lg">
-            <SectionHeading as="h3" title="Totals" subtitle="Recalculated from the lines" />
+        {/*
+          Measured off the drawing but not priced by the engine — wire runs are
+          priced by length and schedules describe equipment rather than count it.
+          Kept beside the estimate so an estimator can price them by hand.
+        */}
+        {drawingPanels.map((panel) => (
+          <CollapsibleCard
+            key={panel.key}
+            title={panel.title}
+            subtitle={panel.subtitle}
+            icon={panel.icon}
+            tone={panel.tone}
+            summary={<span className="tabular-nums">{panel.count}</span>}
+            isOpen={Boolean(open[panel.key])}
+            onToggle={() => toggle(panel.key)}
+          >
+            {panel.node}
+          </CollapsibleCard>
+        ))}
 
-            <dl className="flex flex-col gap-2">
-              {totalRows.map((row) => (
+        <CollapsibleCard
+          title="Totals"
+          subtitle="Recalculated from the lines above on every save"
+          icon={Wallet}
+          tone="success"
+          summary={
+            <span className="font-semibold tabular-nums text-white">
+              {formatCurrency(totals.grandTotal, 2)}
+            </span>
+          }
+          isOpen={Boolean(open['totals'])}
+          onToggle={() => toggle('totals')}
+        >
+          <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-start">
+            <dl className="flex flex-col gap-2.5">
+              {breakdown.map((row) => (
                 <div
                   key={row.label}
-                  className={
-                    row.strong
-                      ? 'flex items-center justify-between gap-3 border-t border-hairline pt-2'
-                      : 'flex items-center justify-between gap-3'
-                  }
+                  className={cn(
+                    'flex items-center justify-between gap-3',
+                    row.strong && 'border-t border-hairline pt-2.5',
+                  )}
                 >
                   <dt
                     className={
@@ -296,11 +413,12 @@ export default function EstimateShow({
                     {row.label}
                   </dt>
                   <dd
-                    className={
+                    className={cn(
+                      'tabular-nums',
                       row.strong
-                        ? 'text-lg font-bold text-white'
-                        : 'text-md font-medium text-white/90'
-                    }
+                        ? 'text-md font-semibold text-white'
+                        : 'text-md font-medium text-white/90',
+                    )}
                   >
                     {formatCurrency(row.value, 2)}
                   </dd>
@@ -308,49 +426,44 @@ export default function EstimateShow({
               ))}
             </dl>
 
-            <div className="mt-4 flex flex-col gap-1 border-t border-hairline pt-4 text-sm text-white/85">
-              <p>
-                {totals.laborHours > 0 && <span>{totals.laborHours} labor hours · </span>}
-                raised {formatDate(estimate.createdAt)}
+            {/* The one number anyone came for, given its own weight. */}
+            <div className="rounded-panel border border-brand/40 bg-brand/8 p-5 lg:min-w-64">
+              <p className="text-2xs tracking-wide text-white/80 uppercase">Grand total</p>
+              <p className="mt-1 text-3xl font-bold tabular-nums text-white">
+                {formatCurrency(totals.grandTotal, 2)}
               </p>
-              {/* What was priced automatically before review, for comparison. */}
-              {totals.engineGrandTotal > 0 && (
-                <p>
-                  {totals.engineLineCount} lines were priced automatically at{' '}
-                  {formatCurrency(totals.engineGrandTotal, 2)} before review
-                </p>
-              )}
-            </div>
-          </Card>
 
-          {history.length > 0 && (
-            <Card padding="lg">
-              <SectionHeading as="h3" title="Takeoff history" subtitle="Audit trail" />
-              <ApprovalHistoryPanel entries={history} />
-            </Card>
-          )}
-        </div>
+              <div className="mt-4 flex flex-col gap-1 border-t border-hairline pt-4 text-sm text-white/85">
+                <p>
+                  {totals.laborHours > 0 && <span>{totals.laborHours} labor hours · </span>}
+                  raised {formatDate(estimate.createdAt)}
+                </p>
+                {/* What was priced automatically before review, for comparison. */}
+                {totals.engineGrandTotal > 0 && (
+                  <p>
+                    {totals.engineLineCount} lines were priced automatically at{' '}
+                    {formatCurrency(totals.engineGrandTotal, 2)} before review
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </CollapsibleCard>
       </div>
 
       {/*
-        Measured off the drawing but not priced by the engine — wire runs are
-        priced by length and schedules describe equipment rather than count it.
-        Kept beside the estimate so an estimator can price them by hand.
+        Forward is the step after this one, which is the job step — the takeoff's
+        own summary, where the job is raised and, once it exists, named. It used
+        to jump straight to the job's detail screen whenever the estimate was
+        linked to one, which skipped the step and dropped out of the flow. An
+        estimate's `job_id` is not the same question either: the takeoff's
+        estimate is linked to whichever job was raised first.
       */}
-      {(drawingData.wireSizes.length > 0 ||
-        drawingData.equipment.length > 0 ||
-        drawingData.panelSchedules.length > 0) && (
-        <div className="mt-6 grid gap-6 xl:grid-cols-2">
-          {drawingData.wireSizes.length > 0 && (
-            <WireSizesPanel wireSizes={drawingData.wireSizes} />
-          )}
-          {drawingData.equipment.length > 0 && (
-            <EquipmentPanel equipment={drawingData.equipment} />
-          )}
-          {drawingData.panelSchedules.length > 0 && (
-            <PanelSchedulesPanel schedules={drawingData.panelSchedules} />
-          )}
-        </div>
+      {inFlow && estimate.aiResultId && (
+        <StepFooter
+          current="estimate"
+          href={routeTo.finalSymbols(estimate.aiResultId)}
+        />
       )}
     </PageTransition>
   )
