@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Head } from '@inertiajs/react'
-import { Download, FileText, Map, Sparkles } from 'lucide-react'
+import { ArrowLeft, Download, FileText, Map, Sparkles } from 'lucide-react'
 import {
   ButtonLink,
   Card,
@@ -125,16 +125,21 @@ export default function DrawingDetails({
           { label: 'Drawing' },
         ]}
         actions={
-          drawing.annotatedUrl ? (
-            <ButtonLink
-              href={drawing.annotatedUrl}
-              variant="secondary"
-              size="sm"
-              leftIcon={Map}
-            >
-              Annotated PDF
-            </ButtonLink>
-          ) : undefined
+          <>
+            {drawing.annotatedUrl && (
+              <ButtonLink
+                href={drawing.annotatedUrl}
+                variant="secondary"
+                size="sm"
+                leftIcon={Map}
+              >
+                Annotated PDF
+              </ButtonLink>
+            )}
+          <ButtonLink href={ROUTES.aiTakeoff} variant="secondary" leftIcon={ArrowLeft}>
+            Back
+          </ButtonLink>
+          </>
         }
       />
 

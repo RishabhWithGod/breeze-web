@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Head, router } from '@inertiajs/react'
-import { ArrowRight, Ban, CheckCircle2, Cog, RotateCcw, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Ban, CheckCircle2, Cog, RotateCcw, TriangleAlert } from 'lucide-react'
 import {
   Alert,
   Button,
+  ButtonLink,
   Card,
   ConfirmDialog,
   ProgressBar,
@@ -227,6 +228,7 @@ export default function Processing({
         }
         breadcrumbs={[{ label: 'AI Takeoff', href: ROUTES.aiTakeoff }, { label: 'Processing' }]}
         actions={
+          <>
           <StatusChip
             tone={isFailed ? 'danger' : isCancelled ? 'warning' : isDone ? 'success' : 'brand'}
             label={
@@ -240,6 +242,10 @@ export default function Processing({
             }
             pulse={isRunning}
           />
+          <ButtonLink href={ROUTES.aiTakeoff} variant="secondary" leftIcon={ArrowLeft}>
+            Back
+          </ButtonLink>
+          </>
         }
       />
 

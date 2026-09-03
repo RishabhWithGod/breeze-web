@@ -1,14 +1,7 @@
 import { useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import {
-  FileText,
-  FolderKanban,
-  MapPin,
-  Sparkles,
-  Trash2,
-  Upload as UploadIcon,
-} from 'lucide-react'
+import { ArrowLeft, FileText, FolderKanban, MapPin, Sparkles, Trash2, Upload as UploadIcon } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -169,6 +162,9 @@ export default function ProjectShow({
             >
               Delete
             </Button>
+                      <ButtonLink href={ROUTES.projects} variant="secondary" leftIcon={ArrowLeft}>
+              Back
+            </ButtonLink>
           </>
         }
       />

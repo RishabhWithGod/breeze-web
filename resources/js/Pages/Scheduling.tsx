@@ -1,16 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Head, Link, router, usePage } from '@inertiajs/react'
-import {
-  CalendarPlus,
-  ChevronLeft,
-  ChevronRight,
-  Printer,
-  SlidersHorizontal,
-  UserCheck,
-} from 'lucide-react'
+import { ArrowLeft, CalendarPlus, ChevronLeft, ChevronRight, Printer, SlidersHorizontal, UserCheck } from 'lucide-react'
 import {
   Alert,
   Button,
+  ButtonLink,
   Card,
   ConfirmDialog,
   EmptyState,
@@ -222,6 +216,9 @@ export default function Scheduling({
             >
               Crew Availability
             </Button>
+                      <ButtonLink href={ROUTES.scheduling} variant="secondary" leftIcon={ArrowLeft}>
+              Back
+            </ButtonLink>
           </>
         }
       />
