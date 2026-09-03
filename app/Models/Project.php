@@ -31,6 +31,7 @@ class Project extends Model
         'location',
         'latitude',
         'longitude',
+        'place_id',
         'drawing_name',
         'selected_upload_id',
         'discipline',

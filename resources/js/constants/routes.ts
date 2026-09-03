@@ -17,6 +17,8 @@ export const ROUTES = {
   aiTakeoff: '/ai-takeoff',
   /** Address suggestions for the Site / Location field. JSON, not a page. */
   addressLookup: '/address-lookup',
+  /** The place behind a chosen suggestion — asked once, on selection. */
+  addressPlace: '/address-lookup/place',
   /**
    * Semantic alias of `aiTakeoff`: history *is* the module landing screen.
    * Kept so "view history" links read clearly at their call sites.
@@ -152,6 +154,9 @@ export const routeTo = {
   jobTasksReorder: (jobId: number) => `/jobs/${jobId}/schedule/reorder`,
   scheduleTask: (taskId: number) => `/schedule-tasks/${taskId}`,
   /** The setup screen aimed at one task, with where Back should return to. */
+  /** One takeoff's own paperwork, and the form that adds to it. */
+  projectDocuments: (projectId: number) => `/documents?project=${projectId}`,
+  projectDocumentCreate: (projectId: number) => `/documents/create?project=${projectId}`,
   client: (clientId: number) => `/clients/${clientId}`,
   clientEdit: (clientId: number) => `/clients/${clientId}/edit`,
   /** Create Project, opened with this client already picked. */
@@ -299,7 +304,6 @@ export const routeTo = {
   documentRestore: (documentId: number) => `/documents/${documentId}/restore`,
   documentShare: (documentId: number) => `/documents/${documentId}/share`,
   documentFoldersStore: '/document-folders',
-  documentImportUpload: '/documents/import-upload',
 
   // Notifications
   notificationRead: (notificationId: number) => `/notifications/${notificationId}/read`,

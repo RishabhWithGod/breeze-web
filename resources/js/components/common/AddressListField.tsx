@@ -2,8 +2,9 @@ import { Plus, Trash2 } from 'lucide-react'
 import { AddressField } from './AddressField'
 import { Button } from './Button'
 import { IconButton } from './Button'
-import { TextInput } from './Field'
-import type { DraftAddress } from '@/types'
+import { SelectField, TextInput } from './Field'
+import { SITE_TYPE_OPTIONS } from '@/constants'
+import type { DraftAddress, JobType } from '@/types'
 import { cn, emptyAddress } from '@/utils'
 
 export interface AddressListFieldProps {
@@ -85,14 +86,39 @@ export function AddressListField({
               latitude={row.latitude}
               longitude={row.longitude}
               disabled={disabled}
-              onChange={(address, latitude, longitude) =>
-                update(index, { address, latitude, longitude })
+              onChange={(place) =>
+                update(index, {
+                  address: place.address,
+                  latitude: place.latitude,
+                  longitude: place.longitude,
+                  place_id: place.placeId,
+                })
               }
               {...(errors[`addresses.${index}.address`]
                 ? { error: errors[`addresses.${index}.address`] }
                 : {})}
             />
           </div>
+
+          {/*
+            The building, not the client: one client can own a house and a
+            warehouse. A job raised at this site starts from this answer, so it
+            is asked once, here, rather than again on every job.
+          */}
+          <SelectField
+            id={`address-type-${index}`}
+            label="Site Type"
+            className="mt-4 lg:max-w-xs"
+            options={SITE_TYPE_OPTIONS}
+            value={row.site_type}
+            disabled={disabled}
+            onChange={(event) =>
+              update(index, { site_type: event.target.value as JobType | '' })
+            }
+            {...(errors[`addresses.${index}.site_type`]
+              ? { error: errors[`addresses.${index}.site_type`] }
+              : {})}
+          />
         </div>
       ))}
 

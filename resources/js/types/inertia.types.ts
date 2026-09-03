@@ -47,7 +47,7 @@ export interface ResumableTakeoff {
 
 export interface SharedPageProps {
   readonly appName: string
-  /** False when no geocoder is configured — the address field says so. */
+  /** False when no Places key is configured — the address field says so. */
   readonly addressLookupEnabled: boolean
   readonly auth: { readonly user: AuthUser | null }
   readonly notifications: readonly AppNotification[]

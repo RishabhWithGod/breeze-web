@@ -154,6 +154,7 @@ class ProjectController extends Controller
             'location' => $site?->address,
             'latitude' => $site?->latitude,
             'longitude' => $site?->longitude,
+            'place_id' => $site?->place_id,
             'status' => 'draft',
             'review_status' => 'none',
         ]);

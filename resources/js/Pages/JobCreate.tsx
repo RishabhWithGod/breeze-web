@@ -116,22 +116,27 @@ export default function JobCreate({
   }
 
   /**
-   * And the project answers the rest: its drawing, its sites, its type. Filled
-   * only into fields still blank — never over something already typed.
+   * And the project answers the rest: its drawing, its site, and through that
+   * site the kind of building the work is in. The name is filled only if still
+   * blank — never over something already typed.
    */
   const selectProject = (projectId: string) => {
     const project = projects.find((option) => String(option.id) === projectId)
+    const primary = project?.addresses.find((site) => site.isPrimary)
 
     setData((current) => ({
       ...current,
       project_id: projectId,
       // The project's own drawing, so the usual case takes no second choice.
       upload_id: project?.defaultUploadId ? String(project.defaultUploadId) : '',
-      address_ids: project
-        ? project.addresses.filter((site) => site.isPrimary).map((site) => site.id)
-        : [],
+      address_ids: primary ? [primary.id] : [],
       name: current.name || (project?.name ?? ''),
-      job_type: current.job_type || (project?.projectType ?? ''),
+      /*
+       * The type comes from the site, because it is the building that decides
+       * it — a client can own a house and a warehouse. Only a site that has
+       * been answered for speaks; otherwise whatever was already chosen stands.
+       */
+      job_type: primary?.siteType ?? current.job_type,
     }))
 
     clearErrors('project_id', 'address_ids', 'upload_id')
@@ -318,7 +323,23 @@ export default function JobCreate({
                 sites={selectedClient?.addresses ?? []}
                 value={data.address_ids}
                 onChange={(addressIds) => {
-                  setData('address_ids', addressIds)
+                  /*
+                   * The site carries the type, so changing the site changes it
+                   * — including a site added from inside the picker, which
+                   * arrives here the moment its props refresh. A site with no
+                   * type recorded leaves the choice alone rather than blanking
+                   * it, and the field below stays editable either way.
+                   */
+                  const picked = (selectedClient?.addresses ?? []).find(
+                    (site) => site.id === addressIds[0],
+                  )
+
+                  setData((current) => ({
+                    ...current,
+                    address_ids: addressIds,
+                    job_type: picked?.siteType ?? current.job_type,
+                  }))
+
                   if (errors.address_ids) clearErrors('address_ids')
                 }}
                 disabled={processing}

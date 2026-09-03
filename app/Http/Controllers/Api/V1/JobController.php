@@ -89,6 +89,15 @@ class JobController extends Controller
             'name' => $job->name,
             'client' => $job->client,
             'location' => $job->location,
+            /*
+             * The site's point, for the crew app: GPS check-in, geofencing and
+             * on-site status all measure against this. Null on a job whose
+             * address was typed rather than chosen, which the app has to treat
+             * as "no geofence" rather than as the origin.
+             */
+            'latitude' => $job->latitude === null ? null : (float) $job->latitude,
+            'longitude' => $job->longitude === null ? null : (float) $job->longitude,
+            'placeId' => $job->place_id,
             'jobType' => $job->job_type,
             'status' => $job->status,
             'priority' => $job->priority,

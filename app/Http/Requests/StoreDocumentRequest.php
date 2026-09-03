@@ -22,12 +22,19 @@ class StoreDocumentRequest extends FormRequest
                 Rule::file()->extensions(config('documents.extensions')),
             ],
             'name' => ['nullable', 'string', 'max:150'],
-            'document_type' => ['required', Rule::in(Document::TYPES)],
+            // The takeoff this paperwork is filed under.
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            /*
+             * Not asked for on the form any more. Still accepted so a caller
+             * that knows the answer can say so, and defaulted below when it
+             * does not — the columns are not nullable and every document has
+             * to land somewhere sensible.
+             */
+            'document_type' => ['nullable', Rule::in(Document::TYPES)],
             'job_id' => ['nullable', 'integer', 'exists:work_jobs,id'],
             'estimate_id' => ['nullable', 'integer', 'exists:estimates,id'],
-            'folder_id' => ['nullable', 'integer', 'exists:document_folders,id'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'visibility' => ['required', Rule::in([Document::VISIBILITY_TEAM, Document::VISIBILITY_PRIVATE])],
+            'visibility' => ['nullable', Rule::in([Document::VISIBILITY_TEAM, Document::VISIBILITY_PRIVATE])],
         ];
     }
 
@@ -42,7 +49,6 @@ class StoreDocumentRequest extends FormRequest
                 .UploadLimits::phpMb().' MB upload limit.',
             'file.extensions' => 'Unsupported file type — accepted types are '
                 .implode(', ', array_map(fn (string $ext) => ".{$ext}", config('documents.extensions'))),
-            'document_type.required' => 'Choose a document type.',
         ];
     }
 }

@@ -41,7 +41,12 @@ class ClientDirectory
                     'label' => $address->label,
                     'address' => $address->address,
                     'display' => $address->display(),
+                    // What a job raised here defaults its own type to.
+                    'siteType' => $address->site_type,
                     'isPrimary' => $address->is_primary,
+                    'latitude' => $address->latitude === null ? null : (float) $address->latitude,
+                    'longitude' => $address->longitude === null ? null : (float) $address->longitude,
+                    'placeId' => $address->place_id,
                 ])->all(),
             ]);
     }

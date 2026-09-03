@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Head, Link, router, usePage } from '@inertiajs/react'
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import {
+  AddressField,
   Alert,
   Button,
   ButtonLink,
@@ -21,11 +22,14 @@ import {
   ConfirmDialog,
   EmptyState,
   IconButton,
+  Modal,
+  SelectField,
   StatusChip,
+  TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { useDisclosure } from '@/hooks'
-import { ROUTES, routeTo } from '@/constants'
+import { ROUTES, routeTo, SITE_TYPE_OPTIONS } from '@/constants'
 import type { SharedPageProps, TakeoffStatus } from '@/types'
 import { TAKEOFF_STATUS_LABEL, TAKEOFF_STATUS_TONE, formatDate } from '@/utils'
 
@@ -34,7 +38,12 @@ interface ClientSite {
   readonly label: string | null
   readonly address: string
   readonly display: string
+  /** What kind of building it is. A job raised here starts from it. */
+  readonly siteType: string | null
   readonly isPrimary: boolean
+  readonly latitude: number | null
+  readonly longitude: number | null
+  readonly placeId: string | null
   /** How many jobs are standing on it. A site with work on it cannot go. */
   readonly jobCount: number
 }
@@ -73,6 +82,7 @@ export interface ClientShowProps {
 export default function ClientShow({ client, projects }: ClientShowProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [removingSite, setRemovingSite] = useState<ClientSite | null>(null)
+  const [editingSite, setEditingSite] = useState<ClientSite | null>(null)
 
   return (
     <PageTransition>
@@ -226,6 +236,9 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
                         — as an alert at the top of a page you are scrolled past
                         — is a reason nobody reads.
                       */}
+                      {site.siteType && (
+                        <span className="text-white/60 capitalize">{site.siteType}</span>
+                      )}
                       {site.jobCount > 0 && (
                         <span className="text-white/60">
                           {site.jobCount} {site.jobCount === 1 ? 'job runs' : 'jobs run'} here
@@ -233,19 +246,32 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
                       )}
                     </span>
                   </span>
-                  <IconButton
-                    icon={Trash2}
-                    label={
-                      site.jobCount > 0
-                        ? `${site.display} has work on it and cannot be removed`
-                        : `Remove ${site.display}`
-                    }
-                    variant="white"
-                    size="sm"
-                    disabled={site.jobCount > 0}
-                    onClick={() => setRemovingSite(site)}
-                    className="shrink-0 text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
-                  />
+                  <span className="flex shrink-0 items-center gap-1">
+                    {/*
+                      Correcting a site rewrites it on every job standing on
+                      it, so a typo is fixed everywhere rather than only here.
+                    */}
+                    <IconButton
+                      icon={PencilLine}
+                      label={`Edit ${site.display}`}
+                      variant="white"
+                      size="sm"
+                      onClick={() => setEditingSite(site)}
+                    />
+                    <IconButton
+                      icon={Trash2}
+                      label={
+                        site.jobCount > 0
+                          ? `${site.display} has work on it and cannot be removed`
+                          : `Remove ${site.display}`
+                      }
+                      variant="white"
+                      size="sm"
+                      disabled={site.jobCount > 0}
+                      onClick={() => setRemovingSite(site)}
+                      className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                    />
+                  </span>
                 </li>
               ))}
             </ul>
@@ -289,6 +315,14 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
         cascades, so the delete would go through and quietly take that job's
         site with it.
       */}
+      {editingSite && (
+        <EditSiteDialog
+          clientId={client.id}
+          site={editingSite}
+          onClose={() => setEditingSite(null)}
+        />
+      )}
+
       <ConfirmDialog
         isOpen={removingSite !== null}
         tone="danger"
@@ -310,6 +344,104 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
         onCancel={() => setRemovingSite(null)}
       />
     </PageTransition>
+  )
+}
+
+interface EditSiteDialogProps {
+  clientId: number
+  site: ClientSite
+  onClose: () => void
+}
+
+/**
+ * Correcting a site.
+ *
+ * The change reaches every job standing on it and every project taking it as
+ * their address — those keep snapshots rather than reading through the book, so
+ * fixing a typo here has to fix it there too, or the work keeps the old
+ * spelling for ever.
+ *
+ * Keyed on the site in the parent, so opening a different one starts a fresh
+ * form rather than carrying the last one's edits over.
+ */
+function EditSiteDialog({ clientId, site, onClose }: EditSiteDialogProps) {
+  const form = useForm({
+    label: site.label ?? '',
+    address: site.address,
+    site_type: site.siteType ?? '',
+    latitude: site.latitude,
+    longitude: site.longitude,
+    place_id: site.placeId,
+  })
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault()
+    form.put(routeTo.clientAddress(clientId, site.id), {
+      preserveScroll: true,
+      onSuccess: onClose,
+    })
+  }
+
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="Edit site"
+      description={
+        site.jobCount > 0
+          ? `${site.jobCount} ${site.jobCount === 1 ? 'job runs' : 'jobs run'} here — they will show the corrected address.`
+          : undefined
+      }
+      size="md"
+      footer={
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" form="edit-site" isLoading={form.processing}>
+            Save site
+          </Button>
+        </div>
+      }
+    >
+      <form id="edit-site" onSubmit={submit} className="flex flex-col gap-4">
+        <TextInput
+          id="edit-site-label"
+          label="Name*"
+          value={form.data.label}
+          onChange={(event) => form.setData('label', event.target.value)}
+          {...(form.errors.label ? { error: form.errors.label } : {})}
+        />
+        <AddressField
+          id="edit-site-address"
+          label="Address"
+          placeholder="Start typing the site address"
+          value={form.data.address}
+          latitude={form.data.latitude}
+          longitude={form.data.longitude}
+          onChange={(place) =>
+            form.setData((current) => ({
+              ...current,
+              address: place.address,
+              latitude: place.latitude,
+              longitude: place.longitude,
+              place_id: place.placeId,
+            }))
+          }
+          {...(form.errors.address ? { error: form.errors.address } : {})}
+        />
+        {/* The building, not the client — and what a job raised here starts
+            from, so correcting it here corrects the next job's default. */}
+        <SelectField
+          id="edit-site-type"
+          label="Site Type"
+          options={SITE_TYPE_OPTIONS}
+          value={form.data.site_type}
+          onChange={(event) => form.setData('site_type', event.target.value)}
+          {...(form.errors.site_type ? { error: form.errors.site_type } : {})}
+        />
+      </form>
+    </Modal>
   )
 }
 

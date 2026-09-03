@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { router } from '@inertiajs/react'
-import { MapPinPlus, Plus, X } from 'lucide-react'
-import { AddressField, Button, TextInput } from '@/components/common'
-import { routeTo } from '@/constants'
-import type { ClientAddressOption } from '@/types'
+import { MapPinPlus, PencilLine, Plus, Save, Trash2, X } from 'lucide-react'
+import { AddressField, Button, IconButton, SelectField, TextInput } from '@/components/common'
+import { routeTo, SITE_TYPE_OPTIONS } from '@/constants'
+import type { ClientAddressOption, JobType } from '@/types'
 import { cn } from '@/utils'
 
 export interface JobSitePickerProps {
@@ -52,13 +52,22 @@ export function JobSitePicker({
   error,
   disabled = false,
 }: JobSitePickerProps) {
-  const [isAdding, setIsAdding] = useState(false)
+  /*
+   * Null when nothing is being written, `'new'` while adding, and a site's id
+   * while correcting one. The same three fields either way — a correction is
+   * the same form pointed at a row that exists.
+   */
+  const [editing, setEditing] = useState<number | 'new' | null>(null)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState({
     label: '',
     address: '',
+    // What kind of building it is. The job's own type starts from this, so it
+    // is asked while the site is being written rather than guessed afterwards.
+    site_type: '' as JobType | '',
     latitude: null as number | null,
     longitude: null as number | null,
+    place_id: null as string | null,
   })
   const [addError, setAddError] = useState<string | null>(null)
 
@@ -92,9 +101,69 @@ export function JobSitePicker({
   }, [sites, value, onChange, multiple])
 
   const reset = () => {
-    setDraft({ label: '', address: '', latitude: null, longitude: null })
+    setDraft({
+      label: '',
+      address: '',
+      site_type: '',
+      latitude: null,
+      longitude: null,
+      place_id: null,
+    })
     setAddError(null)
-    setIsAdding(false)
+    setEditing(null)
+  }
+
+  const startEditing = (site: ClientAddressOption) => {
+    setDraft({
+      label: site.label ?? '',
+      address: site.address,
+      site_type: site.siteType ?? '',
+      latitude: site.latitude ?? null,
+      longitude: site.longitude ?? null,
+      place_id: site.placeId ?? null,
+    })
+    setAddError(null)
+    setEditing(site.id)
+  }
+
+  /** Correcting a site rewrites it on every job standing on it — see the
+      controller. Nothing here has to re-pick anything. */
+  const saveEdit = (siteId: number) => {
+    if (clientId === null || draft.label.trim() === '') {
+      setAddError('Name this site.')
+
+      return
+    }
+
+    if (draft.address.trim() === '') {
+      setAddError('Enter the address.')
+
+      return
+    }
+
+    router.put(routeTo.clientAddress(clientId, siteId), draft, {
+      preserveScroll: true,
+      preserveState: true,
+      onStart: () => {
+        setSaving(true)
+        setAddError(null)
+      },
+      onSuccess: reset,
+      onError: (errors) =>
+        setAddError(errors['label'] ?? errors['address'] ?? 'That site could not be saved.'),
+      onFinish: () => setSaving(false),
+    })
+  }
+
+  const removeSite = (siteId: number) => {
+    if (clientId === null) return
+
+    router.delete(routeTo.clientAddress(clientId, siteId), {
+      preserveScroll: true,
+      preserveState: true,
+      // Dropped from the picking too — a site that is gone is not chosen.
+      onSuccess: () => onChange(value.filter((id) => id !== siteId)),
+    })
   }
 
   /** One site replaces; several toggle, keeping the order they were picked in. */
@@ -111,11 +180,13 @@ export function JobSitePicker({
   const addSite = () => {
     if (clientId === null || draft.label.trim() === '') {
       setAddError('Name this site.')
+
       return
     }
 
     if (draft.address.trim() === '') {
       setAddError('Enter the address.')
+
       return
     }
 
@@ -176,7 +247,42 @@ export function JobSitePicker({
                     disabled={disabled}
                     onChange={() => choose(site.id)}
                   />
-                  <span className="min-w-0 truncate text-md text-white">{site.display}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-md text-white">{site.display}</span>
+                    {/* Shown because picking this site sets the job's type. */}
+                    {site.siteType && (
+                      <span className="block text-xs text-white/60 capitalize">
+                        {site.siteType}
+                      </span>
+                    )}
+                  </span>
+
+                  {/*
+                    Buttons inside a `<label>` would be swallowed by it, so the
+                    click is stopped before the label turns it into a pick.
+                  */}
+                  <span
+                    className="flex shrink-0 items-center gap-1"
+                    onClick={(event) => event.preventDefault()}
+                  >
+                    <IconButton
+                      icon={PencilLine}
+                      label={`Edit ${site.display}`}
+                      variant="white"
+                      size="sm"
+                      disabled={disabled || saving}
+                      onClick={() => startEditing(site)}
+                    />
+                    <IconButton
+                      icon={Trash2}
+                      label={`Remove ${site.display}`}
+                      variant="white"
+                      size="sm"
+                      disabled={disabled || saving}
+                      onClick={() => removeSite(site.id)}
+                      className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                    />
+                  </span>
                 </label>
               )
             })}
@@ -184,10 +290,12 @@ export function JobSitePicker({
         </>
       )}
 
-      {isAdding ? (
+      {editing !== null ? (
         <div className="mt-3 rounded-panel border border-hairline bg-white/4 p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-white">New site for {clientName}</p>
+            <p className="text-sm font-medium text-white">
+              {editing === 'new' ? `New site for ${clientName}` : 'Edit site'}
+            </p>
             <Button
               type="button"
               variant="ghost"
@@ -217,22 +325,40 @@ export function JobSitePicker({
               latitude={draft.latitude}
               longitude={draft.longitude}
               disabled={saving}
-              onChange={(address, latitude, longitude) =>
-                setDraft({ ...draft, address, latitude, longitude })
+              onChange={(place) =>
+                setDraft({
+                  ...draft,
+                  address: place.address,
+                  latitude: place.latitude,
+                  longitude: place.longitude,
+                  place_id: place.placeId,
+                })
               }
               {...(addError ? { error: addError } : {})}
             />
           </div>
 
+          <SelectField
+            id="new-site-type"
+            label="Site Type"
+            className="mt-4 lg:max-w-xs"
+            options={SITE_TYPE_OPTIONS}
+            value={draft.site_type}
+            disabled={saving}
+            onChange={(event) =>
+              setDraft({ ...draft, site_type: event.target.value as JobType | '' })
+            }
+          />
+
           <Button
             type="button"
             size="sm"
             className="mt-4"
-            leftIcon={Plus}
+            leftIcon={editing === 'new' ? Plus : Save}
             isLoading={saving}
-            onClick={addSite}
+            onClick={() => (editing === 'new' ? addSite() : saveEdit(editing))}
           >
-            Add site
+            {editing === 'new' ? 'Add site' : 'Save site'}
           </Button>
         </div>
       ) : (
@@ -243,7 +369,7 @@ export function JobSitePicker({
           className="mt-3"
           leftIcon={MapPinPlus}
           disabled={disabled}
-          onClick={() => setIsAdding(true)}
+          onClick={() => setEditing('new')}
         >
           Add a site
         </Button>

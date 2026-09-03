@@ -6,7 +6,6 @@ import {
   Clock,
   Contact,
   FileText,
-  FolderClosed,
   FolderKanban,
   Gauge,
   ReceiptText,
@@ -45,7 +44,6 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock },
   { label: 'Billing', href: ROUTES.billing, icon: ReceiptText },
   { label: 'Analytics', href: ROUTES.jobCosting, icon: ChartColumn },
-  { label: 'Documents', href: ROUTES.documents, icon: FolderClosed },
 ]
 
 export const FOOTER_LINKS: readonly { label: string; href: string }[] = [

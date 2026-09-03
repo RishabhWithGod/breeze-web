@@ -81,9 +81,16 @@ export interface ProjectDraft {
 export interface DraftAddress {
   label: string
   address: string
-  /** Set only when the address was picked from the lookup, never when typed. */
+  /**
+   * What kind of building it is. Belongs to the site rather than the client —
+   * one client can own a house and a warehouse — and a job raised here starts
+   * from it. Blank is allowed: a site can be recorded before anyone has been.
+   */
+  site_type: JobType | ''
+  /** Set only when the address was chosen from Google, never when typed. */
   latitude: number | null
   longitude: number | null
+  place_id: string | null
 }
 
 /** One site already on a client's record. */
@@ -93,14 +100,46 @@ export interface ClientAddressOption {
   readonly address: string
   /** Label and address as one line, for a list. */
   readonly display: string
+  /** What a job raised at this site defaults its own type to. */
+  readonly siteType: JobType | null
   readonly isPrimary: boolean
+  /**
+   * Set only when the address was chosen from Google, and never one without
+   * the other. Carried so correcting a site can keep the place it already had
+   * rather than dropping it.
+   */
+  readonly latitude: number | null
+  readonly longitude: number | null
+  readonly placeId: string | null
 }
 
-/** One address the geocoder matched, with the point behind it. */
-export interface AddressSuggestion {
+/**
+ * One address Google matched while typing.
+ *
+ * No coordinates: Autocomplete returns none, and asking for them per
+ * suggestion would bill a Place Details call per keystroke. The point arrives
+ * once, when a person picks one — see `PlaceSelection`.
+ */
+export interface PlaceSuggestion {
+  readonly placeId: string
+  /** The whole address on one line. */
   readonly label: string
-  readonly latitude: number
-  readonly longitude: number
+  readonly primary: string
+  readonly secondary: string
+}
+
+/**
+ * An address as the form holds it: what was typed or chosen, and the place
+ * behind it when there is one.
+ *
+ * The three location values travel together, so a stored point always belongs
+ * to the address stored beside it.
+ */
+export interface PlaceSelection {
+  readonly address: string
+  readonly latitude: number | null
+  readonly longitude: number | null
+  readonly placeId: string | null
 }
 
 /**

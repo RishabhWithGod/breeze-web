@@ -42,6 +42,8 @@ class Document extends Model
         'document_type',
         'job_id',
         'estimate_id',
+        // The takeoff this paperwork belongs to — see `scopeForProject`.
+        'project_id',
         'folder_id',
         'upload_id',
         'uploaded_by',
@@ -66,6 +68,12 @@ class Document extends Model
     }
 
     /** @return BelongsTo<Job, $this> */
+    /** The takeoff this document is filed under. */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
     public function job(): BelongsTo
     {
         return $this->belongsTo(Job::class);
@@ -203,6 +211,18 @@ class Document extends Model
         }
 
         return $query->where('job_id', (int) $jobId);
+    }
+
+    /**
+     * Narrowed to one takeoff's paperwork.
+     *
+     * Documents are filed against the project a drawing is taken off, so this
+     * is what makes each takeoff's document section its own rather than a
+     * shared pile every takeoff shows.
+     */
+    public function scopeForProject(Builder $query, null|int|string $projectId): Builder
+    {
+        return $query->when($projectId, fn (Builder $inner) => $inner->where('project_id', $projectId));
     }
 
     public function scopeVersionStatus(Builder $query, ?string $status): Builder

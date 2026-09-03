@@ -166,7 +166,19 @@ export default function JobEdit({ job, clients }: JobEditProps) {
                 sites={selectedClient?.addresses ?? []}
                 value={data.address_ids}
                 onChange={(addressIds) => {
-                  setData('address_ids', addressIds)
+                  // Moving a job to another site moves it to another kind of
+                  // building, so the type follows — still editable below, and
+                  // left alone when the new site has no type recorded.
+                  const picked = (selectedClient?.addresses ?? []).find(
+                    (site) => site.id === addressIds[0],
+                  )
+
+                  setData((current) => ({
+                    ...current,
+                    address_ids: addressIds,
+                    job_type: picked?.siteType ?? current.job_type,
+                  }))
+
                   if (errors.address_ids) clearErrors('address_ids')
                 }}
                 disabled={processing}

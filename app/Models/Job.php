@@ -65,6 +65,7 @@ class Job extends Model
         'location',
         'latitude',
         'longitude',
+        'place_id',
         'description',
         'job_type',
         'status',

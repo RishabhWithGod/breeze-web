@@ -24,6 +24,11 @@ class JobDetailResource extends JsonResource
             /** The client's own id — clients are projects, so this is a `projects` id. */
             'clientId' => $this->project_id,
             'location' => $this->location,
+            // The site's point, carried so the detail screen and the crew app
+            // read the same coordinates.
+            'latitude' => $this->latitude === null ? null : (float) $this->latitude,
+            'longitude' => $this->longitude === null ? null : (float) $this->longitude,
+            'placeId' => $this->place_id,
             /** The client sites this job runs at, in the order they were picked. */
             'addressIds' => $this->whenLoaded(
                 'addresses',

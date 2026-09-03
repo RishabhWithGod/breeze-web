@@ -192,9 +192,17 @@ Route::middleware('auth')->group(function () {
     */
     // Feeds the Site / Location field's suggestions. JSON, not Inertia — it
     // answers a keystroke, not a navigation.
-    Route::get('address-lookup', AddressLookupController::class)
+    /*
+     * Address lookup, in two steps: names while typing, then the place behind
+     * the one that was picked. Both go through us so the Google key never
+     * reaches the browser.
+     */
+    Route::get('address-lookup', [AddressLookupController::class, 'suggest'])
         ->middleware('throttle:address-lookup')
         ->name('address.lookup');
+    Route::get('address-lookup/place', [AddressLookupController::class, 'place'])
+        ->middleware('throttle:address-lookup')
+        ->name('address.place');
 
     /*
      * The client register. A client is who the work is for; the work itself is
@@ -217,6 +225,8 @@ Route::middleware('auth')->group(function () {
     // picks from it.
     Route::post('clients/{client}/addresses', [ClientAddressController::class, 'store'])
         ->name('clients.addresses.store');
+    Route::put('clients/{client}/addresses/{address}', [ClientAddressController::class, 'update'])
+        ->name('clients.addresses.update');
     Route::delete('clients/{client}/addresses/{address}', [ClientAddressController::class, 'destroy'])
         ->name('clients.addresses.destroy');
     Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
@@ -348,7 +358,6 @@ Route::middleware('auth')->group(function () {
     Route::get('documents', [DocumentController::class, 'index'])->name('documents.index');
     Route::get('documents/create', [DocumentController::class, 'create'])->name('documents.create');
     Route::post('documents', [DocumentController::class, 'store'])->name('documents.store');
-    Route::post('documents/import-upload', [DocumentController::class, 'importFromUpload'])->name('documents.import-upload');
     Route::get('documents/{document}/preview', [DocumentController::class, 'preview'])->name('documents.preview');
     Route::get('documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
     Route::get('documents/{document}/history', [DocumentController::class, 'history'])->name('documents.history');

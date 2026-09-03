@@ -27,6 +27,8 @@ export interface Document {
   readonly description: string | null
   readonly jobId: number | null
   readonly jobName: string | null
+  /** The takeoff this is filed under. */
+  readonly projectId: number | null
   readonly estimateId: number | null
   readonly estimateNumber: string | null
   readonly folderId: number | null
@@ -47,12 +49,8 @@ export interface Document {
 }
 
 export interface DocumentFilters {
-  readonly search: string
-  readonly document_type: string
-  readonly job_id: number | null
-  readonly modified: DocumentModifiedRange
-  readonly version_status: DocumentVersionStatus
-  readonly tab: DocumentTab
+  /** Which list this is — one takeoff's paperwork, or the whole workspace's. */
+  readonly project: number | null
 }
 
 export interface DocumentJobOption {

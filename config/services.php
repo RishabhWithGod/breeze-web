@@ -29,16 +29,24 @@ return [
     ],
 
     /*
-     * Address lookup on the Site / Location field. A public token (`pk.…`) is
-     * enough — every call goes out from the server, never the browser, so the
-     * token stays out of the JS bundle. Leave it unset and the field is a
-     * plain text box: an address can still be typed, it just has no
-     * coordinates behind it.
+     * Address lookup on the Site / Location field — Google Places (New).
+     *
+     * Every call goes out from the server, never the browser, so the key stays
+     * out of the JS bundle entirely. Leave it unset and the field is a plain
+     * text box: an address can still be typed, it just has no coordinates
+     * behind it.
      */
-    'mapbox' => [
-        'token' => env('MAPBOX_ACCESS_TOKEN'),
-        /* Bias results towards where the work is. Comma-separated ISO codes. */
-        'countries' => env('MAPBOX_COUNTRIES', 'us,ca'),
+    'google_places' => [
+        /*
+         * Server-side only. Restrict it by API to "Places API (New)"; it needs
+         * no referrer restriction, because no browser ever sends it.
+         */
+        'key' => env('GOOGLE_PLACES_API_KEY'),
+        /*
+         * Which countries to search. Comma-separated ISO codes, or empty to
+         * search everywhere.
+         */
+        'regions' => env('GOOGLE_PLACES_REGIONS', 'us,ca'),
     ],
 
     'slack' => [
