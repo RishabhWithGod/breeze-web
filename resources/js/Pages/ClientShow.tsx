@@ -18,6 +18,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  cardAccent,
   CardHeader,
   ConfirmDialog,
   EmptyState,
@@ -31,7 +32,7 @@ import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { useDisclosure } from '@/hooks'
 import { ROUTES, routeTo, SITE_TYPE_OPTIONS } from '@/constants'
 import type { SharedPageProps, TakeoffStatus } from '@/types'
-import { TAKEOFF_STATUS_LABEL, TAKEOFF_STATUS_TONE, formatDate } from '@/utils'
+import { TAKEOFF_STATUS_LABEL, TAKEOFF_STATUS_TONE, formatDate, toTitleCase } from '@/utils'
 
 interface ClientSite {
   readonly id: number
@@ -120,7 +121,7 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
       </AnimatePresence>
 
       {/* ===================================================== Projects ====== */}
-      <Card padding="lg">
+      <Card padding="lg" className={cardAccent('brand')}>
         <CardHeader
           title="Projects"
           subtitle={`${projects.length} on record`}
@@ -208,7 +209,7 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_1fr]">
         {/* ================================================= Address book ==== */}
-        <Card padding="lg" className="min-w-0">
+        <Card padding="lg" className={cardAccent('success', 'min-w-0')}>
           <CardHeader
             title="Site Location(s)"
             subtitle="One book, shared by every project of theirs"
@@ -279,7 +280,7 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
         </Card>
 
         {/* ======================================================= Record ==== */}
-        <Card padding="lg" className="min-w-0 self-start">
+        <Card padding="lg" className={cardAccent('neutral', 'min-w-0 self-start')}>
           <CardHeader title="Details" />
 
           <dl className="flex flex-col gap-4">
@@ -409,7 +410,7 @@ function EditSiteDialog({ clientId, site, onClose }: EditSiteDialogProps) {
           id="edit-site-label"
           label="Name*"
           value={form.data.label}
-          onChange={(event) => form.setData('label', event.target.value)}
+          onChange={(event) => form.setData('label', toTitleCase(event.target.value))}
           {...(form.errors.label ? { error: form.errors.label } : {})}
         />
         <AddressField

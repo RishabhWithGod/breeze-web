@@ -6,6 +6,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  cardAccentAt,
   ConfirmDialog,
   EmptyState,
   IconButton,
@@ -186,6 +187,23 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
   const groups = jobs.data
   const taskCount = groups.reduce((sum, group) => sum + group.tasks.length, 0)
 
+  /**
+   * What the job's planned work adds up to: every listed task's estimate, in
+   * one figure, so the hours can be read without adding a column up by eye.
+   *
+   * Summed over the tasks *shown*, which is what the count beside it counts —
+   * under a filter both narrow together rather than the total quietly answering
+   * a different question. Null when no task carries an estimate at all: a job
+   * nobody has put hours against is not a job of zero hours.
+   */
+  const plannedHours = (tasks: readonly TaskRow[]): number | null => {
+    const estimated = tasks.filter((task) => task.estimatedHours !== null)
+
+    return estimated.length === 0
+      ? null
+      : estimated.reduce((sum, task) => sum + (task.estimatedHours ?? 0), 0)
+  }
+
   return (
     <PageTransition>
       <Head title="Tasks" />
@@ -319,60 +337,73 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <Card key={group.id} padding="lg">
-              <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hairline pb-3">
-                <div className="min-w-0">
-                  <Link
-                    href={routeTo.jobFrom(group.id, 'tasks')}
-                    className="text-lg font-semibold text-white transition-colors hover:text-brand"
-                  >
-                    {group.name}
-                  </Link>
-                  {/* Stated once per job rather than repeated on every row. */}
-                  <p className="mt-0.5 truncate text-sm text-white/70">
-                    {group.client ?? 'No client on this job'}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-sm text-white/70">
-                    {group.tasks.length} {group.tasks.length === 1 ? 'task' : 'tasks'}
-                  </span>
-                  {/*
-                    Adding to *this* job, so it skips the job picker and opens
-                    the same step that laid the job out in the first place —
-                    with the tasks already on it listed, and its estimate lines
-                    to build the new ones from.
-                  */}
-                  {canEdit && (
-                    <ButtonLink
-                      href={routeTo.jobTaskSetupFromList(group.id)}
-                      variant="secondary"
-                      size="sm"
-                      leftIcon={Plus}
-                    >
-                      Add task
-                    </ButtonLink>
-                  )}
-                </div>
-              </header>
+          {groups.map((group, index) => {
+            const totalHours = plannedHours(group.tasks)
 
-              {group.tasks.length === 0 ? (
-                <p className="text-md text-white/70">
-                  No tasks on this job yet.
-                  {canEdit && ' Add the work it takes above.'}
-                </p>
-              ) : (
-                <Table
-                  columns={columns}
-                  rows={group.tasks}
-                  getRowId={(row) => row.id}
-                  variant="lined"
-                  caption={`Tasks on ${group.name}`}
-                />
-              )}
-            </Card>
-          ))}
+            return (
+              <Card key={group.id} padding="lg" className={cardAccentAt(index)}>
+                <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hairline pb-3">
+                  <div className="min-w-0">
+                    <Link
+                      href={routeTo.jobFrom(group.id, 'tasks')}
+                      className="text-lg font-semibold text-white transition-colors hover:text-brand"
+                    >
+                      {group.name}
+                    </Link>
+                    {/* Stated once per job rather than repeated on every row. */}
+                    <p className="mt-0.5 truncate text-sm text-white/70">
+                      {group.client ?? 'No client on this job'}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-sm text-white/70">
+                      {group.tasks.length} {group.tasks.length === 1 ? 'task' : 'tasks'}
+                    </span>
+                    {/* The hours the tasks come to — the figure the rows are read for. */}
+                    {totalHours !== null && (
+                      <span className="text-sm whitespace-nowrap text-white/70">
+                        <span className="tabular-nums font-semibold text-white">
+                          {formatHours(totalHours)}
+                        </span>{' '}
+                        planned
+                      </span>
+                    )}
+                    {/*
+                      Adding to *this* job, so it skips the job picker and opens
+                      the same step that laid the job out in the first place —
+                      with the tasks already on it listed, and its estimate lines
+                      to build the new ones from.
+                    */}
+                    {canEdit && (
+                      <ButtonLink
+                        href={routeTo.jobTaskSetupFromList(group.id)}
+                        variant="secondary"
+                        size="sm"
+                        leftIcon={Plus}
+                      >
+                        Add task
+                      </ButtonLink>
+                    )}
+                  </div>
+                </header>
+
+                {group.tasks.length === 0 ? (
+                  <p className="text-md text-white/70">
+                    No tasks on this job yet.
+                    {canEdit && ' Add the work it takes above.'}
+                  </p>
+                ) : (
+                  <Table
+                    columns={columns}
+                    rows={group.tasks}
+                    getRowId={(row) => row.id}
+                    variant="lined"
+                    caption={`Tasks on ${group.name}`}
+                  />
+                )}
+              </Card>
+            )
+          })}
         </div>
       )}
 

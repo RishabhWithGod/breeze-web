@@ -101,6 +101,20 @@ export function truncateFileName(fileName: string, maxLength = 28): string {
 }
 
 /**
+ * "john smith" → "John Smith" — a name or place, capitalised the way it is
+ * written, not forced to a single style.
+ *
+ * Used while typing, so only the first letter of each word is ever touched —
+ * everything else is left exactly as typed. That keeps "McDonald" and
+ * "O'Brien" intact where a full title-case (lowercasing the rest of each word)
+ * would break them, and it never fights someone correcting a capital the
+ * moment after this adds one.
+ */
+export function toTitleCase(value: string): string {
+  return value.replace(/(^|\s)\p{Ll}/gu, (letter) => letter.toUpperCase())
+}
+
+/**
  * A phone number as the United States writes one: "(555) 123-4567".
  *
  * Used while typing, so it has to make sense half-finished — "555" stays

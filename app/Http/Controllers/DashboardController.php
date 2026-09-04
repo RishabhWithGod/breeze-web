@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\FeedItemResource;
+use App\Models\AiResult;
 use App\Models\CrewShift;
+use App\Models\Estimate;
 use App\Models\FeedItem;
 use App\Models\Job;
 use App\Models\Project;
+use App\Services\Billing\InvoiceSummaryCalculator;
 use App\Services\Dashboard\JobPerformanceCalculator;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -14,7 +17,10 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __construct(private readonly JobPerformanceCalculator $performance) {}
+    public function __construct(
+        private readonly JobPerformanceCalculator $performance,
+        private readonly InvoiceSummaryCalculator $invoiceSummary,
+    ) {}
 
     public function index(): Response
     {
@@ -33,6 +39,11 @@ class DashboardController extends Controller
             )->resolve(),
             'schedule' => $this->upcomingSchedule(),
             'performance' => $this->performance->series(),
+            // Same figures as the Invoice Summary card — one calculator, so the
+            // two screens can never disagree with each other.
+            'billing' => $this->invoiceSummary->calculate(),
+            'draftEstimates' => $this->draftEstimates(),
+            'reviewsNeedingAttention' => $this->reviewsNeedingAttention(),
         ]);
     }
 
@@ -58,7 +69,7 @@ class DashboardController extends Controller
                 $when = match (true) {
                     $date->isToday() => 'Today',
                     $date->isTomorrow() => 'Tomorrow',
-                    default => $date->format('m/d'),
+                    default => $date->format('M j'),
                 };
 
                 return [
@@ -110,5 +121,56 @@ class DashboardController extends Controller
                 'href' => route('results.latest', absolute: false),
             ],
         ];
+    }
+
+    /**
+     * Draft estimates still waiting to be finished and sent — nothing here
+     * bills anyone until it moves past draft. Capped at five: this is a
+     * queue to act on, not a report to read in full.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function draftEstimates(): array
+    {
+        return Estimate::query()
+            ->where('status', 'draft')
+            ->orderByDesc('issued_on')
+            ->take(5)
+            ->get(['id', 'client', 'project', 'number', 'issued_on', 'grand_total'])
+            ->map(fn (Estimate $estimate) => [
+                'id' => $estimate->id,
+                'client' => $estimate->client,
+                'project' => $estimate->project,
+                'number' => $estimate->number,
+                'issuedOn' => $estimate->issued_on?->toISOString(),
+                'amount' => (float) $estimate->grand_total,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * AI takeoff reviews nobody has signed off yet. Finalised results are
+     * excluded — this is a "still needs a decision" queue, not a history.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function reviewsNeedingAttention(): array
+    {
+        return AiResult::query()
+            ->whereIn('review_status', [AiResult::REVIEW_PENDING, AiResult::REVIEW_IN_PROGRESS])
+            ->with('project')
+            ->orderByDesc('received_at')
+            ->take(5)
+            ->get()
+            ->map(fn (AiResult $result) => [
+                'id' => $result->id,
+                'projectName' => $result->project->name,
+                'drawingName' => $result->project->drawing_name,
+                'reviewStatus' => $result->review_status,
+                'receivedAt' => $result->received_at?->toISOString(),
+            ])
+            ->values()
+            ->all();
     }
 }

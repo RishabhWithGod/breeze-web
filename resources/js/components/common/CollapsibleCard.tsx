@@ -3,28 +3,10 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Card } from './Card'
+import { cardAccent } from './cardStyles'
 import { IconBubble } from './IconBubble'
 import type { Tone } from '@/types'
 import { cn } from '@/utils'
-
-/**
- * The accent, which is what tells one card from the next.
- *
- * All four edges rather than a stripe down the left: a single lit edge reads as
- * a card that has lost three of its borders, and on a page of six stacked
- * sections it is the outline that says where one ends and the next begins.
- *
- * The stripe is kept as a thicker left edge, so the accent still leads the eye
- * down the page the way it did.
- */
-const ACCENTS: Record<Tone, string> = {
-  brand: 'border-brand/60 border-l-brand',
-  success: 'border-status-success/60 border-l-status-success',
-  warning: 'border-status-warning/60 border-l-status-warning',
-  danger: 'border-status-danger/60 border-l-status-danger',
-  info: 'border-status-info/60 border-l-status-info',
-  neutral: 'border-white/35 border-l-white/50',
-}
 
 export interface CollapsibleCardProps {
   title: string
@@ -73,20 +55,7 @@ export function CollapsibleCard({
   return (
     <Card
       padding="none"
-      className={cn(
-        /*
-         * Two pixels, not one: a hairline in a tinted colour on a dark glass
-         * panel is a suggestion of an edge rather than one, and the outline is
-         * what tells a stack of sections apart. The left stays thicker still,
-         * so the accent leads down the page.
-         *
-         * Set here rather than left to the glass variant, whose own hairline
-         * these override.
-         */
-        'relative overflow-hidden border-2 border-l-[6px]',
-        ACCENTS[tone],
-        className,
-      )}
+      className={cn('relative overflow-hidden', cardAccent(tone), className)}
     >
       <button
         type="button"

@@ -3,6 +3,7 @@ import { Save, User as UserIcon } from 'lucide-react'
 import { Alert, Button, Card, SectionHeading, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
+import { toTitleCase } from '@/utils'
 import type { SharedPageProps } from '@/types'
 
 interface ProfileUser {
@@ -67,7 +68,7 @@ export default function Profile({ user }: ProfileProps) {
               label="Name*"
               leftIcon={UserIcon}
               value={data.name}
-              onChange={(event) => setData('name', event.target.value)}
+              onChange={(event) => setData('name', toTitleCase(event.target.value))}
               error={errors.name}
             />
 

@@ -301,7 +301,12 @@ class ScheduleBuilder
      */
     public function realignWindow(JobSchedule $schedule): void
     {
+        // `tasks()` orders by position and id for the schedule view. That
+        // ordering is meaningless once collapsed to a single aggregate row,
+        // and MySQL rejects the query outright for selecting an ordering
+        // column it cannot aggregate — so it is dropped first.
         $bounds = $schedule->tasks()
+            ->reorder()
             ->selectRaw('min(starts_on) as first_day, max(ends_on) as last_day')
             ->first();
 

@@ -14,7 +14,7 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
-import { formatUsPhone } from '@/utils'
+import { formatUsPhone, toTitleCase } from '@/utils'
 
 interface ForemanDraft {
   name: string
@@ -116,7 +116,7 @@ export default function ForemanCreate({ teams, roles }: ForemanCreateProps) {
               placeholder="e.g. Dana Wu"
               autoComplete="off"
               value={data.name}
-              onChange={(event) => update('name', event.target.value)}
+              onChange={(event) => update('name', toTitleCase(event.target.value))}
               {...(errors.name ? { error: errors.name } : {})}
             />
 
