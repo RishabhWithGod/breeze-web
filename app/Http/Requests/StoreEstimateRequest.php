@@ -15,10 +15,19 @@ class StoreEstimateRequest extends FormRequest
             'issued_on' => ['required', 'date'],
             'amount' => ['required', 'numeric', 'min:0', 'max:99999999'],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
-            /** The client, picked from the client register — see ClientDirectory. */
-            // Who the work is for. What it is on is the project, which an
-            // estimate or invoice inherits from the job it belongs to.
-            'client_id' => ['required', 'integer', 'exists:clients,id'],
+            /*
+             * What the estimate is on. Every drawing and takeoff hangs off a
+             * project, so the estimate does too — and it is the one thing that
+             * has to be answered, because the client is read from it.
+             */
+            'project_id' => ['required', 'integer', 'exists:projects,id'],
+            /*
+             * Who it is for. Sent by the form because that is the field the
+             * project list is narrowed by, but not required: a project belongs
+             * to exactly one client, and the client column is derived from it.
+             */
+            'client_id' => ['nullable', 'integer', 'exists:clients,id'],
+            /** The drawing it is priced from, one of that project's own. */
             'upload_id' => ['nullable', 'integer', 'exists:uploads,id'],
         ];
     }

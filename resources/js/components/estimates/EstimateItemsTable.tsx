@@ -91,11 +91,17 @@ export function EstimateItemsTable({
     }))
     .filter((group) => group.rows.length > 0)
 
+  /*
+   * The line being added or corrected. Every box is labelled: five unlabelled
+   * cells in a row say nothing about which one takes the rate and which takes
+   * the count, and a wrong guess is priced work.
+   */
   const editor = (
-    <div className="grid gap-2 rounded-panel bg-white/8 p-3 sm:grid-cols-6">
+    <div className="grid gap-3 rounded-panel bg-white/8 p-3 sm:grid-cols-12">
       <SelectField
         id="item-category"
-        aria-label="Category"
+        label="Category"
+        className="sm:col-span-2"
         options={categories}
         value={draft.category}
         onChange={(event) =>
@@ -104,22 +110,24 @@ export function EstimateItemsTable({
       />
       <TextInput
         id="item-description"
-        aria-label="Description"
-        placeholder="Description"
-        className="sm:col-span-2"
+        label="Description"
+        placeholder="e.g. 20A single-pole switch"
+        className="sm:col-span-5"
         value={draft.description}
         onChange={(event) => setDraft({ ...draft, description: event.target.value })}
       />
       <TextInput
         id="item-unit"
-        aria-label="Unit"
+        label="Unit"
         placeholder="ea"
+        className="sm:col-span-1"
         value={draft.unit}
         onChange={(event) => setDraft({ ...draft, unit: event.target.value })}
       />
       <TextInput
         id="item-quantity"
-        aria-label="Quantity"
+        label="Qty"
+        className="sm:col-span-2"
         type="number"
         step="0.01"
         min={0}
@@ -128,7 +136,8 @@ export function EstimateItemsTable({
       />
       <TextInput
         id="item-unit-cost"
-        aria-label="Unit cost"
+        label="Unit cost ($)"
+        className="sm:col-span-2"
         type="number"
         step="0.01"
         min={0}

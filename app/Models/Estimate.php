@@ -20,6 +20,12 @@ class Estimate extends Model
     protected $fillable = [
         'job_id',
         'project_id',
+        /*
+         * Who the estimate is for. Left out of this list until now, which is
+         * why picking a client on the edit screen saved nothing at all — and
+         * why every takeoff-built estimate came out with none.
+         */
+        'client_id',
         'ai_result_id',
         'number',
         'client',
@@ -81,6 +87,30 @@ class Estimate extends Model
     }
 
     /** @return BelongsTo<Job, $this> */
+    /**
+     * The client an estimate is for is the client of the project it is on.
+     *
+     * A project belongs to exactly one client, so this is derived rather than
+     * asked for twice — and every place that raises an estimate (the takeoff,
+     * a job, the create form) sets the project, not the client. Filling it here
+     * means none of them can leave it blank, and moving an estimate to another
+     * project takes its client with it.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $estimate): void {
+            if ($estimate->project_id === null) {
+                return;
+            }
+
+            if ($estimate->client_id !== null && ! $estimate->isDirty('project_id')) {
+                return;
+            }
+
+            $estimate->client_id = Project::whereKey($estimate->project_id)->value('client_id');
+        });
+    }
+
     public function job(): BelongsTo
     {
         return $this->belongsTo(Job::class);
@@ -116,6 +146,13 @@ class Estimate extends Model
         // The column must be named: `belongsTo` would otherwise infer
         // `takeoff_project_id` from this method's name.
         return $this->belongsTo(Project::class, 'project_id');
+    }
+
+    /** @return BelongsTo<Client, $this> */
+    public function clientRecord(): BelongsTo
+    {
+        // Named for what it is: `client` is the name snapshot column.
+        return $this->belongsTo(Client::class, 'client_id');
     }
 
     /** @return BelongsTo<AiResult, $this> */

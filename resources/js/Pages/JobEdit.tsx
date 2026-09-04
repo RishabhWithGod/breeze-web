@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { ArrowLeft, Save } from 'lucide-react'
@@ -6,7 +7,6 @@ import {
   Button,
   ButtonLink,
   Card,
-  Checkbox,
   RadioGroup,
   SectionHeading,
   SelectField,
@@ -17,13 +17,24 @@ import { JobSitePicker, TeamPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_STATUS_OPTIONS, JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type { JobOrigin } from '@/constants'
-import type { ClientOption, JobDetail, JobStatus, JobType } from '@/types'
+import type {
+  ClientOption,
+  JobDetail,
+  JobStatus,
+  JobType,
+  ProjectOption,
+  TakeoffUploadOption,
+} from '@/types'
 
 /** Edit payload — snake_case to match UpdateJobRequest. */
 interface JobEditForm {
   name: string
-  /** The client. Clients are projects, so this is a `projects` id. */
+  /** Who the work is for. */
+  client_id: string
+  /** And which of their projects it is on. */
   project_id: string
+  /** The drawing the work is taken off. Empty when the job has none yet. */
+  upload_id: string
   /** The client sites this job is at. Its `location` is written from the first. */
   address_ids: number[]
   description: string
@@ -34,15 +45,16 @@ interface JobEditForm {
   start_date: string
   end_date: string
   budget: string
-  create_estimate: boolean
-  assign_team: boolean
-  notify_client: boolean
 }
 
 export interface JobEditProps {
   job: JobDetail
-  /** The client register. Clients are projects, so this is one list, not two. */
+  /** Who the work can be for. */
   clients: readonly ClientOption[]
+  /** Their projects — the list is narrowed to the picked client's. */
+  projects: readonly ProjectOption[]
+  /** And their drawings, narrowed in turn to the picked project's. */
+  uploads: readonly TakeoffUploadOption[]
   /** The crews this job can be handed to. */
   teams: readonly { readonly id: number; readonly name: string }[]
   /**
@@ -63,7 +75,7 @@ function toDateInput(iso: string | null): string {
  * Puts to UpdateJobRequest. Status changes made here are recorded in the status
  * history by the controller, exactly as they are from the detail screen.
  */
-export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
+export default function JobEdit({ job, clients, projects, uploads, teams, from }: JobEditProps) {
   /*
    * Every route out of this screen carries the trail: Back, Cancel, and the
    * save itself. Drop it from any one of them and the job someone lands on has
@@ -73,7 +85,9 @@ export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
   const { data, setData, put, processing, errors, hasErrors, clearErrors } =
     useForm<JobEditForm>({
       name: job.name,
-      project_id: job.clientId === null ? '' : String(job.clientId),
+      client_id: job.clientId === null ? '' : String(job.clientId),
+      project_id: job.projectId === null ? '' : String(job.projectId),
+      upload_id: job.uploadId === null ? '' : String(job.uploadId),
       address_ids: [...job.addressIds],
       description: job.description ?? '',
       job_type: job.jobType ?? '',
@@ -82,9 +96,6 @@ export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
       start_date: toDateInput(job.startDate),
       end_date: toDateInput(job.endDate),
       budget: job.budget === null ? '' : String(job.budget),
-      create_estimate: job.options.createEstimate,
-      assign_team: job.options.assignTeam,
-      notify_client: job.options.notifyClient,
     })
 
   const update = <K extends FormDataKeys<JobEditForm>>(
@@ -95,12 +106,57 @@ export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
     if (errors[field]) clearErrors(field)
   }
 
-  const selectedClient = clients.find((option) => String(option.id) === data.project_id)
+  const selectedClient = clients.find((option) => String(option.id) === data.client_id)
 
-  /** Changing the client drops sites that belonged to the old one. */
+  /** Only the picked client's projects — a job never moves to someone else's. */
+  const projectsForClient = useMemo(
+    () => projects.filter((project) => String(project.clientId) === data.client_id),
+    [projects, data.client_id],
+  )
+
+  /**
+   * Changing the client invalidates everything under it: the project belongs to
+   * the old client, and so do the sites.
+   */
   const selectClient = (clientId: string) => {
-    setData((current) => ({ ...current, project_id: clientId, address_ids: [] }))
-    clearErrors('project_id', 'address_ids')
+    setData((current) => ({
+      ...current,
+      client_id: clientId,
+      project_id: '',
+      upload_id: '',
+      address_ids: [],
+    }))
+
+    clearErrors('client_id', 'project_id', 'address_ids', 'upload_id')
+  }
+
+  /**
+   * What a drawing has been priced at, as the budget field reads it — the same
+   * rule as Create Job, so the two forms never disagree about the figure.
+   */
+  const estimatedBudget = (uploadId: string): string | null => {
+    const amount = uploads.find((upload) => String(upload.id) === uploadId)?.estimate?.amount
+
+    return amount === undefined || amount === null ? null : String(amount)
+  }
+
+  /** And the project answers the site, from its client's own address book. */
+  const selectProject = (projectId: string) => {
+    const project = projects.find((option) => String(option.id) === projectId)
+    const primary = project?.addresses.find((site) => site.isPrimary)
+
+    // The project's own drawing, so the usual case takes no second choice.
+    const uploadId = project?.defaultUploadId ? String(project.defaultUploadId) : ''
+
+    setData((current) => ({
+      ...current,
+      project_id: projectId,
+      upload_id: job.drawingIsFixed ? current.upload_id : uploadId,
+      address_ids: primary ? [primary.id] : current.address_ids,
+      job_type: primary?.siteType ?? current.job_type,
+    }))
+
+    clearErrors('project_id', 'address_ids', 'upload_id')
   }
 
   const submit = (event: React.FormEvent) => {
@@ -119,6 +175,27 @@ export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
       ? { label: `${job.client} — not yet a client record`, value: '' }
       : { label: 'Select client', value: '' },
     ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
+  ]
+
+  const projectOptions = [
+    {
+      label: data.client_id === '' ? 'Select a client first' : 'Select project',
+      value: '',
+    },
+    ...projectsForClient.map((project) => ({ label: project.name, value: String(project.id) })),
+  ]
+
+  const uploadsForProject = useMemo(
+    () => uploads.filter((upload) => String(upload.projectId) === data.project_id),
+    [uploads, data.project_id],
+  )
+
+  const uploadOptions = [
+    {
+      label: data.project_id === '' ? 'Select a project first' : 'No drawing',
+      value: '',
+    },
+    ...uploadsForProject.map((upload) => ({ label: upload.name, value: String(upload.id) })),
   ]
 
   return (
@@ -151,23 +228,77 @@ export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
           <SectionHeading title="Job details" />
 
           <div className="space-y-6">
+
+            {/*
+              The same pair as Create Job, and in the same order: the client
+              says which projects, and the project says which sites. Edit used
+              to ask for one thing and post it as the other, which is why a job
+              could not be saved from here at all.
+            */}
+            <fieldset>
+              <legend className="mb-3 text-md font-medium text-white">
+                Client and project
+              </legend>
+              <div className="grid gap-6 lg:grid-cols-2">
+                <SelectField
+                  id="job-client"
+                  label="Client*"
+                  options={clientOptions}
+                  value={data.client_id}
+                  onChange={(event) => selectClient(event.target.value)}
+                  {...(errors.client_id ? { error: errors.client_id } : {})}
+                />
+                <SelectField
+                  id="job-project"
+                  label="Project*"
+                  options={projectOptions}
+                  value={data.project_id}
+                  disabled={data.client_id === ''}
+                  onChange={(event) => selectProject(event.target.value)}
+                  {...(errors.project_id ? { error: errors.project_id } : {})}
+                />
+              </div>
+
+              <div className="mt-6">
+                <SelectField
+                  id="job-upload"
+                  label="AI Takeoff PDF"
+                  className="lg:max-w-md"
+                  options={uploadOptions}
+                  value={data.upload_id}
+                  disabled={data.project_id === '' || job.drawingIsFixed}
+                  hint={
+                    job.drawingIsFixed
+                      ? 'Raised from a reviewed takeoff — its counts are this drawing’s, so it stays put.'
+                      : 'The drawing this job is taken off. Its estimate fills the budget below.'
+                  }
+                  onChange={(event) => {
+                    /*
+                     * The drawing decides the budget: it is what its estimate
+                     * came to. A drawing with no estimate leaves the figure
+                     * alone rather than zeroing it, and it stays editable.
+                     */
+                    const uploadId = event.target.value
+
+                    setData((current) => ({
+                      ...current,
+                      upload_id: uploadId,
+                      budget: estimatedBudget(uploadId) ?? current.budget,
+                    }))
+
+                    if (errors.upload_id) clearErrors('upload_id')
+                  }}
+                  {...(errors.upload_id ? { error: errors.upload_id } : {})}
+                />
+              </div>
+            </fieldset>
+
             <TextInput
               id="job-name"
               label="Job Name*"
               value={data.name}
               onChange={(event) => update('name', event.target.value)}
               {...(errors.name ? { error: errors.name } : {})}
-            />
-
-            <SelectField
-              id="job-client"
-              label="Client*"
-              hint="Not listed? Add them under Clients first."
-              className="lg:max-w-md"
-              options={clientOptions}
-              value={data.project_id}
-              onChange={(event) => selectClient(event.target.value)}
-              {...(errors.project_id ? { error: errors.project_id } : {})}
             />
 
             {/* Same picker as Create Job, so a site can be added from here too. */}
@@ -199,6 +330,39 @@ export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
               />
             </fieldset>
 
+            {/*
+              Moving the job to another crew moves who its tasks can be given
+              to. Existing tasks keep whoever is on them — reassigning someone's
+              work because the crew changed would be a decision, not a rename.
+            */}
+            <TeamPicker
+              teams={teams}
+              value={data.team_id}
+              onChange={(next) => update('team_id', next)}
+              hint="New tasks on this job are handed to this crew."
+              disabled={processing}
+              {...(errors.team_id ? { error: errors.team_id } : {})}
+            />
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <TextInput
+                id="job-start"
+                type="date"
+                label="Start date"
+                value={data.start_date}
+                onChange={(event) => update('start_date', event.target.value)}
+                {...(errors.start_date ? { error: errors.start_date } : {})}
+              />
+              <TextInput
+                id="job-end"
+                type="date"
+                label="End date"
+                value={data.end_date}
+                onChange={(event) => update('end_date', event.target.value)}
+                {...(errors.end_date ? { error: errors.end_date } : {})}
+              />
+            </div>
+
             <div className="grid gap-6 lg:grid-cols-3">
               <SelectField
                 id="job-status"
@@ -221,24 +385,6 @@ export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
               />
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <TextInput
-                id="job-start"
-                type="date"
-                label="Start date"
-                value={data.start_date}
-                onChange={(event) => update('start_date', event.target.value)}
-                {...(errors.start_date ? { error: errors.start_date } : {})}
-              />
-              <TextInput
-                id="job-end"
-                type="date"
-                label="End date"
-                value={data.end_date}
-                onChange={(event) => update('end_date', event.target.value)}
-                {...(errors.end_date ? { error: errors.end_date } : {})}
-              />
-            </div>
 
             <TextArea
               id="job-description"
@@ -249,19 +395,6 @@ export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
               {...(errors.description ? { error: errors.description } : {})}
             />
 
-            {/*
-              Moving the job to another crew moves who its tasks can be given
-              to. Existing tasks keep whoever is on them — reassigning someone's
-              work because the crew changed would be a decision, not a rename.
-            */}
-            <TeamPicker
-              teams={teams}
-              value={data.team_id}
-              onChange={(next) => update('team_id', next)}
-              hint="New tasks on this job are handed to this crew."
-              disabled={processing}
-              {...(errors.team_id ? { error: errors.team_id } : {})}
-            />
 
             <RadioGroup
               name="job-type"
@@ -272,31 +405,6 @@ export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
               {...(errors.job_type ? { error: errors.job_type } : {})}
             />
 
-            <fieldset>
-              <legend className="mb-3 text-md font-medium text-white">
-                Additional Options
-              </legend>
-              <div className="flex flex-col items-start gap-3">
-                <Checkbox
-                  id="job-create-estimate"
-                  label="Create estimate for this job"
-                  checked={data.create_estimate}
-                  onChange={(event) => setData('create_estimate', event.target.checked)}
-                />
-                <Checkbox
-                  id="job-assign-team"
-                  label="Assign team members"
-                  checked={data.assign_team}
-                  onChange={(event) => setData('assign_team', event.target.checked)}
-                />
-                <Checkbox
-                  id="job-notify-client"
-                  label="Notify client when job is created"
-                  checked={data.notify_client}
-                  onChange={(event) => setData('notify_client', event.target.checked)}
-                />
-              </div>
-            </fieldset>
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-hairline pt-6">

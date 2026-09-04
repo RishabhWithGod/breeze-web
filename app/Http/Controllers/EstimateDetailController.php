@@ -6,8 +6,10 @@ use App\Http\Resources\EstimateItemResource;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\JobAssignment;
+use App\Models\Project;
 use App\Notifications\EstimateStatusChanged;
 use App\Services\Clients\ClientDirectory;
+use App\Services\Clients\ProjectDirectory;
 use App\Services\Export\EstimatePdfWriter;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\TakeoffFlow;
@@ -195,7 +197,15 @@ class EstimateDetailController extends Controller
                 'id' => $estimate->id,
                 'number' => $estimate->number,
                 'client' => $estimate->client,
-                'clientId' => $estimate->client_id,
+                /*
+                 * Who it is for and what it is on, both opened already chosen.
+                 * The client falls back to the project's — an estimate raised
+                 * before `client_id` was writable has the project and nothing
+                 * else, and asking for a client the record can already name is
+                 * work nobody should have to do twice.
+                 */
+                'clientId' => $estimate->client_id ?? $estimate->takeoffProject?->client_id,
+                'projectId' => $estimate->project_id,
                 'status' => $estimate->status,
                 'issuedOn' => $estimate->issued_on?->toDateString(),
                 'markupPct' => (float) $estimate->markup_pct,
@@ -225,6 +235,8 @@ class EstimateDetailController extends Controller
             // Shown beside the rate fields so the effect of a change is visible.
             'totals' => EstimateBuilder::totalsFor($estimate),
             'clients' => $this->clients->options(),
+            // Their projects — the list narrows to the picked client's.
+            'projects' => app(ProjectDirectory::class)->options(),
         ]);
     }
 
@@ -232,8 +244,19 @@ class EstimateDetailController extends Controller
     public function update(Request $request, Estimate $estimate): RedirectResponse
     {
         $validated = $request->validate([
-            /** The client, picked from the client register — see ClientDirectory. */
-            'client_id' => ['required', 'integer', 'exists:clients,id'],
+            /*
+             * What the estimate is on. Every drawing and takeoff hangs off a
+             * project, so the estimate does too — and it is the one thing that
+             * has to be answered, because the client is read from it.
+             */
+            'project_id' => ['required', 'integer', 'exists:projects,id'],
+            /*
+             * Who it is for. Sent by the form because that is the field the
+             * project list is narrowed by, but not required: a project belongs
+             * to exactly one client, and Estimate::booted derives the column
+             * from the project either way.
+             */
+            'client_id' => ['nullable', 'integer', 'exists:clients,id'],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
             'issued_on' => ['required', 'date'],
             'markup_pct' => ['required', 'numeric', 'min:0', 'max:200'],
@@ -241,9 +264,17 @@ class EstimateDetailController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        // `client` and `project` are both snapshots of the picked client's name.
-        $validated = $this->clients->withClientSnapshot($validated);
-        $validated['project'] = $validated['client'];
+        /*
+         * The two name snapshots the record prints from: who it is for, and
+         * what it is on. Both are read from the project rather than trusted
+         * from the form, so the record cannot name one client and point at
+         * another one's project — and a project with no client record yet falls
+         * back to the name it carries, because neither column may be empty.
+         */
+        $project = Project::with('clientRecord:id,name')->find($validated['project_id']);
+        $validated['client_id'] = $project?->client_id;
+        $validated['client'] = $project?->clientRecord?->name ?? $project?->client ?? 'Unassigned';
+        $validated['project'] = $project?->name ?? $validated['client'];
 
         $previousStatus = $estimate->status;
         $estimate->update($validated);

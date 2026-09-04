@@ -247,9 +247,12 @@ class JobController extends Controller
     public function edit(Request $request, Job $job): Response
     {
         return Inertia::render('JobEdit', [
-            'job' => (new JobDetailResource($job->load('teamMembers', 'addresses', 'team:id,name')))->resolve(),
+            'job' => (new JobDetailResource($job->load('teamMembers', 'addresses', 'team:id,name', 'project:id,client_id', 'aiResult:id,upload_id')))->resolve(),
             'clients' => $this->clients->options(),
             'projects' => app(ProjectDirectory::class)->options(),
+            // The same list the create form offers, so a job can be corrected
+            // onto the right drawing instead of being raised again.
+            'uploads' => $this->linkOptions->uploads(),
             'teams' => Team::orderBy('name')->get(['id', 'name']),
             /*
              * Carried, not resolved: this screen's own Back goes to the job, and
@@ -262,6 +265,40 @@ class JobController extends Controller
     }
 
     /** The origin as it came in, once it is one this app serves. */
+    /**
+     * The drawing the job is taken off, when the edit form moves it.
+     *
+     * A job raised by hand can be pointed at another drawing — its project may
+     * have gained one since, or the wrong one was picked. A job raised from a
+     * reviewed takeoff cannot: it carries that review's own counts, and
+     * pointing it at a different drawing would leave the numbers on the job
+     * describing a drawing it is no longer on.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function withRelinkedDrawing(Job $job, array $data): array
+    {
+        $uploadId = $data['upload_id'] ?? null;
+        unset($data['upload_id']);
+
+        if ($uploadId === null || ! empty($job->symbol_counts)) {
+            return $data;
+        }
+
+        $upload = Upload::find($uploadId);
+
+        // The drawing has to be one of the project's own — the form narrows the
+        // list to them, and a hand-made request is held to the same rule.
+        if (! $upload || (int) $upload->project_id !== (int) $data['project_id']) {
+            return $data;
+        }
+
+        $data['ai_result_id'] = $upload->latestAiResult?->id;
+
+        return $data;
+    }
+
     private function originName(Request $request): ?string
     {
         return JobOrigin::name($request->query('from'));
@@ -276,6 +313,8 @@ class JobController extends Controller
         // Against the client's own book — a project and its job share a place.
         $addresses = $this->sites->resolve((int) $data['client_id'], $data['address_ids']);
         unset($data['address_ids']);
+
+        $data = $this->withRelinkedDrawing($job, $data);
 
         $job->update($data);
         $this->sites->attach($job, $addresses);

@@ -44,14 +44,24 @@ class UpdateJobRequest extends FormRequest
              */
             'team_id' => ['nullable', 'integer', 'exists:teams,id'],
             'status' => ['required', Rule::in(Job::STATUSES)],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            /*
+             * Both required, exactly as they are when the job is raised. A job
+             * that can be created only with dates but saved without them can
+             * lose them on the way through this form, and every calendar in
+             * the app then has a blank row where the work was.
+             */
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'budget' => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
             // No foreman on a job: work is handed to someone task by task, so
             // the edit form does not offer one and nothing may set one here.
-            'create_estimate' => ['boolean'],
-            'assign_team' => ['boolean'],
-            'notify_client' => ['boolean'],
+            /*
+             * The drawing the work is taken off. Optional here where it is
+             * required at creation: a job raised before its drawing existed
+             * can be linked to one later, and one already linked keeps what it
+             * has when the field is left alone.
+             */
+            'upload_id' => ['nullable', 'integer', 'exists:uploads,id'],
         ];
     }
 

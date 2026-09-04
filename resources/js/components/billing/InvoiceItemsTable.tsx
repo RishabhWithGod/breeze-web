@@ -65,19 +65,22 @@ export function InvoiceItemsTable({ invoiceId, items, editable }: InvoiceItemsTa
     })
   }
 
+  /* Labelled, like the estimate's own line editor — four bare boxes in a row
+   * say nothing about which one takes the count and which takes the rate. */
   const editor = (
-    <div className="grid gap-2 rounded-panel bg-white/8 p-3 sm:grid-cols-6">
+    <div className="grid gap-3 rounded-panel bg-white/8 p-3 sm:grid-cols-12">
       <TextInput
         id="item-description"
-        aria-label="Description"
-        placeholder="Description"
-        className="sm:col-span-3"
+        label="Description"
+        placeholder="e.g. 20A single-pole switch"
+        className="sm:col-span-6"
         value={draft.description}
         onChange={(event) => setDraft({ ...draft, description: event.target.value })}
       />
       <TextInput
         id="item-quantity"
-        aria-label="Quantity"
+        label="Qty"
+        className="sm:col-span-2"
         type="number"
         step="0.01"
         min={0}
@@ -86,15 +89,19 @@ export function InvoiceItemsTable({ invoiceId, items, editable }: InvoiceItemsTa
       />
       <TextInput
         id="item-unit-price"
-        aria-label="Unit price"
+        label="Unit price ($)"
+        className="sm:col-span-2"
         type="number"
         step="0.01"
         min={0}
         value={draft.unit_price}
         onChange={(event) => setDraft({ ...draft, unit_price: event.target.value })}
       />
-      <div className="flex items-center text-md text-white/85">
-        {formatCurrency((Number(draft.quantity) || 0) * (Number(draft.unit_price) || 0), 2)}
+      <div className="sm:col-span-2">
+        <p className="mb-2 text-md font-medium text-white">Line total</p>
+        <p className="py-2.5 text-md font-semibold text-white">
+          {formatCurrency((Number(draft.quantity) || 0) * (Number(draft.unit_price) || 0), 2)}
+        </p>
       </div>
     </div>
   )
