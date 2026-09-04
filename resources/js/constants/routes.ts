@@ -4,6 +4,17 @@
  * Kept as plain paths rather than generated route helpers so navigation stays
  * readable at the call site; the paths are asserted by routes/web.php.
  */
+/**
+ * The screens a job detail can be opened from. Mirrors the match in
+ * JobController::cameFrom — a name here without a case there falls back to the
+ * jobs list rather than breaking.
+ */
+export type JobOrigin =
+  | 'scheduling'
+  | 'scheduling-calendar'
+  | 'scheduling-availability'
+  | 'tasks'
+
 export const ROUTES = {
   // Public
   login: '/login',
@@ -39,6 +50,11 @@ export const ROUTES = {
   takeoffFlowForget: '/takeoff-flow',
   tasks: '/tasks',
   taskCreate: '/tasks/create',
+  /* The crew register, read by team. One person's own screens stay at
+     `/foremen` — see routes/web.php. */
+  teams: '/teams',
+  teamCreate: '/teams/create',
+  /** Where a new member is posted. The register itself is `teams`. */
   foremen: '/foremen',
   foremanCreate: '/foremen/create',
   jobCreate: '/jobs/create',
@@ -110,7 +126,12 @@ export const routeTo = {
    * only these two markers exist.
    */
   jobTaskSetupFromList: (jobId: number) => `/jobs/${jobId}/tasks/setup?from=tasks`,
-  jobTaskSetupFromJob: (jobId: number) => `/jobs/${jobId}/tasks/setup?from=job`,
+  /**
+   * Task setup, opened from the job — carrying the job's own trail, so coming
+   * back out of the task lands on a job that still knows where it came from.
+   */
+  jobTaskSetupFromJob: (jobId: number, origin: JobOrigin | null = null) =>
+    `/jobs/${jobId}/tasks/setup?from=job${origin ? `&origin=${origin}` : ''}`,
   project: (projectId: number) => `/projects/${projectId}`,
   /** AI Takeoff upload, opened with this client already picked. */
   uploadForProject: (projectId: number) => `/ai-takeoff/upload?project=${projectId}`,
@@ -131,7 +152,20 @@ export const routeTo = {
   takeoff: (projectId: number) => `/takeoffs/${projectId}`,
   takeoffRestore: (projectId: number) => `/takeoffs/${projectId}/restore`,
   job: (jobId: number) => `/jobs/${jobId}`,
+  /**
+   * The job detail, told which screen sent the visitor there so its Back button
+   * can undo the step that was taken. The origin is a name, not a URL — the
+   * server matches it against its own list, so a link can never point Back at
+   * somewhere it chose.
+   */
+  jobFrom: (jobId: number, from: JobOrigin) => `/jobs/${jobId}?from=${from}`,
   jobEdit: (jobId: number) => `/jobs/${jobId}/edit`,
+  /** Edit, carrying the trail so saving lands back where Back still works. */
+  jobEditFrom: (jobId: number, from: JobOrigin | null) =>
+    from ? `/jobs/${jobId}/edit?from=${from}` : `/jobs/${jobId}/edit`,
+  /** The job itself, keeping whatever trail there is. */
+  jobKeeping: (jobId: number, from: JobOrigin | null) =>
+    from ? `/jobs/${jobId}?from=${from}` : `/jobs/${jobId}`,
   jobRestore: (jobId: number) => `/jobs/${jobId}/restore`,
   jobArchive: (jobId: number) => `/jobs/${jobId}/archive`,
   jobUnarchive: (jobId: number) => `/jobs/${jobId}/unarchive`,
@@ -164,7 +198,8 @@ export const routeTo = {
   foreman: (foremanId: number) => `/foremen/${foremanId}`,
   foremanEdit: (foremanId: number) => `/foremen/${foremanId}/edit`,
   taskEdit: (taskId: number) => `/tasks/${taskId}/edit?from=tasks`,
-  taskEditFromJob: (taskId: number) => `/tasks/${taskId}/edit?from=job`,
+  taskEditFromJob: (taskId: number, origin: JobOrigin | null = null) =>
+    `/tasks/${taskId}/edit?from=job${origin ? `&origin=${origin}` : ''}`,
   /** Removing a task hands its estimate lines back to be planned again. */
   taskRemove: (taskId: number) => `/tasks/${taskId}`,
   taskRemoveFromJob: (taskId: number) => `/tasks/${taskId}?from=job`,

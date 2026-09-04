@@ -12,7 +12,7 @@ import {
   TextInput,
   UnfinishedTakeoffNotice,
 } from '@/components/common'
-import { JobSitePicker } from '@/components/jobs'
+import { JobSitePicker, TeamPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type {
@@ -33,6 +33,11 @@ export interface JobCreateProps {
   /** Their drawings — narrowed to the picked client once one is chosen. */
   uploads: readonly TakeoffUploadOption[]
   /**
+   * The crews this job can be handed to. Picking one narrows who a task on the
+   * job can be given to, so it is asked here rather than task by task.
+   */
+  teams: readonly { readonly id: number; readonly name: string }[]
+  /**
    * A takeoff already part-way through. Raising a job by hand is a fork of it:
    * the takeoff's own job is raised from its review summary.
    */
@@ -50,6 +55,7 @@ export default function JobCreate({
   clients,
   projects,
   uploads,
+  teams,
   unfinishedTakeoff,
 }: JobCreateProps) {
   const [savingDraft, setSavingDraft] = useState(false)
@@ -61,6 +67,7 @@ export default function JobCreate({
       address_ids: [],
       description: '',
       job_type: '',
+      team_id: '',
       start_date: '',
       end_date: '',
       budget: '',
@@ -116,6 +123,20 @@ export default function JobCreate({
   }
 
   /**
+   * What a drawing has been priced at, as the budget field reads it.
+   *
+   * A job's budget is the estimate that was signed off on that drawing — it is
+   * the whole point of pricing one. Empty when the drawing has no estimate yet,
+   * so the caller can leave whatever is already in the field rather than
+   * blanking it to zero.
+   */
+  const estimatedBudget = (uploadId: string): string | null => {
+    const amount = uploads.find((upload) => String(upload.id) === uploadId)?.estimate?.amount
+
+    return amount === undefined || amount === null ? null : String(amount)
+  }
+
+  /**
    * And the project answers the rest: its drawing, its site, and through that
    * site the kind of building the work is in. The name is filled only if still
    * blank — never over something already typed.
@@ -124,13 +145,17 @@ export default function JobCreate({
     const project = projects.find((option) => String(option.id) === projectId)
     const primary = project?.addresses.find((site) => site.isPrimary)
 
+    // The project's own drawing, so the usual case takes no second choice.
+    const uploadId = project?.defaultUploadId ? String(project.defaultUploadId) : ''
+
     setData((current) => ({
       ...current,
       project_id: projectId,
-      // The project's own drawing, so the usual case takes no second choice.
-      upload_id: project?.defaultUploadId ? String(project.defaultUploadId) : '',
+      upload_id: uploadId,
       address_ids: primary ? [primary.id] : [],
       name: current.name || (project?.name ?? ''),
+      // And with the drawing comes what it was priced at.
+      budget: estimatedBudget(uploadId) ?? current.budget,
       /*
        * The type comes from the site, because it is the building that decides
        * it — a client can own a house and a warehouse. Only a site that has
@@ -255,7 +280,24 @@ export default function JobCreate({
                   options={uploadOptions}
                   value={data.upload_id}
                   disabled={!data.project_id}
-                  onChange={(event) => update('upload_id', event.target.value)}
+                  onChange={(event) => {
+                    /*
+                     * The drawing decides the budget: it is what its estimate
+                     * came to. Picking a different drawing is picking different
+                     * numbers, so the figure follows — a drawing with no
+                     * estimate yet leaves the field alone rather than zeroing
+                     * it, and it stays editable either way.
+                     */
+                    const uploadId = event.target.value
+
+                    setData((current) => ({
+                      ...current,
+                      upload_id: uploadId,
+                      budget: estimatedBudget(uploadId) ?? current.budget,
+                    }))
+
+                    if (errors.upload_id) clearErrors('upload_id')
+                  }}
                   {...(errors.upload_id ? { error: errors.upload_id } : {})}
                 />
               </div>
@@ -347,16 +389,55 @@ export default function JobCreate({
               />
             </fieldset>
 
-            <TextInput
-              id="job-start"
-              type="date"
-              label="Schedule"
-              placeholder="Select start date"
-              value={data.start_date}
-              onChange={(event) => update('start_date', event.target.value)}
-              {...(errors.start_date ? { error: errors.start_date } : {})}
+            {/*
+              Who does the work. Searchable, because a register of crews is
+              something you find by typing a name rather than by scrolling —
+              and picking one here is what narrows the foreman and supervisor
+              pickers on every task of this job.
+            */}
+            <TeamPicker
+              teams={teams}
+              value={data.team_id}
+              onChange={(next) => update('team_id', next)}
+              hint="Tasks on this job are handed to this crew."
+              disabled={processing}
+              {...(errors.team_id ? { error: errors.team_id } : {})}
             />
 
+            {/*
+              Both dates, both required. The end date used to be posted as an
+              empty string with no field to fill it — a job could be created
+              with no finish date at all, which every calendar in the app then
+              had to draw as a blank.
+            */}
+            <div className="grid gap-6 sm:grid-cols-2">
+              <TextInput
+                id="job-start"
+                type="date"
+                label="Start Date*"
+                value={data.start_date}
+                max={data.end_date || undefined}
+                onChange={(event) => update('start_date', event.target.value)}
+                {...(errors.start_date ? { error: errors.start_date } : {})}
+              />
+
+              <TextInput
+                id="job-end"
+                type="date"
+                label="End Date*"
+                value={data.end_date}
+                // The browser refuses the impossible pairing before the server
+                // has to; the server checks it too.
+                min={data.start_date || undefined}
+                onChange={(event) => update('end_date', event.target.value)}
+                {...(errors.end_date ? { error: errors.end_date } : {})}
+              />
+            </div>
+
+            {/*
+              The estimate is named beside the figure: a number that appears on
+              its own looks like a default rather than this drawing's own price.
+            */}
             <TextInput
               id="job-budget"
               type="number"
@@ -367,6 +448,9 @@ export default function JobCreate({
               placeholder="Enter budget amount"
               value={data.budget}
               onChange={(event) => update('budget', event.target.value)}
+              {...(linkedEstimate
+                ? { hint: `From estimate ${linkedEstimate.number} — change it if this job is not the whole estimate.` }
+                : {})}
               {...(errors.budget ? { error: errors.budget } : {})}
             />
 

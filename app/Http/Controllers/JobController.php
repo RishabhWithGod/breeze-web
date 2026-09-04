@@ -11,6 +11,7 @@ use App\Models\Estimate;
 use App\Models\FeedItem;
 use App\Models\Job;
 use App\Models\JobSchedule;
+use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
 use App\Models\Upload;
@@ -22,6 +23,7 @@ use App\Services\Clients\ProjectDirectory;
 use App\Services\JobCosting\JobCostSummary;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Services\Takeoff\TakeoffLinkOptions;
+use App\Support\JobOrigin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -66,7 +68,7 @@ class JobController extends Controller
         $view = $filters['view'] ?? 'all';
 
         $jobs = Job::query()
-            ->with(['foreman', 'activeAssignments.assigner'])
+            ->with(['foreman', 'team:id,name', 'activeAssignments.assigner'])
             ->withCount(['teamMembers', 'estimates'])
             ->search($filters['search'] ?? null)
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
@@ -108,6 +110,9 @@ class JobController extends Controller
             // Their projects, each carrying its sites and its default drawing.
             'projects' => app(ProjectDirectory::class)->options(),
             'uploads' => $this->linkOptions->uploads(),
+            // The crews a job can be handed to. Once one is picked it narrows
+            // who a task on the job can be given to.
+            'teams' => Team::orderBy('name')->get(['id', 'name']),
             // Raising a job by hand forks a takeoff mid-flow: its own job is
             // raised from its review summary, not here.
             'unfinishedTakeoff' => app(TakeoffFlow::class)->inProgress($request),
@@ -194,12 +199,13 @@ class JobController extends Controller
     {
         $job->load([
             'project',
+            'team:id,name',
             'teamMembers',
             'estimates',
             // Ordered the way the schedule holds them, with the count of what
             // each covers — the detail the panel states without the lines.
             'tasks' => fn ($query) => $query
-                ->with('foreman:id,name')
+                ->with('foreman:id,name', 'supervisor:id,name')
                 ->withCount('estimateItems')
                 ->orderBy('position')
                 ->orderBy('id'),
@@ -230,16 +236,35 @@ class JobController extends Controller
             // Whoever plans the work may add to it; everyone else still reads.
             'canPlanWork' => app(JobSchedulePolicy::class)
                 ->createTask($request->user(), $job->schedule ?? new JobSchedule),
+            /** Where Back goes — see App\Support\JobOrigin. */
+            'back' => JobOrigin::back($request->query('from')),
+            // The same trail as a bare name, so the Edit link can carry it on
+            // and the job someone returns to still knows the way out.
+            'from' => $this->originName($request),
         ]);
     }
 
-    public function edit(Job $job): Response
+    public function edit(Request $request, Job $job): Response
     {
         return Inertia::render('JobEdit', [
-            'job' => (new JobDetailResource($job->load('teamMembers', 'addresses')))->resolve(),
+            'job' => (new JobDetailResource($job->load('teamMembers', 'addresses', 'team:id,name')))->resolve(),
             'clients' => $this->clients->options(),
             'projects' => app(ProjectDirectory::class)->options(),
+            'teams' => Team::orderBy('name')->get(['id', 'name']),
+            /*
+             * Carried, not resolved: this screen's own Back goes to the job, and
+             * it is the job that needs to know where the trail started. Without
+             * this, editing a job reached from Scheduling would drop someone at
+             * the jobs list on the way out.
+             */
+            'from' => $this->originName($request),
         ]);
+    }
+
+    /** The origin as it came in, once it is one this app serves. */
+    private function originName(Request $request): ?string
+    {
+        return JobOrigin::name($request->query('from'));
     }
 
     public function update(UpdateJobRequest $request, Job $job): RedirectResponse
@@ -260,7 +285,11 @@ class JobController extends Controller
         $job->changeStatus($newStatus);
 
         return redirect()
-            ->route('jobs.show', $job)
+            ->route('jobs.show', array_filter([
+                'job' => $job->id,
+                // So Back from the job still points where the trail started.
+                'from' => $this->originName($request),
+            ]))
             ->with('success', "“{$job->name}” was updated.");
     }
 

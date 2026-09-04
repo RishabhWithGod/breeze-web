@@ -1,4 +1,4 @@
-import { ChevronRight, Clock, User } from 'lucide-react'
+import { ChevronRight, Clock, HardHat, User, Users } from 'lucide-react'
 import { Button } from '@/components/common'
 import { PRIORITY_SHORT_LABEL, PRIORITY_STRIPE, routeTo } from '@/constants'
 import type { SchedulableJob } from '@/types'
@@ -64,6 +64,26 @@ export function UnassignedJobCard({ job, onAssign, index = 0 }: UnassignedJobCar
           <dt className="sr-only">Client</dt>
           <dd className="truncate">Client: {job.client ?? 'Unassigned'}</dd>
         </div>
+        {/* The crew, and who on it is already carrying the work. */}
+        <div className="flex items-center gap-2">
+          <HardHat size={13} aria-hidden className="text-white/70" />
+          <dt className="sr-only">Team</dt>
+          <dd className="truncate">Team: {job.teamName ?? 'None'}</dd>
+        </div>
+        {(job.supervisors.length > 0 || job.foremen.length > 0) && (
+          <div className="flex items-center gap-2">
+            <Users size={13} aria-hidden className="text-white/70" />
+            <dt className="sr-only">On the job</dt>
+            <dd className="truncate">
+              {[
+                job.supervisors.map((person) => person.name).join(', '),
+                job.foremen.map((person) => person.name).join(', '),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </dd>
+          </div>
+        )}
       </dl>
 
       <div className="mt-4 flex items-center justify-between gap-3">
@@ -71,7 +91,7 @@ export function UnassignedJobCard({ job, onAssign, index = 0 }: UnassignedJobCar
           Assign
         </Button>
         <a
-          href={routeTo.job(job.id)}
+          href={routeTo.jobFrom(job.id, 'scheduling-calendar')}
           className="inline-flex items-center gap-1 text-sm font-medium text-brand transition-colors hover:text-white"
         >
           View Details

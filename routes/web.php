@@ -46,6 +46,7 @@ use App\Http\Controllers\SymbolReviewController;
 use App\Http\Controllers\TakeoffFlowController;
 use App\Http\Controllers\TakeoffHistoryController;
 use App\Http\Controllers\TaskListController;
+use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TimeEntryController;
 use App\Http\Controllers\TimerController;
 use App\Http\Controllers\TimeTrackingController;
@@ -308,7 +309,18 @@ Route::middleware('auth')->group(function () {
     Route::put('tasks/{task}', [JobTaskSetupController::class, 'update'])->name('tasks.edit.update');
     Route::delete('tasks/{task}', [JobTaskSetupController::class, 'destroy'])->name('tasks.remove');
 
-    Route::get('foremen', [ForemanController::class, 'index'])->name('foremen.index');
+    /*
+     * The crew register, read by team. `/foremen` still holds one person's own
+     * screens: the table and the model are still `foremen`, because a foreman
+     * is what most of them are and renaming the column every task points at
+     * would rewrite who ran what for nothing.
+     */
+    Route::get('teams', [TeamController::class, 'index'])->name('teams.index');
+    Route::get('teams/create', [TeamController::class, 'create'])->name('teams.create');
+    Route::post('teams', [TeamController::class, 'store'])->name('teams.store');
+
+    // The old address, kept so a bookmark or an old link still lands somewhere.
+    Route::redirect('foremen', '/teams')->name('foremen.index');
     Route::get('foremen/create', [ForemanController::class, 'create'])->name('foremen.create');
     // After `create`, so the literal segment is not read as a foreman's id.
     Route::get('foremen/{foreman}', [ForemanController::class, 'show'])->name('foremen.show');

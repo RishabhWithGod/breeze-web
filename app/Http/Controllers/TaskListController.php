@@ -62,7 +62,7 @@ class TaskListController extends Controller
             ->when($narrowed, fn ($query) => $query->whereHas('tasks', $matching))
             ->with([
                 'tasks' => fn ($query) => $matching($query)
-                    ->with('foreman:id,name,initials')
+                    ->with('foreman:id,name,initials', 'supervisor:id,name,initials')
                     ->orderBy('position')
                     ->orderBy('id'),
             ])
@@ -81,6 +81,7 @@ class TaskListController extends Controller
                         ? null
                         : (float) $task->estimated_hours,
                     'foreman' => $task->foreman?->name,
+                    'supervisor' => $task->supervisor?->name,
                 ])->values(),
             ]);
 

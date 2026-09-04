@@ -30,6 +30,11 @@ interface ForemanDetail {
   readonly id: number
   readonly name: string
   readonly initials: string
+  /** What they do on the crew: `supervisor` or `foreman`. */
+  readonly role: string
+  readonly roleLabel: string
+  /** The crew they are on, or null for someone not on one yet. */
+  readonly team: { readonly id: number; readonly name: string } | null
   readonly phone: string | null
   readonly email: string | null
   readonly licenceNumber: string | null
@@ -84,10 +89,10 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
 
       <PageHeader
         title={foreman.name}
-        subtitle="Who they are, how to reach them, and what they are carrying."
+        subtitle={`${foreman.roleLabel} · ${foreman.team?.name ?? 'Not on a team'}`}
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
-          { label: 'Foremen', href: ROUTES.foremen },
+          { label: 'Teams', href: ROUTES.teams },
           { label: foreman.name },
         ]}
         actions={
@@ -101,7 +106,7 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
                 Edit
               </ButtonLink>
             )}
-            <ButtonLink href={ROUTES.foremen} variant="secondary" leftIcon={ArrowLeft}>
+            <ButtonLink href={ROUTES.teams} variant="secondary" leftIcon={ArrowLeft}>
               Back
             </ButtonLink>
           </>
@@ -163,10 +168,24 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
       <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_1.4fr]">
         {/* ================================================== Details ========= */}
         <Card padding="lg" className="min-w-0 self-start">
-          <CardHeader title="Details" subtitle="What is on record for this foreman" />
+          <CardHeader title="Details" subtitle="What is on record for this member" />
 
           <dl className="flex flex-col gap-4">
-            <Detail label="Phone" value={foreman.phone} href={`tel:${foreman.phone ?? ''}`} />
+            {/*
+              Role and crew first: they are what the rest of the record is about.
+              "Not on a team" is a real answer, not a blank.
+            */}
+            <Detail label="Role" value={foreman.roleLabel} />
+            <Detail label="Team" value={foreman.team?.name ?? 'Not on a team'} />
+            {/*
+              Shown formatted, dialled bare: a tel: URI has no room for spaces
+              or brackets, however good they look on the page.
+            */}
+            <Detail
+              label="Phone"
+              value={foreman.phone}
+              href={`tel:${(foreman.phone ?? '').replace(/[^\d+]/g, '')}`}
+            />
             <Detail
               label="Email"
               value={foreman.email}
@@ -301,7 +320,7 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
         tone="danger"
         title={`Remove “${foreman.name}”?`}
         description="They come off the register and can no longer be handed work. This cannot be undone."
-        confirmLabel="Remove foreman"
+        confirmLabel="Remove member"
         confirmVariant="danger"
         onConfirm={() => {
           router.delete(routeTo.foreman(foreman.id))

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Head, Link, router, usePage } from '@inertiajs/react'
-import { ArrowLeft, CalendarPlus, ChevronLeft, ChevronRight, Printer, SlidersHorizontal, UserCheck } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -198,25 +198,7 @@ export default function Scheduling({
             >
               Filters
             </Button>
-            <Button variant="secondary" leftIcon={Printer} onClick={() => window.print()}>
-              Print
-            </Button>
-            <Button
-              variant="secondary"
-              leftIcon={CalendarPlus}
-              onClick={() => addOnDay(today)}
-            >
-              Assign Crew
-            </Button>
-            <Button
-              leftIcon={UserCheck}
-              onClick={() =>
-                router.get(ROUTES.schedulingAvailability, { view, date: anchor })
-              }
-            >
-              Crew Availability
-            </Button>
-                      <ButtonLink href={ROUTES.scheduling} variant="secondary" leftIcon={ArrowLeft}>
+            <ButtonLink href={ROUTES.scheduling} variant="secondary" leftIcon={ArrowLeft}>
               Back
             </ButtonLink>
           </>
@@ -237,13 +219,19 @@ export default function Scheduling({
       {filterPanel.isOpen && (
         <Card padding="md" className="mb-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/*
+              A shift is labelled with the team it was booked for, so this is a
+              team filter. Older shifts carry whatever label they were booked
+              with, and those are offered too — a filter that cannot select what
+              is on the calendar is a filter that lies.
+            */}
             <SelectField
               id="filter-crew"
-              label="Crew"
+              label="Team"
               value={filters.crew}
               onChange={(event) => goTo({ crew: event.target.value })}
               options={[
-                { label: 'All crews', value: '' },
+                { label: 'All teams', value: '' },
                 ...crews.map((crew) => ({ label: crew, value: crew })),
               ]}
             />
@@ -381,8 +369,6 @@ export default function Scheduling({
       <AssignCrewModal
         job={assigning}
         onClose={() => setAssigning(null)}
-        crews={crews}
-        members={members}
         defaultDate={assignDate}
       />
 

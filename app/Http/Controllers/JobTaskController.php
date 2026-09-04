@@ -213,7 +213,7 @@ class JobTaskController extends Controller
             'reason.required' => 'Say why it slipped — the delays panel shows this.',
         ]);
 
-        $wasDue = $task->ends_on?->format('M j, Y') ?? 'unscheduled';
+        $wasDue = $task->ends_on?->format('m/d/Y') ?? 'unscheduled';
         $newDue = Carbon::parse($data['ends_on']);
 
         // Baselined on the first delay only, so slippage is measured from the
@@ -234,13 +234,13 @@ class JobTaskController extends Controller
             $task->schedule,
             $task->job,
             'task_delayed',
-            "Task delayed: {$task->title} — {$wasDue} → {$newDue->format('M j, Y')}. {$data['reason']}",
+            "Task delayed: {$task->title} — {$wasDue} → {$newDue->format('m/d/Y')}. {$data['reason']}",
         );
 
         $this->notifier->taskChanged(
             $task,
             TaskScheduleChanged::DELAYED,
-            "Moved from {$wasDue} to {$newDue->format('M j, Y')}. {$data['reason']}",
+            "Moved from {$wasDue} to {$newDue->format('m/d/Y')}. {$data['reason']}",
             except: $request->user(),
         );
 
@@ -277,7 +277,7 @@ class JobTaskController extends Controller
             $newEnd = $newStart->copy()->addDays($span);
         }
 
-        $wasStart = $task->starts_on?->format('M j') ?? 'unscheduled';
+        $wasStart = $task->starts_on?->format('m/d') ?? 'unscheduled';
 
         $task->baseline_ends_on ??= $task->ends_on;
         $task->forceFill([
@@ -298,7 +298,7 @@ class JobTaskController extends Controller
             $schedule,
             $task->job,
             'task_moved',
-            "Task moved: {$task->title} — {$wasStart} → {$newStart->format('M j')}",
+            "Task moved: {$task->title} — {$wasStart} → {$newStart->format('m/d')}",
         );
 
         $this->notifier->taskChanged($task, TaskScheduleChanged::RESCHEDULED, except: $request->user());
@@ -306,7 +306,7 @@ class JobTaskController extends Controller
         // A warning rather than a refusal: the planner may be mid-way through fixing
         // a sequence, and blocking the save would leave neither end correctable.
         return $mine === []
-            ? back()->with('success', "“{$task->title}” moved to {$newStart->format('M j, Y')}.")
+            ? back()->with('success', "“{$task->title}” moved to {$newStart->format('m/d/Y')}.")
             : back()->with('warning', "“{$task->title}” moved, but ".count($mine).' dependency '
                 .str('constraint')->plural(count($mine)).' no longer '
                 .(count($mine) === 1 ? 'holds' : 'hold').': '.$mine[0]['problem'].'.');

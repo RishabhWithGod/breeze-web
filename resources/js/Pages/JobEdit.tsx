@@ -13,9 +13,10 @@ import {
   TextArea,
   TextInput,
 } from '@/components/common'
-import { JobSitePicker } from '@/components/jobs'
+import { JobSitePicker, TeamPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_STATUS_OPTIONS, JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
+import type { JobOrigin } from '@/constants'
 import type { ClientOption, JobDetail, JobStatus, JobType } from '@/types'
 
 /** Edit payload — snake_case to match UpdateJobRequest. */
@@ -27,6 +28,8 @@ interface JobEditForm {
   address_ids: number[]
   description: string
   job_type: JobType | ''
+  /** The crew this job is handed to. Empty means none. */
+  team_id: string
   status: JobStatus
   start_date: string
   end_date: string
@@ -40,6 +43,13 @@ export interface JobEditProps {
   job: JobDetail
   /** The client register. Clients are projects, so this is one list, not two. */
   clients: readonly ClientOption[]
+  /** The crews this job can be handed to. */
+  teams: readonly { readonly id: number; readonly name: string }[]
+  /**
+   * Which screen this job was reached from, carried through the edit so that
+   * saving lands back on a job whose own Back still knows the way out.
+   */
+  from: JobOrigin | null
 }
 
 /** Date inputs need `yyyy-MM-dd`; the server sends ISO timestamps. */
@@ -53,7 +63,13 @@ function toDateInput(iso: string | null): string {
  * Puts to UpdateJobRequest. Status changes made here are recorded in the status
  * history by the controller, exactly as they are from the detail screen.
  */
-export default function JobEdit({ job, clients }: JobEditProps) {
+export default function JobEdit({ job, clients, teams, from }: JobEditProps) {
+  /*
+   * Every route out of this screen carries the trail: Back, Cancel, and the
+   * save itself. Drop it from any one of them and the job someone lands on has
+   * forgotten where they came from.
+   */
+  const jobUrl = routeTo.jobKeeping(job.id, from)
   const { data, setData, put, processing, errors, hasErrors, clearErrors } =
     useForm<JobEditForm>({
       name: job.name,
@@ -61,6 +77,7 @@ export default function JobEdit({ job, clients }: JobEditProps) {
       address_ids: [...job.addressIds],
       description: job.description ?? '',
       job_type: job.jobType ?? '',
+      team_id: job.teamId === null ? '' : String(job.teamId),
       status: job.status,
       start_date: toDateInput(job.startDate),
       end_date: toDateInput(job.endDate),
@@ -88,7 +105,7 @@ export default function JobEdit({ job, clients }: JobEditProps) {
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    put(routeTo.job(job.id))
+    put(jobUrl)
   }
 
   /**
@@ -113,15 +130,11 @@ export default function JobEdit({ job, clients }: JobEditProps) {
         subtitle={job.name}
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
-          { label: 'Details', href: routeTo.job(job.id) },
+          { label: 'Details', href: jobUrl },
           { label: 'Edit' },
         ]}
         actions={
-          <ButtonLink
-            href={routeTo.job(job.id)}
-            variant="secondary"
-            leftIcon={ArrowLeft}
-          >
+          <ButtonLink href={jobUrl} variant="secondary" leftIcon={ArrowLeft}>
             Back to job
           </ButtonLink>
         }
@@ -236,6 +249,20 @@ export default function JobEdit({ job, clients }: JobEditProps) {
               {...(errors.description ? { error: errors.description } : {})}
             />
 
+            {/*
+              Moving the job to another crew moves who its tasks can be given
+              to. Existing tasks keep whoever is on them — reassigning someone's
+              work because the crew changed would be a decision, not a rename.
+            */}
+            <TeamPicker
+              teams={teams}
+              value={data.team_id}
+              onChange={(next) => update('team_id', next)}
+              hint="New tasks on this job are handed to this crew."
+              disabled={processing}
+              {...(errors.team_id ? { error: errors.team_id } : {})}
+            />
+
             <RadioGroup
               name="job-type"
               label="Job Type"
@@ -273,7 +300,7 @@ export default function JobEdit({ job, clients }: JobEditProps) {
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-hairline pt-6">
-            <ButtonLink href={routeTo.job(job.id)} variant="white">
+            <ButtonLink href={jobUrl} variant="white">
               Cancel
             </ButtonLink>
             <Button type="submit" leftIcon={Save} isLoading={processing}>

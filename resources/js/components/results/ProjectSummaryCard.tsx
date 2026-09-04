@@ -26,7 +26,7 @@ export function ProjectSummaryCard({ project, index }: ProjectSummaryCardProps) 
       icon: CalendarClock,
       label: 'Completed',
       value: project.completedAt
-        ? formatDate(project.completedAt, "MMM d, yyyy 'at' h:mm a")
+        ? formatDate(project.completedAt, "MM/dd/yyyy 'at' h:mm a")
         : 'In progress',
     },
   ]

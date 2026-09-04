@@ -4,6 +4,7 @@ import { PencilLine, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { ButtonLink, ConfirmDialog, IconButton, StatusChip } from '@/components/common'
 import { TASK_STATUS_LABEL, TASK_STATUS_TONE, routeTo } from '@/constants'
+import type { JobOrigin } from '@/constants'
 import type { JobTaskSummary } from '@/types'
 import { formatHours } from '@/utils'
 
@@ -11,6 +12,11 @@ export interface JobTasksPanelProps {
   tasks: readonly JobTaskSummary[]
   /** False for anyone who cannot plan work — the list is still readable. */
   canPlan: boolean
+  /**
+   * The trail the job itself was opened on, passed on to Edit so that coming
+   * back out of a task lands on a job that still knows the way out.
+   */
+  jobOrigin?: JobOrigin | null
 }
 
 /**
@@ -21,7 +27,7 @@ export interface JobTasksPanelProps {
  * schedule's business, worked over days, and repeating them would give two
  * places to read the same plan from.
  */
-export function JobTasksPanel({ tasks, canPlan }: JobTasksPanelProps) {
+export function JobTasksPanel({ tasks, canPlan, jobOrigin = null }: JobTasksPanelProps) {
   const [removing, setRemoving] = useState<JobTaskSummary | null>(null)
 
   if (tasks.length === 0) {
@@ -47,6 +53,9 @@ export function JobTasksPanel({ tasks, canPlan }: JobTasksPanelProps) {
               <p className="truncate font-semibold text-white">{task.title}</p>
               <p className="mt-0.5 text-sm text-white/75">
                 {task.foreman ?? 'Unassigned'}
+                {/* Named only when there is one: "no supervisor" is a normal
+                    state and does not need saying on every row. */}
+                {task.supervisor && ` · under ${task.supervisor}`}
                 {task.lineCount > 0 &&
                   ` · ${task.lineCount} estimate ${task.lineCount === 1 ? 'line' : 'lines'}`}
               </p>
@@ -68,7 +77,7 @@ export function JobTasksPanel({ tasks, canPlan }: JobTasksPanelProps) {
           {canPlan && (
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
               <ButtonLink
-                href={routeTo.taskEditFromJob(task.id)}
+                href={routeTo.taskEditFromJob(task.id, jobOrigin)}
                 variant="ghost"
                 size="sm"
                 leftIcon={PencilLine}

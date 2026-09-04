@@ -35,7 +35,8 @@ export function useFileUpload(): {
     }
 
     if (projectId === null) {
-      setFormError('Select a client before running a takeoff.')
+      // Named as the picker names it — the field says "Project".
+      setFormError('Select a project before running a takeoff.')
       return
     }
 

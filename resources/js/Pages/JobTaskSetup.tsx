@@ -9,12 +9,11 @@ import {
   EmptyState,
   IconButton,
   SectionHeading,
-  SelectField,
   TextInput,
   WorkflowProgress,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { TaskLinePicker, type EstimateLine } from '@/components/jobs'
+import { CrewMemberPicker, TaskLinePicker, type EstimateLine } from '@/components/jobs'
 import { ROUTES, routeTo } from '@/constants'
 import type { SharedPageProps } from '@/types'
 import { cn } from '@/utils'
@@ -23,6 +22,8 @@ interface TaskRow {
   title: string
   /** Who runs it. One person — a task with two people in charge has nobody. */
   foreman_id: string
+  /** Who is over it. Optional: plenty of work needs nobody above the foreman. */
+  supervisor_id: string
   /** The estimate lines this task is the work for. */
   estimate_item_ids: number[]
 }
@@ -57,12 +58,25 @@ export interface JobTaskSetupProps {
   }[]
   /** Every line on the job's estimates, with whatever already claimed it. */
   estimateLines: readonly EstimateLine[]
+  /**
+   * Who can be given this work: the job's own crew, or the whole register when
+   * the job has no crew. Narrowed by the server — see
+   * JobTaskSetupController::staffing().
+   */
   foremen: readonly { readonly id: number; readonly name: string; readonly initials: string }[]
+  supervisors: readonly {
+    readonly id: number
+    readonly name: string
+    readonly initials: string
+  }[]
+  /** The crew both lists came from, so the screen can say why they are short. */
+  team: { readonly id: number; readonly name: string } | null
 }
 
 const emptyRow = (): TaskRow => ({
   title: '',
   foreman_id: '',
+  supervisor_id: '',
   estimate_item_ids: [],
 })
 
@@ -84,6 +98,8 @@ export default function JobTaskSetup({
   existingTasks,
   estimateLines,
   foremen,
+  supervisors,
+  team,
 }: JobTaskSetupProps) {
   const [rows, setRows] = useState<TaskRow[]>([emptyRow()])
   const [processing, setProcessing] = useState(false)
@@ -115,6 +131,7 @@ export default function JobTaskSetup({
         tasks: rows.map((row) => ({
           title: row.title,
           foreman_id: row.foreman_id === '' ? null : Number(row.foreman_id),
+          supervisor_id: row.supervisor_id === '' ? null : Number(row.supervisor_id),
           estimate_item_ids: row.estimate_item_ids,
         })),
       },
@@ -125,22 +142,22 @@ export default function JobTaskSetup({
     )
   }
 
-  /*
-   * A placeholder, not a choice: every task needs a foreman, so "assign later"
-   * was offering something the form goes on to refuse. It still carries no
-   * value, so an unopened select cannot quietly land on whoever is first.
-   */
-  const foremanOptions = [
-    { label: 'Select foreman', value: '' },
-    ...foremen.map((foreman) => ({ label: foreman.name, value: String(foreman.id) })),
-  ]
-
   return (
     <PageTransition>
       <Head title={`Add tasks — ${job.name}`} />
 
       <PageHeader
         title="Add tasks"
+        /*
+         * The crew is named here because it is why the foreman and supervisor
+         * lists below are short — "where is everyone" is the first question a
+         * narrowed picker raises.
+         */
+        subtitle={
+          team === null
+            ? 'This job has no crew, so anyone on the register can be given its work.'
+            : `Handed to ${team.name} — its foremen and supervisors are the ones offered below.`
+        }
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
           { label: job.name, href: routeTo.job(job.id) },
@@ -282,19 +299,47 @@ export default function JobTaskSetup({
                       />
                     </div>
 
-                    {/* Who runs it. One per task — see JobTask::foreman(). */}
-                    <SelectField
-                      id={`task-foreman-${index}`}
-                      label="Foreman"
-                      className="sm:max-w-sm"
-                      options={foremanOptions}
-                      value={row.foreman_id}
-                      disabled={processing}
-                      onChange={(event) => update(index, { foreman_id: event.target.value })}
-                      {...(errors[`tasks.${index}.foreman_id`]
-                        ? { error: errors[`tasks.${index}.foreman_id`] }
-                        : {})}
-                    />
+                    {/*
+                      Who runs it and who is over them — both from this job's
+                      own crew, which is why the lists are short.
+                    */}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <CrewMemberPicker
+                        id={`task-foreman-${index}`}
+                        label="Foreman"
+                        role="foreman"
+                        people={foremen}
+                        value={row.foreman_id}
+                        onChange={(next) => update(index, { foreman_id: next })}
+                        teamId={team?.id ?? null}
+                        teamName={team?.name ?? null}
+                        emptyLabel={
+                          foremen.length > 0 ? 'Select foreman' : 'No foreman on this crew'
+                        }
+                        disabled={processing}
+                        {...(errors[`tasks.${index}.foreman_id`]
+                          ? { error: errors[`tasks.${index}.foreman_id`] }
+                          : {})}
+                      />
+
+                      <CrewMemberPicker
+                        id={`task-supervisor-${index}`}
+                        label="Supervisor"
+                        role="supervisor"
+                        people={supervisors}
+                        value={row.supervisor_id}
+                        onChange={(next) => update(index, { supervisor_id: next })}
+                        teamId={team?.id ?? null}
+                        teamName={team?.name ?? null}
+                        emptyLabel={
+                          supervisors.length > 0 ? 'No supervisor' : 'No supervisor on this crew'
+                        }
+                        disabled={processing}
+                        {...(errors[`tasks.${index}.supervisor_id`]
+                          ? { error: errors[`tasks.${index}.supervisor_id`] }
+                          : {})}
+                      />
+                    </div>
                   </div>
                 </li>
               ))}

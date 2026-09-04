@@ -38,8 +38,8 @@ class InvoicePdfWriter
         foreach ([
             'Client' => $invoice->client,
             'Job' => $invoice->job?->name ?? '-',
-            'Invoice date' => $invoice->invoice_date->format('j M Y'),
-            'Due date' => $invoice->due_date?->format('j M Y') ?? '-',
+            'Invoice date' => $invoice->invoice_date->format('m/d/Y'),
+            'Due date' => $invoice->due_date?->format('m/d/Y') ?? '-',
             'Status' => str($invoice->displayStatus())->headline()->value(),
         ] as $label => $value) {
             $pdf->Cell(26, 5, $this->ascii($label), 0, 0);

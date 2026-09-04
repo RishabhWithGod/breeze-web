@@ -64,7 +64,7 @@ class EstimatePdfWriter
         foreach ([
             'Client' => $estimate->client,
             'Project' => $estimate->project,
-            'Issued' => $estimate->issued_on?->format('j M Y'),
+            'Issued' => $estimate->issued_on?->format('m/d/Y'),
             'Status' => str($estimate->status)->headline()->value(),
             'Source' => $estimate->ai_result_id ? 'Reviewed AI takeoff' : 'Manual',
         ] as $label => $value) {

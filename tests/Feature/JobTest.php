@@ -120,6 +120,8 @@ class JobTest extends TestCase
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
                 'save_as_draft' => true,
+                'start_date' => '2026-09-07',
+                'end_date' => '2026-09-21',
             ])
             ->assertSessionHas('success');
 
@@ -187,6 +189,8 @@ class JobTest extends TestCase
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
+                'start_date' => '2026-09-07',
+                'end_date' => '2026-09-21',
             ])
             ->assertSessionHas('success');
 
@@ -216,6 +220,8 @@ class JobTest extends TestCase
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
+                'start_date' => '2026-09-07',
+                'end_date' => '2026-09-21',
                 // Ticked regardless — the linked estimate takes priority over this.
                 'create_estimate' => true,
             ])

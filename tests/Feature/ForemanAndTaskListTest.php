@@ -43,22 +43,26 @@ class ForemanAndTaskListTest extends TestCase
         $this->taskFor($dana, 'Second fix')
             ->update(['status' => JobTask::STATUS_COMPLETED]);
 
+        /*
+         * Neither has been put on a crew, so both are under "Not on a team" —
+         * a real state the register shows rather than hides.
+         */
         $this->actingAs($this->planner)
-            ->get(route('foremen.index'))
+            ->get(route('teams.index'))
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Foremen')
-                ->has('foremen.data', 2)
-                // The screen reads `foremen.meta.current_page` for its pager.
-                ->where('foremen.meta.current_page', 1)
-                ->has('foremen.meta.last_page')
+                ->component('Teams')
+                ->has('unassigned', 2)
+                // The screen reads `teams.meta.current_page` for its pager.
+                ->where('teams.meta.current_page', 1)
+                ->has('teams.meta.last_page')
                 // Ordered by name, and the counts are the point of the list.
-                ->where('foremen.data.0.name', 'Dana Wu')
-                ->where('foremen.data.0.openTasks', 2)
+                ->where('unassigned.0.name', 'Dana Wu')
+                ->where('unassigned.0.openTasks', 2)
                 // Two open tasks, but across two different jobs.
-                ->where('foremen.data.0.openJobs', 2)
-                ->where('foremen.data.1.name', 'Luis Ortega')
-                ->where('foremen.data.1.openTasks', 0)
-                ->where('foremen.data.1.openJobs', 0)
+                ->where('unassigned.0.openJobs', 2)
+                ->where('unassigned.1.name', 'Luis Ortega')
+                ->where('unassigned.1.openTasks', 0)
+                ->where('unassigned.1.openJobs', 0)
                 ->where('canManage', true));
     }
 
@@ -119,6 +123,7 @@ class ForemanAndTaskListTest extends TestCase
         $this->actingAs($this->planner)
             ->put(route('foremen.update', $dana), [
                 'name' => 'Dana Okonkwo',
+                'role' => 'foreman',
                 'phone' => '(415) 555-0134',
                 'email' => 'dana@example.com',
                 'licence_number' => 'EC-4471',
@@ -142,10 +147,11 @@ class ForemanAndTaskListTest extends TestCase
         $dana = Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW']);
 
         $this->actingAs($this->planner)
-            ->put(route('foremen.update', $dana), ['name' => 'Dana Wu', 'phone' => '555'])
+            ->put(route('foremen.update', $dana), ['name' => 'Dana Wu', 'role' => 'foreman', 'phone' => '4155550134'])
             ->assertSessionHasNoErrors();
 
-        $this->assertSame('555', $dana->refresh()->phone);
+        // Stored the one way the app writes a number, whatever was typed.
+        $this->assertSame('(415) 555-0134', $dana->refresh()->phone);
     }
 
     public function test_a_name_another_foreman_already_has_is_refused_on_edit(): void
@@ -154,7 +160,7 @@ class ForemanAndTaskListTest extends TestCase
         $dana = Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW']);
 
         $this->actingAs($this->planner)
-            ->put(route('foremen.update', $dana), ['name' => 'Luis Ortega'])
+            ->put(route('foremen.update', $dana), ['name' => 'Luis Ortega', 'role' => 'foreman'])
             ->assertSessionHasErrors('name');
 
         $this->assertSame('Dana Wu', $dana->refresh()->name);
@@ -166,7 +172,7 @@ class ForemanAndTaskListTest extends TestCase
 
         $this->actingAs($this->planner)
             ->delete(route('foremen.destroy', $dana))
-            ->assertRedirect(route('foremen.index'))
+            ->assertRedirect(route('teams.index'))
             ->assertSessionHas('warning');
 
         $this->assertSame(0, Foreman::count());
@@ -197,7 +203,7 @@ class ForemanAndTaskListTest extends TestCase
             ->assertForbidden();
 
         $this->actingAs($this->electrician)
-            ->put(route('foremen.update', $dana), ['name' => 'Renamed'])
+            ->put(route('foremen.update', $dana), ['name' => 'Renamed', 'role' => 'foreman'])
             ->assertForbidden();
 
         $this->actingAs($this->electrician)
@@ -228,8 +234,8 @@ class ForemanAndTaskListTest extends TestCase
 
         // Nobody is carrying work on a job that no longer exists.
         $this->actingAs($this->planner)
-            ->get(route('foremen.index'))
-            ->assertInertia(fn (Assert $page) => $page->where('foremen.data.0.openTasks', 0));
+            ->get(route('teams.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('unassigned.0.openTasks', 0));
     }
 
     public function test_a_foreman_is_added_with_the_details_recorded_alongside_the_name(): void
@@ -237,13 +243,14 @@ class ForemanAndTaskListTest extends TestCase
         $this->actingAs($this->planner)
             ->post(route('foremen.store'), [
                 'name' => 'Dana Wu',
+                'role' => 'foreman',
                 'phone' => '  (415) 555-0134  ',
                 'email' => 'dana@example.com',
                 'licence_number' => 'EC-4471',
                 'started_on' => '2024-03-04',
                 'notes' => 'Runs service work.',
             ])
-            ->assertRedirect(route('foremen.index'));
+            ->assertRedirect(route('teams.index'));
 
         $foreman = Foreman::sole();
 
@@ -261,7 +268,7 @@ class ForemanAndTaskListTest extends TestCase
         // Only the name is required, so "has a phone number" has to be one
         // check everywhere rather than two.
         $this->actingAs($this->planner)
-            ->post(route('foremen.store'), ['name' => 'Dana Wu', 'phone' => '  '])
+            ->post(route('foremen.store'), ['name' => 'Dana Wu', 'role' => 'foreman', 'phone' => '  '])
             ->assertSessionHasNoErrors();
 
         $foreman = Foreman::sole();
@@ -274,7 +281,7 @@ class ForemanAndTaskListTest extends TestCase
     public function test_an_address_that_is_not_one_is_refused(): void
     {
         $this->actingAs($this->planner)
-            ->post(route('foremen.store'), ['name' => 'Dana Wu', 'email' => 'not-an-email'])
+            ->post(route('foremen.store'), ['name' => 'Dana Wu', 'role' => 'foreman', 'email' => 'not-an-email'])
             ->assertSessionHasErrors('email');
 
         $this->assertSame(0, Foreman::count());
@@ -292,12 +299,12 @@ class ForemanAndTaskListTest extends TestCase
         ]);
 
         $this->actingAs($this->planner)
-            ->get(route('foremen.index'))
+            ->get(route('teams.index'))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('foremen.data.0.phone', '(415) 555-0134')
-                ->where('foremen.data.0.email', 'dana@example.com')
-                ->where('foremen.data.0.licenceNumber', 'EC-4471')
-                ->where('foremen.data.0.joinedOn', '2024-03-04'));
+                ->where('unassigned.0.phone', '(415) 555-0134')
+                ->where('unassigned.0.email', 'dana@example.com')
+                ->where('unassigned.0.licenceNumber', 'EC-4471')
+                ->where('unassigned.0.joinedOn', '2024-03-04'));
     }
 
     public function test_initials_are_always_taken_from_the_name(): void
@@ -305,11 +312,12 @@ class ForemanAndTaskListTest extends TestCase
         $this->actingAs($this->planner)
             ->post(route('foremen.store'), [
                 'name' => 'dana wu',
+                'role' => 'foreman',
                 // The form has no initials field, and a request that sends one
                 // anyway does not get to override what the name says.
                 'initials' => 'ZZ',
             ])
-            ->assertRedirect(route('foremen.index'))
+            ->assertRedirect(route('teams.index'))
             ->assertSessionHas('success');
 
         $this->assertSame('DW', Foreman::sole()->initials);
@@ -344,7 +352,7 @@ class ForemanAndTaskListTest extends TestCase
     public function test_anyone_signed_in_can_read_the_foreman_list(): void
     {
         $this->actingAs($this->electrician)
-            ->get(route('foremen.index'))
+            ->get(route('teams.index'))
             ->assertInertia(fn (Assert $page) => $page->where('canManage', false));
     }
 

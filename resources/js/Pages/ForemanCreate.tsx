@@ -8,14 +8,20 @@ import {
   ButtonLink,
   Card,
   CardHeader,
+  SelectField,
   TextArea,
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
+import { formatUsPhone } from '@/utils'
 
 interface ForemanDraft {
   name: string
+  /** What they do on the crew: `supervisor` or `foreman`. */
+  role: string
+  /** Which crew they are on. Empty means none — a real state, not a gap. */
+  team_id: string
   phone: string
   email: string
   licence_number: string
@@ -23,21 +29,31 @@ interface ForemanDraft {
   notes: string
 }
 
+export interface ForemanCreateProps {
+  /** The crews someone can be put on. Empty until the first team is added. */
+  teams: readonly { readonly id: number; readonly name: string }[]
+  roles: readonly { readonly value: string; readonly label: string }[]
+}
+
 /**
- * Add Foreman.
+ * Add Member.
  *
- * The name is the only thing required: a foreman exists to be handed work, and
- * nothing else is needed to do that. The rest is what you reach for once they
- * have it — a number to call, a licence to quote — so it is on this screen,
- * optional, rather than on a second one nobody would come back to.
+ * A name and a role are what is required: the register exists to say who runs
+ * work and who supervises it, and neither question has a sensible default. The
+ * rest is what you reach for once they are on it — a number to call, a licence
+ * to quote — so it is on this screen, optional, rather than on a second one
+ * nobody would come back to.
  *
  * Initials are not asked for at all. "Dana Wu" gives "DW", and a field the app
  * can fill in itself is one more thing to type and one more thing to get wrong.
  */
-export default function ForemanCreate() {
+export default function ForemanCreate({ teams, roles }: ForemanCreateProps) {
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<ForemanDraft>({
       name: '',
+      // Most of the register is foremen; a supervisor is the exception you pick.
+      role: 'foreman',
+      team_id: '',
       phone: '',
       email: '',
       licence_number: '',
@@ -47,7 +63,7 @@ export default function ForemanCreate() {
 
   /**
    * Inertia keeps server errors until the next request, which would leave
-   * "Enter the foreman's name" sitting under a field the user has just filled
+   * "Enter the member's name" sitting under a field the user has just filled
    * in, so each edit clears its own message.
    */
   const update = <K extends FormDataKeys<ForemanDraft>>(
@@ -65,17 +81,17 @@ export default function ForemanCreate() {
 
   return (
     <PageTransition>
-      <Head title="Add Foreman" />
+      <Head title="Add Member" />
 
       <PageHeader
-        title="Add Foreman"
+        title="Add Member"
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
-          { label: 'Foremen', href: ROUTES.foremen },
-          { label: 'New Foreman' },
+          { label: 'Teams', href: ROUTES.teams },
+          { label: 'New Member' },
         ]}
         actions={
-          <ButtonLink href={ROUTES.foremen} variant="secondary" leftIcon={ArrowLeft}>
+          <ButtonLink href={ROUTES.teams} variant="secondary" leftIcon={ArrowLeft}>
             Back
           </ButtonLink>
         }
@@ -85,24 +101,56 @@ export default function ForemanCreate() {
         <AnimatePresence initial={false}>
           {hasErrors && (
             <Alert key="form-error" tone="danger" title="Check the form">
-              Some fields need attention before this foreman can be added.
+              Some fields need attention before this member can be added.
             </Alert>
           )}
         </AnimatePresence>
 
         <Card padding="lg">
-          <CardHeader title="Foreman details" />
+          <CardHeader title="Member details" />
 
           <div className="space-y-6">
             <TextInput
               id="foreman-name"
-              label="Foreman Name*"
+              label="Member Name*"
               placeholder="e.g. Dana Wu"
               autoComplete="off"
               value={data.name}
               onChange={(event) => update('name', event.target.value)}
               {...(errors.name ? { error: errors.name } : {})}
             />
+
+            <div className="grid gap-6 sm:grid-cols-2">
+              {/*
+                Asked before anything else about them, because it is what the
+                register is for: who supervises, and who runs the work.
+              */}
+              <SelectField
+                id="foreman-role"
+                label="Role*"
+                options={roles.map((role) => ({ label: role.label, value: role.value }))}
+                value={data.role}
+                onChange={(event) => update('role', event.target.value)}
+                {...(errors.role ? { error: errors.role } : {})}
+              />
+
+              {/*
+                Optional, and blank is a real answer: somebody can be hired
+                before their crew is decided, and the register lists them under
+                "Not on a team" rather than inventing one.
+              */}
+              <SelectField
+                id="foreman-team"
+                label="Team"
+                options={[
+                  { label: teams.length > 0 ? 'Not on a team' : 'No teams yet', value: '' },
+                  ...teams.map((team) => ({ label: team.name, value: String(team.id) })),
+                ]}
+                value={data.team_id}
+                onChange={(event) => update('team_id', event.target.value)}
+                {...(errors.team_id ? { error: errors.team_id } : {})}
+              />
+            </div>
 
             <div className="grid gap-6 sm:grid-cols-2">
               <TextInput
@@ -126,14 +174,20 @@ export default function ForemanCreate() {
             </div>
 
             <div className="grid gap-6 sm:grid-cols-2">
+              {/*
+                Shaped as it is typed, so the field shows what will be stored
+                rather than correcting it after the fact. Whether the number is
+                a real one is still the server's answer — see UsPhoneNumber.
+              */}
               <TextInput
                 id="foreman-phone"
                 label="Phone"
                 type="tel"
-                placeholder="e.g. (415) 555-0134"
+                inputMode="tel"
+                placeholder="(415) 555-0134"
                 autoComplete="off"
                 value={data.phone}
-                onChange={(event) => update('phone', event.target.value)}
+                onChange={(event) => update('phone', formatUsPhone(event.target.value))}
                 {...(errors.phone ? { error: errors.phone } : {})}
               />
 
@@ -164,11 +218,11 @@ export default function ForemanCreate() {
         </Card>
 
         <div className="flex flex-wrap items-center justify-end gap-3">
-          <ButtonLink href={ROUTES.foremen} variant="white">
+          <ButtonLink href={ROUTES.teams} variant="white">
             Cancel
           </ButtonLink>
           <Button type="submit" leftIcon={HardHat} isLoading={processing}>
-            Add Foreman
+            Add Member
           </Button>
         </div>
       </form>

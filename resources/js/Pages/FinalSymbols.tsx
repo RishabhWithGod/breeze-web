@@ -13,7 +13,7 @@ import {
   TextInput,
   WorkflowProgress,
 } from '@/components/common'
-import { JobSitePicker } from '@/components/jobs'
+import { JobSitePicker, TeamPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition, StepFooter } from '@/components/layout'
 import { JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type {
@@ -43,6 +43,8 @@ interface CreateJobForm {
   address_ids: number[]
   description: string
   job_type: JobType | ''
+  /** The crew this job is handed to. Empty means none yet. */
+  team_id: string
   start_date: string
   end_date: string
   budget: string
@@ -66,6 +68,8 @@ interface FinalResultSummary {
     readonly addressIds: readonly number[]
     readonly description: string | null
     readonly jobType: JobType | null
+    /** The crew the job is handed to. Null for a job with no team yet. */
+    readonly teamId: number | null
     readonly startDate: string | null
     readonly endDate: string | null
     readonly budget: number | null
@@ -112,6 +116,8 @@ export interface FinalSymbolsProps {
   circuits: readonly CircuitRow[]
   /** Every project, with its sites, exactly as Create Job offers them. */
   projects: readonly ProjectOption[]
+  /** The crews this job can be handed to. */
+  teams: readonly { readonly id: number; readonly name: string }[]
   /** The takeoff's own client — where the form starts. */
   defaultProjectId: number
   history: readonly ApprovalHistoryEntry[]
@@ -124,7 +130,12 @@ export interface FinalSymbolsProps {
  * and is what the job and estimate are built from. The AI response is kept for
  * audit only and is never read again past this point.
  */
-export default function FinalSymbols({ result, projects, defaultProjectId }: FinalSymbolsProps) {
+export default function FinalSymbols({
+  result,
+  projects,
+  teams,
+  defaultProjectId,
+}: FinalSymbolsProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   /*
@@ -149,6 +160,7 @@ export default function FinalSymbols({ result, projects, defaultProjectId }: Fin
      * is the building that decides the type, and a client can own a house and a
      * warehouse. Still a field: this site's usual type is not every job's.
      */
+    team_id: result.job?.teamId ? String(result.job.teamId) : '',
     job_type:
       result.job?.jobType ??
       projects
@@ -327,16 +339,18 @@ export default function FinalSymbols({ result, projects, defaultProjectId }: Fin
             <TextInput
               id="job-start"
               type="date"
-              label="Start Date"
+              label="Start Date*"
               value={jobForm.data.start_date}
+              max={jobForm.data.end_date || undefined}
               onChange={(event) => updateJobField('start_date', event.target.value)}
               {...(jobForm.errors.start_date ? { error: jobForm.errors.start_date } : {})}
             />
             <TextInput
               id="job-end"
               type="date"
-              label="End Date"
+              label="End Date*"
               value={jobForm.data.end_date}
+              min={jobForm.data.start_date || undefined}
               onChange={(event) => updateJobField('end_date', event.target.value)}
               {...(jobForm.errors.end_date ? { error: jobForm.errors.end_date } : {})}
             />
@@ -362,6 +376,19 @@ export default function FinalSymbols({ result, projects, defaultProjectId }: Fin
             value={jobForm.data.description}
             onChange={(event) => updateJobField('description', event.target.value)}
             {...(jobForm.errors.description ? { error: jobForm.errors.description } : {})}
+          />
+
+          {/*
+            Who does the work. Picking a crew here is what narrows the foreman
+            and supervisor pickers on the task step that follows.
+          */}
+          <TeamPicker
+            teams={teams}
+            value={jobForm.data.team_id}
+            onChange={(next) => updateJobField('team_id', next)}
+            hint="Tasks on this job are handed to this crew."
+            disabled={jobForm.processing}
+            {...(jobForm.errors.team_id ? { error: jobForm.errors.team_id } : {})}
           />
 
           <RadioGroup

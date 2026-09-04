@@ -24,7 +24,7 @@ export function ShiftDetailModal({ shift, onClose, onRemove }: ShiftDetailModalP
       isOpen={shift !== null}
       onClose={onClose}
       title={shift?.jobName ?? 'Shift'}
-      description={shift ? formatDate(`${shift.date}T00:00:00`, 'EEEE, MMMM d, yyyy') : undefined}
+      description={shift ? formatDate(`${shift.date}T00:00:00`, 'EEEE, MM/dd/yyyy') : undefined}
       size="md"
       footer={
         shift && (
@@ -34,7 +34,7 @@ export function ShiftDetailModal({ shift, onClose, onRemove }: ShiftDetailModalP
             </Button>
             <div className="flex items-center gap-3">
               <Link
-                href={routeTo.job(shift.jobId)}
+                href={routeTo.jobFrom(shift.jobId, 'scheduling-calendar')}
                 className="text-sm font-medium text-brand transition-colors hover:text-white"
               >
                 Open job
@@ -70,6 +70,27 @@ export function ShiftDetailModal({ shift, onClose, onRemove }: ShiftDetailModalP
               <dt className="text-sm text-white/75">Length</dt>
               <dd className="mt-0.5 font-semibold text-white">
                 {shift.durationHours} hours
+              </dd>
+            </div>
+            {/*
+              Who is on the work, read off its tasks rather than off the
+              booking: staffing changes after a shift is booked, and showing
+              last week's answer is worse than showing none.
+            */}
+            <div>
+              <dt className="text-sm text-white/75">Supervisor</dt>
+              <dd className="mt-0.5 font-semibold text-white">
+                {shift.supervisors.length > 0
+                  ? shift.supervisors.map((person) => person.name).join(', ')
+                  : 'None assigned'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm text-white/75">Foreman</dt>
+              <dd className="mt-0.5 font-semibold text-white">
+                {shift.foremen.length > 0
+                  ? shift.foremen.map((person) => person.name).join(', ')
+                  : 'None assigned'}
               </dd>
             </div>
             <div>

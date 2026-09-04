@@ -28,11 +28,24 @@ class SchedulableJobResource extends JsonResource
             'requiredSkills' => $this->required_skills ?? [],
             'value' => $this->budget === null ? null : (float) $this->budget,
             'startDate' => $this->start_date?->toISOString(),
+            // Booking a crew reads both: the days a job runs are the days it
+            // was given, not a number somebody guesses at the modal.
+            'endDate' => $this->end_date?->toISOString(),
             'createdAt' => $this->created_at?->toISOString(),
-            'foreman' => $this->foreman ? [
-                'name' => $this->foreman->name,
-                'initials' => $this->foreman->initials,
-            ] : null,
+            /*
+             * The crew this job is handed to. What every scheduling screen
+             * groups and labels by — a shift is booked for a team.
+             */
+            'teamName' => $this->team?->name,
+            /*
+             * Who is already on this job.
+             *
+             * Both are assigned per task, so a job can have several of each —
+             * or, before its work is broken down, none. Older jobs still carry
+             * a foreman of their own; that is the fallback, not the answer.
+             */
+            'foremen' => $this->assignedForemen(),
+            'supervisors' => $this->assignedSupervisors(),
             // Present on the calendar's strip so an already-booked job can say so
             // rather than looking unassigned.
             'shiftCount' => $this->schedules_count ?? 0,

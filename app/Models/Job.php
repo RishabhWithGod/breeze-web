@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
 class Job extends Model
@@ -58,6 +59,7 @@ class Job extends Model
 
     protected $fillable = [
         'foreman_id',
+        'team_id',
         'project_id',
         'ai_result_id',
         'name',
@@ -110,6 +112,74 @@ class Job extends Model
     public function foreman(): BelongsTo
     {
         return $this->belongsTo(Foreman::class);
+    }
+
+    /**
+     * The crew this job is handed to.
+     *
+     * What narrows every later choice: the foreman running a task and the
+     * supervisor over it are both picked from here rather than from the whole
+     * register. Null for a job raised before its crew was decided.
+     *
+     * @return BelongsTo<Team, $this>
+     */
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * The foremen actually on this job, named once each.
+     *
+     * They are assigned per task now — a job is not one person's — so this
+     * gathers them from the work rather than from the job's own column. That
+     * column is only read when there are no tasks to read from: jobs raised
+     * before the change still carry one, and it is the only answer they have.
+     *
+     * @return list<array{name: string, initials: string}>
+     */
+    public function assignedForemen(): array
+    {
+        $fromTasks = $this->tasks
+            ->pluck('foreman')
+            ->filter()
+            ->unique('id')
+            ->values();
+
+        $foremen = $fromTasks->isNotEmpty()
+            ? $fromTasks
+            : collect([$this->foreman])->filter();
+
+        return self::named($foremen);
+    }
+
+    /**
+     * The supervisors over this job's work, named once each.
+     *
+     * No fallback: supervisors only ever existed on tasks, so a job with none
+     * has none — there is no older column to read instead.
+     *
+     * @return list<array{name: string, initials: string}>
+     */
+    public function assignedSupervisors(): array
+    {
+        return self::named(
+            $this->tasks->pluck('supervisor')->filter()->unique('id')->values(),
+        );
+    }
+
+    /**
+     * @param  Collection<int, Foreman>  $people
+     * @return list<array{name: string, initials: string}>
+     */
+    private static function named(Collection $people): array
+    {
+        return $people
+            ->map(fn (Foreman $person) => [
+                'name' => $person->name,
+                'initials' => $person->initials,
+            ])
+            ->all();
     }
 
     /** The takeoff this job was created from, when it came from one. */

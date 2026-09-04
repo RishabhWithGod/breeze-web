@@ -21,7 +21,8 @@ import {
 } from '@/components/common'
 import { REVIEW_STATUS_LABEL, REVIEW_STATUS_TONE, routeTo } from '@/constants'
 import type { SymbolReviewRow } from '@/types'
-import { cn, formatRelative, symbolColor, symbolLabel } from '@/utils'
+import { cn, formatRelative, symbolLabel } from '@/utils'
+import type { SymbolColor } from '@/utils'
 
 /** Which inline editor the card currently shows. */
 type CardMode = 'rename' | 'split' | 'notes' | 'history' | null
@@ -36,6 +37,13 @@ export interface SymbolCardProps {
   index?: number
   /** Highlighted because its marker is selected on the drawing — distinct from `selected`, which is merge-checkbox state. */
   focused?: boolean
+  /**
+   * This category's colour, from the drawing's one canonical map. Required,
+   * not optional: an optional colour meant a `?? symbolColor(name)` fallback,
+   * and that fallback was a second mapping that could disagree with the legend
+   * — the exact bug the map exists to prevent.
+   */
+  color: SymbolColor
 }
 
 /**
@@ -57,6 +65,7 @@ export function SymbolCard({
   onSelect,
   index = 0,
   focused = false,
+  color,
 }: SymbolCardProps) {
   const [mode, setMode] = useState<CardMode>(null)
   // Null means "show the server's count"; a string means the field is being typed in.
@@ -108,7 +117,6 @@ export function SymbolCard({
   }, [countDraft, post, resultId, row.finalCount, row.id])
 
   const isRejected = row.status === 'rejected'
-  const color = symbolColor(row.name)
 
   return (
     <Card
@@ -134,7 +142,16 @@ export function SymbolCard({
           height rather than `aspect-square` — a flex column with a taller
           sibling (a long name, notes) can otherwise stretch an
           aspect-ratioed box past its ratio in some browsers. */}
-      <div className="relative flex h-32 w-full shrink-0 items-center justify-center border-b border-hairline bg-white/5">
+      {/*
+        A solid white plate, not a 5% tint.
+        
+        These crops are line art cut from the drawing: black strokes, often on
+        a transparent background. On the dark card that meant black lines on
+        near-black, and the symbol the reviewer is being asked to judge was the
+        one thing they could not see. White is the paper the symbol was drawn
+        on, so it is the background it reads on.
+      */}
+      <div className="relative flex h-32 w-full shrink-0 items-center justify-center border-b border-hairline bg-white">
         {row.cropUrl && !imageFailed ? (
           <img
             src={row.cropUrl}
@@ -150,12 +167,15 @@ export function SymbolCard({
             }}
           />
         ) : (
-          <span className="px-4 text-center text-2xs text-white/65">
+          <span className="px-4 text-center text-2xs text-navy-900/60">
             {row.cropUrl ? 'Image failed to load' : 'No image for this symbol'}
           </span>
         )}
 
-        <div className="absolute top-2 left-2">
+        {/* On its own dark plate: the checkbox is drawn for this app's dark
+            chrome, and its unchecked state is a hairline on white/10 — which
+            on the white crop below is nothing at all. */}
+        <div className="absolute top-2 left-2 rounded-md bg-navy-900/85 p-1">
           <Checkbox
             id={`select-symbol-${row.id}`}
             checked={selected}
@@ -169,23 +189,27 @@ export function SymbolCard({
           Only states a reviewer acts on. The engine's own verdict, its category and
           its provenance all moved into Advanced details.
         */}
-        <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
-          {row.origin === 'needs_review' && (
-            <Badge tone="warning" size="sm">
-              Needs review
-            </Badge>
-          )}
-          {isRejected && (
-            <Badge tone="danger" size="sm">
-              Rejected
-            </Badge>
-          )}
-          {row.isModified && (
-            <Badge tone="info" size="sm">
-              Edited
-            </Badge>
-          )}
-        </div>
+        {/* Badges are drawn for dark chrome too — tinted fills with light text,
+            which the white plate below would swallow. They keep their own. */}
+        {(row.origin === 'needs_review' || isRejected || row.isModified) && (
+          <div className="absolute top-2 right-2 flex flex-col items-end gap-1 rounded-panel bg-navy-900/85 p-1">
+            {row.origin === 'needs_review' && (
+              <Badge tone="warning" size="sm">
+                Needs review
+              </Badge>
+            )}
+            {isRejected && (
+              <Badge tone="danger" size="sm">
+                Rejected
+              </Badge>
+            )}
+            {row.isModified && (
+              <Badge tone="info" size="sm">
+                Edited
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-3.5">

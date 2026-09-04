@@ -3,6 +3,7 @@ import { useForm } from '@inertiajs/react'
 import { Phone } from 'lucide-react'
 import { Button, Modal, TextInput } from '@/components/common'
 import { routeTo } from '@/constants'
+import { formatUsPhone } from '@/utils'
 
 export interface ChangePhoneModalProps {
   isOpen: boolean
@@ -65,9 +66,11 @@ export function ChangePhoneModal({ isOpen, onClose }: ChangePhoneModalProps) {
         <TextInput
           id="new-phone"
           type="tel"
+          inputMode="tel"
           label="New Phone Number"
+          placeholder="(415) 555-0134"
           value={phoneForm.data.phone}
-          onChange={(event) => phoneForm.setData('phone', event.target.value)}
+          onChange={(event) => phoneForm.setData('phone', formatUsPhone(event.target.value))}
           error={phoneForm.errors.phone}
         />
       ) : (

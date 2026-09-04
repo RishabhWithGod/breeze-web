@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Scheduling\ScheduleBuilder;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\JobOrigin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -91,10 +92,42 @@ class JobTaskSetupController extends Controller
                 'id' => $task->id,
                 'title' => $task->title,
                 'foreman' => $task->foreman?->name,
+                'supervisor' => $task->supervisor?->name,
                 'lineCount' => $task->estimateItems->count(),
             ])->values() ?? [],
-            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
+            ...$this->staffing($job),
         ]);
+    }
+
+    /**
+     * Who a task on this job can be given to.
+     *
+     * Narrowed to the job's own crew: the whole point of handing a job to a
+     * team is that the work on it goes to that team. A job with no crew falls
+     * back to the whole register — otherwise a job raised before teams existed
+     * could not be staffed at all, which would be a worse answer than a long
+     * list.
+     *
+     * @return array<string, mixed>
+     */
+    private function staffing(Job $job): array
+    {
+        $team = $job->team;
+
+        return [
+            'foremen' => $team === null
+                ? Foreman::orderBy('name')->get(['id', 'name', 'initials'])
+                : $team->foremen()->get(['id', 'name', 'initials']),
+            'supervisors' => $team === null
+                ? Foreman::where('role', Foreman::ROLE_SUPERVISOR)
+                    ->orderBy('name')->get(['id', 'name', 'initials'])
+                : $team->supervisors()->get(['id', 'name', 'initials']),
+            /*
+             * Said on the screen, because "why is this list so short" is the
+             * first question a narrowed picker raises.
+             */
+            'team' => $team === null ? null : ['id' => $team->id, 'name' => $team->name],
+        ];
     }
 
     /**
@@ -119,6 +152,11 @@ class JobTaskSetupController extends Controller
             'tasks.*.title' => ['required', 'string', 'max:200'],
             'tasks.*.foreman_id' => ['required', 'integer', 'exists:foremen,id'],
             /*
+             * Who is over the task. Optional: plenty of work needs somebody
+             * running it and nobody above them.
+             */
+            'tasks.*.supervisor_id' => ['nullable', 'integer', 'exists:foremen,id'],
+            /*
              * No `distinct`: with a nested wildcard it compares across every
              * task, not within one, and would report the right refusal under an
              * unreadable key. Checked below, where the message can say what
@@ -135,6 +173,12 @@ class JobTaskSetupController extends Controller
             'tasks.*.estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
             'tasks.*.estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
+
+        // Everyone named across every row, against the job's own crew.
+        $this->refuseOffCrew($job, array_merge(
+            array_column($data['tasks'], 'foreman_id'),
+            array_column($data['tasks'], 'supervisor_id'),
+        ));
 
         /*
          * Everything is checked before anything is built. Creating the schedule
@@ -166,6 +210,7 @@ class JobTaskSetupController extends Controller
                     'created_by' => $request->user()?->id,
                     'title' => trim($row['title']),
                     'foreman_id' => $row['foreman_id'] ?? null,
+                    'supervisor_id' => $row['supervisor_id'] ?? null,
                     /*
                      * Read off the lines rather than typed: the estimate already
                      * priced this work in hours, and asking for the number again
@@ -243,6 +288,7 @@ class JobTaskSetupController extends Controller
                 'title' => $task->title,
                 'status' => $task->status,
                 'foremanId' => $task->foreman_id,
+                'supervisorId' => $task->supervisor_id,
                 'lineIds' => $task->estimateItems->pluck('id')->values(),
             ],
             /*
@@ -252,7 +298,7 @@ class JobTaskSetupController extends Controller
              * the moment it was unticked.
              */
             'estimateLines' => $this->lines($job, $task),
-            'foremen' => Foreman::orderBy('name')->get(['id', 'name', 'initials']),
+            ...$this->staffing($job),
             'statuses' => JobTask::STATUSES,
         ]);
     }
@@ -267,6 +313,34 @@ class JobTaskSetupController extends Controller
      * All in one transaction, because a plan that half-agrees with its estimate
      * is worse than one that disagrees outright.
      */
+    /**
+     * Refuses anyone who is not on the job's crew.
+     *
+     * The pickers only offer the crew, so this catches a hand-made request
+     * rather than a mistake at the screen — but the rule has to live on the
+     * server or the narrowing is decoration. A job with no crew is not
+     * narrowed: it has nobody to be off.
+     *
+     * @param  array<int, int|null>  $ids
+     */
+    private function refuseOffCrew(Job $job, array $ids): void
+    {
+        $team = $job->team;
+        $given = array_values(array_filter($ids));
+
+        if ($team === null || $given === []) {
+            return;
+        }
+
+        $onCrew = Foreman::whereKey($given)->where('team_id', $team->id)->pluck('id')->all();
+
+        if (array_diff($given, $onCrew) !== []) {
+            throw ValidationException::withMessages([
+                'foreman_id' => "That person is not on {$team->name}.",
+            ]);
+        }
+    }
+
     public function update(Request $request, JobTask $task): RedirectResponse
     {
         $job = $this->jobBehind($task);
@@ -279,6 +353,7 @@ class JobTaskSetupController extends Controller
             'title' => ['required', 'string', 'max:200'],
             'status' => ['required', Rule::in(JobTask::STATUSES)],
             'foreman_id' => ['required', 'integer', 'exists:foremen,id'],
+            'supervisor_id' => ['nullable', 'integer', 'exists:foremen,id'],
             'estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],
@@ -289,6 +364,8 @@ class JobTaskSetupController extends Controller
             'estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
             'estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
+
+        $this->refuseOffCrew($job, [$data['foreman_id'], $data['supervisor_id'] ?? null]);
 
         $title = trim($data['title']);
 
@@ -329,6 +406,7 @@ class JobTaskSetupController extends Controller
                 'title' => $title,
                 'status' => $data['status'],
                 'foreman_id' => $data['foreman_id'],
+                'supervisor_id' => $data['supervisor_id'] ?? null,
                 // Re-read off the labour it now covers, never typed.
                 'estimated_hours' => $this->hoursOn($ids),
             ]);
@@ -406,7 +484,13 @@ class JobTaskSetupController extends Controller
     {
         return match ($request->query('from')) {
             'tasks' => route('tasks.index'),
-            'job' => route('jobs.show', $job),
+            /*
+             * Back to the job — carrying whatever trail the job itself was
+             * opened on. Without `origin`, coming out of a task landed on a job
+             * that had forgotten it came from Scheduling, and the next Back
+             * dropped the planner in the jobs list instead.
+             */
+            'job' => JobOrigin::jobUrl($job->id, $request->query('origin')),
             default => null,
         };
     }
@@ -421,7 +505,15 @@ class JobTaskSetupController extends Controller
     {
         $from = $request->query('from');
 
-        return in_array($from, ['tasks', 'job'], true) ? $url.'?from='.$from : $url;
+        if (! in_array($from, ['tasks', 'job'], true)) {
+            return $url;
+        }
+
+        // The job's own trail rides along, so a save walks the same path out
+        // that the planner walked in.
+        $origin = JobOrigin::name($request->query('origin'));
+
+        return $url.'?from='.$from.($origin === null ? '' : '&origin='.$origin);
     }
 
     /**

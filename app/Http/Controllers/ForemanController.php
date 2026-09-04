@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Foreman;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
+use App\Models\Team;
 use App\Models\User;
 use App\Policies\JobSchedulePolicy;
+use App\Rules\UsPhoneNumber;
+use App\Support\UsPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -73,6 +76,8 @@ class ForemanController extends Controller
      */
     public function show(Foreman $foreman): Response
     {
+        $foreman->loadMissing('team');
+
         $open = $this->load(closed: false)[$foreman->id] ?? null;
         $done = $this->load(closed: true)[$foreman->id] ?? null;
 
@@ -90,6 +95,12 @@ class ForemanController extends Controller
                 'id' => $foreman->id,
                 'name' => $foreman->name,
                 'initials' => $foreman->initials,
+                'role' => $foreman->role,
+                'roleLabel' => $foreman->roleLabel(),
+                'team' => $foreman->team === null ? null : [
+                    'id' => $foreman->team->id,
+                    'name' => $foreman->team->name,
+                ],
                 'phone' => $foreman->phone,
                 'email' => $foreman->email,
                 'licenceNumber' => $foreman->licence_number,
@@ -150,7 +161,23 @@ class ForemanController extends Controller
     {
         abort_unless($this->canManage($request->user()), 403);
 
-        return Inertia::render('ForemanCreate');
+        return Inertia::render('ForemanCreate', $this->formProps());
+    }
+
+    /**
+     * What the add and edit forms both need: the crews, and the roles.
+     *
+     * @return array<string, mixed>
+     */
+    private function formProps(): array
+    {
+        return [
+            'teams' => Team::orderBy('name')->get(['id', 'name']),
+            'roles' => array_map(
+                fn (string $role) => ['value' => $role, 'label' => ucfirst($role)],
+                Foreman::ROLES,
+            ),
+        ];
     }
 
     public function edit(Request $request, Foreman $foreman): Response
@@ -158,10 +185,13 @@ class ForemanController extends Controller
         abort_unless($this->canManage($request->user()), 403);
 
         return Inertia::render('ForemanEdit', [
+            ...$this->formProps(),
             'foreman' => [
                 'id' => $foreman->id,
                 'name' => $foreman->name,
                 'initials' => $foreman->initials,
+                'role' => $foreman->role,
+                'teamId' => $foreman->team_id,
                 'phone' => $foreman->phone,
                 'email' => $foreman->email,
                 'licenceNumber' => $foreman->licence_number,
@@ -219,7 +249,7 @@ class ForemanController extends Controller
         $foreman->delete();
 
         return redirect()
-            ->route('foremen.index')
+            ->route('teams.index')
             ->with('warning', "“{$name}” was removed from the register.");
     }
 
@@ -240,8 +270,18 @@ class ForemanController extends Controller
             'initials' => $this->initialsFor($data['name']),
         ]);
 
+        /*
+         * Added from inside another form — a task that needs someone the crew
+         * does not have on it yet. Sending the planner to the register and back
+         * would lose everything they had typed, so they stay where they are and
+         * the new person arrives in the refreshed props.
+         */
+        if ($request->boolean('inline')) {
+            return back()->with('success', "“{$foreman->name}” was added.");
+        }
+
         return redirect()
-            ->route('foremen.index')
+            ->route('teams.index')
             ->with('success', "“{$foreman->name}” was added.");
     }
 
@@ -263,14 +303,29 @@ class ForemanController extends Controller
              * and none of this is needed to do that — it is what you reach for
              * once they have it.
              */
-            'phone' => ['nullable', 'string', 'max:40'],
+            // Typed however the person types it — brackets, dashes, +1 — and
+            // stored the one way the app reads it. See UsPhoneNumber.
+            /*
+             * What they do on the crew. Required, because "a member" is not a
+             * job — the whole point of the register is knowing who supervises
+             * and who runs the work.
+             */
+            'role' => ['required', Rule::in(Foreman::ROLES)],
+            /*
+             * Which crew they are on. Optional: somebody can be hired before
+             * their team is decided, and the register shows them as exactly
+             * that rather than inventing one.
+             */
+            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            'phone' => ['nullable', 'string', 'max:40', new UsPhoneNumber],
             'email' => ['nullable', 'email', 'max:255'],
             'licence_number' => ['nullable', 'string', 'max:60'],
             'started_on' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ], [
-            'name.required' => 'Enter the foreman’s name',
-            'name.unique' => 'A foreman with that name is already on the list',
+            'name.required' => 'Enter the member’s name',
+            'name.unique' => 'Someone with that name is already on the register',
+            'role.required' => 'Pick what they do on the crew',
             'email.email' => 'That does not look like an email address',
         ]);
     }
@@ -284,9 +339,15 @@ class ForemanController extends Controller
     private function details(array $data): array
     {
         return [
-            // Blank stays null rather than an empty string, so "has a phone
-            // number" is one check everywhere rather than two.
-            'phone' => $this->orNull($data['phone'] ?? null),
+            /*
+             * Blank stays null rather than an empty string, so "has a phone
+             * number" is one check everywhere rather than two — and what is
+             * kept is normalised, so every screen, export and job sheet reads
+             * the same shape without formatting it again.
+             */
+            'role' => $data['role'],
+            'team_id' => $data['team_id'] ?? null,
+            'phone' => UsPhone::format($this->orNull($data['phone'] ?? null)),
             'email' => $this->orNull($data['email'] ?? null),
             'licence_number' => $this->orNull($data['licence_number'] ?? null),
             // The date of joining — nullable, because plenty of crews cannot
