@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { router } from '@inertiajs/react'
-import { Maximize, Minus, Plus, RotateCcw, StretchHorizontal } from 'lucide-react'
-import { Button, Card, FilterTabs, IconButton, SectionHeading, SelectField } from '@/components/common'
+import { Box, Maximize, Minus, Plus, RotateCcw, StretchHorizontal } from 'lucide-react'
+import { Button, ButtonLink, Card, FilterTabs, IconButton, SectionHeading, SelectField } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { OccurrenceOrigin, OverlaySymbol, PageDimensions, ReviewStatus } from '@/types'
 import { categoryKey, symbolColor, UNMAPPED_COLOR } from '@/utils'
@@ -504,6 +504,18 @@ export function DrawingOverlay({
           title="Drawing"
           subtitle="Every detected symbol, boxed where it actually sits on the page. Click a symbol to act on it, drag it to reposition, or click empty space to mark one the AI missed."
         />
+        {/*
+          The one addition this screen makes for the spatial viewer: a way in.
+          Everything else about the drawing here is unchanged.
+        */}
+        <ButtonLink
+          href={routeTo.reviewThreeD(resultId)}
+          variant="secondary"
+          size="sm"
+          leftIcon={Box}
+        >
+          3D View
+        </ButtonLink>
         <SelectField
           id="drawing-overlay-page"
           aria-label="Drawing page"

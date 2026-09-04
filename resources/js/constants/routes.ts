@@ -276,6 +276,8 @@ export const routeTo = {
   symbolOccurrenceDelete: (resultId: number, reviewId: number, key: string) =>
     `/reviews/${resultId}/symbols/${reviewId}/occurrences/${key}`,
   symbolManualAdd: (resultId: number) => `/reviews/${resultId}/symbols/manual`,
+  /** The spatial view of the same drawing — see ThreeDViewController. */
+  reviewThreeD: (resultId: number) => `/reviews/${resultId}/3d`,
   reviewUndo: (resultId: number) => `/reviews/${resultId}/undo`,
 
   /** The drawing itself: the PDF plus everything the engine read off it. */
