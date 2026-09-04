@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react'
 import { CalendarDays, ChevronRight, Info } from 'lucide-react'
-import { Button } from '@/components/common'
+import { Button, cardAccentAt } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { JobPriority, SchedulableJob } from '@/types'
 import { cn, formatCurrency, formatDate } from '@/utils'
@@ -41,8 +41,15 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
   return (
     <article
       className={cn(
-        'rounded-card border border-hairline bg-white/8 p-5 transition-colors',
-        'hover:border-brand/40 hover:bg-white/12',
+        'rounded-card bg-white/8 p-5 transition-colors',
+        /*
+         * Walked down the list rather than keyed to priority: priority is
+         * already said twice on this card — by the bubble and by the word — and
+         * the border's job here is the one it does everywhere else, telling one
+         * card from the next.
+         */
+        cardAccentAt(index),
+        'hover:bg-white/12',
       )}
       style={{ animationDelay: `${index * 50}ms` }}
     >

@@ -89,7 +89,7 @@ export default function TimeTrackingSettings({ settings, timezones }: TimeTracki
       </AnimatePresence>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card padding="lg">
+        <Card accent="brand" padding="lg">
           <CardHeader title="Overtime rules" subtitle="When hours stop being regular time" />
 
           <div className="space-y-4">
@@ -151,7 +151,7 @@ export default function TimeTrackingSettings({ settings, timezones }: TimeTracki
           </div>
         </Card>
 
-        <Card padding="lg">
+        <Card accent="success" padding="lg">
           <CardHeader
             title="Default labor rates"
             subtitle="Used when a team member has no rate of their own set"

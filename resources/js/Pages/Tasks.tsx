@@ -248,6 +248,8 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
             <Card padding="md">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <SearchBox
+                  id="task-search"
+                  label="Search"
                   value={search}
                   onValueChange={setSearch}
                   onSearch={(value) => apply({ search: value })}

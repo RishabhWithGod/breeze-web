@@ -1,9 +1,23 @@
 import { useState } from 'react'
 import { Head } from '@inertiajs/react'
-import { ArrowLeft, Download, FileText, FolderClosed, Map, Sparkles } from 'lucide-react'
 import {
+  ArrowLeft,
+  Cable,
+  Calculator,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Download,
+  FileText,
+  FolderClosed,
+  ListChecks,
+  Map,
+  Sparkles,
+} from 'lucide-react'
+import {
+  Button,
   ButtonLink,
   Card,
+  CollapsibleCard,
   EmptyState,
   FilterTabs,
   SectionHeading,
@@ -88,6 +102,21 @@ export default function DrawingDetails({
 }: DrawingDetailsProps) {
   const [view, setView] = useState<DocumentView>('original')
 
+  /*
+   * Every section starts closed, so the page is a contents list you open rather
+   * than three tables you scroll past. The same as the estimate screen.
+   */
+  const [open, setOpen] = useState<Readonly<Record<string, boolean>>>({})
+
+  const sectionKeys = ['boq', 'wire', 'pricing']
+  const allOpen = sectionKeys.every((key) => open[key])
+
+  const toggle = (key: string) =>
+    setOpen((current) => ({ ...current, [key]: !current[key] }))
+
+  const setAllSections = (isOpen: boolean) =>
+    setOpen(Object.fromEntries(sectionKeys.map((key) => [key, isOpen])))
+
   const documentUrl = view === 'annotated' ? drawing.annotatedUrl : drawing.fileUrl
 
   const facts: readonly { label: string; value: string }[] = [
@@ -153,7 +182,7 @@ export default function DrawingDetails({
       />
 
       {/* Facts read off the file, before anything was interpreted. */}
-      <Card padding="md" className="mb-6">
+      <Card accent="brand" padding="md" className="mb-6">
         <dl className="grid gap-4 sm:grid-cols-3 xl:grid-cols-4">
           {facts.map((fact) => (
             <div key={fact.label} className="min-w-0">
@@ -178,7 +207,7 @@ export default function DrawingDetails({
       </Card>
 
       {/* The document itself. */}
-      <Card padding="lg" className="min-w-0">
+      <Card accent="success" padding="lg" className="min-w-0">
         <SectionHeading
           as="h3"
           title="Document"
@@ -259,7 +288,7 @@ export default function DrawingDetails({
       </Card>
 
       {!engine && (
-        <Card padding="lg" className="mt-6">
+        <Card accent="warning" padding="lg" className="mt-6">
           <EmptyState
             icon={Sparkles}
             title="This drawing has no analysis"
@@ -268,72 +297,111 @@ export default function DrawingDetails({
         </Card>
       )}
 
-      {/* Everything else the engine read off the sheet. */}
-      <div className="mt-6">
-        <EngineBoqPanel
-          lines={boq}
-          subtotal={engine?.estimateTotals.subtotal}
-          currency={engine?.estimateTotals.currency}
-        />
-      </div>
-
-      <div className="mt-6">
-        <WireSizesPanel wireSizes={wireSizes} />
-      </div>
-
       {/*
-        Last, because it is the least trustworthy figure on the page: the
-        engine's own pricing, before anyone reviewed a count.
+        Everything else the engine read off the sheet, as sections you open.
+        Three tables stacked down a page meant scrolling past two to read one —
+        the same problem the estimate screen has, so the same answer.
       */}
-      {engine && (engine.estimateTotals.grand_total ?? 0) > 0 && (
-        <Card padding="lg" className="mt-6">
-          <SectionHeading
-            as="h3"
+      <div className="mt-6 mb-4 flex justify-end">
+        <Button
+          variant="secondary"
+          size="sm"
+          leftIcon={allOpen ? ChevronsDownUp : ChevronsUpDown}
+          onClick={() => setAllSections(!allOpen)}
+        >
+          {allOpen ? 'Collapse all' : 'Expand all'}
+        </Button>
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-6">
+        <CollapsibleCard
+          title="Bill of quantities"
+          subtitle="What the engine priced, before your review"
+          icon={ListChecks}
+          tone="brand"
+          summary={`${boq.length} ${boq.length === 1 ? 'line' : 'lines'}`}
+          isOpen={Boolean(open['boq'])}
+          onToggle={() => toggle('boq')}
+        >
+          {/* `bare`: this card already draws the frame and the heading. */}
+          <EngineBoqPanel
+            bare
+            lines={boq}
+            subtotal={engine?.estimateTotals.subtotal}
+            currency={engine?.estimateTotals.currency}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard
+          title="Wire sizes"
+          subtitle="Conductor sizes read off the drawing"
+          icon={Cable}
+          tone="warning"
+          summary={`${wireSizes.length} ${wireSizes.length === 1 ? 'size' : 'sizes'}`}
+          isOpen={Boolean(open['wire'])}
+          onToggle={() => toggle('wire')}
+        >
+          <WireSizesPanel bare wireSizes={wireSizes} />
+        </CollapsibleCard>
+
+        {/*
+          Last, because it is the least trustworthy figure on the page: the
+          engine's own pricing, before anyone reviewed a count.
+        */}
+        {engine && (engine.estimateTotals.grand_total ?? 0) > 0 && (
+          <CollapsibleCard
             title="Automatic pricing"
             subtitle="What was priced automatically, before your review"
-          />
-          <dl className="flex flex-col gap-2">
-            {[
-              ['Subtotal', engine.estimateTotals.subtotal ?? 0],
-              [
-                `Tax (${Math.round((engine.estimateTotals.tax_rate ?? 0) * 100)}%)`,
-                engine.estimateTotals.tax ?? 0,
-              ],
-              ['Grand total', engine.estimateTotals.grand_total ?? 0],
-            ].map(([label, value], index) => (
-              <div
-                key={label as string}
-                className={
-                  index === 2
-                    ? 'flex items-center justify-between border-t border-hairline pt-2'
-                    : 'flex items-center justify-between'
-                }
-              >
-                <dt
+            icon={Calculator}
+            tone="success"
+            summary={formatCurrency(engine.estimateTotals.grand_total ?? 0, 2)}
+            isOpen={Boolean(open['pricing'])}
+            onToggle={() => toggle('pricing')}
+          >
+            <dl className="flex flex-col gap-2">
+              {[
+                ['Subtotal', engine.estimateTotals.subtotal ?? 0],
+                [
+                  `Tax (${Math.round((engine.estimateTotals.tax_rate ?? 0) * 100)}%)`,
+                  engine.estimateTotals.tax ?? 0,
+                ],
+                ['Grand total', engine.estimateTotals.grand_total ?? 0],
+              ].map(([label, value], index) => (
+                <div
+                  key={label as string}
                   className={
                     index === 2
-                      ? 'text-md font-semibold text-white'
-                      : 'text-md text-white/90'
+                      ? 'flex items-center justify-between border-t border-hairline pt-2'
+                      : 'flex items-center justify-between'
                   }
                 >
-                  {label as string}
-                </dt>
-                <dd
-                  className={
-                    index === 2 ? 'text-lg font-bold text-white' : 'text-md text-white/90'
-                  }
-                >
-                  {formatCurrency(value as number, 2)}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <p className="mt-3 text-2xs text-white/70">
-            {engine.estimateTotals.line_count ?? 0} priced lines ·{' '}
-            {engine.estimateTotals.currency ?? 'USD'}
-          </p>
-        </Card>
-      )}
+                  <dt
+                    className={
+                      index === 2
+                        ? 'text-md font-semibold text-white'
+                        : 'text-md text-white/90'
+                    }
+                  >
+                    {label as string}
+                  </dt>
+                  <dd
+                    className={
+                      index === 2 ? 'text-lg font-bold text-white' : 'text-md text-white/90'
+                    }
+                  >
+                    {formatCurrency(value as number, 2)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-3 text-2xs text-white/70">
+              {engine.estimateTotals.line_count ?? 0} priced lines ·{' '}
+              {engine.estimateTotals.currency ?? 'USD'}
+            </p>
+          </CollapsibleCard>
+        )}
+      </div>
+
     </PageTransition>
   )
 }

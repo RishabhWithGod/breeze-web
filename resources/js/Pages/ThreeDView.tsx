@@ -368,7 +368,7 @@ export default function ThreeDView({
           panelOpen ? 'xl:grid-cols-[minmax(0,1fr)_19rem]' : 'xl:grid-cols-1',
         )}
       >
-        <Card padding="sm" animated={false} className="relative h-[74vh] min-h-[30rem]">
+        <Card accent="brand" padding="sm" animated={false} className="relative h-[74vh] min-h-[30rem]">
           <button
             type="button"
             onClick={() => setPanelOpen((open) => !open)}
@@ -403,7 +403,7 @@ export default function ThreeDView({
           drawing stays the primary thing at every size.
         */}
         <div className={cn('flex flex-col gap-4', !panelOpen && 'xl:hidden')}>
-          <Card padding="md" animated={false}>
+          <Card accent="success" padding="md" animated={false}>
             <ThreeDLegend
               counts={counts}
               names={namesOnPage}
@@ -425,7 +425,7 @@ export default function ThreeDView({
             />
           </Card>
 
-          <Card padding="md" animated={false}>
+          <Card accent="warning" padding="md" animated={false}>
             <p className="mb-3 text-2xs tracking-wide text-white/70 uppercase">
               Selected symbol
             </p>

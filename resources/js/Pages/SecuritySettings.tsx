@@ -120,7 +120,7 @@ export default function SecuritySettings({
       </AnimatePresence>
 
       {/* ============================================== Two-Factor Authentication */}
-      <Card>
+      <Card accent="brand">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex gap-4">
             <IconBubble icon={ShieldCheck} tone={twoFactor.enabled ? 'success' : 'neutral'} />
@@ -146,7 +146,7 @@ export default function SecuritySettings({
       </Card>
 
       {/* ==================================================== Authentication Method */}
-      <Card className="mt-6">
+      <Card accent="success" className="mt-6">
         <CardHeader title="Authentication Method" subtitle="Choose how you receive verification codes" />
 
         <ul className="space-y-3">
@@ -168,7 +168,7 @@ export default function SecuritySettings({
       </Card>
 
       {/* ==================================================== Activity Notifications */}
-      <Card className="mt-6">
+      <Card accent="warning" className="mt-6">
         <CardHeader title="Activity Notifications" subtitle="Choose how you're notified about account activity" />
 
         <div className="overflow-x-auto">

@@ -125,15 +125,26 @@ export function SymbolCard({
       hoverable
       className={cn(
         'flex h-full flex-col overflow-hidden',
+        /*
+         * The section border every card in the app wears, in this category's
+         * own identity colour — `solid`, the same value the dot beside the name
+         * uses and the same one the colour bar along the top used before this,
+         * so nothing about which card is which category has changed.
+         *
+         * Thick along the top rather than down the left. These are a grid, not
+         * a stacked list: a lit left edge on a card in the middle of a row
+         * points at the card beside it, and the eye reads the row as pairs.
+         *
+         * Set here rather than through `accent`, which takes one of the six app
+         * tones and cannot say "whatever this category happens to be".
+         */
+        'border-2 border-t-[6px] border-(--sym-accent)',
         selected && 'ring-1 ring-brand/70',
         focused && 'ring-2 ring-white',
         isRejected && 'opacity-75',
       )}
+      style={{ '--sym-accent': color.solid } as React.CSSProperties}
     >
-      {/* The category's own identity color, matching the marker and legend
-          for this symbol on the drawing — a card is recognizable at a
-          glance before you even read its name. */}
-      <div aria-hidden className="h-1 w-full shrink-0" style={{ backgroundColor: color.solid }} />
 
       {/* Symbol image — a fixed height regardless of the crop's own aspect
           ratio, so every card presents the exact same size image area; the

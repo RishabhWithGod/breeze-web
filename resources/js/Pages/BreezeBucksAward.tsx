@@ -92,7 +92,7 @@ export default function BreezeBucksAward({ teamMembers, recentAwards }: BreezeBu
         )}
       </AnimatePresence>
 
-      <Card className="mx-auto max-w-xl">
+      <Card accent="brand" className="mx-auto max-w-xl">
         <div className="space-y-4">
           <SelectField
             id="award-user"
@@ -125,7 +125,7 @@ export default function BreezeBucksAward({ teamMembers, recentAwards }: BreezeBu
         </div>
       </Card>
 
-      <Card className="mx-auto mt-6 max-w-xl">
+      <Card accent="success" className="mx-auto mt-6 max-w-xl">
         <SectionHeading title="Recent awards" subtitle="Bonuses you've given out." />
 
         {recentAwards.length === 0 ? (

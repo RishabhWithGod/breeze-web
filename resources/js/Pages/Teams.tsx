@@ -244,7 +244,7 @@ export default function Teams({ teams, unassigned, filters, canManage }: TeamsPr
       </Card>
 
       {nothingAtAll ? (
-        <Card padding="lg">
+        <Card accent="brand" padding="lg">
           <EmptyState
             icon={HardHat}
             title={filters.search ? 'Nothing matches that' : 'No teams yet'}
@@ -318,7 +318,7 @@ interface TeamCardProps {
 /** One crew and everyone on it. */
 function TeamCard({ name, description, members, columns, canManage }: TeamCardProps) {
   return (
-    <Card padding="lg">
+    <Card accent="success" padding="lg">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-white">{name}</h2>

@@ -486,7 +486,16 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
         <h2 className="mb-4 text-xl font-semibold text-white">Invoice Summary</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {summaryCards.map((card, index) => (
-            <StatCard key={card.label} index={index} label={card.label} value={card.value} icon={card.icon} tone={card.tone} />
+            <StatCard
+              key={card.label}
+              index={index}
+              label={card.label}
+              value={card.value}
+              icon={card.icon}
+              tone={card.tone}
+              /* These four are the section, not decoration beside one. */
+              accent
+            />
           ))}
         </div>
       </div>

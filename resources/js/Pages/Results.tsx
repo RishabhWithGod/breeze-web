@@ -75,7 +75,7 @@ export default function Results({ project }: ResultsProps) {
         </div>
 
         {/* Legend table */}
-        <Card padding="lg">
+        <Card accent="brand" padding="lg">
           <CardHeader
             title="Detected Symbols"
             subtitle={`${formatNumber(totalSymbols)} devices across ${project.symbols.length} classes · ${lowConfidence} flagged for review`}
@@ -86,7 +86,7 @@ export default function Results({ project }: ResultsProps) {
         {/* Sheets + preview + activity */}
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
           <div className="flex flex-col gap-6">
-            <Card padding="lg">
+            <Card accent="success" padding="lg">
               <CardHeader
                 title="Drawing Sheets"
                 subtitle={`${project.sheets.length} sheets analysed`}
@@ -98,13 +98,13 @@ export default function Results({ project }: ResultsProps) {
               />
             </Card>
 
-            <Card padding="lg">
+            <Card accent="warning" padding="lg">
               <CardHeader title="Recent Activity" subtitle="Pipeline event log" />
               <ActivityFeed entries={project.activity} />
             </Card>
           </div>
 
-          <Card padding="lg">
+          <Card accent="neutral" padding="lg">
             <CardHeader
               title="Sheet Preview"
               subtitle="Detected symbol positions are approximate in this prototype"

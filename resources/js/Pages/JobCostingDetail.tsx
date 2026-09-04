@@ -171,7 +171,7 @@ export default function JobCostingDetail({
 
       {/* ================================================ Cost breakdown ======= */}
       {canViewCosts && (
-        <Card padding="lg" className="mb-6">
+        <Card accent="brand" padding="lg" className="mb-6">
           <SectionHeading as="h3" title="Cost Breakdown" />
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -208,7 +208,7 @@ export default function JobCostingDetail({
       )}
 
       {/* =================================================== Labor details ==== */}
-      <Card padding="lg" className="mb-6">
+      <Card accent="success" padding="lg" className="mb-6">
         <SectionHeading as="h3" title="Labor Details" subtitle="Only approved time entries count toward actual cost" />
         {laborRows.length === 0 ? (
           <p className="text-md text-white/70">No approved time has been logged on this job yet.</p>
@@ -218,7 +218,7 @@ export default function JobCostingDetail({
       </Card>
 
       {/* ============================================ Material/equipment/other = */}
-      <Card padding="lg" className="mb-6">
+      <Card accent="warning" padding="lg" className="mb-6">
         <SectionHeading
           as="h3"
           title="Material, Equipment & Other Costs"
@@ -269,7 +269,7 @@ export default function JobCostingDetail({
 
       {/* ============================================= Estimate + Billing ====== */}
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card padding="lg">
+        <Card accent="neutral" padding="lg">
           <SectionHeading
             as="h3"
             title="Estimate Comparison"
@@ -293,7 +293,7 @@ export default function JobCostingDetail({
           )}
         </Card>
 
-        <Card padding="lg">
+        <Card accent="brand" padding="lg">
           <SectionHeading
             as="h3"
             title="Billing"
@@ -314,7 +314,7 @@ export default function JobCostingDetail({
       </div>
 
       {/* ================================================ Schedule ============= */}
-      <Card padding="lg" className="mt-6">
+      <Card accent="success" padding="lg" className="mt-6">
         <SectionHeading as="h3" title="Schedule" />
         {schedule.hasSchedule ? (
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">

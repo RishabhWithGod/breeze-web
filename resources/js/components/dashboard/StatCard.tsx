@@ -11,6 +11,15 @@ export interface StatCardProps {
   trend?: 'up' | 'down' | 'flat'
   icon?: LucideIcon
   tone?: Tone
+  /**
+   * Wear the section accent in `tone` — the lit border the rest of the app's
+   * cards carry.
+   *
+   * Opt-in, because a stat tile is usually one of a row of four and a row of
+   * four lit borders is a fence. Where the tiles *are* the section, as on the
+   * billing summary, it is what makes them read as one.
+   */
+  accent?: boolean
   index?: number
 }
 
@@ -35,12 +44,18 @@ export function StatCard({
   trend = 'flat',
   icon,
   tone = 'brand',
+  accent = false,
   index,
 }: StatCardProps) {
   const TrendIcon = TREND_ICON[trend]
 
   return (
-    <Card hoverable className="h-full" {...(index !== undefined ? { index } : {})}>
+    <Card
+      hoverable
+      className="h-full"
+      {...(accent ? { accent: tone } : {})}
+      {...(index !== undefined ? { index } : {})}
+    >
       <div className="flex items-start justify-between gap-3">
         <p className="text-md text-white/85">{label}</p>
         {icon && <IconBubble icon={icon} tone={tone} size="sm" />}

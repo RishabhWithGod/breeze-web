@@ -186,7 +186,7 @@ export default function JobSchedule({
       </AnimatePresence>
 
       {/* ==================================================== Job + Schedule info */}
-      <Card className="mb-6">
+      <Card accent="brand" className="mb-6">
         <div className="flex flex-wrap items-center gap-3">
           <StatusChip hideDot tone={TASK_PRIORITY_TONE[job.priority]} label={`${TASK_PRIORITY_LABEL[job.priority]} Priority`} />
           <StatusChip hideDot tone={SCHEDULE_STATE_TONE[schedule.status]} label={`Schedule: ${SCHEDULE_STATE_LABEL[schedule.status]}`} />
@@ -202,7 +202,7 @@ export default function JobSchedule({
       </Card>
 
       {/* ============================================================ Progress */}
-      <Card className="mb-6">
+      <Card accent="success" className="mb-6">
         <CardHeader title="Progress" subtitle={progress.isBehind ? 'Behind the expected pace for today' : 'On pace'} />
         <div className="grid gap-6 sm:grid-cols-2">
           <div>
@@ -228,7 +228,7 @@ export default function JobSchedule({
 
       {tab === 'overview' && (
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
+          <Card accent="warning">
             <CardHeader title="Upcoming" subtitle="Due in the next 14 days" />
             {upcoming.length === 0 ? (
               <EmptyState icon={Clock} title="Nothing due soon" />
@@ -247,7 +247,7 @@ export default function JobSchedule({
             )}
           </Card>
 
-          <Card>
+          <Card accent="neutral">
             <CardHeader title="Delays" subtitle="Late or explicitly delayed" />
             {delays.length === 0 ? (
               <EmptyState icon={CheckCircle2} title="Nothing is running late" />
@@ -269,7 +269,7 @@ export default function JobSchedule({
             )}
           </Card>
 
-          <Card>
+          <Card accent="brand">
             <CardHeader title="Milestones" />
             {milestones.length === 0 ? (
               <EmptyState icon={Flag} title="No milestones on this schedule" />
@@ -288,7 +288,7 @@ export default function JobSchedule({
             )}
           </Card>
 
-          <Card>
+          <Card accent="success">
             <CardHeader title="Activity" />
             {activity.length === 0 ? (
               <EmptyState title="No activity recorded yet" />
@@ -308,7 +308,7 @@ export default function JobSchedule({
       )}
 
       {tab === 'tasks' && (
-        <Card>
+        <Card accent="warning">
           <CardHeader
             title="Tasks"
             subtitle={`${tasks.length} task${tasks.length === 1 ? '' : 's'}`}
@@ -401,7 +401,7 @@ export default function JobSchedule({
       )}
 
       {tab === 'timeline' && (
-        <Card>
+        <Card accent="neutral">
           <CardHeader title="Timeline" subtitle={timeline.from && timeline.to ? `${formatDate(timeline.from)} – ${formatDate(timeline.to)}` : undefined} />
           {timeline.bars.length === 0 ? (
             <EmptyState icon={Clock} title="No dated tasks to plot yet" />
@@ -437,7 +437,7 @@ export default function JobSchedule({
       )}
 
       {tab === 'calendar' && (
-        <Card>
+        <Card accent="brand">
           <CardHeader title={calendar.monthLabel} />
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-white/60">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
@@ -472,7 +472,7 @@ export default function JobSchedule({
 
       {tab === 'crew' && (
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
+          <Card accent="success">
             <CardHeader title="Workload" subtitle="Hours assigned on this job" />
             {resources.length === 0 ? (
               <EmptyState title="Nobody assigned yet" />
@@ -500,7 +500,7 @@ export default function JobSchedule({
             )}
           </Card>
 
-          <Card>
+          <Card accent="warning">
             <CardHeader title="Crew Shifts" subtitle="Booked on this job" />
             {crewShifts.length === 0 ? (
               <EmptyState title="No shifts booked on this job yet" />
@@ -524,7 +524,7 @@ export default function JobSchedule({
       {tab === 'dependencies' && (
         <div className="space-y-6">
           {dependencies.breaches.length > 0 && (
-            <Card>
+            <Card accent="neutral">
               <CardHeader title="Broken Constraints" />
               <ul className="space-y-2">
                 {dependencies.breaches.map((b, i) => (
@@ -537,7 +537,7 @@ export default function JobSchedule({
             </Card>
           )}
 
-          <Card>
+          <Card accent="brand">
             <CardHeader title="Dependency Graph" subtitle={`${dependencies.edges.length} dependencies`} />
             {dependencies.edges.length === 0 ? (
               <EmptyState icon={GitBranch} title="No dependencies wired up yet" />
@@ -556,7 +556,7 @@ export default function JobSchedule({
           </Card>
 
           {dependencies.readyToStart.length > 0 && (
-            <Card>
+            <Card accent="success">
               <CardHeader title="Ready to Start" subtitle="Every dependency is satisfied" />
               <ul className="flex flex-wrap gap-2">
                 {dependencies.readyToStart.map((id) => {

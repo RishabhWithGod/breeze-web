@@ -194,7 +194,7 @@ export default function JobCosting({
 
       {/* ============================================ Labor + Materials ======= */}
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card padding="lg">
+        <Card accent="brand" padding="lg">
           <SectionHeading as="h3" title="Estimated vs Actual Labor" />
           {canViewCosts && laborTotals.estimatedCost !== null && laborTotals.actualCost !== null ? (
             <>
@@ -221,7 +221,7 @@ export default function JobCosting({
           )}
         </Card>
 
-        <Card padding="lg">
+        <Card accent="success" padding="lg">
           <SectionHeading as="h3" title="Estimated vs Actual Materials" />
           {!canViewCosts ? (
             <EmptyState title="Cost figures are restricted" description="Only a Client Manager, Admin or Owner can see material cost totals." />
@@ -252,7 +252,7 @@ export default function JobCosting({
 
       {/* ============================================ Profit/Loss + Alerts ==== */}
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <Card padding="lg">
+        <Card accent="warning" padding="lg">
           <SectionHeading as="h3" title="Profit/Loss" />
           {canViewCosts && profitLoss.revenue !== null && profitLoss.profit !== null ? (
             <>
@@ -278,7 +278,7 @@ export default function JobCosting({
           )}
         </Card>
 
-        <Card padding="lg">
+        <Card accent="neutral" padding="lg">
           <SectionHeading
             as="h3"
             title="Cost Overrun Alerts"
@@ -317,7 +317,7 @@ export default function JobCosting({
 
       {/* ============================================ Status + Rankings ======= */}
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
-        <Card padding="lg">
+        <Card accent="brand" padding="lg">
           <SectionHeading as="h3" title="Jobs by Status" />
           {jobsByStatus.length === 0 ? (
             <EmptyState title="No jobs in this view" description="Adjust the filters to see jobs by status." />
@@ -348,7 +348,7 @@ export default function JobCosting({
           )}
         </Card>
 
-        <Card padding="lg">
+        <Card accent="success" padding="lg">
           <SectionHeading as="h3" title="Top Profitable Jobs" />
           {topProfitable.length === 0 ? (
             <EmptyState title="No costed jobs yet" description="Jobs with revenue and cost data will rank here." />
@@ -361,7 +361,7 @@ export default function JobCosting({
           )}
         </Card>
 
-        <Card padding="lg">
+        <Card accent="warning" padding="lg">
           <SectionHeading as="h3" title="Least Profitable Jobs" />
           {leastProfitable.length === 0 ? (
             <EmptyState title="No costed jobs yet" description="Jobs with revenue and cost data will rank here." />

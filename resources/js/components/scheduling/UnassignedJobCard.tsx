@@ -1,6 +1,6 @@
 import { ChevronRight, Clock, HardHat, User, Users } from 'lucide-react'
-import { Button } from '@/components/common'
-import { PRIORITY_SHORT_LABEL, PRIORITY_STRIPE, routeTo } from '@/constants'
+import { Button, cardAccentAt } from '@/components/common'
+import { PRIORITY_SHORT_LABEL, routeTo } from '@/constants'
 import type { SchedulableJob } from '@/types'
 import { cn } from '@/utils'
 
@@ -27,18 +27,13 @@ export function UnassignedJobCard({ job, onAssign, index = 0 }: UnassignedJobCar
   return (
     <div
       className={cn(
-        'relative flex flex-col rounded-panel border border-hairline bg-white/8 py-4 pr-4 pl-5',
-        'transition-colors hover:border-brand/40 hover:bg-white/12',
+        'relative flex flex-col rounded-card bg-white/8 p-4',
+        // By position, like the queue's own rows — the same job, the same look.
+        cardAccentAt(index),
+        'transition-colors hover:bg-white/12',
       )}
       style={{ animationDelay: `${index * 60}ms` }}
     >
-      <span
-        aria-hidden
-        className={cn(
-          'absolute inset-y-0 left-0 w-[3px] rounded-l-panel',
-          PRIORITY_STRIPE[job.priority],
-        )}
-      />
 
       <div className="flex items-start justify-between gap-3">
         <h4 className="text-base font-semibold text-white">{job.name}</h4>

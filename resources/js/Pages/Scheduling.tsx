@@ -267,7 +267,7 @@ export default function Scheduling({
         </Card>
       )}
 
-      <Card padding="md" className="mb-8">
+      <Card accent="brand" padding="md" className="mb-8">
         {/* Period, then the view switch — the order the reference reads in. */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">

@@ -124,7 +124,7 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
 
       <form onSubmit={submit} noValidate>
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-start">
-          <Card padding="lg">
+          <Card accent="brand" padding="lg">
             <SectionHeading
               title="Invoice details"
               subtitle={`Reference ${nextNumber} is reserved for this invoice.`}
@@ -229,7 +229,7 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
             </div>
           </Card>
 
-          <Card padding="lg" className="xl:sticky xl:top-24">
+          <Card accent="success" padding="lg" className="xl:sticky xl:top-24">
             <SectionHeading
               title="Summary"
               subtitle="Updates as you type — nothing is saved until you submit."

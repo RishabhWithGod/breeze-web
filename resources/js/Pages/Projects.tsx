@@ -13,6 +13,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  cardAccentAt,
   EmptyState,
   Pagination,
   SearchBox,
@@ -124,6 +125,8 @@ export default function Projects({ clients, filters, statuses }: ProjectsProps) 
             <Card padding="md">
               <div className="grid gap-4 sm:grid-cols-2">
                 <SearchBox
+                  id="project-search"
+                  label="Search"
                   value={search}
                   onValueChange={setSearch}
                   onSearch={(value) => apply({ search: value })}
@@ -184,8 +187,15 @@ export default function Projects({ clients, filters, statuses }: ProjectsProps) 
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <Card key={group.id} padding="lg">
+          {groups.map((group, index) => (
+            /*
+             * The same accent the task list walks down its job groups with, so
+             * a client group here reads as the same kind of thing. Cycled by
+             * position rather than tied to anything: a client has no status to
+             * colour it by, and the border is here to separate one card from
+             * the next.
+             */
+            <Card key={group.id} padding="lg" className={cardAccentAt(index)}>
               <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hairline pb-3">
                 <Link
                   href={routeTo.client(group.id)}

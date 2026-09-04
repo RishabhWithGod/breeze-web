@@ -201,7 +201,7 @@ export default function JobTaskSetup({
       )}
 
       {existingTasks.length > 0 && (
-        <Card padding="lg" className="mb-6">
+        <Card accent="brand" padding="lg" className="mb-6">
           <SectionHeading
             as="h3"
             title="Already planned"
@@ -230,7 +230,7 @@ export default function JobTaskSetup({
       )}
 
       <form onSubmit={submit} noValidate>
-        <Card padding="lg">
+        <Card accent="success" padding="lg">
           <SectionHeading as="h3" title="Tasks" />
 
           {rows.length === 0 ? (

@@ -3,6 +3,11 @@ import type { EngineBoqLine, TableColumn } from '@/types'
 import { formatCurrency } from '@/utils'
 
 export interface EngineBoqPanelProps {
+  /**
+   * Drop the card and heading — for a caller that has already drawn both, as a
+   * collapsible section does. The same switch `WireSizesPanel` carries.
+   */
+  bare?: boolean
   lines: readonly EngineBoqLine[]
   /** The engine's own totals, before review. */
   subtotal?: number
@@ -16,7 +21,7 @@ export interface EngineBoqPanelProps {
  * to a reviewed count, so the estimate follows the review rather than the engine's
  * original quantity.
  */
-export function EngineBoqPanel({ lines, subtotal, currency = 'USD' }: EngineBoqPanelProps) {
+export function EngineBoqPanel({ bare = false, lines, subtotal, currency = 'USD' }: EngineBoqPanelProps) {
   const columns: readonly TableColumn<EngineBoqLine>[] = [
     {
       key: 'item',
@@ -67,17 +72,8 @@ export function EngineBoqPanel({ lines, subtotal, currency = 'USD' }: EngineBoqP
     },
   ]
 
-  return (
-    <Card padding="lg">
-      <SectionHeading
-        as="h3"
-        title="Automatic bill of quantities"
-        subtitle={
-          subtotal
-            ? `${lines.length} priced lines · ${currency} ${formatCurrency(subtotal, 2).replace('$', '')} before review`
-            : `${lines.length} priced lines, before review`
-        }
-      />
+  const table = (
+    <>
       <Table
         columns={columns}
         rows={lines}
@@ -92,6 +88,23 @@ export function EngineBoqPanel({ lines, subtotal, currency = 'USD' }: EngineBoqP
           />
         }
       />
+    </>
+  )
+
+  if (bare) return table
+
+  return (
+    <Card padding="lg">
+      <SectionHeading
+        as="h3"
+        title="Automatic bill of quantities"
+        subtitle={
+          subtotal
+            ? `${lines.length} priced lines · ${currency} ${formatCurrency(subtotal, 2).replace('$', '')} before review`
+            : `${lines.length} priced lines, before review`
+        }
+      />
+      {table}
     </Card>
   )
 }

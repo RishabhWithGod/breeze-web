@@ -52,6 +52,15 @@ interface Draft {
 }
 
 const DEFAULT_BOX_FRACTION = 0.035
+/**
+ * Whether the Drawing card offers a way into the spatial viewer.
+ *
+ * Off while that feature is parked. Everything behind it is intact — the route,
+ * the page, the components, the tests — so turning this to `true` is the whole
+ * of putting it back.
+ */
+const SHOW_THREE_D_ENTRY = false
+
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
 const MIN_SCALE: number = ZOOM_STEPS[0] ?? 0.5
 const MAX_SCALE: number = ZOOM_STEPS[ZOOM_STEPS.length - 1] ?? 4
@@ -497,7 +506,7 @@ export function DrawingOverlay({
     // `animated={false}`: Card's default whileInView fade only fires once the
     // element has scrolled into view, but this card sits right at the fold on
     // load — a reviewer would see nothing until they scrolled and back up.
-    <Card padding="md" className="mb-6" animated={false}>
+    <Card accent="brand" padding="md" className="mb-6" animated={false}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SectionHeading
           as="h3"
@@ -505,17 +514,22 @@ export function DrawingOverlay({
           subtitle="Every detected symbol, boxed where it actually sits on the page. Click a symbol to act on it, drag it to reposition, or click empty space to mark one the AI missed."
         />
         {/*
-          The one addition this screen makes for the spatial viewer: a way in.
-          Everything else about the drawing here is unchanged.
+          The way in to the spatial viewer, switched off for now.
+
+          Hidden, not removed: the route, the page and every `ThreeD*` component
+          are still there and still tested, and `/reviews/{id}/3d` still opens if
+          you go to it. Flip the flag above to put the button back.
         */}
-        <ButtonLink
-          href={routeTo.reviewThreeD(resultId)}
-          variant="secondary"
-          size="sm"
-          leftIcon={Box}
-        >
-          3D View
-        </ButtonLink>
+        {SHOW_THREE_D_ENTRY && (
+          <ButtonLink
+            href={routeTo.reviewThreeD(resultId)}
+            variant="secondary"
+            size="sm"
+            leftIcon={Box}
+          >
+            3D View
+          </ButtonLink>
+        )}
         <SelectField
           id="drawing-overlay-page"
           aria-label="Drawing page"

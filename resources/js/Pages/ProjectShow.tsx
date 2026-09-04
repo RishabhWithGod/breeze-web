@@ -184,7 +184,7 @@ export default function ProjectShow({
 
       <div className="grid gap-6 xl:grid-cols-3">
         {/* ------------------------------------------------------- Details ---- */}
-        <Card padding="lg">
+        <Card accent="brand" padding="lg">
           <CardHeader title="Project details" />
 
           <dl className="space-y-4">
@@ -212,7 +212,7 @@ export default function ProjectShow({
         </Card>
 
         {/* --------------------------------------------------- Drawing PDFs --- */}
-        <Card padding="lg" className="xl:col-span-2" index={1}>
+        <Card accent="success" padding="lg" className="xl:col-span-2" index={1}>
           <CardHeader
             title="Drawing PDFs"
             subtitle={

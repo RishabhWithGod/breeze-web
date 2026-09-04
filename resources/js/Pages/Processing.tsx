@@ -250,7 +250,7 @@ export default function Processing({
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <Card variant="spotlight" padding="lg" className="text-center">
+        <Card accent="brand" variant="spotlight" padding="lg" className="text-center">
           <ProcessingVisual isActive={isRunning} />
 
           <h2 className="mt-6 text-2xl font-bold text-white sm:text-3xl">
@@ -369,7 +369,7 @@ export default function Processing({
           )}
         </Card>
 
-        <Card padding="lg">
+        <Card accent="success" padding="lg">
           <h3 className="mb-6 text-xl font-semibold text-white">Processing steps</h3>
           <ProcessingStepList stages={stageStates} />
         </Card>
