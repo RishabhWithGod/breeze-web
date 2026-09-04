@@ -159,6 +159,20 @@ class DashboardController extends Controller
     {
         return AiResult::query()
             ->whereIn('review_status', [AiResult::REVIEW_PENDING, AiResult::REVIEW_IN_PROGRESS])
+            /*
+             * Only takeoffs whose project is still there.
+             *
+             * A result can outlive its project — the row is left behind rather
+             * than cascaded when a project is removed outside the app — and this
+             * queue then read `$result->project->name` on nothing and took the
+             * whole dashboard down with it.
+             *
+             * Filtered rather than null-coalesced, because the policy refuses a
+             * review with no project anyway: listing one here would be offering
+             * a decision nobody is allowed to make. The same rule the foreman
+             * and team registers use for tasks on a deleted job.
+             */
+            ->whereHas('project')
             ->with('project')
             ->orderByDesc('received_at')
             ->take(5)

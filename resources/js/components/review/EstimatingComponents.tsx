@@ -25,7 +25,7 @@ export function EstimatingComponents({ components, className }: EstimatingCompon
   const pending = components.filter((component) => component.status === 'pending')
 
   return (
-    <Card padding="lg" className={cn('mt-6', className)}>
+    <Card accent="success" padding="lg" className={cn('mt-6', className)}>
       <CardHeader
         title="Estimating components"
         subtitle={

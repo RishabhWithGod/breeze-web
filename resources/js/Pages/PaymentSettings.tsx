@@ -99,7 +99,7 @@ export default function PaymentSettings({
       </AnimatePresence>
 
       {/* ============================================ Connected Processors === */}
-      <Card>
+      <Card accent="brand">
         <CardHeader title="Connected Payment Processors" subtitle="Manage your payment processor connections" />
 
         <ul className="space-y-3">
@@ -127,7 +127,7 @@ export default function PaymentSettings({
       </Card>
 
       {/* ===================================================== Payment History = */}
-      <Card className="mt-6">
+      <Card accent="success" className="mt-6">
         <CardHeader title="Payment History" />
 
         {transactions.data.length === 0 ? (

@@ -47,6 +47,7 @@ use App\Http\Controllers\TakeoffFlowController;
 use App\Http\Controllers\TakeoffHistoryController;
 use App\Http\Controllers\TaskListController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\ThreeDViewController;
 use App\Http\Controllers\TimeEntryController;
 use App\Http\Controllers\TimerController;
 use App\Http\Controllers\TimeTrackingController;
@@ -142,6 +143,12 @@ Route::middleware('auth')->group(function () {
     | determine what reaches the final JSON.
     */
     Route::get('reviews/{result}', [AiReviewController::class, 'show'])->name('reviews.show');
+    /*
+     * The spatial view of the same drawing. Read-only: every edit it offers
+     * posts to the review endpoints below, so there is one workflow and one
+     * source of truth. See ThreeDViewController.
+     */
+    Route::get('reviews/{result}/3d', [ThreeDViewController::class, 'show'])->name('reviews.threeD');
     Route::get('reviews/{result}/original.json', [AiReviewController::class, 'original'])->name('reviews.original');
     Route::get('reviews/{result}/crops/{review}', [AiReviewController::class, 'crop'])->name('reviews.crop');
     Route::get('reviews/{result}/pages/{page}', [AiReviewController::class, 'pagePreview'])->name('reviews.page');

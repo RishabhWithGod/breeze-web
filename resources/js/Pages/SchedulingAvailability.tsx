@@ -278,7 +278,7 @@ export default function SchedulingAvailability({
         {/* Left column — the tab's own content, plus the activity trail. */}
         <div className="space-y-6 xl:col-span-2">
           {tab === 'overview' && (
-            <Card padding="md">
+            <Card accent="brand" padding="md">
               <h2 className="mb-5 text-xl font-semibold text-white">Crew load</h2>
 
               <ul className="space-y-3">
@@ -394,7 +394,7 @@ export default function SchedulingAvailability({
           )}
 
           {tab === 'crews' && (
-            <Card padding="md">
+            <Card accent="success" padding="md">
               <h2 className="mb-5 text-xl font-semibold text-white">Crews</h2>
 
               {crewTotals.length === 0 ? (
@@ -454,7 +454,7 @@ export default function SchedulingAvailability({
           )}
 
           {tab === 'conflicts' && (
-            <Card padding="md">
+            <Card accent="warning" padding="md">
               <h2 className="mb-2 text-xl font-semibold text-white">Double bookings</h2>
               <p className="mb-5 text-md text-white/80">
                 Two shifts whose times overlap for the same person on the same day. Two
@@ -514,7 +514,7 @@ export default function SchedulingAvailability({
             </Card>
           )}
 
-          <Card padding="md">
+          <Card accent="neutral" padding="md">
             <div className="mb-5 flex items-center justify-between gap-3">
               <h2 className="text-xl font-semibold text-white">Recent Activity</h2>
               <Link
@@ -572,7 +572,7 @@ export default function SchedulingAvailability({
 
         {/* Right column — utilisation, the crew split, and the roster. */}
         <div className="space-y-6">
-          <Card padding="md">
+          <Card accent="brand" padding="md">
             <h2 className="mb-1 text-xl font-semibold text-white">Utilisation</h2>
             <p className="mb-5 text-sm text-white/80">
               Booked against eight hours per working day.
@@ -608,7 +608,7 @@ export default function SchedulingAvailability({
             </ul>
           </Card>
 
-          <Card padding="md">
+          <Card accent="success" padding="md">
             <h2 className="mb-1 text-xl font-semibold text-white">Hours by crew</h2>
             <p className="mb-5 text-sm text-white/80">
               How {summary.bookedHours} booked hours are split.
@@ -644,7 +644,7 @@ export default function SchedulingAvailability({
             </dl>
           </Card>
 
-          <Card padding="md">
+          <Card accent="warning" padding="md">
             <h2 className="mb-5 text-xl font-semibold text-white">Team</h2>
             <ul className="space-y-4">
               {members.map((member) => (

@@ -2,6 +2,7 @@ import { Link } from '@inertiajs/react'
 import { motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
 import { MOTION } from '@/constants'
+import { cardAccentAt } from '@/components/common'
 import { FeedIcon } from '@/lib/icons'
 import type { DashboardSummary } from '@/types'
 import { cn } from '@/utils'
@@ -35,8 +36,14 @@ export function StatMedallionCard({
       }}
       className={cn(
         'group relative flex min-w-0 flex-col overflow-hidden rounded-card',
-        'border border-hairline glass px-6 py-8 shadow-panel',
-        'transition-colors duration-300 hover:border-brand/45 hover:bg-white/10',
+        'glass px-6 py-8 shadow-panel',
+        /*
+         * The same lit border every other card in the app wears, walked across
+         * the three so no two are the same colour. These are the first thing on
+         * the dashboard and they were the last thing still drawn in a hairline.
+         */
+        cardAccentAt(index),
+        'transition-colors duration-300 hover:bg-white/10',
         className,
       )}
     >

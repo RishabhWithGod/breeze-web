@@ -66,7 +66,7 @@ export default function Clients({ clients, filters }: ClientsProps) {
           </span>
           <span className="flex items-center gap-1.5 text-sm text-white/60">
             <MapPin size={13} aria-hidden className="shrink-0" />
-            {row.primarySite ?? 'No site recorded'}
+            {row.primarySite ?? 'No location recorded'}
           </span>
         </Link>
       ),
@@ -80,7 +80,7 @@ export default function Clients({ clients, filters }: ClientsProps) {
     },
     {
       key: 'sites',
-      header: 'Sites',
+      header: 'Locations',
       align: 'right',
       width: 'w-24',
       render: (row) => <span className="tabular-nums text-white/90">{row.siteCount}</span>,

@@ -5,7 +5,7 @@ import { IconButton } from './Button'
 import { SelectField, TextInput } from './Field'
 import { SITE_TYPE_OPTIONS } from '@/constants'
 import type { DraftAddress, JobType } from '@/types'
-import { cn, emptyAddress } from '@/utils'
+import { cn, emptyAddress, toTitleCase } from '@/utils'
 
 export interface AddressListFieldProps {
   addresses: readonly DraftAddress[]
@@ -72,7 +72,7 @@ export function AddressListField({
               placeholder="e.g. Main building"
               value={row.label}
               disabled={disabled}
-              onChange={(event) => update(index, { label: event.target.value })}
+              onChange={(event) => update(index, { label: toTitleCase(event.target.value) })}
               {...(errors[`addresses.${index}.label`]
                 ? { error: errors[`addresses.${index}.label`] }
                 : {})}

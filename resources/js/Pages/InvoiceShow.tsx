@@ -118,7 +118,7 @@ export default function InvoiceShow({ invoice, items, can }: InvoiceShowProps) {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card padding="lg">
+        <Card accent="brand" padding="lg">
           <SectionHeading as="h3" title="Invoice Information" />
           <dl className="grid grid-cols-2 gap-4">
             <Field label="Client" value={invoice.client} />
@@ -138,7 +138,7 @@ export default function InvoiceShow({ invoice, items, can }: InvoiceShowProps) {
           )}
         </Card>
 
-        <Card padding="lg">
+        <Card accent="success" padding="lg">
           <SectionHeading as="h3" title="Totals & Tax" />
           <dl className="flex flex-col gap-2">
             <TotalRow label="Subtotal" value={formatCurrency(invoice.subtotal, 2)} />
@@ -165,13 +165,13 @@ export default function InvoiceShow({ invoice, items, can }: InvoiceShowProps) {
         </Card>
       </div>
 
-      <Card padding="lg" className="mt-6">
+      <Card accent="warning" padding="lg" className="mt-6">
         <SectionHeading as="h3" title="Line Items" />
         <InvoiceItemsTable invoiceId={invoice.id} items={items} editable={can.update} />
       </Card>
 
       {invoice.notes && (
-        <Card padding="lg" className="mt-6">
+        <Card accent="neutral" padding="lg" className="mt-6">
           <SectionHeading as="h3" title="Notes" />
           <p className="text-md text-white/90">{invoice.notes}</p>
         </Card>

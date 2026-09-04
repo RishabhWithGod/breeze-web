@@ -137,7 +137,7 @@ export default function EstimateCreate({
       <form onSubmit={submit} noValidate>
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-start">
           {/* ------------------------------------------------------ Form ---- */}
-          <Card padding="lg">
+          <Card accent="brand" padding="lg">
             <SectionHeading
               title="Estimate details"
               subtitle={`Reference ${nextNumber} is reserved for this estimate.`}
@@ -240,7 +240,7 @@ export default function EstimateCreate({
           </Card>
 
           {/* --------------------------------------------------- Summary ---- */}
-          <Card padding="lg" className="xl:sticky xl:top-24">
+          <Card accent="success" padding="lg" className="xl:sticky xl:top-24">
             <SectionHeading
               title="Summary"
               subtitle="Updates as you type — nothing is saved until you submit."

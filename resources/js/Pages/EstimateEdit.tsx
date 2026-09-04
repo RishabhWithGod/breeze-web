@@ -123,7 +123,7 @@ export default function EstimateEdit({
       />
 
       <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <Card padding="lg" className="min-w-0">
+        <Card accent="brand" padding="lg" className="min-w-0">
           <SectionHeading
             as="h3"
             title="Estimate details"
@@ -211,7 +211,7 @@ export default function EstimateEdit({
           </div>
         </Card>
 
-        <Card padding="lg" className="min-w-0">
+        <Card accent="success" padding="lg" className="min-w-0">
           <SectionHeading
             as="h3"
             title="Effect of these rates"

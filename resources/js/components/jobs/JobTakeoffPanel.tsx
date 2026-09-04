@@ -63,7 +63,7 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
       )}
 
       {boqLines.length > 0 && (
-        <Card padding="lg">
+        <Card accent="warning" padding="lg">
           <SectionHeading
             as="h3"
             title="Bill of quantities"

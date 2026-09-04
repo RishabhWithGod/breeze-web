@@ -5,6 +5,7 @@ import { Eye, EyeOff, Lock, Mail, User } from 'lucide-react'
 import { Alert } from '@/components/common'
 import { BrandWordmark } from '@/components/layout'
 import { MOTION, ROUTES } from '@/constants'
+import { toTitleCase } from '@/utils'
 
 interface SignupForm {
   name: string
@@ -109,7 +110,7 @@ export default function Signup() {
               aria-invalid={Boolean(errors.name) || undefined}
               disabled={processing}
               value={data.name}
-              onChange={(event) => setData('name', event.target.value)}
+              onChange={(event) => setData('name', toTitleCase(event.target.value))}
               className={FIELD}
             />
           </div>

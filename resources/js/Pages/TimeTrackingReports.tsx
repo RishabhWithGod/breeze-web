@@ -75,7 +75,7 @@ export default function TimeTrackingReports({
         }
       />
 
-      <Card padding="lg">
+      <Card accent="brand" padding="lg">
         <div className="flex flex-wrap items-end gap-4">
           <TextInput
             id="report-from"
@@ -96,7 +96,7 @@ export default function TimeTrackingReports({
       </Card>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
-        <Card padding="lg">
+        <Card accent="success" padding="lg">
           <CardHeader title="Billable vs Non-billable" />
           <ProgressBar value={billablePct} showValue tone="success" />
           <dl className="mt-4 space-y-2 text-md">
@@ -111,14 +111,14 @@ export default function TimeTrackingReports({
           </dl>
         </Card>
 
-        <Card padding="lg">
+        <Card accent="warning" padding="lg">
           <CardHeader title="Overtime" />
           <p className="text-3xl font-bold text-white">{formatHours(overtimeTotal)}</p>
           <p className="mt-1 text-sm text-white/75">Total overtime hours in range</p>
         </Card>
 
         {canViewCosts && (
-          <Card padding="lg">
+          <Card accent="neutral" padding="lg">
             <CardHeader title="Labor Cost" />
             <p className="text-3xl font-bold text-white">
               {laborCostTotal !== null ? formatCurrency(laborCostTotal, 0) : '—'}
@@ -134,7 +134,7 @@ export default function TimeTrackingReports({
         <ReportTable title="Time by Task" rows={byTask} />
       </div>
 
-      <Card padding="lg" className="mt-6">
+      <Card accent="brand" padding="lg" className="mt-6">
         <CardHeader title="Estimated vs Actual" subtitle="Task-plan hours against approved time, per job" />
         {estimatedVsActual.length === 0 ? (
           <p className="text-md text-white/75">No jobs with logged time in this range.</p>
@@ -178,7 +178,7 @@ function ReportTable({
   showCost?: boolean
 }) {
   return (
-    <Card padding="lg">
+    <Card accent="success" padding="lg">
       <CardHeader title={title} />
       {rows.length === 0 ? (
         <p className="text-md text-white/75">No data in this range.</p>

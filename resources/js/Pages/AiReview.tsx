@@ -224,7 +224,7 @@ export default function AiReview({
       />
 
       {rows.length === 0 ? (
-        <Card padding="lg">
+        <Card accent="neutral" padding="lg">
           <EmptyState
             icon={Sparkles}
             title="No detections on this drawing"

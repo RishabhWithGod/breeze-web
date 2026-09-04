@@ -200,7 +200,7 @@ export default function TimeEntryShow({
 
       {/* ============================================ Summary cards =========== */}
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card padding="lg">
+        <Card accent="brand" padding="lg">
           <SectionHeading as="h3" title="Electrician Information" />
           <div className="flex items-start gap-4">
             <span className="grid size-14 shrink-0 place-items-center rounded-full bg-ocean-800 text-md font-semibold text-white ring-1 ring-steel-600">
@@ -231,7 +231,7 @@ export default function TimeEntryShow({
           )}
         </Card>
 
-        <Card padding="lg">
+        <Card accent="success" padding="lg">
           <SectionHeading
             as="h3"
             title="Job Information"
@@ -260,7 +260,7 @@ export default function TimeEntryShow({
       </div>
 
       {/* ================================================ Task details ========= */}
-      <Card padding="lg" className="mt-6">
+      <Card accent="warning" padding="lg" className="mt-6">
         <SectionHeading as="h3" title="Task Details" />
         {task ? (
           <>
@@ -301,7 +301,7 @@ export default function TimeEntryShow({
       </Card>
 
       {/* ================================================= Time details ======= */}
-      <Card padding="lg" className="mt-6">
+      <Card accent="neutral" padding="lg" className="mt-6">
         <SectionHeading as="h3" title="Time Details" subtitle="Calculated by the server — never recomputed here" />
         <dl className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
           <Field label="Date" value={formatDate(entry.date)} />
@@ -317,7 +317,7 @@ export default function TimeEntryShow({
       </Card>
 
       {/* ============================================= Work description ======= */}
-      <Card padding="lg" className="mt-6">
+      <Card accent="brand" padding="lg" className="mt-6">
         <SectionHeading as="h3" title="Work Performed" />
         {entry.description ? (
           <p className="text-md text-white/90">{entry.description}</p>
@@ -328,7 +328,7 @@ export default function TimeEntryShow({
 
       {/* ======================================= History + cost/job summary ==== */}
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-        <Card padding="lg">
+        <Card accent="success" padding="lg">
           <SectionHeading as="h3" title="Activity & Approval History" subtitle="Every status change, in order" />
           <ApprovalHistoryPanel entries={history} />
           {entry.rejectionReason && (
@@ -341,7 +341,7 @@ export default function TimeEntryShow({
 
         <div className="flex min-w-0 flex-col gap-6">
           {can.viewJobCosts && entry.laborCost !== null && (
-            <Card padding="lg">
+            <Card accent="warning" padding="lg">
               <SectionHeading as="h3" title="Labor Cost Summary" />
               <dl className="flex flex-col gap-2">
                 <TotalRow label="Hours" value={formatHours(entry.hours)} />
@@ -356,7 +356,7 @@ export default function TimeEntryShow({
           )}
 
           {jobTimeSummary && (
-            <Card padding="lg">
+            <Card accent="neutral" padding="lg">
               <SectionHeading as="h3" title="Job Time Summary" />
               <dl className="flex flex-col gap-2">
                 <TotalRow label="This Entry" value={formatHours(jobTimeSummary.thisEntryHours)} />
@@ -367,7 +367,7 @@ export default function TimeEntryShow({
             </Card>
           )}
 
-          <Card padding="lg">
+          <Card accent="brand" padding="lg">
             <SectionHeading as="h3" title="Decision" />
             <div className="flex flex-wrap gap-3">
               {can.approve && (
@@ -390,7 +390,7 @@ export default function TimeEntryShow({
 
       {/* ================================================ Related entries ====== */}
       {relatedEntries.length > 0 && (
-        <Card padding="lg" className="mt-6">
+        <Card accent="success" padding="lg" className="mt-6">
           <SectionHeading as="h3" title="Related Entries" subtitle="Other time logged on this job" />
           <Table
             dense

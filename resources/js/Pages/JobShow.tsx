@@ -143,7 +143,7 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
       </AnimatePresence>
 
       {/* ================================================= Summary bar ======= */}
-      <Card padding="lg">
+      <Card accent="brand" padding="lg">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
@@ -233,7 +233,7 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
       )}
 
       {/* ======================================================= Tasks ======= */}
-      <Card padding="lg" className="mt-6">
+      <Card accent="success" padding="lg" className="mt-6">
         <SectionHeading
           title="Tasks"
           subtitle={`${job.tasks.length} on this job`}
@@ -259,7 +259,7 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
       </Card>
 
       {/* =================================================== Estimates ======= */}
-      <Card padding="lg" className="mt-6">
+      <Card accent="warning" padding="lg" className="mt-6">
         <SectionHeading
           title="Estimates"
           subtitle={`${job.estimates.length} raised for this job`}
@@ -269,12 +269,12 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
 
       {/* =============================================== Notes + files ======= */}
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <Card padding="lg">
+        <Card accent="neutral" padding="lg">
           <SectionHeading title="Notes" subtitle={`${job.notes.length} recorded`} />
           <JobNotesPanel jobId={job.id} notes={job.notes} />
         </Card>
 
-        <Card padding="lg">
+        <Card accent="brand" padding="lg">
           <SectionHeading
             title="Attachments"
             subtitle={`${job.attachments.length} uploaded`}

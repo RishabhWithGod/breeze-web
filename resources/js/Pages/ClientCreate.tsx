@@ -18,7 +18,7 @@ import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { useDisclosure } from '@/hooks'
 import { ROUTES } from '@/constants'
 import type { DraftAddress, ResumableTakeoff } from '@/types'
-import { emptyAddress } from '@/utils'
+import { emptyAddress, toTitleCase } from '@/utils'
 
 interface ClientDraft {
   name: string
@@ -144,7 +144,7 @@ export default function ClientCreate({ unfinishedTakeoff }: ClientCreateProps) {
               placeholder="e.g. Harborview Data Hall"
               autoComplete="off"
               value={data.name}
-              onChange={(event) => update('name', event.target.value)}
+              onChange={(event) => update('name', toTitleCase(event.target.value))}
               {...(errors.name ? { error: errors.name } : {})}
             />
 

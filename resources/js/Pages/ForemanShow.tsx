@@ -123,7 +123,7 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
       </AnimatePresence>
 
       {/* ==================================================== Identity ======== */}
-      <Card padding="lg">
+      <Card accent="brand" padding="lg">
         <div className="flex flex-wrap items-center gap-4">
           <span
             aria-hidden
@@ -167,7 +167,7 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_1.4fr]">
         {/* ================================================== Details ========= */}
-        <Card padding="lg" className="min-w-0 self-start">
+        <Card accent="success" padding="lg" className="min-w-0 self-start">
           <CardHeader title="Details" subtitle="What is on record for this member" />
 
           <dl className="flex flex-col gap-4">
@@ -231,7 +231,7 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
         </Card>
 
         {/* ============================================== Open work =========== */}
-        <Card padding="lg" className="min-w-0">
+        <Card accent="warning" padding="lg" className="min-w-0">
           <CardHeader
             title="Open work"
             subtitle={

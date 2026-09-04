@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import { motion, type HTMLMotionProps } from 'framer-motion'
 import { MOTION } from '@/constants'
+import type { Tone } from '@/types'
 import { cn } from '@/utils'
+import { cardAccent, cardAccentAt } from './cardStyles'
 
 export type CardVariant = 'glass' | 'solid' | 'spotlight' | 'ocean' | 'outline'
 export type CardPadding = 'none' | 'sm' | 'md' | 'lg'
@@ -30,6 +32,19 @@ export interface CardProps extends Omit<HTMLMotionProps<'div'>, 'ref' | 'childre
   animated?: boolean
   /** Entrance delay index, multiplied by the shared stagger interval. */
   index?: number
+  /**
+   * The lit border the estimate sections wear — two pixels round, six down the
+   * left, in a colour.
+   *
+   * A `Tone` picks the colour. `'auto'` takes it from `index`, walking a card
+   * list through four accents so one card is never the next one's colour;
+   * that is what a list of groups wants, and it is why `index` already exists.
+   *
+   * Off by default. The accent says "this is a section of its own", and a card
+   * nested inside another card is not — spending it everywhere would leave it
+   * meaning nothing anywhere.
+   */
+  accent?: Tone | 'auto'
   children?: ReactNode
 }
 
@@ -39,6 +54,7 @@ export function Card({
   hoverable = false,
   animated = true,
   index = 0,
+  accent,
   className,
   children,
   ...props
@@ -56,6 +72,8 @@ export function Card({
       className={cn(
         'relative rounded-card',
         VARIANTS[variant],
+        // After the variant, so its own hairline is the thing being overridden.
+        accent === 'auto' ? cardAccentAt(index) : accent ? cardAccent(accent) : undefined,
         PADDINGS[padding],
         hoverable &&
           'transition-colors duration-300 hover:border-brand/50 hover:bg-white/10',
