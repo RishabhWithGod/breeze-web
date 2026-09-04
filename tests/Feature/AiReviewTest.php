@@ -34,6 +34,12 @@ use Tests\TestCase;
  */
 class AiReviewTest extends TestCase
 {
+    /**
+     * The days the work runs — required by the job step, as they are on the
+     * Create Job screen. A job with no dates cannot be scheduled or crewed.
+     */
+    private const JOB_DATES = ['start_date' => '2026-09-07', 'end_date' => '2026-09-21'];
+
     use RefreshDatabase, TalksToTheEngine;
 
     private User $user;
@@ -840,7 +846,7 @@ class AiReviewTest extends TestCase
         $this->finalise();
 
         $this->actingAs($this->user)
-            ->post("/takeoffs/{$this->result->id}/job")
+            ->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES)
             ->assertRedirect();
 
         $job = Job::latest('id')->firstOrFail();
@@ -865,7 +871,7 @@ class AiReviewTest extends TestCase
     public function test_the_estimate_is_generated_from_the_engines_bill_of_quantities(): void
     {
         $this->finalise();
-        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job");
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES);
 
         $this->actingAs($this->user)
             ->post("/takeoffs/{$this->result->id}/estimate")
@@ -1030,7 +1036,7 @@ class AiReviewTest extends TestCase
     public function test_creating_the_job_twice_refreshes_it_instead_of_duplicating_it(): void
     {
         $this->finalise();
-        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job");
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES);
         $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/estimate");
 
         $job = Job::latest('id')->firstOrFail();
@@ -1058,7 +1064,7 @@ class AiReviewTest extends TestCase
 
         // Creating the job and estimate again brings the same two records up to
         // the reviewed numbers rather than duplicating them.
-        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job");
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES);
         $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/estimate");
 
         $this->assertDatabaseCount('work_jobs', 1);
@@ -1086,7 +1092,7 @@ class AiReviewTest extends TestCase
     public function test_a_job_can_be_staffed_by_role_and_keeps_its_assignment_history(): void
     {
         $this->finalise();
-        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job");
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES);
         $job = Job::latest('id')->firstOrFail();
 
         // Creating the job assigns nobody — staffing is a separate, explicit step.
@@ -1136,7 +1142,7 @@ class AiReviewTest extends TestCase
         $this->finalise();
         $this->assertDatabaseHas('app_notifications', ['type' => 'review-completed']);
 
-        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job");
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES);
         $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/estimate");
         $this->assertDatabaseHas('app_notifications', ['type' => 'estimate-ready']);
     }

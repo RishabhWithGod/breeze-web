@@ -30,7 +30,13 @@ export interface JobShift {
   readonly location: string | null
   readonly jobType: string | null
   readonly priority: JobPriority
+  /** What the shift was booked under: the job's crew, as it stood. */
   readonly crew: string
+  /** The job's crew as it stands now. Null for a job with no team. */
+  readonly teamName: string | null
+  /** Who is on the work, read live off its tasks. */
+  readonly foremen: readonly { readonly name: string; readonly initials: string }[]
+  readonly supervisors: readonly { readonly name: string; readonly initials: string }[]
   /** `YYYY-MM-DD`; the grid buckets by this. */
   readonly date: string
   /** `HH:mm`, for form fields. */
@@ -57,8 +63,17 @@ export interface SchedulableJob {
   readonly requiredSkills: readonly string[]
   readonly value: number | null
   readonly startDate: string | null
+  /** With `startDate`, the days the job actually runs. Either can be missing. */
+  readonly endDate: string | null
   readonly createdAt: string | null
-  readonly foreman: { readonly name: string; readonly initials: string } | null
+  /** The crew the job is handed to. Null for a job with no team yet. */
+  readonly teamName: string | null
+  /**
+   * Who is already on the job. Both are assigned per task, so there can be
+   * several of each — or none, before the work has been broken down.
+   */
+  readonly foremen: readonly { readonly name: string; readonly initials: string }[]
+  readonly supervisors: readonly { readonly name: string; readonly initials: string }[]
   readonly shiftCount: number
 }
 

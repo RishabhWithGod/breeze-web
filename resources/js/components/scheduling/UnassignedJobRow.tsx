@@ -76,6 +76,14 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
 
       <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
+          {/* Who the work is handed to — the first thing the office needs to
+              know before deciding when to book it. */}
+          <dt className="text-sm text-white/75">Team</dt>
+          <dd className="mt-0.5 truncate text-md font-semibold text-white">
+            {job.teamName ?? <span className="font-normal text-white/50">No team</span>}
+          </dd>
+        </div>
+        <div>
           <dt className="text-sm text-white/75">Client</dt>
           <dd className="mt-0.5 truncate text-md font-semibold text-white">
             {job.client ?? '—'}
@@ -105,6 +113,31 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
         </div>
       </dl>
 
+      {(job.supervisors.length > 0 || job.foremen.length > 0) && (
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          {/*
+            Named rather than counted: "who is on this" is the question, and two
+            names take less room than a number you have to open the job to read.
+          */}
+          <div>
+            <p className="text-sm text-white/75">Supervisor</p>
+            <p className="mt-0.5 text-md font-semibold text-white">
+              {job.supervisors.length > 0
+                ? job.supervisors.map((person) => person.name).join(', ')
+                : <span className="font-normal text-white/50">None assigned</span>}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-white/75">Foreman</p>
+            <p className="mt-0.5 text-md font-semibold text-white">
+              {job.foremen.length > 0
+                ? job.foremen.map((person) => person.name).join(', ')
+                : <span className="font-normal text-white/50">None assigned</span>}
+            </p>
+          </div>
+        </div>
+      )}
+
       {job.requiredSkills.length > 0 && (
         <div className="mt-5">
           <p className="text-sm text-white/75">Required Skills</p>
@@ -127,7 +160,7 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
           Created: {job.createdAt ? formatDate(job.createdAt) : 'Unknown'}
         </p>
         <Link
-          href={routeTo.job(job.id)}
+          href={routeTo.jobFrom(job.id, 'scheduling')}
           className="inline-flex items-center gap-1 text-sm font-medium text-brand transition-colors hover:text-white"
         >
           View Details

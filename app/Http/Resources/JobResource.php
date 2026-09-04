@@ -25,6 +25,12 @@ class JobResource extends JsonResource
                 'name' => $this->foreman->name,
                 'initials' => $this->foreman->initials,
             ] : null,
+            /*
+             * The crew the job is handed to. Named `teamName` rather than
+             * `team` because `team` on the detail resource already means the
+             * people staffed onto the job, which is a different list.
+             */
+            'teamName' => $this->team?->name,
             // ISO strings throughout — the client formats with date-fns.
             'startDate' => $this->start_date?->toISOString(),
             'endDate' => $this->end_date?->toISOString(),

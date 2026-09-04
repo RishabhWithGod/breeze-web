@@ -9,8 +9,8 @@ use Illuminate\Validation\Rule;
 class StoreJobRequest extends FormRequest
 {
     /**
-     * Mirrors the Create New Job screen: name, client and location are the only
-     * required fields. Everything else can be filled in later. No foreman: they
+     * Mirrors the Create New Job screen: name, client, location and the dates
+     * the work runs are required. Everything else can be filled in later. No foreman: they
      * are assigned per task, once the job has been broken into the work it
      * takes — picking one here was a guess made before that was known. A job names
      * both its client and its project: the client is who it is for, the project is
@@ -34,8 +34,20 @@ class StoreJobRequest extends FormRequest
             'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            /*
+             * The crew this job is handed to. Optional: work is often raised
+             * before anyone knows who will run it. Once it is set, it narrows
+             * who a task on this job can be given to.
+             */
+            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            /*
+             * When the work runs. Required: a job with no dates cannot be
+             * scheduled, cannot be crewed, and shows as a blank row on every
+             * calendar in the app — which is worse than being asked for two
+             * dates that can be corrected later.
+             */
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'budget' => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
             'create_estimate' => ['boolean'],
             'assign_team' => ['boolean'],
@@ -73,6 +85,8 @@ class StoreJobRequest extends FormRequest
             'address_ids.required' => 'Pick the site this job runs at',
             'address_ids.size' => 'A job runs at one site',
             'address_ids.*.exists' => 'That site is not on the project\'s record',
+            'start_date.required' => 'Pick the day this job starts',
+            'end_date.required' => 'Pick the day this job is due to finish',
             'end_date.after_or_equal' => 'End date must be on or after the start date',
             'budget.gt' => 'Enter an amount greater than zero',
         ];

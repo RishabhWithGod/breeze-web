@@ -7,6 +7,7 @@ use App\Http\Resources\SchedulableJobResource;
 use App\Models\CrewShift;
 use App\Models\Job;
 use App\Models\JobActivity;
+use App\Models\Team;
 use App\Models\TeamMember;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -54,7 +55,16 @@ class SchedulingController extends Controller
         [$from, $to] = $this->window($view, $anchor);
 
         $shifts = CrewShift::query()
-            ->with(['job:id,name,client,location,job_type,priority', 'teamMember:id,name,initials,role'])
+            ->with([
+                'job:id,name,client,location,job_type,priority,team_id',
+                // Who is actually on the work, so a block can say so without
+                // opening the job. Two queries for the whole calendar, not one
+                // per block.
+                'job.team:id,name',
+                'job.tasks.foreman:id,name,initials',
+                'job.tasks.supervisor:id,name,initials',
+                'teamMember:id,name,initials,role',
+            ])
             ->between($from, $to)
             ->when(
                 filled($filters['crew'] ?? null),
@@ -78,7 +88,7 @@ class SchedulingController extends Controller
             'days' => $this->days($from, $to, $anchor, $view),
             'shifts' => CrewShiftResource::collection($shifts)->resolve(),
             'unassigned' => SchedulableJobResource::collection(
-                Job::query()->with('foreman')->unscheduled()
+                Job::query()->with(['foreman', 'team:id,name', 'tasks.foreman', 'tasks.supervisor'])->unscheduled()
                     ->sortedForScheduling('start-desc')
                     ->take(self::STRIP_LIMIT)
                     ->get()
@@ -111,7 +121,7 @@ class SchedulingController extends Controller
         $sort = $filters['sort'] ?? 'start-desc';
 
         $jobs = Job::query()
-            ->with('foreman')
+            ->with(['foreman', 'team:id,name', 'tasks.foreman', 'tasks.supervisor'])
             ->unscheduled()
             ->search($filters['search'] ?? null)
             ->when($type !== 'all', fn ($query) => $query->where('job_type', $type))
@@ -131,8 +141,8 @@ class SchedulingController extends Controller
              * whole queue's shape rather than collapsing to the current tab.
              */
             'counts' => $this->typeCounts($filters['search'] ?? null),
-            'crews' => $this->crews(),
-            'members' => $this->members(),
+            // No crew or member lists: booking takes the foremen already on the
+            // job rather than asking again — see AssignCrewModal.
             'today' => Carbon::today()->toDateString(),
         ]);
     }
@@ -207,12 +217,36 @@ class SchedulingController extends Controller
      * show it on each day and a crew can be changed on one of them without touching
      * the rest. Weekends are skipped rather than booked.
      */
+    /**
+     * What a booking is labelled with on the calendar.
+     *
+     * The team, because that is what a shift is booked for. A job with no crew
+     * falls back to whoever is on its tasks — some name is more use on a
+     * calendar than none — and a job with neither says so.
+     */
+    private function crewLabel(Job $job): string
+    {
+        if ($job->team !== null) {
+            return $job->team->name;
+        }
+
+        $names = array_column($job->assignedForemen(), 'name');
+
+        return $names === [] ? 'Unassigned' : implode(', ', $names);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'job_id' => ['required', 'integer', 'exists:work_jobs,id'],
             'team_member_id' => ['nullable', 'integer', 'exists:team_members,id'],
-            'crew' => ['required', 'string', 'max:60'],
+            /*
+             * Who the shift is booked for. No longer asked at the modal: a job's
+             * foremen are decided when its work is broken into tasks, and asking
+             * again there invited a second, different answer. Still accepted, so
+             * a caller with its own label is not refused.
+             */
+            'crew' => ['nullable', 'string', 'max:60'],
             'scheduled_date' => ['required', 'date'],
             'start_time' => ['required', 'date_format:H:i'],
             'duration_hours' => ['required', 'numeric', 'min:0.5', 'max:24'],
@@ -220,7 +254,15 @@ class SchedulingController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $job = Job::findOrFail($data['job_id']);
+        $job = Job::with('team', 'tasks.foreman', 'foreman')->findOrFail($data['job_id']);
+
+        /*
+         * The shift is labelled with whoever is on the job. A job whose work has
+         * not been broken down yet has nobody on it, and says so — inventing a
+         * crew name would be putting a stranger on the calendar.
+         */
+        $data['crew'] = $data['crew'] ?? $this->crewLabel($job);
+
         $start = Carbon::parse($data['scheduled_date'])->startOfDay();
         $days = $data['days'] ?? 1;
         $booked = 0;
@@ -266,7 +308,7 @@ class SchedulingController extends Controller
 
             $job->recordActivity(
                 'scheduled',
-                "Booked {$data['crew']} for {$booked} ".str('day')->plural($booked)." from {$start->format('M j, Y')}",
+                "Booked {$data['crew']} for {$booked} ".str('day')->plural($booked)." from {$start->format('m/d/Y')}",
                 ['crew' => $data['crew'], 'days' => $booked],
             );
         });
@@ -351,12 +393,10 @@ class SchedulingController extends Controller
         ];
     }
 
-    /** "Oct 4 – 10, 2026", collapsing the month when both ends share one. */
+    /** "10/04/2026 – 10/10/2026": the week being looked at, both ends written out. */
     private function weekLabel(Carbon $from, Carbon $to): string
     {
-        return $from->isSameMonth($to)
-            ? $from->format('F j').' – '.$to->format('j, Y')
-            : $from->format('M j').' – '.$to->format('M j, Y');
+        return $from->format('m/d/Y').' – '.$to->format('m/d/Y');
     }
 
     /**
@@ -377,7 +417,7 @@ class SchedulingController extends Controller
                 'date' => $date->toDateString(),
                 'dayOfMonth' => $date->day,
                 'weekday' => $date->format('D'),
-                'label' => $date->format('D, M j'),
+                'label' => $date->format('D, m/d'),
                 'isToday' => $date->isSameDay($today),
                 'isWeekend' => $date->isWeekend(),
                 // Month views pad into neighbouring months; those cells are dimmed.
@@ -393,18 +433,29 @@ class SchedulingController extends Controller
      *
      * @return list<string>
      */
+    /**
+     * What the calendar's team filter offers.
+     *
+     * The real register, plus whatever labels are already on shifts. It used to
+     * offer a hardcoded "Team A / B / C" — three crews that never existed, and
+     * three filters that could only ever come back empty.
+     *
+     * Old labels are kept because old shifts still carry them: a filter that
+     * cannot select what is on the calendar is a filter that lies.
+     *
+     * @return list<string>
+     */
     private function crews(): array
     {
-        $known = CrewShift::query()
+        $onShifts = CrewShift::query()
             ->reorder()
             ->distinct()
-            ->orderBy('crew')
             ->pluck('crew')
             ->all();
 
-        // Always offer the standard three, even on an empty calendar.
-        return collect(['Team A', 'Team B', 'Team C'])
-            ->merge($known)
+        return Team::orderBy('name')->pluck('name')
+            ->merge($onShifts)
+            ->filter()
             ->unique()
             ->sort()
             ->values()
@@ -507,7 +558,7 @@ class SchedulingController extends Controller
                 'client' => $shift->job?->client,
                 'crew' => $shift->crew,
                 'date' => $shift->scheduled_date->toDateString(),
-                'dayLabel' => $shift->scheduled_date->format('D, M j'),
+                'dayLabel' => $shift->scheduled_date->format('D, m/d'),
                 'startLabel' => $shift->startLabel(),
                 'endLabel' => $shift->endLabel(),
                 'durationHours' => (float) $shift->duration_hours,
@@ -590,7 +641,7 @@ class SchedulingController extends Controller
                         $conflicts[] = [
                             'id' => "{$earlier->id}-{$later->id}",
                             'date' => $date,
-                            'dayLabel' => $earlier->scheduled_date->format('D, M j'),
+                            'dayLabel' => $earlier->scheduled_date->format('D, m/d'),
                             'member' => $member ? [
                                 'id' => $member->id,
                                 'name' => $member->name,

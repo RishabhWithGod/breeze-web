@@ -115,4 +115,36 @@ class UploadClientPreselectTest extends TestCase
             'status' => 'draft',
         ]);
     }
+
+    /**
+     * The refusal names the field that was left empty.
+     *
+     * A drawing is taken off a project, and the picker on that screen says
+     * "Project" — so a message telling someone to select a client sends them
+     * looking for a field that is not there.
+     */
+    public function test_running_a_takeoff_with_no_project_says_so(): void
+    {
+        $this->actingAs($this->user)
+            ->post(route('uploads.store'), ['files' => []])
+            ->assertSessionHasErrors([
+                'project_id' => 'Select a project before running a takeoff.',
+            ]);
+    }
+
+    public function test_a_project_that_is_not_yours_is_not_found(): void
+    {
+        $theirs = Project::create([
+            'user_id' => User::factory()->create()->id,
+            'name' => 'Someone Else’s Tower',
+            'client' => 'Someone Else',
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($this->user)
+            ->post(route('uploads.store'), ['project_id' => $theirs->id, 'files' => []])
+            ->assertSessionHasErrors([
+                'project_id' => 'That project could not be found.',
+            ]);
+    }
 }

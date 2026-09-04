@@ -24,7 +24,16 @@ class CrewShiftResource extends JsonResource
             'location' => $this->job?->location,
             'jobType' => $this->job?->job_type,
             'priority' => $this->job?->priority ?? 'medium',
+            // What the shift was booked under: the job's crew, as it stood.
             'crew' => $this->crew,
+            'teamName' => $this->job?->team?->name,
+            /*
+             * Who is on the work, from its tasks. Read live rather than stored
+             * on the shift: staffing changes after a booking, and a calendar
+             * showing last week's answer is worse than showing none.
+             */
+            'foremen' => $this->job?->assignedForemen() ?? [],
+            'supervisors' => $this->job?->assignedSupervisors() ?? [],
             // The grid buckets blocks by this exact key, so it is a plain date.
             'date' => $this->scheduled_date->toDateString(),
             'startTime' => substr((string) $this->start_time, 0, 5),

@@ -28,6 +28,8 @@ export interface Job {
   readonly status: JobStatus
   /** Assigned after intake, so absent on a freshly created job. */
   readonly foreman: Pick<JobForeman, 'name' | 'initials'> | null
+  /** The crew the job is handed to. Null for a job with no team yet. */
+  readonly teamName: string | null
   /** ISO timestamps — formatted with date-fns at render time. */
   readonly startDate: string | null
   readonly endDate: string | null
@@ -69,6 +71,8 @@ export interface JobTaskSummary {
   readonly title: string
   readonly status: TaskStatus
   readonly foreman: string | null
+  /** Who is over it. Null for work with a foreman and nobody above them. */
+  readonly supervisor: string | null
   readonly estimatedHours: number | null
   readonly actualHours: number | null
   /** How much of the estimate this task covers. */
@@ -170,6 +174,13 @@ export interface JobDetail extends Omit<Job, 'teamCount' | 'estimateCount'> {
   readonly placeId: string | null
   readonly archivedAt: string | null
   readonly createdAt: string
+  /**
+   * The crew the job is handed to — one team, picked when the job was raised.
+   * Not to be confused with `team` below, which is the individual people
+   * staffed onto it.
+   */
+  readonly teamId: number | null
+  readonly teamName: string | null
   readonly team: readonly JobTeamMember[]
   readonly estimates: readonly JobEstimateSummary[]
   /** The work the job is broken into, in schedule order. */
@@ -198,6 +209,11 @@ export interface JobDraft {
   address_ids: number[]
   description: string
   job_type: JobType | ''
+  /**
+   * The crew this job is handed to. Empty means none yet — a real state, and
+   * what narrows the foreman and supervisor pickers on the job's tasks.
+   */
+  team_id: string
   start_date: string
   end_date: string
   budget: string

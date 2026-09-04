@@ -32,6 +32,7 @@ import {
 } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_STATUS_OPTIONS, ROUTES, routeTo } from '@/constants'
+import type { JobOrigin } from '@/constants'
 import { useDisclosure, useEchoConnectionState, usePrivateChannel } from '@/hooks'
 import type {
   JobCostRow,
@@ -53,6 +54,14 @@ export interface JobShowProps {
   jobCosting: JobCostRow
   /** False for anyone who cannot plan work — the tasks are still readable. */
   canPlanWork: boolean
+  /**
+   * Where Back returns to, resolved by the server from the link that got here.
+   * A job is opened from the jobs list, from Scheduling and from the task list,
+   * and Back has to undo the step that was actually taken.
+   */
+  back: { label: string; url: string }
+  /** The same trail as a bare name, so Edit can carry it on. */
+  from: JobOrigin | null
 }
 
 /**
@@ -61,7 +70,7 @@ export interface JobShowProps {
  * Every panel writes through its own controller and the page reloads with the
  * updated relationships, so what is on screen always matches the database.
  */
-export default function JobShow({ job, canPlanWork }: JobShowProps) {
+export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
@@ -98,15 +107,19 @@ export default function JobShow({ job, canPlanWork }: JobShowProps) {
 
       <PageHeader
         title={job.name}
-        subtitle={[job.client, job.location].filter(Boolean).join(' · ') || undefined}
+        // The crew is named up here with the client and the site: it is what
+        // decides who the job's tasks can be given to.
+        subtitle={
+          [job.client, job.location, job.teamName].filter(Boolean).join(' · ') || undefined
+        }
         breadcrumbs={[{ label: 'Jobs', href: ROUTES.jobs }, { label: 'Details' }]}
         actions={
           <>
-            <ButtonLink href={ROUTES.jobs} variant="secondary" leftIcon={ArrowLeft}>
-              Back
+            <ButtonLink href={back.url} variant="secondary" leftIcon={ArrowLeft}>
+              {back.label}
             </ButtonLink>
             <ButtonLink
-              href={routeTo.jobEdit(job.id)}
+              href={routeTo.jobEditFrom(job.id, from)}
               variant="dark"
               leftIcon={PencilLine}
             >
@@ -232,7 +245,7 @@ export default function JobShow({ job, canPlanWork }: JobShowProps) {
              */
             canPlanWork ? (
               <ButtonLink
-                href={routeTo.jobTaskSetupFromJob(job.id)}
+                href={routeTo.jobTaskSetupFromJob(job.id, from)}
                 variant="secondary"
                 size="sm"
                 leftIcon={Plus}
@@ -242,7 +255,7 @@ export default function JobShow({ job, canPlanWork }: JobShowProps) {
             ) : undefined
           }
         />
-        <JobTasksPanel tasks={job.tasks} canPlan={canPlanWork} />
+        <JobTasksPanel tasks={job.tasks} canPlan={canPlanWork} jobOrigin={from} />
       </Card>
 
       {/* =================================================== Estimates ======= */}

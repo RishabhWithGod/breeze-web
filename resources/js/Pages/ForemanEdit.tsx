@@ -8,14 +8,20 @@ import {
   ButtonLink,
   Card,
   CardHeader,
+  SelectField,
   TextArea,
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
+import { formatUsPhone } from '@/utils'
 
 interface ForemanDraft {
   name: string
+  /** What they do on the crew: `supervisor` or `foreman`. */
+  role: string
+  /** Which crew they are on. Empty means none — a real state, not a gap. */
+  team_id: string
   phone: string
   email: string
   licence_number: string
@@ -24,10 +30,15 @@ interface ForemanDraft {
 }
 
 export interface ForemanEditProps {
+  /** The crews someone can be put on. Empty until the first team is added. */
+  teams: readonly { readonly id: number; readonly name: string }[]
+  roles: readonly { readonly value: string; readonly label: string }[]
   foreman: {
     readonly id: number
     readonly name: string
     readonly initials: string
+    readonly role: string
+    readonly teamId: number | null
     readonly phone: string | null
     readonly email: string | null
     readonly licenceNumber: string | null
@@ -37,10 +48,10 @@ export interface ForemanEditProps {
 }
 
 /**
- * Edit Foreman.
+ * Edit Member.
  *
- * The name is the only thing required: a foreman exists to be handed work, and
- * nothing else is needed to do that. The rest is what you reach for once they
+ * A name and a role are what is required: the register exists to say who runs
+ * work and who supervises it. The rest is what you reach for once they
  * have it — a number to call, a licence to quote — so it is on this screen,
  * optional, rather than on a second one nobody would come back to.
  *
@@ -48,10 +59,12 @@ export interface ForemanEditProps {
  * can fill in itself is one more thing to type and one more thing to get wrong
  * — a rename re-derives them rather than leaving the old ones behind.
  */
-export default function ForemanEdit({ foreman }: ForemanEditProps) {
+export default function ForemanEdit({ foreman, teams, roles }: ForemanEditProps) {
   const { data, setData, put, processing, errors, hasErrors, clearErrors } =
     useForm<ForemanDraft>({
       name: foreman.name,
+      role: foreman.role,
+      team_id: foreman.teamId === null ? '' : String(foreman.teamId),
       phone: foreman.phone ?? '',
       email: foreman.email ?? '',
       licence_number: foreman.licenceNumber ?? '',
@@ -85,7 +98,7 @@ export default function ForemanEdit({ foreman }: ForemanEditProps) {
         title={`Edit ${foreman.name}`}
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
-          { label: 'Foremen', href: ROUTES.foremen },
+          { label: 'Teams', href: ROUTES.teams },
           { label: foreman.name, href: routeTo.foreman(foreman.id) },
           { label: 'Edit' },
         ]}
@@ -110,18 +123,48 @@ export default function ForemanEdit({ foreman }: ForemanEditProps) {
         </AnimatePresence>
 
         <Card padding="lg">
-          <CardHeader title="Foreman details" />
+          <CardHeader title="Member details" />
 
           <div className="space-y-6">
             <TextInput
               id="foreman-name"
-              label="Foreman Name*"
+              label="Member Name*"
               placeholder="e.g. Dana Wu"
               autoComplete="off"
               value={data.name}
               onChange={(event) => update('name', event.target.value)}
               {...(errors.name ? { error: errors.name } : {})}
             />
+
+            <div className="grid gap-6 sm:grid-cols-2">
+              {/*
+                What the register is for: who supervises, and who runs the work.
+              */}
+              <SelectField
+                id="foreman-role"
+                label="Role*"
+                options={roles.map((role) => ({ label: role.label, value: role.value }))}
+                value={data.role}
+                onChange={(event) => update('role', event.target.value)}
+                {...(errors.role ? { error: errors.role } : {})}
+              />
+
+              {/*
+                Blank is a real answer, and moving somebody between crews is
+                just changing it — the work they are carrying stays with them.
+              */}
+              <SelectField
+                id="foreman-team"
+                label="Team"
+                options={[
+                  { label: teams.length > 0 ? 'Not on a team' : 'No teams yet', value: '' },
+                  ...teams.map((team) => ({ label: team.name, value: String(team.id) })),
+                ]}
+                value={data.team_id}
+                onChange={(event) => update('team_id', event.target.value)}
+                {...(errors.team_id ? { error: errors.team_id } : {})}
+              />
+            </div>
 
             <div className="grid gap-6 sm:grid-cols-2">
               <TextInput
@@ -145,14 +188,20 @@ export default function ForemanEdit({ foreman }: ForemanEditProps) {
             </div>
 
             <div className="grid gap-6 sm:grid-cols-2">
+              {/*
+                Shaped as it is typed, so the field shows what will be stored
+                rather than correcting it after the fact. Whether the number is
+                a real one is still the server's answer — see UsPhoneNumber.
+              */}
               <TextInput
                 id="foreman-phone"
                 label="Phone"
                 type="tel"
-                placeholder="e.g. (415) 555-0134"
+                inputMode="tel"
+                placeholder="(415) 555-0134"
                 autoComplete="off"
                 value={data.phone}
-                onChange={(event) => update('phone', event.target.value)}
+                onChange={(event) => update('phone', formatUsPhone(event.target.value))}
                 {...(errors.phone ? { error: errors.phone } : {})}
               />
 

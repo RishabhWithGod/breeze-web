@@ -106,7 +106,7 @@ class TaskScheduleChanged extends Notification
             return $this->detail;
         }
 
-        $due = $this->task->ends_on?->format('M j, Y');
+        $due = $this->task->ends_on?->format('m/d/Y');
 
         return match ($this->reason) {
             self::ASSIGNED => $due ? "You are on this task, due {$due}." : 'You are on this task.',

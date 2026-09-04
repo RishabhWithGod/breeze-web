@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\AiJob;
+use App\Models\AiResult;
 use App\Models\Client;
 use App\Models\ClientAddress;
+use App\Models\Estimate;
 use App\Models\Job;
 use App\Models\Project;
 use App\Models\TeamMember;
@@ -77,6 +80,8 @@ class JobLocationTest extends TestCase
             'project_id' => $this->project->id,
             'address_ids' => [$this->harbour->id],
             'upload_id' => $this->drawing()->id,
+            'start_date' => '2026-09-07',
+            'end_date' => '2026-09-21',
         ])->assertSessionHasNoErrors();
 
         $job = Job::sole();
@@ -99,6 +104,8 @@ class JobLocationTest extends TestCase
             'project_id' => $this->project->id,
             'address_ids' => [$typed->id],
             'upload_id' => $this->drawing()->id,
+            'start_date' => '2026-09-07',
+            'end_date' => '2026-09-21',
         ])->assertSessionHasNoErrors();
 
         $job = Job::sole();
@@ -191,6 +198,8 @@ class JobLocationTest extends TestCase
             'project_id' => $this->project->id,
             'address_ids' => [$theirSite->id],
             'upload_id' => $this->drawing()->id,
+            'start_date' => '2026-09-07',
+            'end_date' => '2026-09-21',
         ])->assertSessionHasErrors('address_ids');
 
         $this->assertSame(0, Job::count());
@@ -224,5 +233,103 @@ class JobLocationTest extends TestCase
             'size_bytes' => 1024,
             'status' => 'completed',
         ]);
+    }
+
+    /*
+     * When the work runs.
+     *
+     * Required from here on: a job with no dates cannot be scheduled or crewed,
+     * and shows as a blank row on every calendar in the app.
+     */
+    public function test_a_job_needs_the_days_it_runs(): void
+    {
+        $this->actingAs($this->user)
+            ->post(route('jobs.store'), [
+                'name' => 'Dock rewire',
+                'client_id' => $this->client->id,
+                'project_id' => $this->project->id,
+                'address_ids' => [$this->harbour->id],
+                'upload_id' => $this->drawing()->id,
+            ])
+            ->assertSessionHasErrors(['start_date', 'end_date']);
+
+        $this->assertSame(0, Job::count());
+    }
+
+    public function test_a_job_cannot_finish_before_it_starts(): void
+    {
+        $this->actingAs($this->user)
+            ->post(route('jobs.store'), [
+                'name' => 'Dock rewire',
+                'client_id' => $this->client->id,
+                'project_id' => $this->project->id,
+                'address_ids' => [$this->harbour->id],
+                'upload_id' => $this->drawing()->id,
+                'start_date' => '2026-09-21',
+                'end_date' => '2026-09-07',
+            ])
+            ->assertSessionHasErrors('end_date');
+
+        $this->assertSame(0, Job::count());
+    }
+
+    /**
+     * What a drawing was priced at reaches the Create Job screen.
+     *
+     * The form fills the budget from it the moment a drawing is picked — a job's
+     * budget is the estimate signed off on that drawing, and retyping a figure
+     * that is already on record is how the two drift apart. The form can only do
+     * that if the amount is on the screen with the drawing.
+     */
+    public function test_the_create_job_screen_carries_what_each_drawing_was_priced_at(): void
+    {
+        $drawing = $this->drawing();
+        $result = AiResult::create([
+            'ai_job_id' => AiJob::create([
+                'project_id' => $this->project->id,
+                'upload_id' => $drawing->id,
+                'user_id' => $this->user->id,
+                'status' => 'completed',
+            ])->id,
+            'project_id' => $this->project->id,
+            'upload_id' => $drawing->id,
+            'original_payload' => [],
+        ]);
+        $estimate = Estimate::create([
+            'ai_result_id' => $result->id,
+            'number' => 'EST-9100',
+            'client' => 'Harborview',
+            'project' => 'Data Hall',
+            'issued_on' => now()->toDateString(),
+            'amount' => 12750,
+            'grand_total' => 12750,
+            'status' => 'draft',
+        ]);
+        $result->update(['estimate_id' => $estimate->id]);
+
+        $this->actingAs($this->user)
+            ->get(route('jobs.create'))
+            ->assertInertia(function ($page) use ($drawing) {
+                $upload = collect($page->toArray()['props']['uploads'])
+                    ->firstWhere('id', $drawing->id);
+
+                $this->assertSame('EST-9100', $upload['estimate']['number']);
+                $this->assertEqualsWithDelta(12750, $upload['estimate']['amount'], 0.001);
+            });
+    }
+
+    /** A drawing nobody has priced yet says so, so the field is left alone. */
+    public function test_a_drawing_with_no_estimate_carries_none(): void
+    {
+        $drawing = $this->drawing();
+
+        $this->actingAs($this->user)
+            ->get(route('jobs.create'))
+            ->assertInertia(function ($page) use ($drawing) {
+                $upload = collect($page->toArray()['props']['uploads'])
+                    ->firstWhere('id', $drawing->id);
+
+                $this->assertNull($upload['estimate']);
+            });
     }
 }

@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\SecurityEvent;
 use App\Models\SecurityNotificationPreference;
 use App\Models\UserSecuritySetting;
+use App\Rules\UsPhoneNumber;
 use App\Services\Security\OtpChallengeService;
 use App\Services\Security\SecurityEventLogger;
 use App\Services\Security\TwoFactorService;
+use App\Support\UsPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -176,7 +178,11 @@ class SecuritySettingsController extends Controller
 
     public function sendPhoneChallenge(Request $request): RedirectResponse
     {
-        $data = $request->validate(['phone' => ['required', 'string', 'max:20']]);
+        $data = $request->validate(['phone' => ['required', 'string', 'max:20', new UsPhoneNumber]]);
+
+        // Normalised before the code is sent, so the number that is confirmed
+        // is the number that gets stored.
+        $data['phone'] = UsPhone::format($data['phone']);
 
         // Verified through the real email OTP mechanism, since no SMS
         // provider is configured to deliver a code to the new number itself.

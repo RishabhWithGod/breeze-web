@@ -20,12 +20,7 @@ import {
   type SchedulingSort,
   type SchedulingTypeFilter,
 } from '@/constants'
-import type {
-  CrewMember,
-  Paginated,
-  SchedulableJob,
-  SharedPageProps,
-} from '@/types'
+import type { Paginated, SchedulableJob, SharedPageProps } from '@/types'
 
 interface UnassignedFilters {
   search: string
@@ -37,8 +32,6 @@ export interface SchedulingUnassignedProps {
   jobs: Paginated<SchedulableJob>
   filters: UnassignedFilters
   counts: Record<SchedulingTypeFilter, number>
-  crews: readonly string[]
-  members: readonly CrewMember[]
   today: string
 }
 
@@ -54,8 +47,6 @@ export default function SchedulingUnassigned({
   jobs,
   filters,
   counts,
-  crews,
-  members,
   today,
 }: SchedulingUnassignedProps) {
   const { flash } = usePage<SharedPageProps>().props
@@ -209,8 +200,6 @@ export default function SchedulingUnassigned({
       <AssignCrewModal
         job={scheduling}
         onClose={() => setScheduling(null)}
-        crews={crews}
-        members={members}
         defaultDate={today}
       />
     </PageTransition>

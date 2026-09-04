@@ -45,7 +45,7 @@ class TimeEntryStatusChanged extends Notification
             ->subject("{$this->headline()} — {$jobName}")
             ->greeting("Hi {$notifiable->name},")
             ->line("{$this->headline()} on {$jobName}.")
-            ->line("Date: {$this->entry->date->format('M j, Y')} · {$this->entry->hours} hrs");
+            ->line("Date: {$this->entry->date->format('m/d/Y')} · {$this->entry->hours} hrs");
 
         if ($this->reason === self::REJECTED && $this->entry->rejection_reason) {
             $message->line("Reason: {$this->entry->rejection_reason}");

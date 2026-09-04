@@ -40,7 +40,7 @@ export function JobStatusHistory({ history }: JobStatusHistoryProps) {
           />
 
           <span className="ml-auto text-sm text-white/70">
-            {change.actor} · {formatDate(change.createdAt, 'MMM d, yyyy · h:mm a')}
+            {change.actor} · {formatDate(change.createdAt, 'MM/dd/yyyy · h:mm a')}
           </span>
         </li>
       ))}

@@ -271,6 +271,17 @@ export default function Jobs({ jobs, filters }: JobsProps) {
       ),
     },
     {
+      key: 'team',
+      header: 'Team',
+      // Who the work is handed to. "No team" is a real answer — plenty of jobs
+      // are raised before anyone knows who will run them.
+      render: (job) => (
+        <span className="whitespace-nowrap text-white/90">
+          {job.teamName ?? <span className="text-white/45">No team</span>}
+        </span>
+      ),
+    },
+    {
       key: 'status',
       header: 'Status',
       render: (job) => (

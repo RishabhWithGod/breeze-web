@@ -58,7 +58,7 @@ class DashboardController extends Controller
                 $when = match (true) {
                     $date->isToday() => 'Today',
                     $date->isTomorrow() => 'Tomorrow',
-                    default => $date->format('M j'),
+                    default => $date->format('m/d'),
                 };
 
                 return [

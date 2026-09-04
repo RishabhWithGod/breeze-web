@@ -50,6 +50,14 @@ class JobDetailResource extends JsonResource
                 'notifyClient' => $this->notify_client,
             ],
 
+            /*
+             * The crew this job is handed to — one team, picked when the job
+             * was raised. Not to be confused with `team` below, which is the
+             * individual people staffed onto it.
+             */
+            'teamId' => $this->team_id,
+            'teamName' => $this->team?->name,
+
             'team' => $this->teamMembers->map(fn ($member) => [
                 'id' => $member->id,
                 'name' => $member->name,
@@ -79,6 +87,8 @@ class JobDetailResource extends JsonResource
                 'title' => $task->title,
                 'status' => $task->status,
                 'foreman' => $task->foreman?->name,
+                // Who is over it. Null for work with nobody above the foreman.
+                'supervisor' => $task->supervisor?->name,
                 'estimatedHours' => $task->estimated_hours === null
                     ? null
                     : (float) $task->estimated_hours,

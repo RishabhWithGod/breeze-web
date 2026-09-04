@@ -6,6 +6,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react'
 import { ChevronDown, type LucideIcon } from 'lucide-react'
+import { DateControl } from './DateControl'
 import type { SelectOption } from '@/types'
 import { cn } from '@/utils'
 
@@ -84,6 +85,21 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
         {...(hint ? { hint } : {})}
         {...(error ? { error } : {})}
       >
+        {/*
+          A date is written MM/DD/YYYY everywhere in this app, and a native date
+          input draws itself in the browser's own region instead. Swapped here
+          rather than at each of the thirty-odd callers, so `type="date"` keeps
+          meaning what it always meant: an ISO value in, an ISO value out.
+        */}
+        {props.type === 'date' ? (
+          <DateControl
+            {...props}
+            {...(id ? { id } : {})}
+            {...(error ? { invalid: true } : {})}
+            controlClassName={cn(CONTROL_BASE, error && INVALID)}
+            {...(className ? { className } : {})}
+          />
+        ) : (
         <div className="relative">
           {LeftIcon && (
             <LeftIcon
@@ -109,6 +125,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
             <div className="absolute top-1/2 right-2 -translate-y-1/2">{rightSlot}</div>
           )}
         </div>
+        )}
       </FieldShell>
     )
   },

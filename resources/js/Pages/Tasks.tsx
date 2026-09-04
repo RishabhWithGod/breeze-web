@@ -27,6 +27,8 @@ interface TaskRow {
   readonly status: TaskStatus
   readonly estimatedHours: number | null
   readonly foreman: string | null
+  /** Who is over it. Null for work with a foreman and nobody above them. */
+  readonly supervisor: string | null
 }
 
 /** One job and the tasks on it, which is the unit this screen pages through. */
@@ -107,6 +109,17 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
       render: (row) => (
         <span className={row.foreman ? 'text-white/90' : 'text-white/60'}>
           {row.foreman ?? 'Unassigned'}
+        </span>
+      ),
+    },
+    {
+      key: 'supervisor',
+      header: 'Supervisor',
+      // Optional work, optional column value: plenty of tasks have a foreman
+      // and nobody above them.
+      render: (row) => (
+        <span className={row.supervisor ? 'text-white/90' : 'text-white/60'}>
+          {row.supervisor ?? '—'}
         </span>
       ),
     },
@@ -311,7 +324,7 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
               <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hairline pb-3">
                 <div className="min-w-0">
                   <Link
-                    href={routeTo.job(group.id)}
+                    href={routeTo.jobFrom(group.id, 'tasks')}
                     className="text-lg font-semibold text-white transition-colors hover:text-brand"
                   >
                     {group.name}

@@ -37,6 +37,12 @@ class UpdateJobRequest extends FormRequest
             'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
+            /*
+             * The crew this job is handed to. Optional: work is often raised
+             * before anyone knows who will run it. Once it is set, it narrows
+             * who a task on this job can be given to.
+             */
+            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
             'status' => ['required', Rule::in(Job::STATUSES)],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],

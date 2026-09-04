@@ -75,6 +75,7 @@ class JobTask extends Model
         'job_schedule_id',
         'job_id',
         'foreman_id',
+        'supervisor_id',
         'created_by',
         'title',
         'description',
@@ -153,6 +154,20 @@ class JobTask extends Model
     public function foreman(): BelongsTo
     {
         return $this->belongsTo(Foreman::class);
+    }
+
+    /**
+     * Who is over this task.
+     *
+     * A supervisor from the same crew as the foreman running it — see
+     * `Job::team()`. Optional: plenty of work needs someone running it and
+     * nobody above them.
+     *
+     * @return BelongsTo<Foreman, $this>
+     */
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(Foreman::class, 'supervisor_id');
     }
 
     /** The people on this task. */

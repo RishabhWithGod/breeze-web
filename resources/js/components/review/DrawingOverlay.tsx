@@ -4,7 +4,9 @@ import { Maximize, Minus, Plus, RotateCcw, StretchHorizontal } from 'lucide-reac
 import { Button, Card, FilterTabs, IconButton, SectionHeading, SelectField } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { OccurrenceOrigin, OverlaySymbol, PageDimensions, ReviewStatus } from '@/types'
-import { symbolColor } from '@/utils'
+import { categoryKey, symbolColor, UNMAPPED_COLOR } from '@/utils'
+import type { SymbolColor } from '@/utils'
+
 import { ManualAddPopover } from './ManualAddPopover'
 import { SymbolBox, type OccurrenceRef } from './SymbolBox'
 import { SymbolLegend } from './SymbolLegend'
@@ -15,6 +17,13 @@ export interface DrawingOverlayProps {
   overlaySymbols: readonly OverlaySymbol[]
   pageDimensions: Readonly<Record<number, PageDimensions>>
   distinctNames: readonly string[]
+  /**
+   * Every category's colour, resolved once for the whole drawing by the screen
+   * that owns it. Taken as a prop rather than worked out here so the drawing,
+   * the legend and the card grid cannot drift apart — which is exactly what
+   * happened when each resolved its own.
+   */
+  colors: ReadonlyMap<string, SymbolColor>
   /** Seeds the active page from the grid's own page filter, when set. */
   initialPage: number | null
   selected: OccurrenceRef | null
@@ -69,6 +78,7 @@ export function DrawingOverlay({
   overlaySymbols,
   pageDimensions,
   distinctNames,
+  colors,
   initialPage,
   selected,
   onSelect,
@@ -231,7 +241,11 @@ export function DrawingOverlay({
   const filteredBoxes = useMemo(
     () =>
       boxes.filter((box) => {
-        if (activeCategory && box.name !== activeCategory) return false
+        // Normalised, like every other name comparison here: the engine sends
+        // the same category in different cases.
+        if (activeCategory && categoryKey(box.name) !== categoryKey(activeCategory)) {
+          return false
+        }
         if (activeStatus !== 'all' && box.status !== activeStatus) return false
 
         return true
@@ -636,6 +650,15 @@ export function DrawingOverlay({
                     onSelect={onSelect}
                     onHoverChange={setHoveredCategory}
                     containerSize={containerSize}
+                    /*
+                     * One map, no fallback. A `?? symbolColor(name)` here was a
+                     * second mapping that could disagree with the legend's —
+                     * the exact bug this map exists to prevent. `colors` is
+                     * built from the drawing's own names, so a miss is not
+                     * possible; if one ever were, an uncoloured box is a
+                     * visible bug rather than a silently wrong colour.
+                     */
+                    color={colors.get(categoryKey(box.name)) ?? UNMAPPED_COLOR}
                   />
                 </div>
               ))}
@@ -650,7 +673,8 @@ export function DrawingOverlay({
                     width: `${DEFAULT_BOX_FRACTION * 100}%`,
                     height: `${DEFAULT_BOX_FRACTION * 100}%`,
                     transform: 'translate(-50%, -50%)',
-                    borderColor: draftColor.border,
+                    // On the page, so the paper colour — see `symbolColor`.
+                    borderColor: draftColor.onPaper,
                     backgroundColor: draftColor.fill,
                   }}
                 />
@@ -707,6 +731,7 @@ export function DrawingOverlay({
             activeCategory={activeCategory}
             onSelectCategory={setActiveCategory}
             hoveredCategory={hoveredCategory}
+            colors={colors}
           />
         </div>
       </div>

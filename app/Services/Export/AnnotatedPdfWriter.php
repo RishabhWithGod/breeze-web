@@ -277,7 +277,7 @@ class AnnotatedPdfWriter
             'Project' => $result->project->name,
             'Drawing' => $result->project->drawing_name,
             'Model' => $result->model_version ?? 'n/a',
-            'Generated' => now()->format('j M Y, H:i'),
+            'Generated' => now()->format('m/d/Y, g:i A'),
         ] as $label => $value) {
             $pdf->Cell(30, 5, $this->ascii($label), 0, 0);
             $pdf->Cell(0, 5, $this->ascii((string) $value), 0, 1);

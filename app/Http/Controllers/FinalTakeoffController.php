@@ -8,6 +8,7 @@ use App\Models\AiResult;
 use App\Models\FinalSymbol;
 use App\Models\Job;
 use App\Models\Project;
+use App\Models\Team;
 use App\Services\Ai\ArtefactStore;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\JobSites;
@@ -95,6 +96,7 @@ class FinalTakeoffController extends Controller
                     'addressIds' => $result->workJob->addresses->pluck('id')->all(),
                     'description' => $result->workJob->description,
                     'jobType' => $result->workJob->job_type,
+                    'teamId' => $result->workJob->team_id,
                     'startDate' => $result->workJob->start_date?->toDateString(),
                     'endDate' => $result->workJob->end_date?->toDateString(),
                     'budget' => $result->workJob->budget === null
@@ -182,6 +184,9 @@ class FinalTakeoffController extends Controller
              * a different one. The takeoff's own is where the form starts.
              */
             'projects' => app(ProjectDirectory::class)->options(),
+            // The crews this job can be handed to — the same list Create Job
+            // offers, because this is the same step reached from the takeoff.
+            'teams' => Team::orderBy('name')->get(['id', 'name']),
             'defaultProjectId' => $result->project_id,
             'history' => ApprovalHistoryResource::collection(
                 $result->history()->with('actor')->take(20)->get()
@@ -290,9 +295,18 @@ class FinalTakeoffController extends Controller
             'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            // The crew, as the Create Job screen asks for it — this is the same
+            // step of the same flow, reached from the takeoff instead.
+            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            // The same two the Create Job screen requires — this is the same
+            // step of the same flow, reached from the takeoff instead.
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'budget' => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
+        ], [
+            'start_date.required' => 'Pick the day this job starts',
+            'end_date.required' => 'Pick the day this job is due to finish',
+            'end_date.after_or_equal' => 'End date must be on or after the start date',
         ]);
 
         $addressIds = $attributes['address_ids'] ?? [];

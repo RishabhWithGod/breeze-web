@@ -273,7 +273,9 @@ export default function EstimateShow({
         </Button>
       </div>
 
-      <div className="flex min-w-0 flex-col gap-4">
+      {/* Roomier than the usual stack: each of these is a whole section, and
+          at gap-4 the closed headers ran together as one striped list. */}
+      <div className="flex min-w-0 flex-col gap-6">
         <CollapsibleCard
           title="Line items"
           subtitle="What is being priced, and at what rate"
@@ -426,8 +428,12 @@ export default function EstimateShow({
               ))}
             </dl>
 
-            {/* The one number anyone came for, given its own weight. */}
-            <div className="rounded-panel border border-brand/40 bg-brand/8 p-5 lg:min-w-64">
+            {/*
+              The one number anyone came for, given its own weight — and green,
+              because a money total reads as a result rather than as one more
+              brand-coloured panel on a screen full of them.
+            */}
+            <div className="rounded-panel border-2 border-status-success/60 bg-status-success/8 p-5 lg:min-w-64">
               <p className="text-2xs tracking-wide text-white/80 uppercase">Grand total</p>
               <p className="mt-1 text-3xl font-bold tabular-nums text-white">
                 {formatCurrency(totals.grandTotal, 2)}

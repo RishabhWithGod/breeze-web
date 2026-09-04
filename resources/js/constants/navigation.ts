@@ -39,7 +39,7 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   // here — adding one is a button on its list, the way every other module does
   // it, rather than a second drawer entry per screen.
   { label: 'Tasks', href: ROUTES.tasks, icon: ClipboardList },
-  { label: 'Foremen', href: ROUTES.foremen, icon: Users },
+  { label: 'Teams', href: ROUTES.teams, icon: Users },
   { label: 'Scheduling', href: ROUTES.scheduling, icon: CalendarCheck },
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock },
   { label: 'Billing', href: ROUTES.billing, icon: ReceiptText },

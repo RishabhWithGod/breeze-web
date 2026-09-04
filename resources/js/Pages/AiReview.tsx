@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { CheckCheck, Combine, RotateCcw, Sparkles, X } from 'lucide-react'
 import {
@@ -24,6 +24,7 @@ import {
 } from '@/components/review'
 import type { OccurrenceRef } from '@/components/review/SymbolBox'
 import { ROUTES, routeTo } from '@/constants'
+import { categoryKey, resolveSymbolColors, UNMAPPED_COLOR } from '@/utils'
 import type {
   AiReviewSummary,
   EstimatingComponent,
@@ -72,6 +73,12 @@ export default function AiReview({
   distinctNames,
   filters,
 }: AiReviewProps) {
+  /*
+   * Every category's colour, resolved once across the whole drawing. Resolving
+   * one name at a time cannot see its siblings, so the same symbol could come
+   * out one colour on a card and another in the legend.
+   */
+  const symbolColors = useMemo(() => resolveSymbolColors(distinctNames), [distinctNames])
   const { flash } = usePage<SharedPageProps>().props
   const [selected, setSelected] = useState<number[]>([])
   const [mergeName, setMergeName] = useState('')
@@ -208,6 +215,7 @@ export default function AiReview({
         overlaySymbols={overlaySymbols}
         pageDimensions={pageDimensions}
         distinctNames={distinctNames}
+        colors={symbolColors}
         initialPage={filters.pageNo}
         selected={selectedOccurrence}
         onSelect={setSelectedOccurrence}
@@ -234,6 +242,9 @@ export default function AiReview({
               onSelect={toggleSelected}
               index={index}
               focused={selectedOccurrence?.reviewId === row.id}
+              // The same map the drawing and the legend read from, so one
+              // symbol is one colour wherever it appears on this screen.
+              color={symbolColors.get(categoryKey(row.name)) ?? UNMAPPED_COLOR}
             />
           ))}
         </div>

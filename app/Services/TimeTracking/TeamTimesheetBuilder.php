@@ -41,7 +41,7 @@ class TeamTimesheetBuilder
 
         $days = [];
         for ($cursor = $weekStart->copy(); $cursor->lessThanOrEqualTo($weekEnd); $cursor->addDay()) {
-            $days[] = ['date' => $cursor->toDateString(), 'label' => $cursor->format('D n/j')];
+            $days[] = ['date' => $cursor->toDateString(), 'label' => $cursor->format('D m/d')];
         }
 
         $rows = $byPerson->map(function ($personEntries) use ($days) {

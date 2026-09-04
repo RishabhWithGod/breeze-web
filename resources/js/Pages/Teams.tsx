@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Head, Link, router } from '@inertiajs/react'
-import { Eye, HardHat, Plus } from 'lucide-react'
+import { Eye, HardHat, UserPlus, Users } from 'lucide-react'
 import {
   ButtonLink,
   Card,
@@ -15,10 +15,13 @@ import { ROUTES, routeTo } from '@/constants'
 import type { Paginated, TableColumn } from '@/types'
 import { formatDate, formatHours } from '@/utils'
 
-interface ForemanRow {
+interface MemberRow {
   readonly id: number
   readonly name: string
   readonly initials: string
+  /** What they do on the crew: `supervisor` or `foreman`. */
+  readonly role: string
+  readonly roleLabel: string
   /** Open work only — what they are carrying now, not what they ever carried. */
   readonly openTasks: number
   readonly openJobs: number
@@ -29,27 +32,39 @@ interface ForemanRow {
   readonly joinedOn: string | null
 }
 
-export interface ForemenProps {
-  foremen: Paginated<ForemanRow>
+interface TeamGroup {
+  readonly id: number
+  readonly name: string
+  readonly members: readonly MemberRow[]
+}
+
+export interface TeamsProps {
+  teams: Paginated<TeamGroup>
+  /**
+   * Everyone on no crew. Not a team, and not hidden either: people added before
+   * teams existed have none, and so does anyone hired before their crew is
+   * decided.
+   */
+  unassigned: readonly MemberRow[]
   filters: { readonly search: string }
-  /** False for anyone who cannot staff work — the list is still readable. */
+  /** False for anyone who cannot staff work — the register is still readable. */
   canManage: boolean
 }
 
-/** The task list, narrowed to one foreman — what a row's numbers describe. */
+/** The task list, narrowed to one member — what a row's numbers describe. */
 const tasksFor = (name: string) => `${ROUTES.tasks}?foreman=${encodeURIComponent(name)}`
 
 /**
- * The foremen a task can be handed to.
+ * The crew register, read the way work is staffed: by team.
  *
- * The numbers are what the list is for: who is already carrying work, and who
- * has room. All of them count open work only — a foreman who finished forty
- * tasks last year is as free as one who has never had any — and the name opens
- * the task list filtered to them, so a number is a way in rather than trivia.
+ * A flat list of names answered "who is free" but never "who is free on the
+ * crew already on this site". The numbers are still what each row is for — all
+ * of them count open work only, and a name opens the task list filtered to that
+ * person, so a number is a way in rather than trivia.
  */
-export default function Foremen({ foremen, filters, canManage }: ForemenProps) {
+export default function Teams({ teams, unassigned, filters, canManage }: TeamsProps) {
   const [search, setSearch] = useState(filters.search)
-  const rows = foremen.data
+  const groups = teams.data
 
   const apply = (changes: Record<string, string>) => {
     const query = new URLSearchParams(window.location.search)
@@ -64,16 +79,16 @@ export default function Foremen({ foremen, filters, canManage }: ForemenProps) {
     query.delete('page')
     if (changes['page'] !== undefined) query.set('page', changes['page'])
 
-    router.get(`${ROUTES.foremen}?${query.toString()}`, undefined, {
+    router.get(`${ROUTES.teams}?${query.toString()}`, undefined, {
       preserveState: true,
       replace: true,
     })
   }
 
-  const columns: TableColumn<ForemanRow>[] = [
+  const columns: TableColumn<MemberRow>[] = [
     {
       key: 'name',
-      header: 'Foreman',
+      header: 'Member',
       render: (row) => (
         <Link href={tasksFor(row.name)} className="group flex items-center gap-3">
           <span
@@ -95,6 +110,19 @@ export default function Foremen({ foremen, filters, canManage }: ForemenProps) {
             </span>
           </span>
         </Link>
+      ),
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      /* Toned, not just written: a supervisor reads differently from a foreman
+         at a glance, which is the point of showing it in the crew's own list. */
+      render: (row) => (
+        <StatusChip
+          hideDot
+          tone={row.role === 'supervisor' ? 'info' : 'neutral'}
+          label={row.roleLabel}
+        />
       ),
     },
     {
@@ -180,19 +208,26 @@ export default function Foremen({ foremen, filters, canManage }: ForemenProps) {
     },
   ]
 
+  const nothingAtAll = groups.length === 0 && unassigned.length === 0
+
   return (
     <PageTransition>
-      <Head title="Foremen" />
+      <Head title="Teams" />
 
       <PageHeader
-        title="Foremen"
-        subtitle="Who work can be handed to, and how much each is already carrying."
-        breadcrumbs={[{ label: 'Jobs', href: ROUTES.jobs }, { label: 'Foremen' }]}
+        title="Teams"
+        subtitle="The crews work is handed to, and how much each member is already carrying."
+        breadcrumbs={[{ label: 'Jobs', href: ROUTES.jobs }, { label: 'Teams' }]}
         actions={
           canManage ? (
-            <ButtonLink href={ROUTES.foremanCreate} leftIcon={Plus}>
-              Add foreman
-            </ButtonLink>
+            <>
+              <ButtonLink href={ROUTES.teamCreate} variant="secondary" leftIcon={Users}>
+                Add team
+              </ButtonLink>
+              <ButtonLink href={ROUTES.foremanCreate} leftIcon={UserPlus}>
+                Add member
+              </ButtonLink>
+            </>
           ) : undefined
         }
       />
@@ -202,57 +237,124 @@ export default function Foremen({ foremen, filters, canManage }: ForemenProps) {
           value={search}
           onValueChange={setSearch}
           onSearch={(value) => apply({ search: value })}
-          placeholder="Search foremen…"
-          aria-label="Search foremen"
+          placeholder="Search teams and members…"
+          aria-label="Search teams and members"
           containerClassName="sm:max-w-xs"
         />
       </Card>
 
-      <Card padding="lg">
-        {rows.length === 0 ? (
+      {nothingAtAll ? (
+        <Card padding="lg">
           <EmptyState
             icon={HardHat}
-            title={filters.search ? 'No foreman matches that' : 'No foremen yet'}
+            title={filters.search ? 'Nothing matches that' : 'No teams yet'}
             description={
               filters.search
-                ? 'Clear the search to see everyone on the list.'
-                : 'Add the people who run work on site, then hand them tasks.'
+                ? 'Clear the search to see every crew on the register.'
+                : 'Add a crew, then add the people who run its work.'
             }
             {...(!filters.search && canManage
               ? {
                   actions: (
-                    <ButtonLink href={ROUTES.foremanCreate} leftIcon={Plus}>
-                      Add foreman
+                    <ButtonLink href={ROUTES.teamCreate} leftIcon={Users}>
+                      Add team
                     </ButtonLink>
                   ),
                 }
               : {})}
           />
-        ) : (
-          <Table
-            columns={columns}
-            rows={rows}
-            getRowId={(row) => row.id}
-            variant="lined"
-            caption="Foremen on record"
-          />
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          {groups.map((team) => (
+            <TeamCard
+              key={team.id}
+              name={team.name}
+              members={team.members}
+              columns={columns}
+              canManage={canManage}
+            />
+          ))}
+
+          {unassigned.length > 0 && (
+            <TeamCard
+              name="Not on a team"
+              /* Said plainly rather than left as a gap: these are people on the
+                 register whose crew nobody has decided yet. */
+              description="Everyone on the register who has not been put on a crew."
+              members={unassigned}
+              columns={columns}
+              canManage={canManage}
+            />
+          )}
+        </div>
+      )}
 
       <Pagination
         withLabels
         className="mt-6"
-        page={foremen.meta.current_page}
-        pageCount={foremen.meta.last_page}
+        page={teams.meta.current_page}
+        pageCount={teams.meta.last_page}
         onPageChange={(page) => apply({ page: String(page) })}
         summary={
-          foremen.meta.total === 0
-            ? 'No foremen to display'
-            : `Showing ${rows.length} of ${foremen.meta.total} foremen`
+          teams.meta.total === 0
+            ? 'No teams to display'
+            : `Showing ${groups.length} of ${teams.meta.total} teams`
         }
       />
     </PageTransition>
   )
 }
 
-Foremen.layout = appLayout
+interface TeamCardProps {
+  name: string
+  /** Overrides the member count, for a group that needs explaining. */
+  description?: string
+  members: readonly MemberRow[]
+  columns: TableColumn<MemberRow>[]
+  canManage: boolean
+}
+
+/** One crew and everyone on it. */
+function TeamCard({ name, description, members, columns, canManage }: TeamCardProps) {
+  return (
+    <Card padding="lg">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-white">{name}</h2>
+          <p className="mt-1 text-sm text-white/70">
+            {description ??
+              `${members.length} ${members.length === 1 ? 'member' : 'members'}`}
+          </p>
+        </div>
+      </div>
+
+      {members.length === 0 ? (
+        /* A crew with nobody on it is a real state — it was just created — and
+           the way out of it is the button that put it here. */
+        <p className="text-md text-white/75">
+          Nobody is on this crew yet.
+          {canManage && (
+            <>
+              {' '}
+              <Link href={ROUTES.foremanCreate} className="text-brand hover:underline">
+                Add a member
+              </Link>
+              .
+            </>
+          )}
+        </p>
+      ) : (
+        <Table
+          columns={columns}
+          rows={members}
+          getRowId={(row) => row.id}
+          variant="lined"
+          caption={`${name} members`}
+        />
+      )}
+    </Card>
+  )
+}
+
+Teams.layout = appLayout

@@ -3,7 +3,8 @@ import { Check, X } from 'lucide-react'
 import { motion, type PanInfo } from 'framer-motion'
 import { router } from '@inertiajs/react'
 import type { OccurrenceOrigin, PageDimensions, ReviewStatus } from '@/types'
-import { cn, symbolColor } from '@/utils'
+import type { SymbolColor } from '@/utils'
+import { cn } from '@/utils'
 import { routeTo } from '@/constants'
 import { OccurrencePopover } from './OccurrencePopover'
 
@@ -33,6 +34,14 @@ export interface SymbolBoxProps {
   onHoverChange?: (name: string | null) => void
   /** Current on-screen CSS pixel size of the layer this box's percentages are relative to. Move is disabled without it. */
   containerSize: { width: number; height: number } | null
+  /**
+   * This category's colour, resolved across every name on the drawing.
+   *
+   * Passed in rather than looked up here: resolving one name at a time cannot
+   * see its siblings, so a box could end up a different colour from its own row
+   * in the legend — see `resolveSymbolColors`.
+   */
+  color: SymbolColor
 }
 
 /**
@@ -64,6 +73,7 @@ export function SymbolBox({
   onSelect,
   onHoverChange,
   containerSize,
+  color,
 }: SymbolBoxProps) {
   const [isDragging, setIsDragging] = useState(false)
   const draggedRef = useRef(false)
@@ -94,7 +104,6 @@ export function SymbolBox({
   if (!pageDimensions || pageDimensions.width <= 0 || pageDimensions.height <= 0) return null
 
   const [x = 0, y = 0, w = 0, h = 0] = bbox
-  const color = symbolColor(name)
   const isRejected = status === 'rejected'
   const canMove = containerSize !== null
 
@@ -120,7 +129,26 @@ export function SymbolBox({
         ? routeTo.symbolApprove(resultId, reviewId)
         : routeTo.symbolReject(resultId, reviewId)
 
-    router.post(url, {}, { preserveScroll: true, preserveState: true })
+    /*
+     * `except: ['flash']` is what keeps this from shoving the page around.
+     *
+     * The server flashes "X rejected" on this route, and the review screen
+     * renders that banner above the drawing. The first rejection of a session
+     * therefore made the banner appear and pushed everything below it down —
+     * which reads as the whole screen reloading. Every rejection after that
+     * only swapped the banner's text, so it never happened again, which is why
+     * it looked like a first-time-only bug.
+     *
+     * A banner is the right feedback for the card grid's own buttons, where the
+     * row can be scrolled out of view. It is redundant here: the marker under
+     * the pointer turns red the moment it lands. So this request asks for
+     * everything except the flash, and the page does not move.
+     */
+    router.post(url, {}, {
+      preserveScroll: true,
+      preserveState: true,
+      except: ['flash'],
+    })
   }
 
   const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -181,26 +209,68 @@ export function SymbolBox({
       whileHover={{ scale: 1.08 }}
       animate={isSelected ? { scale: 1.15 } : { scale: 1 }}
     >
-      {/* Outline only — deliberately no fill and no icon glyph over the box's
-          own area, so the real symbol already drawn on the page underneath
-          stays fully visible. The border color alone carries both the
-          category identity (approved) and the rejected state. */}
+      {/* No icon glyph over the box's own area — the real electrical symbol is
+          drawn on the page underneath, and covering it would defeat the point
+          of a spatial review. The wash is 22%, which the linework reads
+          straight through, and it is what makes a light hue findable: a
+          two-pixel yellow line on white is a line you hunt for, a tinted patch
+          is not. */}
       <div
         className={cn(
-          'absolute inset-0 rounded-sm border-2 bg-transparent transition-colors duration-150',
-          isRejected ? 'border-red-500' : 'border-(--sb-border)',
-          isSelected && 'ring-2 ring-white ring-offset-1 ring-offset-navy-900',
+          'absolute inset-0 rounded-sm transition-colors duration-150',
+          /*
+           * A white halo around the coloured line.
+           *
+           * These lines land on dense black linework, not on clean paper, and
+           * a two-pixel colour against a drawing is a colour you have to hunt
+           * for. The white ring outside it is what makes it read as a marker
+           * rather than as part of the drawing.
+           */
+          'border-2 outline-2 outline-white/90',
+          /*
+           * Rejected is red, and red is only ever rejected.
+           *
+           * The category palette has no red in it — see `PALETTE_HUES` — so a
+           * red box on this page cannot be mistaken for a category. That is
+           * what makes spending the hue on status affordable here: it costs
+           * nothing that another colour was using.
+           *
+           * Dashed and filled as well as red, so it is still the odd one out
+           * for anyone who cannot separate red from green. The wash is light
+           * enough to read the symbol through: it is dismissed, not deleted,
+           * and a reviewer has to see what they turned down to bring it back.
+           */
+          isRejected
+            ? 'border-dashed border-red-700 bg-red-600/25'
+            : 'border-(--sb-border) bg-(--sb-fill)',
+          // The selected box is picked out in ink, against its own white halo.
+          isSelected && 'ring-2 ring-navy-900 ring-offset-2 ring-offset-white',
           isDragging && 'shadow-lg',
         )}
-        style={{ '--sb-border': color.border } as CSSProperties}
+        style={
+          {
+            '--sb-border': color.onPaper,
+            '--sb-fill': color.paperFill,
+          } as CSSProperties
+        }
       />
 
-      {/* Rejected is the only status color that persists at rest — an
-          approved/pending box's badge stays neutral so nothing on the
-          drawing reads as "green = good" at a glance. Hovering previews the
-          one action available (reject, or reinstate) with a neutral swap,
-          never a green one, and clicking it fires instantly, no popover
-          needed. */}
+      {/*
+        The one action available on this marker, shown only while the pointer
+        is on it.
+
+        A badge sitting on every box at rest was the problem: these boxes are
+        often barely bigger than the badge, so the thing meant to help was
+        covering the coloured outline that says what the symbol is. At rest the
+        drawing is now just outlines — which is the whole point of a spatial
+        review — and the action appears where it is wanted.
+
+        Nothing is lost by hiding it: a rejected box already reads as rejected
+        from its red outline, with or without a badge on it.
+
+        Green to reinstate, red to reject, and the glyph is the action rather
+        than the current state — there is only ever one thing this button does.
+      */}
       <button
         type="button"
         onClick={(event) => {
@@ -210,26 +280,26 @@ export function SymbolBox({
         onPointerDown={(event) => event.stopPropagation()}
         aria-label={isRejected ? `Reinstate ${name}` : `Reject this ${name}`}
         className={cn(
-          'absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full text-white shadow-sm transition-colors duration-150',
-          isRejected ? 'bg-red-500 group-hover:bg-white/25' : 'bg-white/25 group-hover:bg-red-500',
+          'absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full text-white shadow-sm',
+          // A white ring, so it separates from whatever linework it lands on.
+          'ring-[1.5px] ring-white transition-opacity duration-150',
+          /*
+           * Hidden means unclickable too. An invisible hit target hanging off
+           * every marker would swallow clicks meant for the drawing, or for the
+           * box behind it on a crowded page. Keyboard focus still reveals it —
+           * `pointer-events` has no say over tabbing.
+           */
+          'opacity-0 pointer-events-none group-hover:pointer-events-auto',
+          'group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100',
+          isSelected && 'pointer-events-auto opacity-100',
+          isRejected ? 'bg-[#15803d]' : 'bg-red-600',
         )}
       >
-        <Check
-          size={9}
-          strokeWidth={3.5}
-          className={cn(
-            'absolute transition-opacity duration-150',
-            isRejected ? 'opacity-0 group-hover:opacity-100' : 'opacity-100 group-hover:opacity-0',
-          )}
-        />
-        <X
-          size={9}
-          strokeWidth={3.5}
-          className={cn(
-            'absolute transition-opacity duration-150',
-            isRejected ? 'opacity-100 group-hover:opacity-0' : 'opacity-0 group-hover:opacity-100',
-          )}
-        />
+        {isRejected ? (
+          <Check size={10} strokeWidth={3.5} aria-hidden />
+        ) : (
+          <X size={10} strokeWidth={3.5} aria-hidden />
+        )}
       </button>
 
       <span className="pointer-events-none absolute -top-6 left-1/2 hidden -translate-x-1/2 rounded-full bg-navy-900/95 px-2 py-0.5 text-2xs whitespace-nowrap text-white group-hover:block">

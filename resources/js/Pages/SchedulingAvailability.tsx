@@ -360,7 +360,7 @@ export default function SchedulingAvailability({
                                 >
                                   <span className="min-w-0">
                                     <Link
-                                      href={routeTo.job(shift.jobId)}
+                                      href={routeTo.jobFrom(shift.jobId, 'scheduling-availability')}
                                       className="block truncate font-medium text-white transition-colors hover:text-brand"
                                     >
                                       {shift.jobName}
@@ -495,7 +495,7 @@ export default function SchedulingAvailability({
                         {[conflict.first, conflict.second].map((side) => (
                           <Link
                             key={side.id}
-                            href={routeTo.job(side.jobId)}
+                            href={routeTo.jobFrom(side.jobId, 'scheduling-availability')}
                             className="rounded-panel bg-navy-950/30 px-3 py-2 transition-colors hover:bg-navy-950/50"
                           >
                             <span className="block truncate font-medium text-white">
@@ -549,7 +549,7 @@ export default function SchedulingAvailability({
                     </span>
                     <span className="min-w-0">
                       <Link
-                        href={routeTo.job(entry.jobId)}
+                        href={routeTo.jobFrom(entry.jobId, 'scheduling-availability')}
                         className="block truncate font-semibold text-white transition-colors hover:text-brand"
                       >
                         {entry.jobName}

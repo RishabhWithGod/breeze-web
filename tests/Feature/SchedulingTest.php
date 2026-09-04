@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\CrewShift;
 use App\Models\Foreman;
 use App\Models\Job;
+use App\Models\JobSchedule;
+use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -287,7 +289,8 @@ class SchedulingTest extends TestCase
             ->get('/scheduling/availability?view=week&date=2026-10-07')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('summary.shifts', 1)
-                ->where('periodLabel', 'October 4 – 10, 2026'));
+                // Both ends written out, month first — see UsDateFormatTest.
+                ->where('periodLabel', '10/04/2026 – 10/10/2026'));
     }
 
     /* ------------------------------------------------------------- unassigned */
@@ -552,6 +555,24 @@ class SchedulingTest extends TestCase
     }
 
     /** @param  array<string, mixed>  $attributes */
+    /** A task on the job, with the foreman it is assigned to. */
+    private function task(Job $job, string $title, Foreman $foreman, int $position = 0): void
+    {
+        $schedule = $job->schedule ?? JobSchedule::create([
+            'job_id' => $job->id,
+            'working_days' => [1, 2, 3, 4, 5],
+        ]);
+
+        $job->setRelation('schedule', $schedule);
+
+        $job->tasks()->create([
+            'job_schedule_id' => $schedule->id,
+            'title' => $title,
+            'position' => $position,
+            'foreman_id' => $foreman->id,
+        ]);
+    }
+
     private function book(Job $job, Carbon $date, array $attributes = []): CrewShift
     {
         return CrewShift::create([
@@ -564,5 +585,234 @@ class SchedulingTest extends TestCase
             'status' => CrewShift::STATUS_SCHEDULED,
             ...$attributes,
         ]);
+    }
+
+    /* ------------------------------------------------- booking a job's own crew */
+
+    /**
+     * Nobody is picked at the booking.
+     *
+     * Foremen are assigned when a job's work is broken into tasks. Asking again
+     * at the modal invited a second, different answer — the calendar saying one
+     * thing and the task list another — so the shift takes whoever is already on
+     * the job.
+     */
+    public function test_a_booking_is_labelled_with_the_foremen_on_the_job(): void
+    {
+        $job = $this->makeJob(['foreman_id' => null]);
+        $luis = Foreman::create(['name' => 'Luis Ortega', 'initials' => 'LO']);
+
+        $this->task($job, 'Rough-in', $this->foreman, 0);
+        $this->task($job, 'Trim out', $luis, 1);
+
+        $this->actingAs($this->user)
+            ->post(route('scheduling.store'), [
+                'job_id' => $job->id,
+                'scheduled_date' => Carbon::parse('next monday')->toDateString(),
+                'start_time' => '08:00',
+                'duration_hours' => 8,
+                'days' => 1,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Dana Wu, Luis Ortega', CrewShift::sole()->crew);
+    }
+
+    /** One foreman on two tasks is one name, not two. */
+    public function test_a_foreman_on_several_tasks_is_named_once(): void
+    {
+        $job = $this->makeJob(['foreman_id' => null]);
+        $this->task($job, 'Rough-in', $this->foreman, 0);
+        $this->task($job, 'Trim out', $this->foreman, 1);
+
+        $this->actingAs($this->user)
+            ->post(route('scheduling.store'), [
+                'job_id' => $job->id,
+                'scheduled_date' => Carbon::parse('next monday')->toDateString(),
+                'start_time' => '08:00',
+                'duration_hours' => 8,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Dana Wu', CrewShift::sole()->crew);
+    }
+
+    /**
+     * A job whose work has not been broken down yet has nobody on it, and says
+     * so. Inventing a crew name would put a stranger on the calendar.
+     */
+    public function test_a_job_with_nobody_on_it_books_as_unassigned(): void
+    {
+        $job = $this->makeJob(['foreman_id' => null]);
+
+        $this->actingAs($this->user)
+            ->post(route('scheduling.store'), [
+                'job_id' => $job->id,
+                'scheduled_date' => Carbon::parse('next monday')->toDateString(),
+                'start_time' => '08:00',
+                'duration_hours' => 8,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Unassigned', CrewShift::sole()->crew);
+    }
+
+    /** Jobs raised before foremen moved to tasks still carry one of their own. */
+    public function test_an_older_job_falls_back_to_its_own_foreman(): void
+    {
+        $job = $this->makeJob();
+
+        $this->actingAs($this->user)
+            ->post(route('scheduling.store'), [
+                'job_id' => $job->id,
+                'scheduled_date' => Carbon::parse('next monday')->toDateString(),
+                'start_time' => '08:00',
+                'duration_hours' => 8,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Dana Wu', CrewShift::sole()->crew);
+    }
+
+    /**
+     * The queue carries what the booking form fills itself in from: who is on
+     * the job, and the days it is meant to run.
+     */
+    public function test_the_queue_carries_the_dates_and_foremen_the_form_starts_from(): void
+    {
+        $job = $this->makeJob([
+            'foreman_id' => null,
+            'start_date' => '2026-09-07',
+            'end_date' => '2026-09-11',
+        ]);
+        $this->task($job, 'Rough-in', $this->foreman);
+
+        $this->actingAs($this->user)
+            ->get('/scheduling')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('jobs.data.0.foremen.0.name', 'Dana Wu')
+                ->where('jobs.data.0.foremen.0.initials', 'DW')
+                // Both dates, so the form can count the working days between.
+                ->has('jobs.data.0.startDate')
+                ->has('jobs.data.0.endDate'));
+    }
+
+    /** The queue no longer ships crew or member lists — nothing picks from them. */
+    public function test_the_queue_does_not_ship_lists_nobody_picks_from(): void
+    {
+        $this->actingAs($this->user)
+            ->get('/scheduling')
+            ->assertInertia(fn (Assert $page) => $page
+                ->missing('crews')
+                ->missing('members'));
+    }
+
+    /* ------------------------------------------------ the crew, on schedule */
+
+    /**
+     * A shift is booked for a team, so that is what it is labelled with.
+     *
+     * The label used to be the foremen's names. Those change after a booking;
+     * the crew the job was handed to does not.
+     */
+    public function test_a_booking_is_labelled_with_the_jobs_team(): void
+    {
+        $north = Team::create(['name' => 'North Crew']);
+        $job = $this->makeJob(['foreman_id' => null, 'team_id' => $north->id]);
+        $this->task($job, 'Rough-in', $this->foreman);
+
+        $this->actingAs($this->user)
+            ->post(route('scheduling.store'), [
+                'job_id' => $job->id,
+                'scheduled_date' => Carbon::parse('next monday')->toDateString(),
+                'start_time' => '08:00',
+                'duration_hours' => 8,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('North Crew', CrewShift::sole()->crew);
+    }
+
+    /** A job with no crew still gets a useful label, from whoever is on it. */
+    public function test_a_job_with_no_team_is_labelled_with_its_people(): void
+    {
+        $job = $this->makeJob(['foreman_id' => null]);
+        $this->task($job, 'Rough-in', $this->foreman);
+
+        $this->actingAs($this->user)
+            ->post(route('scheduling.store'), [
+                'job_id' => $job->id,
+                'scheduled_date' => Carbon::parse('next monday')->toDateString(),
+                'start_time' => '08:00',
+                'duration_hours' => 8,
+            ]);
+
+        $this->assertSame('Dana Wu', CrewShift::sole()->crew);
+    }
+
+    public function test_the_queue_names_the_crew_and_both_roles(): void
+    {
+        $north = Team::create(['name' => 'North Crew']);
+        $torres = Foreman::create([
+            'name' => 'Michael Torres', 'initials' => 'MT',
+            'team_id' => $north->id, 'role' => 'supervisor',
+        ]);
+        $job = $this->makeJob(['foreman_id' => null, 'team_id' => $north->id]);
+
+        $schedule = JobSchedule::create(['job_id' => $job->id, 'working_days' => [1, 2, 3, 4, 5]]);
+        $job->tasks()->create([
+            'job_schedule_id' => $schedule->id,
+            'title' => 'Rough-in',
+            'position' => 0,
+            'foreman_id' => $this->foreman->id,
+            'supervisor_id' => $torres->id,
+        ]);
+
+        $this->actingAs($this->user)
+            ->get('/scheduling')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('jobs.data.0.teamName', 'North Crew')
+                ->where('jobs.data.0.foremen.0.name', 'Dana Wu')
+                ->where('jobs.data.0.supervisors.0.name', 'Michael Torres'));
+    }
+
+    /**
+     * A block on the calendar names who is on the work now, not who was on it
+     * when the booking was made.
+     */
+    public function test_a_calendar_block_names_who_is_on_the_work(): void
+    {
+        $north = Team::create(['name' => 'North Crew']);
+        $job = $this->makeJob(['foreman_id' => null, 'team_id' => $north->id]);
+        $this->task($job, 'Rough-in', $this->foreman);
+        $this->book($job, Carbon::today());
+
+        $this->actingAs($this->user)
+            ->get('/scheduling/calendar')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('shifts.0.teamName', 'North Crew')
+                ->where('shifts.0.foremen.0.name', 'Dana Wu'));
+    }
+
+    /**
+     * The team filter offers the register, not three crews that never existed.
+     *
+     * Labels already on shifts are kept: a filter that cannot select what is on
+     * the calendar is a filter that lies.
+     */
+    public function test_the_team_filter_offers_the_real_register(): void
+    {
+        Team::create(['name' => 'North Crew']);
+        $this->book($this->makeJob(), Carbon::today(), ['crew' => 'Old Label']);
+
+        $this->actingAs($this->user)
+            ->get('/scheduling/calendar')
+            ->assertInertia(function (Assert $page) {
+                $crews = $page->toArray()['props']['crews'];
+
+                $this->assertContains('North Crew', $crews);
+                $this->assertContains('Old Label', $crews);
+                $this->assertNotContains('Team B', $crews);
+            });
     }
 }
