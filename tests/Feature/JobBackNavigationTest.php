@@ -140,6 +140,9 @@ class JobBackNavigationTest extends TestCase
                 'project_id' => $this->job->project_id,
                 'address_ids' => [$this->site->id],
                 'status' => 'scheduled',
+                // Both dates, as UpdateJobRequest requires them.
+                'start_date' => '2026-03-02',
+                'end_date' => '2026-03-20',
             ])
             ->assertRedirect(route('jobs.show', [$this->job, 'from' => 'scheduling']));
     }

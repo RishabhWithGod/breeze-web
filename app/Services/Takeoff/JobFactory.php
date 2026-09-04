@@ -137,6 +137,12 @@ class JobFactory
             'description' => $attributes['description'] ?? $this->describe($payload, $reviewed),
             'job_type' => $attributes['job_type'] ?? $client->project_type ?? 'commercial',
             'status' => 'planning',
+            /*
+             * The crew the form asked for. Validated by the controller and then
+             * dropped here, which is why a job raised from a reviewed takeoff
+             * came out with no team however carefully one was picked.
+             */
+            'team_id' => $attributes['team_id'] ?? null,
             'foreman_id' => $attributes['foreman_id'] ?? null,
             'start_date' => $attributes['start_date'] ?? $client->due_date,
             'end_date' => $attributes['end_date'] ?? null,

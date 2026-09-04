@@ -21,8 +21,26 @@ class JobDetailResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'client' => $this->client,
-            /** The client's own id — clients are projects, so this is a `projects` id. */
-            'clientId' => $this->project_id,
+            /*
+             * Who the work is for, and which of their projects it is on. The
+             * job carries the project; the client is read through it, because
+             * a project cannot belong to two clients and the edit form must
+             * open on the pair the job actually has.
+             */
+            'clientId' => $this->project?->client_id,
+            'projectId' => $this->project_id,
+            /*
+             * The drawing the work is taken off, read back through the takeoff
+             * it is linked to. The edit form opens on it, so correcting a job
+             * onto the right drawing does not mean raising it again.
+             */
+            'uploadId' => $this->aiResult?->upload_id,
+            /*
+             * Whether that link can be moved. A job raised from a reviewed
+             * takeoff carries that review's counts, so its drawing is fixed —
+             * see JobController::withRelinkedDrawing.
+             */
+            'drawingIsFixed' => ! empty($this->symbol_counts),
             'location' => $this->location,
             // The site's point, carried so the detail screen and the crew app
             // read the same coordinates.

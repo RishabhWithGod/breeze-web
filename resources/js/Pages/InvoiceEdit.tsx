@@ -107,7 +107,6 @@ export default function InvoiceEdit({ invoice, clients, jobs }: InvoiceEditProps
             <SelectField
               id="invoice-client"
               label="Client *"
-              hint="Not listed? Add them under Clients first."
               options={clientOptions}
               value={data.client_id}
               onChange={(event) => update('client_id', event.target.value)}

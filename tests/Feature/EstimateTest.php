@@ -46,8 +46,9 @@ class EstimateTest extends TestCase
             ->assertSessionHas('success');
 
         $estimate = Estimate::latest('id')->firstOrFail();
-        // Both name columns are snapshots of the picked client, not typed input.
-        $this->assertSame('Northgate Fit-out', $estimate->client);
+        // Both name columns are snapshots read from the project, not typed
+        // input: who the work is for, and what it is on.
+        $this->assertSame('Northgate Retail', $estimate->client);
         $this->assertSame('Northgate Fit-out', $estimate->project);
         $this->assertSame($project->id, $estimate->project_id);
         $this->assertNull($estimate->ai_result_id);

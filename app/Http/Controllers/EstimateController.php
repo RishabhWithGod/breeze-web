@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreEstimateRequest;
 use App\Http\Resources\EstimateResource;
 use App\Models\Estimate;
+use App\Models\Project;
 use App\Models\Upload;
 use App\Services\Clients\ClientDirectory;
+use App\Services\Clients\ProjectDirectory;
 use App\Services\Takeoff\TakeoffLinkOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -69,6 +71,8 @@ class EstimateController extends Controller
         return Inertia::render('EstimateCreate', [
             'nextNumber' => Estimate::nextNumber(),
             'clients' => $this->clients->options(),
+            // Their projects, and their drawings — each narrows the next.
+            'projects' => app(ProjectDirectory::class)->options(),
             'uploads' => $this->linkOptions->uploads(),
         ]);
     }
@@ -88,10 +92,17 @@ class EstimateController extends Controller
 
         unset($data['upload_id']);
 
-        // `client` and `project` are both snapshots of the picked client's
-        // name — the two columns this merge collapsed into one field.
-        $data = $this->clients->withClientSnapshot($data);
-        $data['project'] = $data['client'];
+        /*
+         * The two name snapshots the record prints from: who it is for, and
+         * what it is on. Both are read from the project rather than trusted
+         * from the form, so the record cannot name one client and point at
+         * another one's project — and a project with no client record yet falls
+         * back to the name it carries, because neither column may be empty.
+         */
+        $project = Project::with('clientRecord:id,name')->find($data['project_id']);
+        $data['client_id'] = $project?->client_id;
+        $data['client'] = $project?->clientRecord?->name ?? $project?->client ?? 'Unassigned';
+        $data['project'] = $project?->name ?? $data['client'];
 
         $estimate = Estimate::create([
             ...$data,

@@ -22,7 +22,12 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ESTIMATE_STATUS_OPTIONS, ROUTES } from '@/constants'
-import type { ClientOption, EstimateDraft, TakeoffUploadOption } from '@/types'
+import type {
+  ClientOption,
+  EstimateDraft,
+  ProjectOption,
+  TakeoffUploadOption,
+} from '@/types'
 import {
   ESTIMATE_STATUS_LABEL,
   ESTIMATE_STATUS_TONE,
@@ -33,9 +38,11 @@ import {
 export interface EstimateCreateProps {
   /** Reference the server will assign on save. */
   nextNumber: string
-  /** The client register. Clients are projects, so this is one list, not two. */
+  /** Who the estimate can be for. */
   clients: readonly ClientOption[]
-  /** Their drawings — narrowed to the picked client once one is chosen. */
+  /** Their projects — the list narrows to the picked client's. */
+  projects: readonly ProjectOption[]
+  /** And their drawings, narrowed in turn to the picked project's. */
   uploads: readonly TakeoffUploadOption[]
 }
 
@@ -50,6 +57,7 @@ export interface EstimateCreateProps {
 export default function EstimateCreate({
   nextNumber,
   clients,
+  projects,
   uploads,
 }: EstimateCreateProps) {
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
@@ -58,6 +66,7 @@ export default function EstimateCreate({
       amount: '',
       status: 'draft',
       client_id: '',
+      project_id: '',
       upload_id: '',
     })
 
@@ -87,25 +96,49 @@ export default function EstimateCreate({
     ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
   ]
 
-  /** Only the picked client's drawings — an estimate never links to someone else's. */
-  const uploadsForClient = useMemo(
-    () => uploads.filter((upload) => String(upload.clientId) === data.client_id),
-    [uploads, data.client_id],
+  /** Only the picked client's projects — an estimate is never on someone else's. */
+  const projectsForClient = useMemo(
+    () => projects.filter((project) => String(project.clientId) === data.client_id),
+    [projects, data.client_id],
+  )
+
+  const projectOptions = [
+    { label: data.client_id === '' ? 'Select a client first' : 'Select project', value: '' },
+    ...projectsForClient.map((project) => ({ label: project.name, value: String(project.id) })),
+  ]
+
+  /** And only that project's drawings — the same narrowing, one step further. */
+  const uploadsForProject = useMemo(
+    () => uploads.filter((upload) => String(upload.projectId) === data.project_id),
+    [uploads, data.project_id],
   )
 
   const uploadOptions = [
     { label: 'No linked drawing', value: '' },
-    ...uploadsForClient.map((upload) => ({ label: upload.name, value: String(upload.id) })),
+    ...uploadsForProject.map((upload) => ({ label: upload.name, value: String(upload.id) })),
   ]
 
-  const linkedEstimate = uploadsForClient.find(
+  const linkedEstimate = uploadsForProject.find(
     (upload) => String(upload.id) === data.upload_id,
   )?.estimate
 
-  /** Changing the client invalidates whatever drawing was picked under the old one. */
+  /** Changing the client invalidates the project picked under the old one, and its drawing. */
   const selectClient = (clientId: string) => {
-    setData((current) => ({ ...current, client_id: clientId, upload_id: '' }))
-    if (errors.client_id) clearErrors('client_id')
+    setData((current) => ({ ...current, client_id: clientId, project_id: '', upload_id: '' }))
+    clearErrors('client_id', 'project_id', 'upload_id')
+  }
+
+  /** The project's own drawing, so the usual case takes no second choice. */
+  const selectProject = (projectId: string) => {
+    const project = projects.find((option) => String(option.id) === projectId)
+
+    setData((current) => ({
+      ...current,
+      project_id: projectId,
+      upload_id: project?.defaultUploadId ? String(project.defaultUploadId) : '',
+    }))
+
+    clearErrors('project_id', 'upload_id')
   }
 
   const clientName = clients.find((option) => String(option.id) === data.client_id)?.name
@@ -155,11 +188,21 @@ export default function EstimateCreate({
                   {...(errors.client_id ? { error: errors.client_id } : {})}
                 />
                 <SelectField
+                  id="estimate-project"
+                  label="Project*"
+                  options={projectOptions}
+                  value={data.project_id}
+                  disabled={!data.client_id}
+                  onChange={(event) => selectProject(event.target.value)}
+                  {...(errors.project_id ? { error: errors.project_id } : {})}
+                />
+                <SelectField
                   id="estimate-linked-upload"
                   label="AI Takeoff drawing (optional)"
+                  className="sm:col-span-2"
                   options={uploadOptions}
                   value={data.upload_id}
-                  disabled={!data.client_id}
+                  disabled={!data.project_id}
                   onChange={(event) => update('upload_id', event.target.value)}
                   {...(errors.upload_id ? { error: errors.upload_id } : {})}
                 />

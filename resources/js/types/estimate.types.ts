@@ -20,11 +20,13 @@ export interface EstimateDraft {
   issued_on: string
   amount: string
   status: EstimateStatus
-  /**
-   * The client. Clients are projects, so this is a `projects` id — the
-   * estimate's own `client`/`project` name columns are snapshots the server
-   * writes from it, never typed here.
-   */
+  /** Who the estimate is for. What narrows the project list. */
   client_id: string
+  /**
+   * And which of their projects it is on — the answer the server keeps. The
+   * `client`/`project` name columns are snapshots written from the project's
+   * own client, never typed here.
+   */
+  project_id: string
   upload_id: string
 }

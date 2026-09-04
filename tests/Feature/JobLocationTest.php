@@ -127,6 +127,9 @@ class JobLocationTest extends TestCase
             'project_id' => $this->project->id,
             'address_ids' => [$this->dock->id],
             'status' => 'planning',
+            // Both dates, as UpdateJobRequest requires them.
+            'start_date' => '2026-03-02',
+            'end_date' => '2026-03-20',
         ])->assertSessionHasNoErrors();
 
         $job->refresh();
@@ -146,6 +149,9 @@ class JobLocationTest extends TestCase
             'project_id' => $this->project->id,
             'address_ids' => [$this->harbour->id],
             'status' => 'planning',
+            // Both dates, as UpdateJobRequest requires them.
+            'start_date' => '2026-03-02',
+            'end_date' => '2026-03-20',
         ])->assertSessionHasNoErrors();
 
         $job->refresh();
@@ -217,6 +223,9 @@ class JobLocationTest extends TestCase
             'longitude' => $site->longitude,
             'place_id' => $site->place_id,
             'status' => 'planning',
+            // Both dates, as UpdateJobRequest requires them.
+            'start_date' => '2026-03-02',
+            'end_date' => '2026-03-20',
         ]);
 
         $job->addresses()->attach($site->id, ['position' => 0]);

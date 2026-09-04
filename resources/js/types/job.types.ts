@@ -164,8 +164,14 @@ export interface JobTakeoff {
 
 /** The full record rendered by the job detail screen. */
 export interface JobDetail extends Omit<Job, 'teamCount' | 'estimateCount'> {
-  /** The client's own id — clients are projects, so this is a `projects` id. */
+  /** Who the work is for, read through the project it is on. */
   readonly clientId: number | null
+  /** And which of their projects that is. */
+  readonly projectId: number | null
+  /** The drawing the work is taken off, through the takeoff it is linked to. */
+  readonly uploadId: number | null
+  /** True once reviewed counts were copied onto the job: the drawing is settled. */
+  readonly drawingIsFixed: boolean
   /** The client sites this job runs at, in the order they were picked. */
   readonly addressIds: readonly number[]
   /** The site's point, for GPS check-in on the crew app. */

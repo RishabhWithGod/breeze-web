@@ -79,11 +79,19 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
     ref,
   ) {
     return (
+      /*
+       * `className` sizes the whole field, not the `<input>` — the same rule
+       * SelectField follows. Every caller passes a width or a grid span, and
+       * putting those on the control left the shell full width: a field asked
+       * to span five columns of twelve sat in one of them, with a shrunken box
+       * inside it.
+       */
       <FieldShell
         {...(label ? { label } : {})}
         {...(id ? { htmlFor: id } : {})}
         {...(hint ? { hint } : {})}
         {...(error ? { error } : {})}
+        {...(className ? { className } : {})}
       >
         {/*
           A date is written MM/DD/YYYY everywhere in this app, and a native date
@@ -97,7 +105,6 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
             {...(id ? { id } : {})}
             {...(error ? { invalid: true } : {})}
             controlClassName={cn(CONTROL_BASE, error && INVALID)}
-            {...(className ? { className } : {})}
           />
         ) : (
         <div className="relative">
@@ -117,7 +124,6 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
               LeftIcon && 'pl-11',
               rightSlot && 'pr-12',
               error && INVALID,
-              className,
             )}
             {...props}
           />

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Head, useForm } from '@inertiajs/react'
 import { ArrowLeft, Save } from 'lucide-react'
 import {
@@ -12,15 +13,17 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
-import type { ClientOption, EstimateTotals, SelectOption } from '@/types'
+import type { ClientOption, EstimateTotals, ProjectOption, SelectOption } from '@/types'
 import { ESTIMATE_STATUS_LABEL, formatCurrency } from '@/utils'
 
 interface EditableEstimate {
   readonly id: number
   readonly number: string
   readonly client: string
-  /** The client's own id — clients are projects, so this is a `projects` id. */
+  /** Who it is for, read through the project when the row predates the column. */
   readonly clientId: number | null
+  /** And which of their projects it is on. */
+  readonly projectId: number | null
   readonly status: string
   readonly issuedOn: string | null
   readonly markupPct: number
@@ -41,8 +44,10 @@ export interface EstimateEditProps {
   /** Where the form saves to. Carries the origin so it survives the save. */
   saveUrl: string
   totals: EstimateTotals
-  /** The client register. Clients are projects, so this is one list, not two. */
+  /** Who the estimate can be for. */
   clients: readonly ClientOption[]
+  /** Their projects — the list narrows to the picked client's. */
+  projects: readonly ProjectOption[]
 }
 
 /**
@@ -64,9 +69,11 @@ export default function EstimateEdit({
   saveUrl,
   totals,
   clients,
+  projects,
 }: EstimateEditProps) {
   const form = useForm({
     client_id: estimate.clientId === null ? '' : String(estimate.clientId),
+    project_id: estimate.projectId === null ? '' : String(estimate.projectId),
     status: estimate.status,
     issued_on: estimate.issuedOn ?? '',
     markup_pct: String(estimate.markupPct),
@@ -93,6 +100,33 @@ export default function EstimateEdit({
       : { value: '', label: 'Select client' },
     ...clients.map((client) => ({ value: String(client.id), label: client.name })),
   ]
+
+  /** Only the picked client's projects — an estimate never moves to someone else's. */
+  const projectsForClient = useMemo(
+    () => projects.filter((project) => String(project.clientId) === form.data.client_id),
+    [projects, form.data.client_id],
+  )
+
+  const projectOptions: readonly SelectOption[] = [
+    {
+      value: '',
+      label: form.data.client_id === '' ? 'Select a client first' : 'Select project',
+    },
+    ...projectsForClient.map((project) => ({
+      value: String(project.id),
+      label: project.name,
+    })),
+  ]
+
+  /**
+   * Changing the client drops the project under it: the old client's project is
+   * not one of the new client's, and the estimate's own client column is
+   * written from whichever project it ends up on.
+   */
+  const selectClient = (clientId: string) => {
+    form.setData((current) => ({ ...current, client_id: clientId, project_id: '' }))
+    form.clearErrors('client_id', 'project_id')
+  }
 
   /** Preview of the effect of the rates being typed, before saving. */
   const markup = (Number(form.data.markup_pct) || 0) / 100
@@ -138,15 +172,30 @@ export default function EstimateEdit({
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
+            {/*
+              The same pair as everywhere else, opened on what the estimate
+              already has: the client says which projects, and the project is
+              what the numbers were taken off.
+            */}
             <SelectField
               id="estimate-client"
-              label="Client"
-              className="sm:col-span-2"
-              hint="Not listed? Add them under Clients first."
+              label="Client*"
               options={clientOptions}
               value={form.data.client_id}
-              onChange={(event) => form.setData('client_id', event.target.value)}
+              onChange={(event) => selectClient(event.target.value)}
               {...(form.errors.client_id ? { error: form.errors.client_id } : {})}
+            />
+            <SelectField
+              id="estimate-project"
+              label="Project*"
+              options={projectOptions}
+              value={form.data.project_id}
+              disabled={form.data.client_id === ''}
+              onChange={(event) => {
+                form.setData('project_id', event.target.value)
+                if (form.errors.project_id) form.clearErrors('project_id')
+              }}
+              {...(form.errors.project_id ? { error: form.errors.project_id } : {})}
             />
             <SelectField
               id="estimate-status"
