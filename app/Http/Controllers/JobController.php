@@ -205,7 +205,14 @@ class JobController extends Controller
             // Ordered the way the schedule holds them, with the count of what
             // each covers — the detail the panel states without the lines.
             'tasks' => fn ($query) => $query
-                ->with('foreman:id,name', 'supervisor:id,name')
+                ->with(
+                    'foreman:id,name',
+                    'supervisor:id,name',
+                    // Field notes/photos — the crew's own Materials screen on
+                    // the mobile app, read-only here.
+                    'comments.author:id,name',
+                    'attachments.uploader:id,name',
+                )
                 ->withCount('estimateItems')
                 ->orderBy('position')
                 ->orderBy('id'),

@@ -157,6 +157,7 @@ class ProjectController extends Controller
             'place_id' => $site?->place_id,
             'status' => 'draft',
             'review_status' => 'none',
+            'estimate_target_total' => $data['estimate_target_total'] ?? null,
         ]);
 
         // The takeoff starts here: this project's drawing is the next step, and

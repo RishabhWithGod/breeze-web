@@ -13,11 +13,19 @@ use Illuminate\Database\Eloquent\Builder;
  * The web app has no per-job restriction at all — any signed-in user can
  * open any Job Detail page (jobs are shared company-wide there). The mobile
  * surface is deliberately stricter: a field electrician's app only shows
- * work they are actually staffed on, either through the role-based
- * `job_assignments` table or through a task-level crew assignment
- * (`job_task_assignments`). A manager/foreman/PM/admin/owner — who might
- * also carry the mobile app — keeps the web app's unrestricted view, since
- * they already see every job's data there.
+ * work they are actually staffed on, through any of the app's three real
+ * staffing mechanics:
+ * - the role-based `job_assignments` table (the "Assigned Crew" panel),
+ * - a task-level crew assignment (`job_task_assignments`, from the full
+ *   scheduling system), or
+ * - being named as a task's foreman/supervisor (`job_tasks.foreman_id`/
+ *   `supervisor_id`) — the register-based mechanic `JobTaskSetupController`
+ *   actually uses when a job's tasks are first broken out, so a technician
+ *   named there is staffed exactly as much as one added through either of
+ *   the other two.
+ * A manager/foreman/PM/admin/owner — who might also carry the mobile app —
+ * keeps the web app's unrestricted view, since they already see every job's
+ * data there.
  *
  * This is the single place that answers "does this mobile user have access
  * to this job" — every mobile controller that touches a job goes through
@@ -47,8 +55,13 @@ class ElectricianJobAccess
         }
 
         $teamMemberId = $this->resolver->resolveFor($user)->id;
+        // Null until a manager has given this technician both a team and a
+        // role — see `TechnicianController::syncForemanRoster()`. Before
+        // that, this signal simply contributes nothing, same as any other
+        // web-created user with no `foremen` row.
+        $foremanId = $user->foreman?->id;
 
-        return Job::query()->where(function (Builder $query) use ($user, $teamMemberId) {
+        return Job::query()->where(function (Builder $query) use ($user, $teamMemberId, $foremanId) {
             $query->whereHas(
                 'assignments',
                 fn (Builder $q) => $q->where('user_id', $user->id)->whereNull('released_at'),
@@ -56,11 +69,26 @@ class ElectricianJobAccess
                 'tasks.members',
                 fn (Builder $q) => $q->where('team_members.id', $teamMemberId),
             );
+
+            if ($foremanId !== null) {
+                $query->orWhere('foreman_id', $foremanId)
+                    ->orWhereHas('tasks', fn (Builder $q) => $q->heldBy($foremanId));
+            }
         });
     }
 
     private function isUnrestricted(User $user): bool
     {
+        // A technician onboarded from the mobile app always stays restricted
+        // to their own staffing, even once a manager corrects their role to
+        // 'Foreman'/'Site Supervisor' — on mobile those are real operational
+        // roles for a field crew member, not the web app's managerial roles
+        // this list exists for. `registration_source` is the only thing that
+        // still tells the two apart once the role string is identical.
+        if ($user->isFromMobile()) {
+            return false;
+        }
+
         return in_array(mb_strtolower(trim((string) $user->role)), self::UNRESTRICTED, true);
     }
 }

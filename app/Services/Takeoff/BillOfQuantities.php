@@ -79,6 +79,14 @@ class BillOfQuantities
 
             $lines[] = [
                 'symbol' => $device['name'],
+                /*
+                 * What the company calls it. A drawing labels a fixture "EM2";
+                 * the estimating workbook says "EM2, NEW BATTERY 2/HEAD EM
+                 * FIXTURE" — the same item, described well enough to order.
+                 * Null when the price book has never seen it, so the screens
+                 * keep showing the symbol's own name.
+                 */
+                'description' => $rates['description'],
                 'count' => $count,
                 'unit' => $rates['unit'],
                 'category' => $rates['category'],
@@ -88,6 +96,9 @@ class BillOfQuantities
                 'confidence' => round($device['confidence'], 4),
                 'pages' => $device['pages'],
                 'rate_matched' => $rates['matched'],
+                // Where the rate came from: a bid the company sent out, or a
+                // plausible constant standing in for one.
+                'rate_source' => $rates['source'],
                 'final_symbol_id' => $device['final_symbol_id'],
             ];
 

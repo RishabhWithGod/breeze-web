@@ -114,6 +114,32 @@ class JobDetailResource extends JsonResource
                     ? null
                     : (float) $task->actual_hours,
                 'lineCount' => $task->estimate_items_count ?? 0,
+
+                // Field notes/photos — the crew's own Materials screen on the
+                // mobile app (`job_task_comments`/`job_task_attachments`),
+                // read-only here.
+                'comments' => $task->relationLoaded('comments')
+                    ? $task->comments->map(fn ($note) => [
+                        'id' => $note->id,
+                        'body' => $note->body,
+                        'author' => $note->author?->name ?? 'Unknown',
+                        'createdAt' => $note->created_at->toISOString(),
+                    ])->values()->all()
+                    : [],
+                'attachments' => $task->relationLoaded('attachments')
+                    ? $task->attachments->map(fn ($photo) => [
+                        'id' => $photo->id,
+                        'name' => $photo->name,
+                        'mime' => $photo->mime_type,
+                        'sizeBytes' => $photo->size_bytes,
+                        'uploadedBy' => $photo->uploader?->name ?? 'Unknown',
+                        'createdAt' => $photo->created_at->toISOString(),
+                        'url' => route('tasks.attachments.show', [
+                            'task' => $task->id,
+                            'attachment' => $photo->id,
+                        ]),
+                    ])->values()->all()
+                    : [],
             ])->values()->all(), []),
 
             'notes' => $this->notes->map(fn ($note) => [

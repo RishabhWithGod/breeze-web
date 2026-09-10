@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TimerSessionResource;
+use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\JobTask;
 use App\Services\Mobile\ElectricianJobAccess;
@@ -56,6 +57,21 @@ class TimerController extends Controller
 
         $job = Job::findOrFail($data['job_id']);
         abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
+        abort_if($job->isLocked(), 409, 'This job is completed and locked.');
+        // The crew's own clock is exactly what `prepareCompletion()`
+        // stopped when they submitted for review — starting a new one on
+        // the same job before a supervisor has acted would undo that.
+        // A supervisor isn't exempt here either: they don't run a clock of
+        // their own on a job they oversee (mobile's own UI never offers
+        // them the button), so there is nothing this should ever block them
+        // from doing in practice.
+        if ($job->isReadyForReview()
+            && $request->user()->foreman?->role !== Foreman::ROLE_SUPERVISOR) {
+            return $this->fail(
+                'This job has been submitted for review — wait for your supervisor to act on it.',
+                409,
+            );
+        }
 
         $task = ! empty($data['job_task_id']) ? JobTask::findOrFail($data['job_task_id']) : null;
 
@@ -119,6 +135,8 @@ class TimerController extends Controller
         // `TimerController` applies. `active()` already scopes to this
         // user, so this only ever matters if that ever changes.
         $this->authorize('update', $session);
+
+        abort_if($session->job->isLocked(), 409, 'This job is completed and locked.');
 
         return $session;
     }

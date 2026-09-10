@@ -21,6 +21,15 @@ class EstimateItemResource extends JsonResource
             'unitCost' => (float) $this->unit_cost,
             'total' => (float) $this->total,
             'source' => $this->source,
+            /*
+             * Where the rate came from. Two identical-looking figures on the
+             * same page can be a price the company has charged and a constant
+             * standing in for one; the estimate has to say which, or a guess
+             * goes out as a quote.
+             */
+            'pricingSource' => $this->pricing_source,
+            'pricingConfidence' => $this->pricing_confidence,
+            'priceBookItemId' => $this->price_book_item_id,
         ];
     }
 }

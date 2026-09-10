@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * One piece of work on a schedule.
@@ -223,6 +225,69 @@ class JobTask extends Model
     }
 
     /* ------------------------------------------------------------------ Scopes */
+
+    /**
+     * Tasks this person is on, running one or overseeing it.
+     *
+     * A task names two people and both are carrying it: the foreman doing the
+     * work and the supervisor answerable for it. Counting only the foreman is
+     * what left a supervisor's register row reading nought open tasks while
+     * they had a dozen.
+     */
+    public function scopeHeldBy(Builder $query, int $memberId): Builder
+    {
+        return $query->where(fn (Builder $held) => $held
+            ->where('foreman_id', $memberId)
+            ->orWhere('supervisor_id', $memberId));
+    }
+
+    /**
+     * What every member of the crew register is carrying, in one query.
+     *
+     * A task counts once for its foreman and once for its supervisor — except
+     * when they are the same person, who is carrying one task, not two. That is
+     * the whole reason for the union: `group by foreman_id` cannot express "or
+     * the other column", and a second query added on top would double-count the
+     * jobs the two share.
+     *
+     * @return Collection<int, object>
+     */
+    public static function workload(bool $closed): Collection
+    {
+        $held = function (string $column) use ($closed) {
+            $query = static::query()
+                ->whereHas('job')
+                ->whereNotNull($column)
+                ->when(
+                    $closed,
+                    fn (Builder $q) => $q->whereIn('status', self::CLOSED_STATUSES),
+                    fn (Builder $q) => $q->whereNotIn('status', self::CLOSED_STATUSES),
+                );
+
+            // Supervising a task you are also running is one job of work.
+            if ($column === 'supervisor_id') {
+                $query->where(fn (Builder $q) => $q
+                    ->whereNull('foreman_id')
+                    ->orWhereColumn('supervisor_id', '!=', 'foreman_id'));
+            }
+
+            return $query->select([
+                $column.' as member_id',
+                'job_id',
+                'estimated_hours',
+            ]);
+        };
+
+        return DB::query()
+            ->fromSub($held('foreman_id')->unionAll($held('supervisor_id')), 'held')
+            ->groupBy('member_id')
+            ->selectRaw(
+                'member_id, count(*) as tasks, count(distinct job_id) as jobs, '.
+                'coalesce(sum(estimated_hours), 0) as hours'
+            )
+            ->get()
+            ->keyBy('member_id');
+    }
 
     public function scopeOpen(Builder $query): Builder
     {

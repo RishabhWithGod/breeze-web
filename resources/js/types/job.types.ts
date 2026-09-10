@@ -65,6 +65,25 @@ export interface JobEstimateSummary {
   readonly convertedProjectId: number | null
 }
 
+/** A note left on a task from the field — the mobile app's own Materials screen. */
+export interface TaskFieldNote {
+  readonly id: number
+  readonly body: string
+  readonly author: string
+  readonly createdAt: string
+}
+
+/** A photo attached to a task from the field — same mobile screen as the note above. */
+export interface TaskFieldPhoto {
+  readonly id: number
+  readonly name: string
+  readonly mime: string | null
+  readonly sizeBytes: number
+  readonly uploadedBy: string
+  readonly createdAt: string
+  readonly url: string
+}
+
 /** One task on a job, as the detail screen lists it. */
 export interface JobTaskSummary {
   readonly id: number
@@ -77,6 +96,9 @@ export interface JobTaskSummary {
   readonly actualHours: number | null
   /** How much of the estimate this task covers. */
   readonly lineCount: number
+  /** Left from the field, via the mobile app — read-only here. */
+  readonly comments: readonly TaskFieldNote[]
+  readonly attachments: readonly TaskFieldPhoto[]
 }
 
 export interface JobNote {

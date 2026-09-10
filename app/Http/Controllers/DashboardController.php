@@ -114,11 +114,19 @@ class DashboardController extends Controller
             ],
             [
                 'id' => 'sum_estimates',
-                'value' => Project::where('status', 'completed')->count(),
+                /*
+                 * Sent, and not yet answered — that is what "awaiting approval"
+                 * means for an estimate. This counted completed *projects*
+                 * before, a number that had nothing to do with the label above
+                 * it or the list the link now opens.
+                 */
+                'value' => Estimate::where('status', 'sent')->count(),
                 'label' => 'Estimates Awaiting Approval',
                 'icon' => 'receipt-text',
+                // The estimates list, not the latest takeoff result: the tile
+                // says estimates, so "View all estimates" has to land on them.
+                'href' => route('estimates.index', absolute: false),
                 'linkLabel' => 'View all estimates',
-                'href' => route('results.latest', absolute: false),
             ],
         ];
     }

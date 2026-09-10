@@ -19,6 +19,7 @@ import type { ClientOption, ResumableTakeoff } from '@/types'
 interface ProjectDraft {
   client_id: string
   name: string
+  estimate_target_total: string
 }
 
 export interface ProjectCreateProps {
@@ -46,6 +47,7 @@ export default function ProjectCreate({
     useForm<ProjectDraft>({
       client_id: defaultClientId === null ? '' : String(defaultClientId),
       name: '',
+      estimate_target_total: '',
     })
 
   /**
@@ -133,6 +135,19 @@ export default function ProjectCreate({
               value={data.name}
               onChange={(event) => update('name', event.target.value)}
               {...(errors.name ? { error: errors.name } : {})}
+            />
+
+            <TextInput
+              id="project-estimate-target-total"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={50}
+              label="Estimate Project Cost (Optional)"
+              placeholder="e.g. 24850"
+              value={data.estimate_target_total}
+              onChange={(event) => update('estimate_target_total', event.target.value)}
+              {...(errors.estimate_target_total ? { error: errors.estimate_target_total } : {})}
             />
 
             {/*

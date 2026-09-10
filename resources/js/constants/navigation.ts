@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Briefcase,
   CalendarCheck,
   ChartColumn,
@@ -33,12 +34,16 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   // Lands on the takeoff history, matching the reference product.
   { label: 'AI Takeoff', href: ROUTES.aiTakeoff, icon: Sparkles },
   { label: 'Estimates', href: ROUTES.estimates, icon: FileText },
+  // Beside Estimates, because it is what an estimate is priced from.
+  { label: 'Price Book', href: ROUTES.priceBook, icon: BookOpen },
   { label: 'Jobs', href: ROUTES.jobs, icon: Briefcase },
   // Work and the people who run it: both are read across every job rather than
   // inside one, so they follow Jobs as entries of their own. Only the lists are
   // here — adding one is a button on its list, the way every other module does
   // it, rather than a second drawer entry per screen.
   { label: 'Tasks', href: ROUTES.tasks, icon: ClipboardList },
+  // Technicians who signed up from the mobile app are on this same screen —
+  // a pending-approval section at the top, not a separate drawer entry.
   { label: 'Teams', href: ROUTES.teams, icon: Users },
   { label: 'Scheduling', href: ROUTES.scheduling, icon: CalendarCheck },
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock },

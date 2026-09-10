@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -16,8 +17,24 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
+    public const STATUS_PENDING_APPROVAL = 'pending_approval';
+
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_REJECTED = 'rejected';
+
+    public const STATUS_INACTIVE = 'inactive';
+
+    public const SOURCE_WEB = 'web';
+
+    public const SOURCE_MOBILE = 'mobile';
+
     /**
      * The attributes that are mass assignable.
+     *
+     * `status`/`approved_at`/`approved_by`/`registration_source` are
+     * deliberately absent — only `AuthController::register()` and
+     * `TechnicianController` ever set them, never a bare mass-assignment.
      *
      * @var list<string>
      */
@@ -49,8 +66,29 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
+            'approved_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function isActive(): bool
+    {
+        return $this->status === self::STATUS_ACTIVE;
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === self::STATUS_PENDING_APPROVAL;
+    }
+
+    public function isRejected(): bool
+    {
+        return $this->status === self::STATUS_REJECTED;
+    }
+
+    public function isFromMobile(): bool
+    {
+        return $this->registration_source === self::SOURCE_MOBILE;
     }
 
     protected static function booted(): void
@@ -106,6 +144,25 @@ class User extends Authenticatable
     public function teamMember(): HasOne
     {
         return $this->hasOne(TeamMember::class);
+    }
+
+    /** The manager who approved this account, when it went through mobile signup. */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /**
+     * The crew register entry this account was synced into, once a manager
+     * has given it both a team and a role — the same `foremen` row every
+     * web-created crew member has, so an approved technician shows up on
+     * their team's roster rather than staying in a separate list forever.
+     *
+     * @return HasOne<Foreman, $this>
+     */
+    public function foreman(): HasOne
+    {
+        return $this->hasOne(Foreman::class);
     }
 
     /** @return HasMany<TimeEntry, $this> */

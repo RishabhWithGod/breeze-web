@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Events\JobStatusChanged;
+use App\Notifications\JobReviewStatusChanged;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Notification;
 
 class Job extends Model
 {
@@ -29,6 +31,8 @@ class Job extends Model
         'delayed',
         'completed',
     ];
+
+    public const STATUS_COMPLETED = 'completed';
 
     public const TYPES = ['residential', 'commercial', 'industrial'];
 
@@ -95,6 +99,15 @@ class Job extends Model
             'longitude' => 'decimal:7',
             'budget' => 'decimal:2',
             'estimated_hours' => 'decimal:2',
+            // `actual_hours`/`delay_hours`/`delay_reason` are deliberately not
+            // in `$fillable` — they are only ever computed and written by
+            // `Api\V1\JobController::changeStatus()` when a job is marked
+            // completed, never accepted directly from a request body.
+            'actual_hours' => 'decimal:2',
+            'delay_hours' => 'decimal:2',
+            // Also deliberately not in `$fillable` — only ever set by
+            // `markReadyForReview()`/`clearReadyForReview()` below.
+            'ready_for_review_at' => 'datetime',
             'required_skills' => 'array',
             'create_estimate' => 'boolean',
             'assign_team' => 'boolean',
@@ -440,6 +453,118 @@ class Job extends Model
             'description' => $description,
             'meta' => $meta === [] ? null : $meta,
         ]);
+    }
+
+    /** Statuses a job sits in before any real work has begun on it. */
+    private const NOT_YET_STARTED = ['draft', 'planning', 'scheduled'];
+
+    /**
+     * Whether work has actually begun — everything past the planning
+     * statuses, including `on-hold`/`delayed`/`completed`, since a job
+     * cannot be put on hold or finished before it started. Mobile gates
+     * every task action (complete, progress, checklist) on this: nothing
+     * on a job's tasks should move before the job itself has.
+     */
+    public function hasStarted(): bool
+    {
+        return ! in_array($this->status, self::NOT_YET_STARTED, true);
+    }
+
+    /** Once a job is completed, nothing about it should change again. */
+    public function isLocked(): bool
+    {
+        return $this->status === self::STATUS_COMPLETED;
+    }
+
+    /** The crew says every task is done and it's ready for a supervisor's sign-off. */
+    public function isReadyForReview(): bool
+    {
+        return $this->ready_for_review_at !== null;
+    }
+
+    /**
+     * The crew's sign-off: every task is closed, but only a supervisor can
+     * actually complete the job from here (`Api\V1\JobController::changeStatus`).
+     * Deliberately does not touch `status` itself — see the model's own
+     * `casts()` comment on why this column exists instead of an 8th status.
+     */
+    public function markReadyForReview(): void
+    {
+        // Direct assignment + save, not `update()` — `ready_for_review_at`
+        // is deliberately not in `$fillable` (see the `casts()` comment),
+        // and `update()` mass-assigns through `fill()`, which a non-fillable
+        // attribute would silently not survive.
+        $this->ready_for_review_at = now();
+        $this->save();
+
+        $this->recordActivity(
+            'ready_for_review',
+            'Marked ready for supervisor review — every task is complete.',
+        );
+
+        Notification::send(
+            $this->notifiableSupervisors(),
+            new JobReviewStatusChanged($this, JobReviewStatusChanged::READY_FOR_REVIEW),
+        );
+    }
+
+    /**
+     * Undoes a crew sign-off — a supervisor reopened a task while reviewing,
+     * so the crew has to close it again before the job can complete.
+     */
+    public function clearReadyForReview(): void
+    {
+        if (! $this->isReadyForReview()) {
+            return;
+        }
+
+        $this->ready_for_review_at = null;
+        $this->save();
+
+        $this->recordActivity(
+            'ready_for_review_reverted',
+            'Sent back to the crew — a task was reopened after review.',
+        );
+
+        Notification::send(
+            $this->notifiableForemen(),
+            new JobReviewStatusChanged($this, JobReviewStatusChanged::REVERTED),
+        );
+    }
+
+    /**
+     * The actual `User` accounts behind {@see assignedSupervisors()} — that
+     * method returns display-only name/initials arrays, not models a
+     * notification can be sent to. Public: reused by
+     * `App\Listeners\NotifyOfJobCompletion`/`NotifyOfJobStarted`, which live
+     * outside this model.
+     *
+     * @return Collection<int, User>
+     */
+    public function notifiableSupervisors(): Collection
+    {
+        return $this->tasks->pluck('supervisor')->filter()->unique('id')
+            ->map(fn (Foreman $supervisor) => $supervisor->user)
+            ->filter()
+            ->values();
+    }
+
+    /**
+     * The actual `User` accounts behind {@see assignedForemen()} — same
+     * reasoning as {@see notifiableSupervisors()}. Also public for the same
+     * reason.
+     *
+     * @return Collection<int, User>
+     */
+    public function notifiableForemen(): Collection
+    {
+        $fromTasks = $this->tasks->pluck('foreman')->filter()->unique('id');
+        $foremen = $fromTasks->isNotEmpty() ? $fromTasks : collect([$this->foreman])->filter();
+
+        return $foremen
+            ->map(fn (Foreman $foreman) => $foreman->user)
+            ->filter()
+            ->values();
     }
 
     /** Applies a status change, recording both the trail row and the activity. */

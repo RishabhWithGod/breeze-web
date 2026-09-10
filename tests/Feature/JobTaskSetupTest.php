@@ -6,6 +6,7 @@ use App\Models\AiJob;
 use App\Models\AiResult;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
+use App\Models\FinalSymbol;
 use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\JobTask;
@@ -124,6 +125,88 @@ class JobTaskSetupTest extends TestCase
                 'unit_cost' => 10, 'total' => 300, 'source' => 'manual', 'position' => 1,
             ]),
         ];
+    }
+
+    /**
+     * A second, independently claimable labor line on the same estimate as
+     * [$labour] — for tests exercising two lines a planner can split across
+     * tasks. Material is never independently claimable (see
+     * `pairedMaterialLines()` on the controller), so a second *labor* line
+     * is what "two lines a planner can move separately" means now.
+     */
+    private function makeSecondLabourLine(EstimateItem $labour): EstimateItem
+    {
+        return EstimateItem::create([
+            'estimate_id' => $labour->estimate_id, 'category' => 'labor',
+            'description' => 'Pull cable, second floor', 'unit' => 'hr', 'quantity' => 8,
+            'unit_cost' => 50, 'total' => 400, 'source' => 'manual', 'position' => 2,
+        ]);
+    }
+
+    /**
+     * A real `FinalSymbol` row — `final_symbol_id` is a genuine foreign key,
+     * so pairing a labor line with a material one for a test needs an
+     * actual symbol behind them, the same as a real takeoff would leave.
+     */
+    private function makeFinalSymbol(): FinalSymbol
+    {
+        $client = $this->job->project;
+        $upload = $this->makeDrawing($client);
+
+        $result = AiResult::create([
+            'ai_job_id' => AiJob::create([
+                'project_id' => $client->id,
+                'upload_id' => $upload->id,
+                'user_id' => $this->user->id,
+                'status' => 'completed',
+            ])->id,
+            'project_id' => $client->id,
+            'upload_id' => $upload->id,
+            'original_payload' => [],
+        ]);
+
+        return FinalSymbol::create([
+            'ai_result_id' => $result->id,
+            'project_id' => $client->id,
+            'name' => 'Duplex Receptacle',
+            'count' => 1,
+        ]);
+    }
+
+    /**
+     * A labor line and its material, sharing one `final_symbol_id` — the
+     * same link `EstimateBuilder` stamps on both when a takeoff device
+     * becomes an estimate (e.g. "CEILING MOUNTED DUPLEX RECEPTACLE" as
+     * labor, and the receptacle itself as material). Picking the labor line
+     * should bring this material with it automatically.
+     *
+     * @return array{0: EstimateItem, 1: EstimateItem}
+     */
+    private function makePairedLines(): array
+    {
+        $estimate = Estimate::create([
+            'job_id' => $this->job->id,
+            'number' => 'EST-3001',
+            'client' => 'Harborview',
+            'project' => 'Harborview',
+            'issued_on' => now()->toDateString(),
+            'amount' => 112,
+            'status' => 'draft',
+        ]);
+        $symbol = $this->makeFinalSymbol();
+
+        $labour = EstimateItem::create([
+            'estimate_id' => $estimate->id, 'category' => 'labor', 'final_symbol_id' => $symbol->id,
+            'description' => 'CEILING MOUNTED DUPLEX RECEPTACLE', 'unit' => 'hr', 'quantity' => 2,
+            'unit_cost' => 50, 'total' => 100, 'source' => 'ai', 'position' => 0,
+        ]);
+        $material = EstimateItem::create([
+            'estimate_id' => $estimate->id, 'category' => 'material', 'final_symbol_id' => $symbol->id,
+            'description' => 'CEILING MOUNTED DUPLEX RECEPTACLE', 'unit' => 'ea', 'quantity' => 1,
+            'unit_cost' => 12, 'total' => 12, 'source' => 'ai', 'position' => 1,
+        ]);
+
+        return [$labour, $material];
     }
 
     public function test_coming_back_to_the_job_step_shows_the_form_as_it_was_filled(): void
@@ -265,7 +348,7 @@ class JobTaskSetupTest extends TestCase
 
     public function test_the_edit_screen_shows_the_task_s_own_lines_as_free_to_pick(): void
     {
-        [$labour, $material] = $this->makeEstimateLines();
+        [$labour] = $this->makeEstimateLines();
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
             'tasks' => [[
@@ -286,52 +369,55 @@ class JobTaskSetupTest extends TestCase
                 // would grey it out and make putting it back impossible.
                 ->where('estimateLines.0.id', $labour->id)
                 ->where('estimateLines.0.taskId', null)
-                ->where('estimateLines.1.id', $material->id));
+                // Only ever the one labor line — its paired material (none
+                // here, no `final_symbol_id`) never gets its own row to pick.
+                ->has('estimateLines', 1));
     }
 
     public function test_dropping_a_line_frees_it_and_recomputes_the_hours(): void
     {
-        [$labour, $material] = $this->makeEstimateLines();
+        [$labour] = $this->makeEstimateLines();
+        $secondLabour = $this->makeSecondLabourLine($labour);
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
             'tasks' => [[
                 'title' => 'Rough-in',
                 'foreman_id' => $this->foreman->id,
-                'estimate_item_ids' => [$labour->id, $material->id],
+                'estimate_item_ids' => [$labour->id, $secondLabour->id],
             ]],
         ]);
 
         $task = JobTask::sole();
-        $this->assertSame('12.00', $task->estimated_hours);
+        $this->assertSame('20.00', $task->estimated_hours);
 
-        // Hand back the labour line, keep the material one.
+        // Hand back the first line, keep the second.
         $this->actingAs($this->user)
             ->put(route('tasks.edit.update', $task), [
                 'title' => $task->title,
                 'status' => $task->status,
                 'foreman_id' => $this->foreman->id,
-                'estimate_item_ids' => [$material->id],
+                'estimate_item_ids' => [$secondLabour->id],
             ])
             ->assertSessionHasNoErrors();
 
         // Free to plan into another task again.
         $this->assertNull($labour->refresh()->job_task_id);
-        $this->assertSame($task->id, $material->refresh()->job_task_id);
+        $this->assertSame($task->id, $secondLabour->refresh()->job_task_id);
 
-        // Hours are re-read off the labour it now covers — none — and the job
-        // is recomputed from its tasks rather than adjusted.
-        $this->assertNull($task->refresh()->estimated_hours);
-        $this->assertNull($this->job->refresh()->estimated_hours);
+        // Hours are re-read off the labour it now covers — 8, not 20.
+        $this->assertSame('8.00', $task->refresh()->estimated_hours);
+        $this->assertSame('8.00', $this->job->refresh()->estimated_hours);
     }
 
     public function test_a_line_another_task_holds_cannot_be_taken_by_editing(): void
     {
-        [$labour, $material] = $this->makeEstimateLines();
+        [$labour] = $this->makeEstimateLines();
+        $secondLabour = $this->makeSecondLabourLine($labour);
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
             'tasks' => [
                 ['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'estimate_item_ids' => [$labour->id]],
-                ['title' => 'Second fix', 'foreman_id' => $this->foreman->id, 'estimate_item_ids' => [$material->id]],
+                ['title' => 'Second fix', 'foreman_id' => $this->foreman->id, 'estimate_item_ids' => [$secondLabour->id]],
             ],
         ]);
 
@@ -343,12 +429,12 @@ class JobTaskSetupTest extends TestCase
                 'title' => $roughIn->title,
                 'status' => $roughIn->status,
                 'foreman_id' => $this->foreman->id,
-                'estimate_item_ids' => [$labour->id, $material->id],
+                'estimate_item_ids' => [$labour->id, $secondLabour->id],
             ])
             ->assertSessionHasErrors('estimate_item_ids');
 
         // Nothing moved: the whole save is refused, not partly applied.
-        $this->assertSame($secondFix->id, $material->refresh()->job_task_id);
+        $this->assertSame($secondFix->id, $secondLabour->refresh()->job_task_id);
         $this->assertSame($roughIn->id, $labour->refresh()->job_task_id);
     }
 
@@ -380,17 +466,18 @@ class JobTaskSetupTest extends TestCase
 
     public function test_removing_a_task_frees_its_lines_and_recomputes_the_job(): void
     {
-        [$labour, $material] = $this->makeEstimateLines();
+        [$labour] = $this->makeEstimateLines();
+        $secondLabour = $this->makeSecondLabourLine($labour);
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
             'tasks' => [
                 ['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'estimate_item_ids' => [$labour->id]],
-                ['title' => 'Second fix', 'foreman_id' => $this->foreman->id, 'estimate_item_ids' => [$material->id]],
+                ['title' => 'Second fix', 'foreman_id' => $this->foreman->id, 'estimate_item_ids' => [$secondLabour->id]],
             ],
         ]);
 
         $roughIn = JobTask::where('title', 'Rough-in')->sole();
-        $this->assertSame('12.00', $this->job->refresh()->estimated_hours);
+        $this->assertSame('20.00', $this->job->refresh()->estimated_hours);
 
         $this->actingAs($this->user)
             ->delete(route('tasks.remove', ['task' => $roughIn, 'from' => 'tasks']))
@@ -401,9 +488,9 @@ class JobTaskSetupTest extends TestCase
         // Back in the picker for another task to take.
         $this->assertNull($labour->refresh()->job_task_id);
         // The other task's line is untouched.
-        $this->assertNotNull($material->refresh()->job_task_id);
-        // And the job no longer bills for hours nobody is working.
-        $this->assertNull($this->job->refresh()->estimated_hours);
+        $this->assertNotNull($secondLabour->refresh()->job_task_id);
+        // And the job now bills only for the hours still on the books.
+        $this->assertSame('8.00', $this->job->refresh()->estimated_hours);
     }
 
     public function test_removing_a_task_from_a_job_returns_to_that_job(): void
@@ -609,7 +696,8 @@ class JobTaskSetupTest extends TestCase
 
     public function test_a_task_is_built_from_the_jobs_estimate_lines_and_its_foreman(): void
     {
-        [$first, $second] = $this->makeEstimateLines();
+        [$first] = $this->makeEstimateLines();
+        $second = $this->makeSecondLabourLine($first);
         $dana = Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW']);
 
         $this->actingAs($this->user)
@@ -701,7 +789,8 @@ class JobTaskSetupTest extends TestCase
 
     public function test_the_step_offers_every_line_with_whatever_already_claimed_it(): void
     {
-        [$first, $second] = $this->makeEstimateLines();
+        [$first] = $this->makeEstimateLines();
+        $second = $this->makeSecondLabourLine($first);
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
             'tasks' => [['title' => 'Rough-in first floor', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id]],
@@ -932,23 +1021,22 @@ class JobTaskSetupTest extends TestCase
 
     public function test_a_tasks_hours_are_read_off_the_labour_lines_it_covers(): void
     {
-        [$labour, $material] = $this->makeEstimateLines();
+        // Only the labor line is ever submitted now — its paired material
+        // (see `test_selecting_a_labor_line_auto_attaches_its_paired_material`)
+        // comes along on its own, and its 1 receptacle is not hours.
+        [$labour] = $this->makePairedLines();
 
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [[
                     'title' => 'Rough-in first floor',
                     'foreman_id' => $this->foreman->id,
-                    'estimate_item_ids' => [$labour->id, $material->id],
+                    'estimate_item_ids' => [$labour->id],
                 ]],
             ])
             ->assertSessionHasNoErrors();
 
-        /*
-         * 12 hours of labour. The material line's 30 receptacles are not hours
-         * and must not be added to them.
-         */
-        $this->assertSame('12.00', $this->job->refresh()->schedule->tasks->sole()->estimated_hours);
+        $this->assertSame('2.00', $this->job->refresh()->schedule->tasks->sole()->estimated_hours);
     }
 
     public function test_the_jobs_own_hours_are_the_sum_of_its_tasks(): void
@@ -972,14 +1060,27 @@ class JobTaskSetupTest extends TestCase
 
     public function test_a_task_covering_no_labour_has_no_hours_rather_than_zero(): void
     {
-        [, $material] = $this->makeEstimateLines();
+        // A labor line that simply carries no hours yet — a material line
+        // can no longer be picked on its own to construct this case (see
+        // `pairedMaterialLines()`), so this is the only way a task ends up
+        // covering no labor.
+        $estimate = Estimate::create([
+            'job_id' => $this->job->id, 'number' => 'EST-2002', 'client' => 'Harborview',
+            'project' => 'Harborview', 'issued_on' => now()->toDateString(),
+            'amount' => 0, 'status' => 'draft',
+        ]);
+        $unpriced = EstimateItem::create([
+            'estimate_id' => $estimate->id, 'category' => 'labor',
+            'description' => 'Site walk, not yet estimated', 'unit' => 'hr', 'quantity' => 0,
+            'unit_cost' => 0, 'total' => 0, 'source' => 'manual', 'position' => 0,
+        ]);
 
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [[
-                    'title' => 'Deliver receptacles',
+                    'title' => 'Walk the site',
                     'foreman_id' => $this->foreman->id,
-                    'estimate_item_ids' => [$material->id],
+                    'estimate_item_ids' => [$unpriced->id],
                 ]],
             ])
             ->assertSessionHasNoErrors();
@@ -993,5 +1094,121 @@ class JobTaskSetupTest extends TestCase
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), ['tasks' => []])
             ->assertSessionHasErrors('tasks');
+    }
+
+    /* ------------------------------------- labor/material pairing ---- */
+
+    public function test_the_picker_never_offers_a_material_line_directly(): void
+    {
+        $this->makeEstimateLines(); // one labor, one material
+
+        $this->actingAs($this->user)
+            ->get(route('jobs.tasks.setup', $this->job))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('estimateLines', 1)
+                ->where('estimateLines.0.category', 'labor'));
+    }
+
+    public function test_selecting_a_labor_line_auto_attaches_its_paired_material(): void
+    {
+        [$labour, $material] = $this->makePairedLines();
+
+        $this->actingAs($this->user)
+            ->post(route('jobs.tasks.setup.store', $this->job), [
+                'tasks' => [[
+                    'title' => 'Install receptacles',
+                    'foreman_id' => $this->foreman->id,
+                    // Only the labor line is picked — its material is never
+                    // offered as its own row.
+                    'estimate_item_ids' => [$labour->id],
+                ]],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $task = JobTask::sole();
+        $this->assertSame($task->id, $labour->refresh()->job_task_id);
+        $this->assertSame($task->id, $material->refresh()->job_task_id);
+    }
+
+    public function test_a_manual_labor_line_with_no_symbol_pairs_with_nothing(): void
+    {
+        // `makeEstimateLines()`'s material has no `final_symbol_id` —
+        // manual lines aren't linked to anything, so picking the labor line
+        // must not sweep it in just because it happens to be on the same
+        // estimate.
+        [$labour, $material] = $this->makeEstimateLines();
+
+        $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
+            'tasks' => [[
+                'title' => 'Rough-in',
+                'foreman_id' => $this->foreman->id,
+                'estimate_item_ids' => [$labour->id],
+            ]],
+        ]);
+
+        $this->assertSame(JobTask::sole()->id, $labour->refresh()->job_task_id);
+        $this->assertNull($material->refresh()->job_task_id);
+    }
+
+    public function test_re_saving_a_task_unchanged_does_not_detach_its_paired_material(): void
+    {
+        [$labour, $material] = $this->makePairedLines();
+
+        $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
+            'tasks' => [[
+                'title' => 'Install receptacles',
+                'foreman_id' => $this->foreman->id,
+                'estimate_item_ids' => [$labour->id],
+            ]],
+        ]);
+
+        $task = JobTask::sole();
+
+        // Editing the task without changing which lines it covers — the
+        // picker only ever resubmits the labor line, never the material it
+        // already brought along.
+        $this->actingAs($this->user)
+            ->put(route('tasks.edit.update', $task), [
+                'title' => 'Install receptacles, corrected',
+                'status' => $task->status,
+                'foreman_id' => $this->foreman->id,
+                'estimate_item_ids' => [$labour->id],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($task->id, $labour->refresh()->job_task_id);
+        $this->assertSame($task->id, $material->refresh()->job_task_id);
+    }
+
+    public function test_dropping_the_labor_line_on_edit_also_frees_its_paired_material(): void
+    {
+        [$labour, $material] = $this->makePairedLines();
+        $secondLabour = $this->makeSecondLabourLine($labour);
+
+        $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
+            'tasks' => [[
+                'title' => 'Install receptacles',
+                'foreman_id' => $this->foreman->id,
+                'estimate_item_ids' => [$labour->id],
+            ]],
+        ]);
+
+        $task = JobTask::sole();
+        $this->assertSame($task->id, $material->refresh()->job_task_id);
+
+        // Swap to a different, unrelated labor line — the first labor line
+        // and the material that came with it both go back to the picker.
+        $this->actingAs($this->user)
+            ->put(route('tasks.edit.update', $task), [
+                'title' => $task->title,
+                'status' => $task->status,
+                'foreman_id' => $this->foreman->id,
+                'estimate_item_ids' => [$secondLabour->id],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull($labour->refresh()->job_task_id);
+        $this->assertNull($material->refresh()->job_task_id);
+        $this->assertSame($task->id, $secondLabour->refresh()->job_task_id);
     }
 }

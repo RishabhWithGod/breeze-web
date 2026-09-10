@@ -45,6 +45,7 @@ class Project extends Model
         'started_at',
         'due_date',
         'completed_at',
+        'estimate_target_total',
     ];
 
     protected function casts(): array
@@ -58,6 +59,7 @@ class Project extends Model
             'started_at' => 'datetime',
             'due_date' => 'date',
             'completed_at' => 'datetime',
+            'estimate_target_total' => 'decimal:2',
         ];
     }
 

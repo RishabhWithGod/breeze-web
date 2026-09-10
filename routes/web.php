@@ -34,6 +34,7 @@ use App\Http\Controllers\JobTaskSetupController;
 use App\Http\Controllers\JobTeamController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentSettingsController;
+use App\Http\Controllers\PriceBookController;
 use App\Http\Controllers\ProcessingController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -47,6 +48,7 @@ use App\Http\Controllers\TakeoffFlowController;
 use App\Http\Controllers\TakeoffHistoryController;
 use App\Http\Controllers\TaskListController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\TechnicianController;
 use App\Http\Controllers\ThreeDViewController;
 use App\Http\Controllers\TimeEntryController;
 use App\Http\Controllers\TimerController;
@@ -258,6 +260,14 @@ Route::middleware('auth')->group(function () {
     Route::get('results', [ResultsController::class, 'latest'])->name('results.latest');
     Route::get('results/{project}', [ResultsController::class, 'show'])->name('results.show');
 
+    /*
+     * The company's own rates, imported from its estimating workbooks. Read
+     * only: the numbers arrive through `pricebook:import`, and this is where
+     * anyone can check one without opening the database.
+     */
+    Route::get('price-book', [PriceBookController::class, 'index'])->name('price-book.index');
+    Route::get('price-book/{priceBookItem}', [PriceBookController::class, 'show'])->name('price-book.show');
+
     Route::get('estimates', [EstimateController::class, 'index'])->name('estimates.index');
     Route::get('estimates/create', [EstimateController::class, 'create'])->name('estimates.create');
     Route::post('estimates', [EstimateController::class, 'store'])->name('estimates.store');
@@ -336,6 +346,16 @@ Route::middleware('auth')->group(function () {
     Route::delete('foremen/{foreman}', [ForemanController::class, 'destroy'])->name('foremen.destroy');
     Route::post('foremen', [ForemanController::class, 'store'])->name('foremen.store');
 
+    /*
+     * Actions on technicians who signed up from the mobile app. The list
+     * itself renders on Teams (`TeamController::index()`) alongside the
+     * `foremen` register — this old address just lands there now.
+     */
+    Route::redirect('technicians', '/teams')->name('technicians.index');
+    Route::post('technicians/{user}/approve', [TechnicianController::class, 'approve'])->name('technicians.approve');
+    Route::post('technicians/{user}/reject', [TechnicianController::class, 'reject'])->name('technicians.reject');
+    Route::put('technicians/{user}/team', [TechnicianController::class, 'assignTeam'])->name('technicians.team');
+
     Route::get('jobs', [JobController::class, 'index'])->name('jobs.index');
     Route::get('jobs/create', [JobController::class, 'create'])->name('jobs.create');
     Route::post('jobs', [JobController::class, 'store'])->name('jobs.store');
@@ -407,6 +427,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('schedule-tasks/{task}/dependencies/{dependency}', [JobTaskController::class, 'removeDependency'])
         ->name('tasks.dependencies.destroy');
     Route::post('schedule-tasks/{task}/comments', [JobTaskController::class, 'comment'])->name('tasks.comments.store');
+    Route::get('schedule-tasks/{task}/attachments/{attachment}', [JobTaskController::class, 'attachment'])
+        ->name('tasks.attachments.show');
 
     // Team members
     Route::post('jobs/{job}/team', [JobTeamController::class, 'store'])->name('jobs.team.store');

@@ -82,7 +82,9 @@ class ForemanController extends Controller
         $done = $this->load(closed: true)[$foreman->id] ?? null;
 
         $tasks = JobTask::query()
-            ->where('foreman_id', $foreman->id)
+            // Work they are running and work they are over: the register row
+            // above counts both, so the list below has to show both.
+            ->heldBy($foreman->id)
             ->whereHas('job')
             ->whereNotIn('status', JobTask::CLOSED_STATUSES)
             ->with('job:id,name,client')
@@ -126,6 +128,13 @@ class ForemanController extends Controller
                 'jobId' => $task->job_id,
                 'jobName' => $task->job?->name,
                 'client' => $task->job?->client,
+                /*
+                 * Which hat they wear on this one. The list now mixes work they
+                 * are running with work they are over, and those are different
+                 * obligations — a row that does not say which is a row nobody
+                 * can act on.
+                 */
+                'heldAs' => $task->foreman_id === $foreman->id ? 'foreman' : 'supervisor',
             ])->values(),
             'canManage' => $this->canManage(request()->user()),
         ]);
@@ -140,21 +149,9 @@ class ForemanController extends Controller
      */
     private function load(bool $closed): Collection
     {
-        return JobTask::query()
-            ->whereHas('job')
-            ->whereNotNull('foreman_id')
-            ->when(
-                $closed,
-                fn ($query) => $query->whereIn('status', JobTask::CLOSED_STATUSES),
-                fn ($query) => $query->whereNotIn('status', JobTask::CLOSED_STATUSES),
-            )
-            ->groupBy('foreman_id')
-            ->selectRaw(
-                'foreman_id, count(*) as tasks, count(distinct job_id) as jobs, '.
-                'coalesce(sum(estimated_hours), 0) as hours'
-            )
-            ->get()
-            ->keyBy('foreman_id');
+        // Foreman or supervisor: both are carrying the task — see
+        // JobTask::workload().
+        return JobTask::workload($closed);
     }
 
     public function create(Request $request): Response

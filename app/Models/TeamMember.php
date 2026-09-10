@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TeamMember extends Model
 {
-    protected $fillable = ['user_id', 'name', 'initials', 'role', 'billable_rate', 'cost_rate'];
+    protected $fillable = ['user_id', 'team_id', 'name', 'initials', 'role', 'billable_rate', 'cost_rate'];
 
     protected function casts(): array
     {
@@ -38,6 +38,12 @@ class TeamMember extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** The crew this technician is on, mirroring `Foreman::team()`. */
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
     }
 
     /** @return HasMany<TimeEntry, $this> */

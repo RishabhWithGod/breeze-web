@@ -113,13 +113,25 @@ class JobSchedulePolicy
     }
 
     /**
-     * Whether this user is on the task.
+     * Whether this user is on the task, through either of the app's two
+     * real staffing mechanics:
      *
-     * Users and crew members are separate records, so the link is the name — that is
-     * what the office types into both. Matched case-insensitively and trimmed.
+     * - named as the task's foreman/supervisor (`job_tasks.foreman_id`/
+     *   `supervisor_id`, linked to this account via `foremen.user_id`) —
+     *   the mechanic every mobile-onboarded technician is actually staffed
+     *   through (see `TechnicianController::syncForemanRoster()`), or
+     * - the older name-matched `job_task_assignments` crew, where users and
+     *   crew members are separate records and the link is the name — that
+     *   is what the office types into both, matched case-insensitively.
      */
     private function isAssigned(User $user, JobTask $task): bool
     {
+        $foremanId = $user->foreman?->id;
+        if ($foremanId !== null
+            && ($task->foreman_id === $foremanId || $task->supervisor_id === $foremanId)) {
+            return true;
+        }
+
         $name = mb_strtolower(trim($user->name));
 
         return $task->assignments

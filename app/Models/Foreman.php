@@ -50,6 +50,19 @@ class Foreman extends Model
         return $this->belongsTo(Team::class);
     }
 
+    /**
+     * The account this row was synced from, when it was — a web-created
+     * crew member has none. Deliberately not in `$fillable`: this is only
+     * ever set by `TechnicianController` linking an approved technician into
+     * the register, never by the create/edit forms a manager fills in.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     /** "Supervisor" / "Foreman", as a screen writes it. */
     public function roleLabel(): string
     {

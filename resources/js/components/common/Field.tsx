@@ -71,11 +71,17 @@ export interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
   leftIcon?: LucideIcon
   /** Interactive element pinned inside the control on the right. */
   rightSlot?: ReactNode
+  /**
+   * Classes for the box itself, where `className` sizes the whole field.
+   * For the rare control that is part of a larger one — the number in the
+   * middle of a stepper — and has to shed the standard height and corners.
+   */
+  controlClassName?: string
 }
 
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   function TextInput(
-    { label, hint, error, leftIcon: LeftIcon, rightSlot, id, className, ...props },
+    { label, hint, error, leftIcon: LeftIcon, rightSlot, id, className, controlClassName, ...props },
     ref,
   ) {
     return (
@@ -104,7 +110,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
             {...props}
             {...(id ? { id } : {})}
             {...(error ? { invalid: true } : {})}
-            controlClassName={cn(CONTROL_BASE, error && INVALID)}
+            controlClassName={cn(CONTROL_BASE, error && INVALID, controlClassName)}
           />
         ) : (
         <div className="relative">
@@ -124,6 +130,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
               LeftIcon && 'pl-11',
               rightSlot && 'pr-12',
               error && INVALID,
+              controlClassName,
             )}
             {...props}
           />

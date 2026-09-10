@@ -6,6 +6,7 @@ use App\Events\ScheduleChanged;
 use App\Models\Job;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
+use App\Models\JobTaskAttachment;
 use App\Models\JobTaskDependency;
 use App\Models\TeamMember;
 use App\Notifications\TaskScheduleChanged;
@@ -19,8 +20,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Everything that changes a task.
@@ -140,6 +143,8 @@ class JobTaskController extends Controller
         $datesMoved = $task->starts_on?->toDateString() !== ($data['starts_on'] ?? null)
             || $task->ends_on?->toDateString() !== ($data['ends_on'] ?? null);
 
+        $wasCompleted = $task->getOriginal('status') === JobTask::STATUS_COMPLETED;
+
         $task->fill([
             ...$data,
             'title' => trim($data['title']),
@@ -156,6 +161,13 @@ class JobTaskController extends Controller
         }
 
         $task->save();
+
+        if ($wasCompleted && $task->status !== JobTask::STATUS_COMPLETED) {
+            // Same rule as the mobile reopen path — a task leaving
+            // `completed` here undoes the crew's sign-off just as much as
+            // reopening it from the app does.
+            $task->job?->clearReadyForReview();
+        }
 
         $this->settle($task->schedule, $task->job, 'task_updated', "Task updated: {$task->title}");
 
@@ -529,6 +541,25 @@ class JobTaskController extends Controller
         ]);
 
         return back()->with('success', 'Comment added.');
+    }
+
+    /**
+     * A field photo's bytes — session-authenticated (this is the web app, no
+     * `Bearer` token to check), the same `inline` streaming shape the
+     * mobile-only route already uses (`Api\V1\JobTaskAttachmentController
+     * ::show()`) so an `<img>` tag on the job detail screen can load it
+     * directly.
+     */
+    public function attachment(JobTask $task, JobTaskAttachment $attachment): StreamedResponse
+    {
+        abort_unless($attachment->job_task_id === $task->id, 404);
+
+        return response()->streamDownload(
+            fn () => print(Storage::disk('local')->get($attachment->path)),
+            $attachment->name,
+            ['Content-Type' => $attachment->mime_type ?? 'application/octet-stream'],
+            'inline',
+        );
     }
 
     /* ------------------------------------------------------------- internals */

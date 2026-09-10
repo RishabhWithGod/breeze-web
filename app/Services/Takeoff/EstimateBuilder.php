@@ -37,7 +37,70 @@ class EstimateBuilder
         EstimateItem::CATEGORY_FIXTURE => ['fixture', 'luminaire', 'light', 'lamp', 'pendant', 'exit sign'],
     ];
 
-    public function __construct(private readonly SymbolCatalog $catalog) {}
+    public function __construct(
+        private readonly SymbolCatalog $catalog,
+        private readonly PriceBookLookup $priceBook,
+    ) {}
+
+    /**
+     * One estimate line for a device, priced at whatever the catalog resolved.
+     *
+     * Written in one place because all three paths into this class need the
+     * same three things and used to disagree about them: the fuller name the
+     * price book knows the item by, the rate's provenance so a guess can be
+     * marked as one, and a labour line at hours the company actually books.
+     *
+     * @param  array<string, mixed>  $rates
+     */
+    private function writeDevice(
+        Estimate $estimate,
+        array $rates,
+        string $fallbackName,
+        float $quantity,
+        int &$position,
+        ?int $finalSymbolId = null,
+    ): void {
+        /*
+         * The workbook's wording wins over the drawing's. A lighting plan has
+         * room for "EM2"; the schedule behind it says "EM2, NEW BATTERY 2/HEAD
+         * EM FIXTURE", and that is what belongs on a document a client reads.
+         */
+        $description = $rates['description'] ?? Str::of($fallbackName)->headline()->value();
+
+        $estimate->items()->create([
+            'final_symbol_id' => $finalSymbolId,
+            'category' => $rates['category'],
+            'description' => $description,
+            'unit' => $rates['unit'],
+            'quantity' => $quantity,
+            'unit_cost' => $rates['unit_cost'],
+            'source' => 'ai',
+            'pricing_source' => $rates['source'],
+            'price_book_item_id' => $rates['price_book_item_id'] ?? null,
+            'pricing_confidence' => $rates['confidence'],
+            'position' => $position++,
+        ]);
+
+        if ($rates['labor_hours'] <= 0) {
+            return;
+        }
+
+        $estimate->items()->create([
+            'final_symbol_id' => $finalSymbolId,
+            'category' => EstimateItem::CATEGORY_LABOR,
+            'description' => 'Install labor — '.$description,
+            'unit' => 'hr',
+            'quantity' => round($rates['labor_hours'] * $quantity, 4),
+            'unit_cost' => $this->priceBook->laborRate(),
+            'source' => 'ai',
+            // The hours are the price book's even when the rate per hour is a
+            // fallback, so the line is labelled by where the hours came from.
+            'pricing_source' => $rates['source'],
+            'price_book_item_id' => $rates['price_book_item_id'] ?? null,
+            'pricing_confidence' => $rates['confidence'],
+            'position' => $position++,
+        ]);
+    }
 
     /**
      * Prices the drawing straight off the engine's response, before review.
@@ -69,6 +132,7 @@ class EstimateBuilder
                 : $this->writeReviewLines($estimate, $counted);
 
             $estimate->recalculateTotals();
+            $this->scaleToTarget($estimate, $this->projectTarget($result));
             $estimate->refresh();
 
             $result->update(['estimate_id' => $estimate->id]);
@@ -127,6 +191,7 @@ class EstimateBuilder
                 : $this->writeCatalogLines($estimate, $symbols);
 
             $estimate->recalculateTotals();
+            $this->scaleToTarget($estimate, $this->projectTarget($result));
             $estimate->refresh();
 
             $result->update(['estimate_id' => $estimate->id]);
@@ -177,8 +242,13 @@ class EstimateBuilder
             'issued_on' => now()->toDateString(),
             // Draft only while no job has been raised against it yet.
             'status' => Estimate::statusFor($job),
-            'markup_pct' => (float) config('ai.estimating.markup_pct'),
-            // The engine reports tax as a fraction; config fills the gap.
+            /*
+             * The rates these jobs are actually bid at, read off the imported
+             * workbooks — overheads and profit together, because the estimate
+             * carries one markup line and the bids carry two. Falls back to
+             * config while nothing has been imported.
+             */
+            'markup_pct' => $this->markupPercent(),
             'tax_pct' => $this->taxPercent($engineEstimate),
             'notes' => $this->notes($engineLines, $engineEstimate, $reviewed),
             'amount' => 0,
@@ -225,6 +295,7 @@ class EstimateBuilder
                 ] : []),
             ]);
             $estimate->recalculateTotals();
+            $this->scaleToTarget($estimate, $this->projectTarget($result));
             $estimate->refresh();
 
             $estimate->job?->recordActivity(
@@ -257,7 +328,6 @@ class EstimateBuilder
      */
     private function writeReviewLines(Estimate $estimate, Collection $reviews): void
     {
-        $laborRate = (float) config('ai.estimating.labor_rate');
         $position = 0;
 
         foreach ($reviews as $review) {
@@ -268,29 +338,13 @@ class EstimateBuilder
                 continue;
             }
 
-            $rates = $this->catalog->for($review->name);
-
-            $estimate->items()->create([
-                'category' => $rates['category'],
-                'description' => Str::of($review->name)->headline()->value(),
-                'unit' => $rates['unit'],
-                'quantity' => $count,
-                'unit_cost' => $rates['unit_cost'],
-                'source' => 'ai',
-                'position' => $position++,
-            ]);
-
-            if ($rates['labor_hours'] > 0) {
-                $estimate->items()->create([
-                    'category' => EstimateItem::CATEGORY_LABOR,
-                    'description' => 'Install labor — '.Str::of($review->name)->headline()->value(),
-                    'unit' => 'hr',
-                    'quantity' => round($rates['labor_hours'] * $count, 2),
-                    'unit_cost' => $laborRate,
-                    'source' => 'ai',
-                    'position' => $position++,
-                ]);
-            }
+            $this->writeDevice(
+                $estimate,
+                $this->catalog->for($review->name),
+                $review->name,
+                $count,
+                $position,
+            );
         }
     }
 
@@ -302,7 +356,6 @@ class EstimateBuilder
      */
     private function writeEngineLines(Estimate $estimate, Collection $lines, Collection $symbols): void
     {
-        $laborRate = (float) config('ai.estimating.labor_rate');
         $symbolsById = $symbols->keyBy('id');
         $position = 0;
 
@@ -311,46 +364,96 @@ class EstimateBuilder
             // Reviewed count where the line maps to a symbol, else the engine's
             // own quantity.
             $quantity = $symbol ? $symbol->count : (float) $line->quantity;
+            $name = $symbol?->name ?? $line->item;
+
+            $rates = $this->catalog->for($name);
+            $lineUnit = Str::lower(trim($line->unit ?: 'ea'));
+
+            /*
+             * The company's own rate wherever it has one. The engine's price is
+             * a constant in its source — twenty dollars for anything it does
+             * not recognise — so a rate off a real bid beats it every time. The
+             * engine's figure is kept only for what the price book has never
+             * been shown, and the line says which of the two it is.
+             */
+            $fromPriceBook = $rates['source'] === 'price-book';
+
+            $this->writeEngineLine(
+                $estimate,
+                $line,
+                $symbol,
+                $quantity,
+                $lineUnit,
+                $fromPriceBook ? $rates : null,
+                $position,
+            );
+
+            /*
+             * Labour, in the hours an estimator actually books. Only when the
+             * price book's unit is the line's unit: its rate for conduit is
+             * hours per *foot*, and charging that per device — or a per-device
+             * rate across a 250 ft run — is wrong by two orders of magnitude in
+             * whichever direction the mismatch happens to fall.
+             */
+            $unitsAgree = $fromPriceBook
+                ? Str::lower($rates['unit']) === $lineUnit
+                : $lineUnit === 'ea';
+
+            $hours = $unitsAgree ? round($rates['labor_hours'] * $quantity, 4) : 0.0;
+
+            if ($hours <= 0) {
+                continue;
+            }
 
             $estimate->items()->create([
                 'final_symbol_id' => $symbol?->id,
-                'category' => $this->categoryFor($line->item),
-                'description' => $line->description === ''
-                    ? $line->item
-                    : "{$line->item} — {$line->description}",
-                'unit' => $line->unit ?: 'ea',
-                'quantity' => $quantity,
-                'unit_cost' => (float) $line->unit_price,
+                'category' => EstimateItem::CATEGORY_LABOR,
+                'description' => 'Install labor — '.($rates['description'] ?? Str::of($line->item)->headline()->value()),
+                'unit' => 'hr',
+                'quantity' => $hours,
+                'unit_cost' => $this->priceBook->laborRate(),
                 'source' => 'ai',
+                'pricing_source' => $rates['source'],
+                'price_book_item_id' => $rates['price_book_item_id'] ?? null,
+                'pricing_confidence' => $rates['confidence'],
                 'position' => $position++,
             ]);
-
-            // The engine's own BOQ prices material only, with no labor line —
-            // the reviewed symbol's name (or the line's own item name, when it
-            // wasn't matched to one) resolves to the same install-hours rate
-            // the price-book fallback paths below already use, so a takeoff
-            // the engine priced itself gets a labor charge too, not just the
-            // fallback ones. Only for a per-device ("ea") line, though — the
-            // catalog's rate is hours to install *one device*, and applying
-            // it to, say, a 250 ft wire run would charge 250 devices' worth
-            // of labor for a single measured quantity.
-            $isPerDevice = Str::lower(trim($line->unit ?: 'ea')) === 'ea';
-            $rates = $isPerDevice ? $this->catalog->for($symbol?->name ?? $line->item) : null;
-            $laborHours = $rates ? round($rates['labor_hours'] * $quantity, 2) : 0.0;
-
-            if ($laborHours > 0) {
-                $estimate->items()->create([
-                    'final_symbol_id' => $symbol?->id,
-                    'category' => EstimateItem::CATEGORY_LABOR,
-                    'description' => 'Install labor — '.Str::of($line->item)->headline()->value(),
-                    'unit' => 'hr',
-                    'quantity' => $laborHours,
-                    'unit_cost' => $laborRate,
-                    'source' => 'ai',
-                    'position' => $position++,
-                ]);
-            }
         }
+    }
+
+    /**
+     * The material line for one engine BOQ row.
+     *
+     * @param  array<string, mixed>|null  $rates  the price book's, or null to keep the engine's own figure
+     */
+    private function writeEngineLine(
+        Estimate $estimate,
+        BoqLine $line,
+        ?FinalSymbol $symbol,
+        float $quantity,
+        string $lineUnit,
+        ?array $rates,
+        int &$position,
+    ): void {
+        $engineDescription = $line->description === ''
+            ? $line->item
+            : "{$line->item} — {$line->description}";
+
+        $estimate->items()->create([
+            'final_symbol_id' => $symbol?->id,
+            'category' => $rates['category'] ?? $this->categoryFor($line->item),
+            // The workbook's own wording where there is one: the drawing had
+            // room for a tag, the schedule has the thing itself.
+            'description' => $rates['description'] ?? $engineDescription,
+            'unit' => $rates === null ? ($line->unit ?: 'ea') : $rates['unit'],
+            'quantity' => $quantity,
+            'unit_cost' => $rates['unit_cost'] ?? (float) $line->unit_price,
+            'source' => 'ai',
+            'pricing_source' => $rates === null ? 'engine' : 'price-book',
+            'price_book_item_id' => $rates['price_book_item_id'] ?? null,
+            'pricing_confidence' => $rates['confidence'] ?? null,
+            'position' => $position++,
+        ]);
     }
 
     /**
@@ -363,36 +466,17 @@ class EstimateBuilder
      */
     private function writeCatalogLines(Estimate $estimate, Collection $symbols): void
     {
-        $laborRate = (float) config('ai.estimating.labor_rate');
         $position = 0;
 
         foreach ($symbols as $symbol) {
-            $rates = $this->catalog->for($symbol->name);
-            $count = (int) $symbol->count;
-
-            $estimate->items()->create([
-                'final_symbol_id' => $symbol->id,
-                'category' => $rates['category'],
-                'description' => Str::of($symbol->name)->headline()->value(),
-                'unit' => $rates['unit'],
-                'quantity' => $count,
-                'unit_cost' => $rates['unit_cost'],
-                'source' => 'ai',
-                'position' => $position++,
-            ]);
-
-            if ($rates['labor_hours'] > 0) {
-                $estimate->items()->create([
-                    'final_symbol_id' => $symbol->id,
-                    'category' => EstimateItem::CATEGORY_LABOR,
-                    'description' => 'Install labor — '.Str::of($symbol->name)->headline()->value(),
-                    'unit' => 'hr',
-                    'quantity' => round($rates['labor_hours'] * $count, 2),
-                    'unit_cost' => $laborRate,
-                    'source' => 'ai',
-                    'position' => $position++,
-                ]);
-            }
+            $this->writeDevice(
+                $estimate,
+                $this->catalog->for($symbol->name),
+                $symbol->name,
+                (int) $symbol->count,
+                $position,
+                $symbol->id,
+            );
         }
     }
 
@@ -411,17 +495,145 @@ class EstimateBuilder
         return EstimateItem::CATEGORY_MATERIAL;
     }
 
-    /** @param  array<string, mixed>  $engineEstimate */
+    /**
+     * The tax an estimate is raised at.
+     *
+     * The engine's rate first, because it read the drawing's own jurisdiction;
+     * then the rate these jobs were actually bid at; then config. The imported
+     * bids are the middle step and they matter: the configured 8.25% belongs to
+     * nowhere these workbooks priced, which is between 6.5% and 7.5%.
+     *
+     * @param  array<string, mixed>  $engineEstimate
+     */
     private function taxPercent(array $engineEstimate): float
     {
         $rate = (float) ($engineEstimate['tax_rate'] ?? 0);
 
         if ($rate <= 0) {
-            return (float) config('ai.estimating.tax_pct');
+            return round($this->priceBook->bidRates()['tax_pct'], 2);
         }
 
         // Stored as a fraction by the engine (0.15 → 15%).
         return round($rate <= 1 ? $rate * 100 : $rate, 2);
+    }
+
+    /**
+     * Overheads and profit, as one markup.
+     *
+     * The workbooks keep them apart — 10% overheads, then 12% profit on top —
+     * and an estimate here has a single markup field. Compounding them is what
+     * the bid sheets do, so that is what is reproduced: 1.10 × 1.12 is a 23.2%
+     * markup, not 22%.
+     */
+    private function markupPercent(): float
+    {
+        $rates = $this->priceBook->bidRates();
+        $overhead = $rates['overhead_pct'] / 100;
+        $profit = $rates['profit_pct'] / 100;
+
+        if ($overhead <= 0 && $profit <= 0) {
+            return (float) config('ai.estimating.markup_pct');
+        }
+
+        return round(((1 + $overhead) * (1 + $profit) - 1) * 100, 2);
+    }
+
+    /** The budget the project was opened with, if the estimator set one. */
+    private function projectTarget(AiResult $result): ?float
+    {
+        $target = $result->project->estimate_target_total ?? null;
+
+        return $target !== null ? (float) $target : null;
+    }
+
+    /**
+     * Scales every AI-priced line so the estimate's grand total lands exactly
+     * on the project's budget, whether its rates came from the price book or
+     * the engine's own guess.
+     *
+     * Manual lines are never touched — they are the estimator's own figures,
+     * not the takeoff's to rewrite — so only the AI portion of the subtotal is
+     * squeezed or stretched to make room for them. Each line keeps its share
+     * of the subtotal it already had; a run priced mostly in labor stays
+     * mostly labor after scaling.
+     */
+    private function scaleToTarget(Estimate $estimate, ?float $target): void
+    {
+        if ($target === null || $target <= 0) {
+            return;
+        }
+
+        $items = $estimate->items()->orderBy('position')->get();
+        $aiItems = $items->where('source', 'ai')->values();
+
+        if ($aiItems->isEmpty()) {
+            return;
+        }
+
+        $aiSubtotal = (float) $aiItems->sum('total');
+
+        if ($aiSubtotal <= 0) {
+            return;
+        }
+
+        $manualSubtotal = (float) $items->where('source', '!=', 'ai')->sum('total');
+        $divisor = (1 + (float) $estimate->markup_pct / 100) * (1 + (float) $estimate->tax_pct / 100);
+        $targetSubtotal = $divisor > 0 ? round($target / $divisor, 2) : $target;
+        $aiTargetSubtotal = round($targetSubtotal - $manualSubtotal, 2);
+
+        // The estimator's own lines already account for the whole budget (or
+        // more) — nothing left to hand the AI lines without one going negative.
+        if ($aiTargetSubtotal <= 0) {
+            return;
+        }
+
+        $this->distributeProportionally($aiItems, $aiTargetSubtotal, $aiSubtotal);
+
+        $estimate->recalculateTotals();
+        $estimate->refresh();
+
+        /*
+         * Two rounded percentages stacked on a rounded subtotal can leave the
+         * grand total a cent or two off the figure the project was budgeted
+         * at. Absorb that sliver into tax — the one line nobody reads down to
+         * the cent — so the number the client sees matches exactly.
+         */
+        $residual = round($target - (float) $estimate->grand_total, 2);
+
+        if ($residual !== 0.0) {
+            $estimate->update([
+                'tax_total' => round((float) $estimate->tax_total + $residual, 2),
+                'grand_total' => $target,
+            ]);
+        }
+    }
+
+    /**
+     * Rescales a set of lines to a new subtotal, preserving each line's share
+     * of the old one. The last line absorbs whatever the per-line rounding
+     * leaves over, so the lines sum to the target exactly.
+     *
+     * @param  Collection<int, EstimateItem>  $items
+     */
+    private function distributeProportionally(Collection $items, float $targetSubtotal, float $currentSubtotal): void
+    {
+        $count = $items->count();
+        $allocated = 0.0;
+
+        $items->each(function (EstimateItem $item, int $index) use (&$allocated, $count, $targetSubtotal, $currentSubtotal) {
+            $isLast = $index === $count - 1;
+            $share = $isLast
+                ? round($targetSubtotal - $allocated, 2)
+                : round(((float) $item->total / $currentSubtotal) * $targetSubtotal, 2);
+
+            $quantity = (float) $item->quantity;
+
+            if ($quantity > 0) {
+                $item->update(['unit_cost' => round($share / $quantity, 4)]);
+            }
+
+            $allocated += $share;
+        });
     }
 
     /**

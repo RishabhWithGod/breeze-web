@@ -282,6 +282,15 @@ export interface EstimateItemRow {
   readonly total: number
   /** `ai` lines came from the takeoff, `manual` were added by hand. */
   readonly source: 'ai' | 'manual'
+  /**
+   * Where the rate came from: `price-book` is a price the company has charged
+   * before, `catalog` is a plausible constant standing in for one, `engine` is
+   * the AI's own figure. Null on lines raised before this was recorded.
+   */
+  readonly pricingSource: 'price-book' | 'catalog' | 'engine' | null
+  /** How the price book match was made — a `words` match is a suggestion. */
+  readonly pricingConfidence: 'exact' | 'tag' | 'words' | null
+  readonly priceBookItemId: number | null
 }
 
 export interface EstimateTotals {
