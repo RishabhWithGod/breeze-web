@@ -9,6 +9,7 @@ use App\Models\Job;
 use App\Models\JobActivity;
 use App\Models\Team;
 use App\Models\TeamMember;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -50,11 +51,13 @@ class SchedulingController extends Controller
             'member' => ['nullable', 'integer', 'exists:team_members,id'],
         ]);
 
+        $user = $request->user();
         $view = $filters['view'] ?? 'week';
         $anchor = $this->anchorDate($filters['date'] ?? null);
         [$from, $to] = $this->window($view, $anchor);
 
         $shifts = CrewShift::query()
+            ->ownedBy($user)
             ->with([
                 'job:id,name,client,location,job_type,priority,team_id',
                 // Who is actually on the work, so a block can say so without
@@ -88,13 +91,14 @@ class SchedulingController extends Controller
             'days' => $this->days($from, $to, $anchor, $view),
             'shifts' => CrewShiftResource::collection($shifts)->resolve(),
             'unassigned' => SchedulableJobResource::collection(
-                Job::query()->with(['foreman', 'team:id,name', 'tasks.foreman', 'tasks.supervisor'])->unscheduled()
+                Job::query()->ownedBy($user)
+                    ->with(['foreman', 'team:id,name', 'tasks.foreman', 'tasks.supervisor'])->unscheduled()
                     ->sortedForScheduling('start-desc')
                     ->take(self::STRIP_LIMIT)
                     ->get()
             )->resolve(),
-            'unassignedTotal' => Job::query()->unscheduled()->count(),
-            'crews' => $this->crews(),
+            'unassignedTotal' => Job::query()->ownedBy($user)->unscheduled()->count(),
+            'crews' => $this->crews($user),
             'members' => $this->members(),
             'filters' => [
                 'crew' => $filters['crew'] ?? '',
@@ -117,10 +121,12 @@ class SchedulingController extends Controller
             'sort' => ['nullable', Rule::in(Job::SCHEDULING_SORTS)],
         ]);
 
+        $user = $request->user();
         $type = $filters['type'] ?? 'all';
         $sort = $filters['sort'] ?? 'start-desc';
 
         $jobs = Job::query()
+            ->ownedBy($user)
             ->with(['foreman', 'team:id,name', 'tasks.foreman', 'tasks.supervisor'])
             ->unscheduled()
             ->search($filters['search'] ?? null)
@@ -140,7 +146,7 @@ class SchedulingController extends Controller
              * Counted without the type filter applied, so the tabs keep showing the
              * whole queue's shape rather than collapsing to the current tab.
              */
-            'counts' => $this->typeCounts($filters['search'] ?? null),
+            'counts' => $this->typeCounts($user, $filters['search'] ?? null),
             // No crew or member lists: booking takes the foremen already on the
             // job rather than asking again — see AssignCrewModal.
             'today' => Carbon::today()->toDateString(),
@@ -168,11 +174,12 @@ class SchedulingController extends Controller
         [$from, $to] = $this->window($view, $anchor);
 
         $shifts = CrewShift::query()
+            ->ownedBy($request->user())
             ->with(['job:id,name,client,job_type,priority', 'teamMember:id,name,initials,role'])
             ->between($from, $to)
             ->get();
 
-        $crewLoad = $this->crewLoad($from, $to);
+        $crewLoad = $this->crewLoad($request->user(), $from, $to);
         $capacity = $crewLoad[0]['capacity'] ?? 0;
         $bookedHours = round((float) collect($crewLoad)->sum('hours'), 2);
         $totalCapacity = $capacity * count($crewLoad);
@@ -204,9 +211,9 @@ class SchedulingController extends Controller
             'assignments' => $this->assignmentsByMember($shifts),
             'crewTotals' => $this->crewTotals($shifts, $capacity),
             'conflicts' => $this->conflicts($shifts),
-            'activity' => $this->schedulingActivity(),
+            'activity' => $this->schedulingActivity($request->user()),
             'members' => $this->members(),
-            'crews' => $this->crews(),
+            'crews' => $this->crews($request->user()),
         ]);
     }
 
@@ -255,6 +262,7 @@ class SchedulingController extends Controller
         ]);
 
         $job = Job::with('team', 'tasks.foreman', 'foreman')->findOrFail($data['job_id']);
+        $this->authorize('update', $job);
 
         /*
          * The shift is labelled with whoever is on the job. A job whose work has
@@ -322,6 +330,8 @@ class SchedulingController extends Controller
     /** Moves a shift, or hands it to a different crew. */
     public function update(Request $request, CrewShift $schedule): RedirectResponse
     {
+        $this->authorize('update', $schedule->job);
+
         $data = $request->validate([
             'team_member_id' => ['nullable', 'integer', 'exists:team_members,id'],
             'crew' => ['nullable', 'string', 'max:60'],
@@ -353,6 +363,8 @@ class SchedulingController extends Controller
      */
     public function destroy(CrewShift $schedule): RedirectResponse
     {
+        $this->authorize('update', $schedule->job);
+
         $job = $schedule->job;
         $schedule->delete();
 
@@ -445,9 +457,10 @@ class SchedulingController extends Controller
      *
      * @return list<string>
      */
-    private function crews(): array
+    private function crews(User $user): array
     {
         $onShifts = CrewShift::query()
+            ->ownedBy($user)
             ->reorder()
             ->distinct()
             ->pluck('crew')
@@ -488,10 +501,11 @@ class SchedulingController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private function crewLoad(Carbon $from, Carbon $to): array
+    private function crewLoad(User $user, Carbon $from, Carbon $to): array
     {
         /** @var Collection<int, object> $booked */
         $booked = CrewShift::query()
+            ->ownedBy($user)
             ->reorder()
             ->whereBetween('scheduled_date', [$from->toDateString(), $to->toDateString()])
             ->whereNotNull('team_member_id')
@@ -682,9 +696,10 @@ class SchedulingController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private function schedulingActivity(int $limit = 6): array
+    private function schedulingActivity(User $user, int $limit = 6): array
     {
         return JobActivity::query()
+            ->whereHas('job', fn ($query) => $query->ownedBy($user))
             ->with('job:id,name')
             ->whereIn('type', ['scheduled', 'unscheduled'])
             ->latest('id')
@@ -706,9 +721,10 @@ class SchedulingController extends Controller
      *
      * @return array{all: int, residential: int, commercial: int, industrial: int}
      */
-    private function typeCounts(?string $search): array
+    private function typeCounts(User $user, ?string $search): array
     {
         $rows = Job::query()
+            ->ownedBy($user)
             ->reorder()
             ->unscheduled()
             ->search($search)

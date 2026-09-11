@@ -14,8 +14,11 @@ class RecordReviewFinalisedActivity implements ShouldHandleEventsAfterCommit
     public function handle(ReviewFinalised $event): void
     {
         $name = $event->result->project?->name ?? 'a project';
+        $owner = $event->result->project?->user;
 
-        $this->recorder->record(FeedItem::DASHBOARD_ACTIVITY, "Review finalised for {$name}", 'file-text', 'lilac');
-        $this->recorder->record(FeedItem::HISTORY_ACTIVITY, "Review finalised for {$name}", 'file-text', 'lilac');
+        if ($owner) {
+            $this->recorder->record($owner, FeedItem::DASHBOARD_ACTIVITY, "Review finalised for {$name}", 'file-text', 'lilac');
+            $this->recorder->record($owner, FeedItem::HISTORY_ACTIVITY, "Review finalised for {$name}", 'file-text', 'lilac');
+        }
     }
 }

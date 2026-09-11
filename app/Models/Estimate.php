@@ -18,6 +18,7 @@ class Estimate extends Model
     public const SORTS = ['date-desc', 'date-asc', 'amount-desc', 'amount-asc', 'number-asc'];
 
     protected $fillable = [
+        'user_id',
         'job_id',
         'project_id',
         /*
@@ -103,11 +104,24 @@ class Estimate extends Model
                 return;
             }
 
-            if ($estimate->client_id !== null && ! $estimate->isDirty('project_id')) {
+            if (! $estimate->isDirty('project_id')) {
+                if ($estimate->client_id === null) {
+                    $estimate->client_id = Project::whereKey($estimate->project_id)->value('client_id');
+                }
+
+                if ($estimate->user_id === null) {
+                    $estimate->user_id = Project::whereKey($estimate->project_id)->value('user_id');
+                }
+
                 return;
             }
 
-            $estimate->client_id = Project::whereKey($estimate->project_id)->value('client_id');
+            // The project moved: its client and its owner move with it. Both
+            // are read off the project, never asked for — the same reasoning
+            // that already applied to the client alone.
+            $project = Project::whereKey($estimate->project_id)->first(['client_id', 'user_id']);
+            $estimate->client_id = $project?->client_id;
+            $estimate->user_id = $project?->user_id;
         });
     }
 
@@ -153,6 +167,18 @@ class Estimate extends Model
     {
         // Named for what it is: `client` is the name snapshot column.
         return $this->belongsTo(Client::class, 'client_id');
+    }
+
+    /** The manager this estimate belongs to. */
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /** Only this manager's own estimates. */
+    public function scopeOwnedBy(Builder $query, User $user): Builder
+    {
+        return $query->where('user_id', $user->id);
     }
 
     /** @return BelongsTo<AiResult, $this> */
@@ -243,7 +269,7 @@ class Estimate extends Model
      * Next reference in the EST-#### series, continuing past soft-deleted rows
      * so a restored estimate can never collide with a newly created one.
      */
-    public static function nextNumber(): string
+    public static function nextNumber(User $user): string
     {
         /*
          * `INTEGER` is SQLite's spelling of this cast; MySQL rejects it outright and
@@ -255,7 +281,11 @@ class Estimate extends Model
             default => 'INTEGER',
         };
 
+        // One EST-#### series per manager, not one shared by everyone —
+        // otherwise the number itself said how many estimates every other
+        // manager in the system had ever written.
         $highest = (int) static::withTrashed()
+            ->where('user_id', $user->id)
             ->selectRaw("MAX(CAST(SUBSTR(number, 5) AS {$integerType})) AS seq")
             ->value('seq');
 

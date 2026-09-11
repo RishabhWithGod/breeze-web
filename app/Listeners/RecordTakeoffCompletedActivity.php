@@ -14,8 +14,11 @@ class RecordTakeoffCompletedActivity implements ShouldHandleEventsAfterCommit
     public function handle(TakeoffProcessed $event): void
     {
         $name = $event->result->project?->name ?? 'a project';
+        $owner = $event->result->project?->user;
 
-        $this->recorder->record(FeedItem::DASHBOARD_ACTIVITY, "AI Takeoff completed for {$name}", 'bot', 'butter');
-        $this->recorder->record(FeedItem::HISTORY_ACTIVITY, "AI Takeoff completed for {$name}", 'bot', 'butter');
+        if ($owner) {
+            $this->recorder->record($owner, FeedItem::DASHBOARD_ACTIVITY, "AI Takeoff completed for {$name}", 'bot', 'butter');
+            $this->recorder->record($owner, FeedItem::HISTORY_ACTIVITY, "AI Takeoff completed for {$name}", 'bot', 'butter');
+        }
     }
 }

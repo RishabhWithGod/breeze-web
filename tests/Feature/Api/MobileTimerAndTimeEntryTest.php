@@ -310,4 +310,59 @@ class MobileTimerAndTimeEntryTest extends TestCase
             ->assertJsonPath('data.laborCost', null)
             ->assertJsonPath('data.billableAmount', null);
     }
+
+    /**
+     * The premise the mobile app's per-user timer UI depends on: a foreman
+     * and a supervisor working the same job each get their own independent
+     * clock. `TimerService`'s one-active-session guard locks on `user_id`
+     * only, never `job_id` — pausing one must never touch the other's.
+     */
+    public function test_two_different_users_each_run_their_own_independent_timer_on_the_same_job(): void
+    {
+        $foreman = User::factory()->create(['role' => 'Electrician', 'name' => 'Fred Foreman']);
+        $supervisor = User::factory()->create(['role' => 'Electrician', 'name' => 'Sam Supervisor']);
+        $job = $this->makeJob();
+        $this->staffJob($job, $foreman);
+        $this->staffJob($job, $supervisor);
+
+        $foremanHeaders = ['Authorization' => 'Bearer '.$this->tokenFor($foreman)];
+        $supervisorHeaders = ['Authorization' => 'Bearer '.$this->tokenFor($supervisor)];
+
+        // Laravel's `RequestGuard` caches whichever user it resolved for the
+        // rest of the test process (real per-request handling never hits
+        // this) — `forgetGuards()` before every switch is what makes each
+        // call below actually authenticate as the header it was sent with,
+        // same as `test_a_user_cannot_pause_someone_elses_timer` above.
+        $this->withHeaders($foremanHeaders)->postJson('/api/v1/timer/start', ['job_id' => $job->id])->assertStatus(201);
+        auth()->forgetGuards();
+        $this->withHeaders($supervisorHeaders)->postJson('/api/v1/timer/start', ['job_id' => $job->id])->assertStatus(201);
+        auth()->forgetGuards();
+
+        $this->assertSame(2, TimerSession::where('job_id', $job->id)->count());
+
+        // Pausing the supervisor's clock must not touch the foreman's, and
+        // vice versa — each request only ever resolves "my own" session.
+        $this->withHeaders($supervisorHeaders)->postJson('/api/v1/timer/pause')
+            ->assertOk()->assertJsonPath('data.status', 'paused');
+        auth()->forgetGuards();
+
+        $this->withHeaders($foremanHeaders)->getJson('/api/v1/timer')
+            ->assertOk()->assertJsonPath('data.status', 'running');
+        auth()->forgetGuards();
+        $this->withHeaders($supervisorHeaders)->getJson('/api/v1/timer')
+            ->assertOk()->assertJsonPath('data.status', 'paused');
+        auth()->forgetGuards();
+
+        $stopped = $this->withHeaders($foremanHeaders)->postJson('/api/v1/timer/stop')->assertOk();
+
+        // Stopping the foreman's clock leaves the supervisor's own session
+        // (still paused) completely untouched.
+        $this->assertSame(1, TimerSession::count());
+        $this->assertDatabaseHas('timer_sessions', ['user_id' => $supervisor->id, 'status' => 'paused']);
+        $this->assertDatabaseHas('time_entries', [
+            'id' => $stopped->json('data.timeEntryId'),
+            'job_id' => $job->id,
+            'user_id' => $foreman->id,
+        ]);
+    }
 }

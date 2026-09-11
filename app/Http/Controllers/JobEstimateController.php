@@ -22,6 +22,8 @@ class JobEstimateController extends Controller
      */
     public function store(Job $job, EstimateBuilder $builder): RedirectResponse
     {
+        $this->authorize('view', $job);
+
         $result = $job->aiResult;
 
         if ($result?->isFinalised()) {
@@ -39,7 +41,7 @@ class JobEstimateController extends Controller
         $estimate = Estimate::create([
             'job_id' => $job->id,
             'project_id' => $job->project_id,
-            'number' => Estimate::nextNumber(),
+            'number' => Estimate::nextNumber(request()->user()),
             // Both name columns are the client's — see ClientDirectory.
             'client' => $job->client ?? 'Unassigned',
             'project' => $job->client ?? 'Unassigned',
@@ -67,6 +69,7 @@ class JobEstimateController extends Controller
      */
     public function convert(Job $job, Estimate $estimate): RedirectResponse
     {
+        $this->authorize('view', $job);
         abort_unless($estimate->job_id === $job->id, 404);
 
         if ($estimate->isConverted()) {

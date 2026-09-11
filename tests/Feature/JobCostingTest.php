@@ -135,7 +135,7 @@ class JobCostingTest extends TestCase
         $job = $this->makeJob();
 
         Invoice::create([
-            'invoice_number' => Invoice::nextNumber(),
+            'invoice_number' => Invoice::nextNumber($this->manager),
             'job_id' => $job->id,
             'client' => $job->client,
             'invoice_date' => now()->toDateString(),
@@ -167,7 +167,7 @@ class JobCostingTest extends TestCase
             'status' => 'draft',
         ]);
         Invoice::create([
-            'invoice_number' => Invoice::nextNumber(),
+            'invoice_number' => Invoice::nextNumber($this->manager),
             'job_id' => $job->id,
             'client' => $job->client,
             'invoice_date' => now()->toDateString(),

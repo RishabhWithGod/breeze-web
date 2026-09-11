@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -78,6 +79,12 @@ class JobSchedule extends Model
     public function job(): BelongsTo
     {
         return $this->belongsTo(Job::class);
+    }
+
+    /** Only schedules on this manager's own jobs. */
+    public function scopeOwnedBy(Builder $query, User $user): Builder
+    {
+        return $query->whereHas('job', fn (Builder $q) => $q->ownedBy($user));
     }
 
     /** @return BelongsTo<User, $this> */

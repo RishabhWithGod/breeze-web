@@ -14,7 +14,10 @@ class RecordTaskCompletedActivity implements ShouldHandleEventsAfterCommit
     public function handle(JobTaskCompleted $event): void
     {
         $job = $event->task->job?->name ?? 'a job';
+        $owner = $event->task->job?->owner;
 
-        $this->recorder->record(FeedItem::DASHBOARD_ACTIVITY, "\"{$event->task->title}\" completed on {$job}", 'briefcase', 'lilac');
+        if ($owner) {
+            $this->recorder->record($owner, FeedItem::DASHBOARD_ACTIVITY, "\"{$event->task->title}\" completed on {$job}", 'briefcase', 'lilac');
+        }
     }
 }

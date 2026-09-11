@@ -44,17 +44,35 @@ class EstimateItem extends Model
         'unit_cost',
         'total',
         'source',
+        /*
+         * Where the rate came from — 'price-book' when the company has charged
+         * it before, 'catalog' when it is a plausible constant standing in, and
+         * how sure the match was. A guess that reads like a quote is the thing
+         * these three columns exist to prevent.
+         */
+        'pricing_source',
+        'price_book_item_id',
+        'pricing_confidence',
         'position',
     ];
 
     protected function casts(): array
     {
         return [
-            'quantity' => 'decimal:2',
-            'unit_cost' => 'decimal:2',
+            // Four decimals: conduit and conductor are priced per foot at a
+            // fraction of a cent, and rounding the rate misprices the run.
+            'quantity' => 'decimal:4',
+            'unit_cost' => 'decimal:4',
             'total' => 'decimal:2',
             'position' => 'integer',
+            'completed_at' => 'datetime',
         ];
+    }
+
+    /** Whether the crew has actually done the work this line prices. */
+    public function isCompleted(): bool
+    {
+        return $this->completed_at !== null;
     }
 
     protected static function booted(): void

@@ -280,7 +280,14 @@ export function SymbolCard({
                   commitCount()
                 }
               }}
-              className="h-8 min-w-0 flex-1 rounded-none border-x border-hairline bg-transparent py-0 text-center text-sm font-semibold hover:border-hairline focus:bg-white/10"
+              className="min-w-0 flex-1"
+              /*
+                The box is the middle of a stepper, not a field of its own: no
+                corners, no height of its own, and no browser spinner — there
+                are already a minus and a plus either side of it, and the tiny
+                native arrows on top of them are two controls for one job.
+              */
+              controlClassName="h-8 rounded-none border-x border-y-0 border-hairline bg-transparent px-2 py-0 text-center text-sm font-semibold hover:border-hairline focus:bg-white/10 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
             <IconButton
               variant="ghost"

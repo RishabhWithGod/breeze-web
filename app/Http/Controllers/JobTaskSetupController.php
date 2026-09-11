@@ -9,6 +9,7 @@ use App\Models\Job;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
 use App\Models\User;
+use App\Notifications\TaskScheduleChanged;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Scheduling\ScheduleBuilder;
 use App\Services\Takeoff\TakeoffFlow;
@@ -195,7 +196,12 @@ class JobTaskSetupController extends Controller
 
         $schedule = $job->schedule ?? $this->builder->build($job, $request->user(), withTasks: false);
 
-        DB::transaction(function () use ($schedule, $job, $request, $data) {
+        // Filled inside the transaction, notified after it commits — a
+        // notification sent for a task whose transaction then rolled back
+        // would tell someone they're on work that was never actually saved.
+        $createdTasks = [];
+
+        DB::transaction(function () use ($schedule, $job, $request, $data, &$createdTasks) {
             // Appended after whatever is already planned, so re-running the step
             // extends the schedule instead of renumbering it.
             $position = (int) $schedule->tasks()->max('position');
@@ -203,7 +209,14 @@ class JobTaskSetupController extends Controller
             foreach ($data['tasks'] as $row) {
                 $position++;
 
-                $lineIds = $row['estimate_item_ids'] ?? [];
+                $laborLineIds = $row['estimate_item_ids'] ?? [];
+                // Every material a picked labor line installs rides along
+                // with it automatically — the planner never picks it
+                // separately.
+                $lineIds = array_values(array_unique(array_merge(
+                    $laborLineIds,
+                    $this->pairedMaterialLines($job, $laborLineIds),
+                )));
 
                 $task = $schedule->tasks()->create([
                     'job_id' => $job->id,
@@ -228,12 +241,20 @@ class JobTaskSetupController extends Controller
                 if ($lineIds !== []) {
                     EstimateItem::whereIn('id', $lineIds)->update(['job_task_id' => $task->id]);
                 }
+
+                $createdTasks[] = $task;
             }
 
             $this->builder->realignWindow($schedule->refresh());
 
             $job->refreshEstimatedHours();
         });
+
+        // A freshly-created task's foreman/supervisor is always a new
+        // assignment — nobody was on it a moment ago.
+        foreach ($createdTasks as $task) {
+            $this->notifyAssignment($task);
+        }
 
         // The takeoff has become a job with its work laid out. Nothing left to
         // resume, so the floating button goes.
@@ -381,25 +402,37 @@ class JobTaskSetupController extends Controller
             ]);
         }
 
-        $ids = array_values(array_unique(array_map(
+        $laborIds = array_values(array_unique(array_map(
             intval(...),
             $data['estimate_item_ids'] ?? [],
         )));
 
         // Free, or already this task's own — anything else belongs elsewhere.
+        // Labor only: the picker never submits a material line directly, its
+        // material rides along automatically (see `pairedMaterialLines()`).
         $allowed = EstimateItem::query()
             ->whereIn('estimate_id', $this->estimateIds($job))
+            ->where('category', EstimateItem::CATEGORY_LABOR)
             ->where(fn ($query) => $query
                 ->whereNull('job_task_id')
                 ->orWhere('job_task_id', $task->id))
             ->pluck('id')
             ->all();
 
-        if (array_diff($ids, $allowed) !== []) {
+        if (array_diff($laborIds, $allowed) !== []) {
             throw ValidationException::withMessages([
                 'estimate_item_ids' => 'One of those lines is already planned into another task. Reload the page.',
             ]);
         }
+
+        // Every material a picked labor line installs rides along with it
+        // automatically. Matched against this task's own already-claimed
+        // lines too, so re-saving with no changes does not detach material
+        // it already correctly holds.
+        $ids = array_values(array_unique(array_merge(
+            $laborIds,
+            $this->pairedMaterialLines($job, $laborIds, $task->id),
+        )));
 
         DB::transaction(function () use ($task, $job, $title, $data, $ids) {
             $task->update([
@@ -424,9 +457,36 @@ class JobTaskSetupController extends Controller
             $job->refreshEstimatedHours();
         });
 
+        // Only when the assignment itself actually changed — re-saving a
+        // task's lines or title with the same foreman/supervisor is not a
+        // new assignment, and would otherwise re-notify them every edit.
+        if ($task->wasChanged('foreman_id') || $task->wasChanged('supervisor_id')) {
+            $this->notifyAssignment($task);
+        }
+
         return redirect()
             ->to($this->returnUrl($request, $job) ?? route('tasks.index'))
             ->with('success', 'Task updated.');
+    }
+
+    /**
+     * Tells whoever is newly running or overseeing a task — reused for both
+     * a task's first breakout ({@see store()}, always a new assignment) and
+     * a later reassignment ({@see update()}, only called there when the
+     * foreman/supervisor actually changed).
+     */
+    private function notifyAssignment(JobTask $task): void
+    {
+        $task->loadMissing('foreman.user', 'supervisor.user');
+
+        if ($task->foreman?->user !== null) {
+            $task->foreman->user->notify(new TaskScheduleChanged($task, TaskScheduleChanged::ASSIGNED));
+        }
+
+        if ($task->supervisor?->user !== null
+            && $task->supervisor->user->isNot($task->foreman?->user)) {
+            $task->supervisor->user->notify(new TaskScheduleChanged($task, TaskScheduleChanged::ASSIGNED));
+        }
     }
 
     /**
@@ -550,6 +610,11 @@ class JobTaskSetupController extends Controller
     {
         return EstimateItem::query()
             ->whereIn('estimate_id', $this->estimateIds($job))
+            // Only labor lines are ever picked directly — a material line has
+            // no work of its own to schedule. Its material rides along with
+            // whichever labor line installs it (see `pairedMaterialLines()`),
+            // so it never needs its own row in this picker.
+            ->where('category', EstimateItem::CATEGORY_LABOR)
             ->with('task:id,title')
             ->orderBy('estimate_id')
             ->orderBy('position')
@@ -597,7 +662,10 @@ class JobTaskSetupController extends Controller
     }
 
     /**
-     * The lines this job's estimates hold that nothing has claimed yet.
+     * The labor lines this job's estimates hold that nothing has claimed yet
+     * — the only lines ever picked directly. A material line is never
+     * claimable on its own; it only ever comes along with the labor line
+     * that pairs with it (see `pairedMaterialLines()`).
      *
      * @return Collection<int, int>
      */
@@ -605,8 +673,67 @@ class JobTaskSetupController extends Controller
     {
         return EstimateItem::query()
             ->whereIn('estimate_id', $this->estimateIds($job))
+            ->where('category', EstimateItem::CATEGORY_LABOR)
             ->whereNull('job_task_id')
             ->pluck('id');
+    }
+
+    /**
+     * The material/fixture/equipment lines that belong with the given labor
+     * lines — matched by `final_symbol_id`, the same takeoff-device link
+     * `EstimateBuilder` stamps on a labor line and its material when both
+     * are written for one symbol (e.g. "CEILING MOUNTED DUPLEX RECEPTACLE"
+     * as labor, and the receptacle itself as material, share one symbol).
+     * A manually-added labor line has no symbol and so pairs with nothing —
+     * there is no estimate data to match it against.
+     *
+     * Scoped to lines still free to claim, or already claimed by
+     * [$editingTaskId] itself — re-saving a task must not detach material it
+     * already correctly holds just because it wasn't resubmitted (the
+     * picker never lets material be submitted directly).
+     *
+     * Scoped to `$job`'s own estimates as well. A symbol id is only unique
+     * within the takeoff that produced it, and the match here is what decides
+     * which rows get stamped with this task's id — unscoped, a free material
+     * line on another manager's estimate that happened to share a symbol
+     * would be quietly claimed into this job's task.
+     *
+     * @param  list<int>  $laborLineIds
+     * @return list<int>
+     */
+    private function pairedMaterialLines(Job $job, array $laborLineIds, ?int $editingTaskId = null): array
+    {
+        if ($laborLineIds === []) {
+            return [];
+        }
+
+        $estimateIds = $this->estimateIds($job);
+
+        $symbolIds = EstimateItem::query()
+            ->whereIn('id', $laborLineIds)
+            ->whereIn('estimate_id', $estimateIds)
+            ->whereNotNull('final_symbol_id')
+            ->pluck('final_symbol_id')
+            ->unique()
+            ->all();
+
+        if ($symbolIds === []) {
+            return [];
+        }
+
+        return EstimateItem::query()
+            ->whereIn('estimate_id', $estimateIds)
+            ->whereIn('final_symbol_id', $symbolIds)
+            ->where('category', '!=', EstimateItem::CATEGORY_LABOR)
+            ->where(function ($query) use ($editingTaskId) {
+                $query->whereNull('job_task_id');
+
+                if ($editingTaskId !== null) {
+                    $query->orWhere('job_task_id', $editingTaskId);
+                }
+            })
+            ->pluck('id')
+            ->all();
     }
 
     /**
@@ -648,13 +775,19 @@ class JobTaskSetupController extends Controller
     /**
      * Planning a job is a planning decision — the same one `JobTaskController`
      * gates on. Checked against the job's schedule when it has one, and against
-     * the one it is about to get when it does not: the policy asks about the
-     * user's role, not about that particular schedule.
+     * the one it is about to get when it does not.
+     *
+     * The stand-in schedule must name the job. The policy asks two questions —
+     * the user's role, and whether the job is theirs — and it reads the second
+     * off `$schedule->job`. A bare `new JobSchedule` names no job, which the
+     * policy reads as "nothing to own, nothing to deny": every job with no
+     * schedule yet would then be plannable by anyone holding a planning role,
+     * whoever raised it. Naming the job is what makes the check real.
      */
     private function authorisePlanning(Job $job, User $user): void
     {
         abort_unless(
-            $this->policy->createTask($user, $job->schedule ?? new JobSchedule),
+            $this->policy->createTask($user, $job->schedule ?? new JobSchedule(['job_id' => $job->id])),
             403,
         );
     }

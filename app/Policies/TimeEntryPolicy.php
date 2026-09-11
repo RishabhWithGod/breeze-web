@@ -10,10 +10,12 @@ use App\Models\User;
  * Who may do what to a time entry.
  *
  * Built on `users.role`, the same free-text column `JobSchedulePolicy` already
- * matches case-insensitively. Anyone can log and submit their own time; a
- * Foreman/Site Supervisor can see their crew's time but not approve it; only a
- * Project Manager/Admin/Owner can approve, reject, see job costs, or run
- * reports; only an Admin/Owner can change the module's overtime settings.
+ * matches case-insensitively — and, for anyone reading time that is not their
+ * own, on whether the entry's job is theirs to manage at all. Anyone can log
+ * and submit their own time; a Foreman/Site Supervisor can see their crew's
+ * time on their own jobs but not approve it; only a Project Manager/Admin/
+ * Owner can approve, reject, see job costs, or run reports, and only for jobs
+ * they manage; only an Admin/Owner can change the module's overtime settings.
  */
 class TimeEntryPolicy
 {
@@ -33,7 +35,8 @@ class TimeEntryPolicy
 
     public function view(User $user, TimeEntry $entry): bool
     {
-        return $entry->user_id === $user->id || $this->holds($user, self::FOREMEN) || $this->holds($user, self::MANAGERS);
+        return $entry->user_id === $user->id
+            || (($this->holds($user, self::FOREMEN) || $this->holds($user, self::MANAGERS)) && $entry->job?->user_id === $user->id);
     }
 
     /** Anyone signed in can log time — for themselves, against a job they can see. */
@@ -66,12 +69,14 @@ class TimeEntryPolicy
 
     public function approve(User $user, TimeEntry $entry): bool
     {
-        return $this->holds($user, self::MANAGERS) && $entry->status === TimeEntry::STATUS_SUBMITTED;
+        return $this->holds($user, self::MANAGERS) && $entry->job?->user_id === $user->id
+            && $entry->status === TimeEntry::STATUS_SUBMITTED;
     }
 
     public function reject(User $user, TimeEntry $entry): bool
     {
-        return $this->holds($user, self::MANAGERS) && $entry->status === TimeEntry::STATUS_SUBMITTED;
+        return $this->holds($user, self::MANAGERS) && $entry->job?->user_id === $user->id
+            && $entry->status === TimeEntry::STATUS_SUBMITTED;
     }
 
     /**
@@ -83,12 +88,13 @@ class TimeEntryPolicy
      */
     public function reopen(User $user, TimeEntry $entry): bool
     {
-        return $this->holds($user, self::MANAGERS) && $entry->status === TimeEntry::STATUS_APPROVED;
+        return $this->holds($user, self::MANAGERS) && $entry->job?->user_id === $user->id
+            && $entry->status === TimeEntry::STATUS_APPROVED;
     }
 
     public function viewJobCosts(User $user, ?Job $job = null): bool
     {
-        return $this->holds($user, self::MANAGERS);
+        return $this->holds($user, self::MANAGERS) && ($job === null || $job->user_id === $user->id);
     }
 
     public function viewReports(User $user): bool

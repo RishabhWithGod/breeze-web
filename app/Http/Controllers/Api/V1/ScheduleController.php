@@ -6,7 +6,9 @@ use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\JobTaskResource;
 use App\Models\Job;
+use App\Models\JobTask;
 use App\Services\Mobile\ElectricianJobAccess;
+use App\Services\Scheduling\JobTaskWorkflowService;
 use App\Services\TimeTracking\TeamMemberResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,6 +32,7 @@ class ScheduleController extends Controller
     public function __construct(
         private readonly ElectricianJobAccess $access,
         private readonly TeamMemberResolver $resolver,
+        private readonly JobTaskWorkflowService $workflow,
     ) {}
 
     public function show(Request $request, Job $job): JsonResponse
@@ -43,12 +46,25 @@ class ScheduleController extends Controller
         }
 
         $teamMemberId = $this->resolver->resolveFor($request->user())->id;
+        $foremanId = $request->user()->foreman?->id;
 
         $myTasks = $job->tasks()
-            ->whereHas('members', fn ($q) => $q->where('team_members.id', $teamMemberId))
-            ->with('assignments.member')
+            ->where(function ($query) use ($teamMemberId, $foremanId) {
+                $query->whereHas('members', fn ($q) => $q->where('team_members.id', $teamMemberId));
+
+                // Named as the task's foreman/supervisor — the same signal
+                // `ElectricianJobAccess` treats as real staffing, so a
+                // technician assigned this way sees their own tasks here too,
+                // not just ones reached through the full scheduling system.
+                if ($foremanId !== null) {
+                    $query->orWhere(fn ($q) => $q->heldBy($foremanId));
+                }
+            })
+            ->with(['assignments.member', 'estimateItems'])
             ->orderBy('starts_on')
             ->get();
+
+        $myTasks->each(fn (JobTask $task) => $this->workflow->reconcileChecklistProgress($task));
 
         return $this->ok([
             'schedule' => [

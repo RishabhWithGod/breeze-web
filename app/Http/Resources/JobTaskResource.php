@@ -41,6 +41,16 @@ class JobTaskResource extends JsonResource
             'isMilestone' => $this->is_milestone,
             'notes' => $this->notes,
             'completedAt' => $this->completed_at?->toISOString(),
+            'foreman' => $this->whenLoaded('foreman', fn () => $this->foreman ? [
+                'id' => $this->foreman->id,
+                'name' => $this->foreman->name,
+                'initials' => $this->foreman->initials,
+            ] : null),
+            'supervisor' => $this->whenLoaded('supervisor', fn () => $this->supervisor ? [
+                'id' => $this->supervisor->id,
+                'name' => $this->supervisor->name,
+                'initials' => $this->supervisor->initials,
+            ] : null),
             'isOverdue' => $this->isOverdue(),
             'daysLate' => $this->daysLate(),
             'slippedDays' => $this->slippedDays(),
@@ -75,6 +85,22 @@ class JobTaskResource extends JsonResource
             ),
             'commentCount' => $this->comments_count ?? 0,
             'attachmentCount' => $this->attachments_count ?? 0,
+            // The estimate lines grouped into this task at setup — a
+            // supervisor's per-line checklist, one step finer than the
+            // task's own overall completionPct/status.
+            'estimateItems' => $this->whenLoaded(
+                'estimateItems',
+                fn () => $this->estimateItems->map(fn ($item) => [
+                    'id' => $item->id,
+                    'description' => $item->description,
+                    'category' => $item->category,
+                    'unit' => $item->unit,
+                    'quantity' => (float) $item->quantity,
+                    'isCompleted' => $item->isCompleted(),
+                    'completedAt' => $item->completed_at?->toISOString(),
+                ])->values(),
+                [],
+            ),
         ];
     }
 }

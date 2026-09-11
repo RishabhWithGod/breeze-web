@@ -47,6 +47,7 @@ class InvoiceController extends Controller
         $sort = $filters['sort'] ?? 'date-desc';
 
         $invoices = Invoice::query()
+            ->ownedBy($request->user())
             ->with('job')
             ->search($filters['search'] ?? null)
             ->when($status !== 'all', fn ($query) => $query->displayStatus($status))
@@ -72,23 +73,24 @@ class InvoiceController extends Controller
                 'sort' => $sort,
             ],
             // Drives the Client filter; only clients an invoice has actually been raised for.
-            'clients' => Invoice::query()->distinct()->orderBy('client')->pluck('client'),
-            'jobs' => Job::query()->orderBy('name')->get(['id', 'name']),
-            'summary' => $this->summary->calculate(),
+            'clients' => Invoice::query()->ownedBy($request->user())->distinct()->orderBy('client')->pluck('client'),
+            'jobs' => Job::query()->ownedBy($request->user())->orderBy('name')->get(['id', 'name']),
+            'summary' => $this->summary->calculate($request->user()),
             'can' => app(InvoicePolicy::class)->abilities($request->user()),
         ]);
     }
 
     /** Full-page create form. */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         return Inertia::render('InvoiceCreate', [
-            'nextNumber' => Invoice::nextNumber(),
-            'clients' => $this->clients->options(),
-            'jobs' => Job::query()->orderBy('name')->get(['id', 'name', 'client', 'client_id']),
+            'nextNumber' => Invoice::nextNumber($request->user()),
+            'clients' => $this->clients->options($request->user()),
+            'jobs' => Job::query()->ownedBy($request->user())->orderBy('name')->get(['id', 'name', 'client', 'client_id']),
             // Sent/approved estimates not yet converted into an invoice — the
             // real "generate invoice from estimate" starting point.
             'estimates' => Estimate::query()
+                ->ownedBy($request->user())
                 ->whereIn('status', ['sent', 'approved'])
                 ->whereDoesntHave('invoices')
                 ->orderByDesc('issued_on')
@@ -98,15 +100,23 @@ class InvoiceController extends Controller
 
     public function store(StoreInvoiceRequest $request): RedirectResponse
     {
+        $this->authorize('create', Invoice::class);
+
         $data = $request->validated();
-        $estimate = ! empty($data['estimate_id']) ? Estimate::find($data['estimate_id']) : null;
+
+        // Scoped as well as validated: the request rule already refuses another
+        // manager's estimate, and this refuses to read one even if that rule
+        // were ever loosened.
+        $estimate = ! empty($data['estimate_id'])
+            ? Estimate::where('user_id', $request->user()->id)->find($data['estimate_id'])
+            : null;
 
         // `client` is a snapshot of the picked client's name, never typed.
-        $data = $this->clients->withClientSnapshot($data);
+        $data = $this->clients->withClientSnapshot($data, $request->user());
 
         $invoice = Invoice::create([
             ...$data,
-            'invoice_number' => Invoice::nextNumber(),
+            'invoice_number' => Invoice::nextNumber($request->user()),
             'status' => Invoice::STATUS_DRAFT,
             'created_by' => $request->user()->id,
         ]);
@@ -146,9 +156,9 @@ class InvoiceController extends Controller
     }
 
     /** Undo for the delete above. */
-    public function restore(int $invoice): RedirectResponse
+    public function restore(Request $request, int $invoice): RedirectResponse
     {
-        $trashed = Invoice::onlyTrashed()->findOrFail($invoice);
+        $trashed = Invoice::onlyTrashed()->ownedBy($request->user())->findOrFail($invoice);
         $trashed->restore();
 
         return back()->with('success', "{$trashed->invoice_number} was restored.");

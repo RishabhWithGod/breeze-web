@@ -32,6 +32,7 @@ class AppNotification extends Model
         'payment-' => 'billing',
         'security-' => 'security',
         'breeze-bucks-' => 'breeze-bucks',
+        'technician-' => 'teams',
     ];
 
     /**
@@ -60,6 +61,7 @@ class AppNotification extends Model
         'job-costing' => 'Job Costing',
         'security' => 'Security',
         'breeze-bucks' => 'Breeze Bucks',
+        'teams' => 'Teams',
         'general' => 'General',
     ];
 

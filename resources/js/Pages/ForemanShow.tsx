@@ -12,6 +12,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import {
   Alert,
+  Badge,
   Button,
   ButtonLink,
   Card,
@@ -54,6 +55,8 @@ interface ForemanTask {
   readonly jobId: number
   readonly jobName: string | null
   readonly client: string | null
+  /** Whether they run this task or oversee it — both are work they carry. */
+  readonly heldAs: 'foreman' | 'supervisor'
 }
 
 export interface ForemanShowProps {
@@ -273,7 +276,16 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-white">{task.title}</p>
+                      <p className="truncate font-semibold text-white">
+                        {task.title}
+                        {/* The list mixes work they run with work they are
+                            over, so each row says which. */}
+                        {task.heldAs === 'supervisor' && (
+                          <Badge tone="info" size="sm" className="ml-2">
+                            Supervising
+                          </Badge>
+                        )}
+                      </p>
                       <p className="mt-0.5 truncate text-sm text-white/70">
                         <Link
                           href={routeTo.job(task.jobId)}

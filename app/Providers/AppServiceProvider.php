@@ -55,6 +55,12 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinutes(60, 5)->by("password-reset:{$key}");
         });
 
+        // Mobile technician signup has no session or existing account to key
+        // on, so it falls back to the IP alone — same limit as password reset.
+        RateLimiter::for('signup', function (Request $request) {
+            return Limit::perMinutes(60, 5)->by('signup:'.$request->ip());
+        });
+
         // Generous enough not to interfere with normal app/mobile use —
         // this exists to bound abuse of an already-authenticated token,
         // not to rate-limit legitimate traffic.

@@ -34,6 +34,10 @@ export interface TaskLinePickerProps {
  * schedule, or by another row on this screen — is shown greyed with what has
  * it, rather than hidden. "Why can't I pick this?" is then answered on the
  * spot, and taking it back is a matter of unticking it there.
+ *
+ * Only labor lines are ever offered here — a material line has no work of
+ * its own to schedule, and rides along automatically with whichever labor
+ * line installs it (`JobTaskSetupController::pairedMaterialLines()`).
  */
 export function TaskLinePicker({
   lines,
@@ -121,7 +125,6 @@ export function TaskLinePicker({
                     <span className="text-white/65">
                       {line.quantity}
                       {line.unit ? ` ${line.unit}` : ''} · {formatCurrency(line.total, 0)}
-                      {line.category ? ` · ${line.category}` : ''}
                     </span>
                     {blocked && (
                       <Badge tone="neutral" size="sm" icon={Lock} className="mt-1">

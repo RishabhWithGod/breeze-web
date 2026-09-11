@@ -517,15 +517,24 @@ class JobScheduleTest extends TestCase
 
     public function test_the_screen_reports_what_the_role_may_do(): void
     {
-        [$job] = $this->planJob();
         $apprentice = User::factory()->create(['role' => 'Apprentice']);
+        // Owning the job is what lets a lesser role still open the screen —
+        // an unrelated apprentice is refused the page outright, see the
+        // "requires signing in" test below for the equivalent on a job that
+        // is nobody's own.
+        [$job] = $this->planJob([
+            'project_id' => $apprentice->projects()->create([
+                'name' => 'Test Project', 'client' => 'Riverside Properties LLC', 'status' => 'draft',
+            ])->id,
+        ]);
 
         $this->actingAs($apprentice)
             ->get("/jobs/{$job->id}/schedule")
             ->assertInertia(fn (Assert $page) => $page
                 ->where('can.updateSchedule', false)
                 ->where('can.deleteTask', false)
-                // Everyone can read the plan and talk about it.
+                // Owning the job reads the plan and talks about it, even
+                // without a role that can change it.
                 ->where('can.comment', true));
     }
 
@@ -562,6 +571,9 @@ class JobScheduleTest extends TestCase
     private function makeJob(array $attributes = []): Job
     {
         return Job::create([
+            'project_id' => $this->planner->projects()->create([
+                'name' => 'Test Project', 'client' => 'Riverside Properties LLC', 'status' => 'draft',
+            ])->id,
             'foreman_id' => Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW'])->id,
             'name' => 'Riverside Office Renovation',
             'client' => 'Riverside Properties LLC',

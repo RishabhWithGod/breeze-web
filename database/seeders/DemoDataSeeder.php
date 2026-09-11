@@ -314,7 +314,7 @@ class DemoDataSeeder extends Seeder
         // Paid — sent, then actually marked paid, so "Paid This Month" and
         // "Average Days to Pay" have a real fact to compute from.
         $paid = Invoice::create([
-            'invoice_number' => Invoice::nextNumber(),
+            'invoice_number' => Invoice::nextNumber($user),
             'job_id' => $jobs[0]->id,
             'client' => $jobs[0]->client,
             'invoice_date' => now()->subDays(20)->toDateString(),
@@ -343,7 +343,7 @@ class DemoDataSeeder extends Seeder
         // Overdue — sent, due date already passed, still unpaid. Status stays
         // "sent" in the database; "overdue" is derived, never stored.
         $overdue = Invoice::create([
-            'invoice_number' => Invoice::nextNumber(),
+            'invoice_number' => Invoice::nextNumber($user),
             'job_id' => $jobs[1]->id,
             'client' => $jobs[1]->client,
             'invoice_date' => now()->subDays(30)->toDateString(),
@@ -361,7 +361,7 @@ class DemoDataSeeder extends Seeder
 
         // Pending — sent, due date still ahead.
         $pending = Invoice::create([
-            'invoice_number' => Invoice::nextNumber(),
+            'invoice_number' => Invoice::nextNumber($user),
             'job_id' => $jobs[2]->id,
             'client' => $jobs[2]->client,
             'invoice_date' => now()->subDays(5)->toDateString(),
@@ -379,7 +379,7 @@ class DemoDataSeeder extends Seeder
 
         // Draft — not yet sent.
         $draft = Invoice::create([
-            'invoice_number' => Invoice::nextNumber(),
+            'invoice_number' => Invoice::nextNumber($user),
             'job_id' => $jobs[3]->id,
             'client' => $jobs[3]->client,
             'invoice_date' => now()->toDateString(),

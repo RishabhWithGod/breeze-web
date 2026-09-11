@@ -13,6 +13,46 @@ import { ESTIMATE_CATEGORY_LABEL, routeTo } from '@/constants'
 import type { EstimateCategory, EstimateItemRow, SelectOption } from '@/types'
 import { formatCurrency } from '@/utils'
 
+/**
+ * Where this line's rate came from.
+ *
+ * Two figures side by side on an estimate can be a price the company has
+ * charged for years and a constant somebody typed into a config file, and
+ * nothing about them looks different. Only the ones that need a second look are
+ * marked: a rate off a real bid is the expected case and does not need a badge
+ * arguing for itself.
+ */
+function PricingBadge({ item }: { item: EstimateItemRow }) {
+  if (item.pricingSource === 'catalog') {
+    return (
+      <Badge tone="warning" size="sm" className="ml-2">
+        Estimated rate
+      </Badge>
+    )
+  }
+
+  if (item.pricingSource === 'engine') {
+    return (
+      <Badge tone="neutral" size="sm" className="ml-2">
+        AI rate
+      </Badge>
+    )
+  }
+
+  // A word match found this item by every word in its name appearing somewhere
+  // in a description — "Panel" landing on one specific panelboard. Right often
+  // enough to offer, not often enough to send out unread.
+  if (item.pricingSource === 'price-book' && item.pricingConfidence === 'words') {
+    return (
+      <Badge tone="info" size="sm" className="ml-2">
+        Check match
+      </Badge>
+    )
+  }
+
+  return null
+}
+
 /** Blank line used by the "add line" row. */
 const EMPTY_DRAFT = {
   category: 'material' as EstimateCategory,
@@ -198,9 +238,16 @@ export function EstimateItemsTable({
                             Manual
                           </Badge>
                         )}
+                        <PricingBadge item={item} />
                       </p>
                       <p className="text-2xs text-white/75">
-                        {item.quantity} {item.unit} @ {formatCurrency(item.unitCost, 2)}
+                        {/*
+                          Four decimals where the rate has them: conduit is
+                          priced at $0.8296 a foot, and showing it as $0.83
+                          makes the line total look like an error.
+                        */}
+                        {item.quantity} {item.unit} @{' '}
+                        {formatCurrency(item.unitCost, item.unitCost < 1 ? 4 : 2)}
                       </p>
                     </div>
                     <span className="shrink-0 text-md font-semibold text-white">

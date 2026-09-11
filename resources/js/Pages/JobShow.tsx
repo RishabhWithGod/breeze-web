@@ -28,6 +28,7 @@ import {
   JobEstimatesPanel,
   JobNotesPanel,
   JobTakeoffPanel,
+  JobTaskFieldNotesPanel,
   JobTasksPanel,
 } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
@@ -257,6 +258,17 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
         />
         <JobTasksPanel tasks={job.tasks} canPlan={canPlanWork} jobOrigin={from} />
       </Card>
+
+      {/* ============================================ Field notes & photos ======= */}
+      {job.tasks.some((task) => task.comments.length > 0 || task.attachments.length > 0) && (
+        <Card accent="info" padding="lg" className="mt-6">
+          <SectionHeading
+            title="Field Notes & Photos"
+            subtitle="Left by the crew, from the mobile app"
+          />
+          <JobTaskFieldNotesPanel tasks={job.tasks} />
+        </Card>
+      )}
 
       {/* =================================================== Estimates ======= */}
       <Card accent="warning" padding="lg" className="mt-6">

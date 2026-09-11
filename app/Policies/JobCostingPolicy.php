@@ -33,7 +33,7 @@ class JobCostingPolicy
 
     public function deleteEntry(User $user, JobCostEntry $entry): bool
     {
-        return $this->holds($user, self::MANAGERS);
+        return $this->holds($user, self::MANAGERS) && $entry->job?->user_id === $user->id;
     }
 
     /** Derived so the client can hide what it cannot do, rather than fail on submit. */

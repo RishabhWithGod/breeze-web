@@ -42,6 +42,7 @@ class SecurityOtpCode extends Notification
             'change_email' => 'Use this code to confirm your new email address.',
             'change_phone' => 'Use this code to confirm your new phone number.',
             'login_2fa' => 'Use this code to finish signing in.',
+            'password_reset' => 'Use this code to reset your password.',
             default => 'Use this code to verify this action.',
         };
     }

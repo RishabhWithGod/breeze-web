@@ -39,6 +39,7 @@ class EstimateController extends Controller
         $sort = $filters['sort'] ?? 'date-desc';
 
         $estimates = Estimate::query()
+            ->ownedBy($request->user())
             ->search($filters['search'] ?? null)
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when($client !== 'all', fn ($query) => $query->where('client', $client))
@@ -59,6 +60,7 @@ class EstimateController extends Controller
             ],
             // Drives the Client dropdown; kept in sync with whatever is stored.
             'clients' => Estimate::query()
+                ->ownedBy($request->user())
                 ->distinct()
                 ->orderBy('client')
                 ->pluck('client'),
@@ -66,13 +68,13 @@ class EstimateController extends Controller
     }
 
     /** Full-page create form. */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         return Inertia::render('EstimateCreate', [
-            'nextNumber' => Estimate::nextNumber(),
-            'clients' => $this->clients->options(),
+            'nextNumber' => Estimate::nextNumber($request->user()),
+            'clients' => $this->clients->options($request->user()),
             // Their projects, and their drawings — each narrows the next.
-            'projects' => app(ProjectDirectory::class)->options(),
+            'projects' => app(ProjectDirectory::class)->options($request->user()),
             'uploads' => $this->linkOptions->uploads(),
         ]);
     }
@@ -99,7 +101,7 @@ class EstimateController extends Controller
          * another one's project — and a project with no client record yet falls
          * back to the name it carries, because neither column may be empty.
          */
-        $project = Project::with('clientRecord:id,name')->find($data['project_id']);
+        $project = Project::where('user_id', $request->user()->id)->with('clientRecord:id,name')->find($data['project_id']);
         $data['client_id'] = $project?->client_id;
         $data['client'] = $project?->clientRecord?->name ?? $project?->client ?? 'Unassigned';
         $data['project'] = $project?->name ?? $data['client'];
@@ -107,7 +109,7 @@ class EstimateController extends Controller
         $estimate = Estimate::create([
             ...$data,
             'ai_result_id' => $aiResult?->id,
-            'number' => Estimate::nextNumber(),
+            'number' => Estimate::nextNumber($request->user()),
         ]);
 
         if ($aiResult) {
@@ -121,15 +123,17 @@ class EstimateController extends Controller
 
     public function destroy(Estimate $estimate): RedirectResponse
     {
+        $this->authorize('delete', $estimate);
+
         $estimate->delete();
 
         return back()->with('warning', "{$estimate->number} was deleted.");
     }
 
     /** Undo for the delete above. */
-    public function restore(int $estimate): RedirectResponse
+    public function restore(Request $request, int $estimate): RedirectResponse
     {
-        $trashed = Estimate::onlyTrashed()->findOrFail($estimate);
+        $trashed = Estimate::onlyTrashed()->ownedBy($request->user())->findOrFail($estimate);
         $trashed->restore();
 
         return back()->with('success', "{$trashed->number} was restored.");

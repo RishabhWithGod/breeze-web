@@ -79,7 +79,65 @@ class TeamController extends Controller
                 ->values(),
             'filters' => ['search' => $search],
             'canManage' => $this->canManage($request->user()),
+            /*
+             * Technicians who signed up from the mobile app, on this same
+             * page rather than a separate one — a manager approving someone
+             * and staffing a crew is one job, not two screens.
+             */
+            'pendingTechnicians' => $this->technicians(User::STATUS_PENDING_APPROVAL),
+            'activeTechnicians' => $this->technicians(User::STATUS_ACTIVE),
+            'rejectedTechnicians' => $this->technicians(User::STATUS_REJECTED),
+            'canApproveTechnicians' => $this->canApproveTechnicians($request->user()),
+            // Every team, unpaginated — the "assign a team" picker on a
+            // pending technician's row needs the whole list regardless of
+            // which page of `teams` above happens to be showing.
+            'teamOptions' => Team::query()->orderBy('name')->get(['id', 'name']),
+            'technicianRoleOptions' => TechnicianController::ROLES,
         ]);
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function technicians(string $status): Collection
+    {
+        return User::query()
+            ->where('registration_source', User::SOURCE_MOBILE)
+            ->where('status', $status)
+            // Once a technician has a team and a role, `TechnicianController`
+            // syncs them onto the real `foremen` roster — from then on their
+            // team's own card is where they live, not this separate list.
+            ->whereDoesntHave('foreman')
+            ->with(['teamMember.team', 'approver'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'status' => $user->status,
+                // What they actually are — 'Foreman' is only ever the
+                // starting default a manager may not have corrected yet.
+                'role' => $user->role,
+                'approvedAt' => $user->approved_at?->toISOString(),
+                'approvedBy' => $user->approver?->name,
+                'teamMember' => $user->teamMember ? [
+                    'id' => $user->teamMember->id,
+                    'teamId' => $user->teamMember->team_id,
+                    'teamName' => $user->teamMember->team?->name,
+                ] : null,
+                'createdAt' => $user->created_at?->toISOString(),
+            ])
+            ->values();
+    }
+
+    private const TECHNICIAN_MANAGER_ROLES = ['project manager', 'admin', 'owner'];
+
+    private function canApproveTechnicians(?User $user): bool
+    {
+        return $user !== null
+            && in_array(mb_strtolower(trim((string) $user->role)), self::TECHNICIAN_MANAGER_ROLES, true);
     }
 
     public function create(Request $request): Response
@@ -159,21 +217,9 @@ class TeamController extends Controller
      */
     private function load(bool $closed): Collection
     {
-        return JobTask::query()
-            ->whereHas('job')
-            ->whereNotNull('foreman_id')
-            ->when(
-                $closed,
-                fn ($query) => $query->whereIn('status', JobTask::CLOSED_STATUSES),
-                fn ($query) => $query->whereNotIn('status', JobTask::CLOSED_STATUSES),
-            )
-            ->groupBy('foreman_id')
-            ->selectRaw(
-                'foreman_id, count(*) as tasks, count(distinct job_id) as jobs, '.
-                'coalesce(sum(estimated_hours), 0) as hours'
-            )
-            ->get()
-            ->keyBy('foreman_id');
+        // Foreman or supervisor: both are carrying the task — see
+        // JobTask::workload().
+        return JobTask::workload($closed);
     }
 
     private function canManage(?User $user): bool

@@ -15,7 +15,10 @@ class RecordTimeEntryApprovedActivity implements ShouldHandleEventsAfterCommit
     {
         $who = $event->entry->user?->name ?? 'Someone';
         $job = $event->entry->job?->name ?? 'a job';
+        $owner = $event->entry->job?->owner;
 
-        $this->recorder->record(FeedItem::DASHBOARD_ACTIVITY, "{$who}'s time entry on {$job} was approved", 'file-text', 'lilac');
+        if ($owner) {
+            $this->recorder->record($owner, FeedItem::DASHBOARD_ACTIVITY, "{$who}'s time entry on {$job} was approved", 'file-text', 'lilac');
+        }
     }
 }

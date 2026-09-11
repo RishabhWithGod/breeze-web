@@ -41,6 +41,8 @@ export const ROUTES = {
   projects: '/projects',
   /** Where a project and its drawing PDFs are defined. */
   projectCreate: '/projects/create',
+  /** The company's own rates, imported from its estimating workbooks. */
+  priceBook: '/price-book',
   estimates: '/estimates',
   estimateCreate: '/estimates/create',
   jobs: '/jobs',
@@ -197,6 +199,9 @@ export const routeTo = {
   projectCreateForClient: (clientId: number) => `/projects/create?client=${clientId}`,
   foreman: (foremanId: number) => `/foremen/${foremanId}`,
   foremanEdit: (foremanId: number) => `/foremen/${foremanId}/edit`,
+  technicianApprove: (userId: number) => `/technicians/${userId}/approve`,
+  technicianReject: (userId: number) => `/technicians/${userId}/reject`,
+  technicianTeam: (userId: number) => `/technicians/${userId}/team`,
   taskEdit: (taskId: number) => `/tasks/${taskId}/edit?from=tasks`,
   taskEditFromJob: (taskId: number, origin: JobOrigin | null = null) =>
     `/tasks/${taskId}/edit?from=job${origin ? `&origin=${origin}` : ''}`,

@@ -256,6 +256,9 @@ class JobTest extends TestCase
     private function makeJob(array $attributes = []): Job
     {
         return Job::create([
+            'project_id' => $this->user->projects()->create([
+                'name' => 'Test Project', 'client' => 'A Job', 'status' => 'draft',
+            ])->id,
             'name' => 'A Job',
             'status' => 'in-progress',
             'foreman_id' => $this->foreman->id,

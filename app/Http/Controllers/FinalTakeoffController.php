@@ -183,7 +183,7 @@ class FinalTakeoffController extends Controller
              * work is sometimes taken off one project's drawing and built under
              * a different one. The takeoff's own is where the form starts.
              */
-            'projects' => app(ProjectDirectory::class)->options(),
+            'projects' => app(ProjectDirectory::class)->options($request->user()),
             // The crews this job can be handed to — the same list Create Job
             // offers, because this is the same step reached from the takeoff.
             'teams' => Team::orderBy('name')->get(['id', 'name']),

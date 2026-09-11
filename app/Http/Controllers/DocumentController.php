@@ -37,15 +37,22 @@ class DocumentController extends Controller
     {
         $this->authorize('viewAny', Document::class);
 
+        $user = $request->user();
+
         $filters = $request->validate([
-            // The takeoff whose paperwork this is. Documents are filed against
-            // a project, so the list is that project's rather than everyone's.
-            // Not a filter: it is which list this is.
-            'project' => ['nullable', 'integer'],
+            /*
+             * The takeoff whose paperwork this is. Documents are filed against
+             * a project, so the list is that project's rather than everyone's.
+             * Not a filter: it is which list this is.
+             *
+             * It has to be one of this manager's own projects. Without that,
+             * anyone could name another manager's project id in the query
+             * string and read their filing cabinet.
+             */
+            'project' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('user_id', $user->id)],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        $user = $request->user();
         $policy = app(DocumentPolicy::class);
         $canManageAll = $policy->abilities($user)['manage'];
 
@@ -56,7 +63,18 @@ class DocumentController extends Controller
          * now simply the rule, because a version family reads as one document
          * and its earlier versions are opened through History.
          */
+        /*
+         * Confined to this manager's own projects before anything else is
+         * asked. `visibleTo()` decides who may see a *private* document, and a
+         * "manage" role turns that check off entirely — neither has anything
+         * to say about whose project the document sits on, so on its own it
+         * would show an admin every manager's paperwork. This matches
+         * `DocumentPolicy::view()`, which now refuses a document that is not
+         * on a project of the user's: the list must never offer what opening
+         * it would 403 on.
+         */
         $base = fn () => Document::query()
+            ->whereHas('project', fn ($query) => $query->where('user_id', $user->id))
             ->visibleTo($user, $canManageAll)
             ->forProject($projectId)
             ->versionStatus('latest');
@@ -124,6 +142,8 @@ class DocumentController extends Controller
 
     public function store(StoreDocumentRequest $request): RedirectResponse
     {
+        $this->authorize('create', Document::class);
+
         $data = $request->validated();
 
         $file = $request->file('file');
@@ -145,7 +165,7 @@ class DocumentController extends Controller
 
         $document->recordActivity('uploaded', "“{$document->name}” was uploaded");
 
-        $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "Document uploaded: {$document->name}", 'file-text', 'lilac');
+        $this->activity->record($request->user(), FeedItem::DASHBOARD_ACTIVITY, "Document uploaded: {$document->name}", 'file-text', 'lilac');
 
         // Back to the list it was uploaded from — a takeoff's own, when it
         // was filed under one.
