@@ -434,26 +434,6 @@ export default function JobCreate({
               />
             </div>
 
-            {/*
-              The estimate is named beside the figure: a number that appears on
-              its own looks like a default rather than this drawing's own price.
-            */}
-            <TextInput
-              id="job-budget"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step={50}
-              label="Budget ($)"
-              placeholder="Enter budget amount"
-              value={data.budget}
-              onChange={(event) => update('budget', event.target.value)}
-              {...(linkedEstimate
-                ? { hint: `From estimate ${linkedEstimate.number} — change it if this job is not the whole estimate.` }
-                : {})}
-              {...(errors.budget ? { error: errors.budget } : {})}
-            />
-
             <TextArea
               id="job-description"
               label="Job Description"
