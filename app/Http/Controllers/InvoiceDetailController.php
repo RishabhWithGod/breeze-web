@@ -64,7 +64,7 @@ class InvoiceDetailController extends Controller
     }
 
     /** Full-page edit form for the invoice's header — status is never editable here. */
-    public function edit(Invoice $invoice): Response
+    public function edit(Request $request, Invoice $invoice): Response
     {
         $this->authorize('update', $invoice);
 
@@ -72,15 +72,17 @@ class InvoiceDetailController extends Controller
 
         return Inertia::render('InvoiceEdit', [
             'invoice' => $this->present($invoice),
-            'clients' => $this->clients->options(),
-            'jobs' => Job::query()->orderBy('name')->get(['id', 'name', 'client']),
+            'clients' => $this->clients->options($request->user()),
+            'jobs' => Job::query()->ownedBy($request->user())->orderBy('name')->get(['id', 'name', 'client']),
         ]);
     }
 
     public function update(UpdateInvoiceRequest $request, Invoice $invoice): RedirectResponse
     {
+        $this->authorize('update', $invoice);
+
         // `client` is a snapshot of the picked client's name, never typed.
-        $invoice->update($this->clients->withClientSnapshot($request->validated()));
+        $invoice->update($this->clients->withClientSnapshot($request->validated(), $request->user()));
         $invoice->recalculateTotals();
 
         return redirect()
@@ -154,7 +156,7 @@ class InvoiceDetailController extends Controller
 
         $invoice->update(['status' => Invoice::STATUS_SENT, 'sent_at' => now()]);
         $this->notifyCreator($request, $invoice, InvoiceStatusChanged::SENT);
-        $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "Invoice {$invoice->invoice_number} sent to {$invoice->client}", 'file-text', 'lilac');
+        $this->activity->record($request->user(), FeedItem::DASHBOARD_ACTIVITY, "Invoice {$invoice->invoice_number} sent to {$invoice->client}", 'file-text', 'lilac');
 
         return back()->with('success', "{$invoice->invoice_number} was sent.");
     }
@@ -185,7 +187,7 @@ class InvoiceDetailController extends Controller
         ]);
 
         $this->notifyCreator($request, $invoice, InvoiceStatusChanged::PAID);
-        $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "Invoice {$invoice->invoice_number} marked paid", 'file-text', 'butter');
+        $this->activity->record($request->user(), FeedItem::DASHBOARD_ACTIVITY, "Invoice {$invoice->invoice_number} marked paid", 'file-text', 'butter');
 
         return back()->with('success', "{$invoice->invoice_number} was marked paid.");
     }

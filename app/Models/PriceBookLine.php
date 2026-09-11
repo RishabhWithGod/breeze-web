@@ -18,7 +18,7 @@ class PriceBookLine extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'price_book_import_id', 'section', 'subsection',
+        'price_book_import_id', 'user_id', 'section', 'subsection',
         'sr_no', 'dwg_no', 'detail_no', 'description',
         'quantity', 'wastage', 'quantity_with_wastage', 'unit',
         'unit_material_cost', 'material_cost', 'manhour_rate',
@@ -58,5 +58,11 @@ class PriceBookLine extends Model
     public function import(): BelongsTo
     {
         return $this->belongsTo(PriceBookImport::class, 'price_book_import_id');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

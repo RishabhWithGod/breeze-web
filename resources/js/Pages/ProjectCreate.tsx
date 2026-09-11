@@ -1,13 +1,15 @@
+import { useRef } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { ArrowLeft, FolderKanban, MapPin } from 'lucide-react'
+import { ArrowLeft, FileSpreadsheet, FolderKanban, Layers, MapPin, X } from 'lucide-react'
 import {
   Alert,
   Button,
   ButtonLink,
   Card,
   CardHeader,
+  IconButton,
   SelectField,
   TextInput,
   UnfinishedTakeoffNotice,
@@ -15,11 +17,13 @@ import {
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { ClientOption, ResumableTakeoff } from '@/types'
+import { formatFileSize } from '@/utils'
 
 interface ProjectDraft {
   client_id: string
   name: string
   estimate_target_total: string
+  vendor_rate_list: File[]
 }
 
 export interface ProjectCreateProps {
@@ -43,11 +47,14 @@ export default function ProjectCreate({
   defaultClientId,
   unfinishedTakeoff,
 }: ProjectCreateProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<ProjectDraft>({
       client_id: defaultClientId === null ? '' : String(defaultClientId),
       name: '',
       estimate_target_total: '',
+      vendor_rate_list: [],
     })
 
   /**
@@ -73,9 +80,43 @@ export default function ProjectCreate({
     ...clients.map((client) => ({ label: client.name, value: String(client.id) })),
   ]
 
+  const vendorRateListErrors = Object.entries(errors)
+    .filter(([key]) => key === 'vendor_rate_list' || key.startsWith('vendor_rate_list.'))
+    .map(([, message]) => message)
+
+  const clearRateListErrors = () => {
+    const keys = Object.keys(errors).filter(
+      (key) => key === 'vendor_rate_list' || key.startsWith('vendor_rate_list.'),
+    )
+    if (keys.length > 0) clearErrors(...(keys as FormDataKeys<ProjectDraft>[]))
+  }
+
+  /** Each "Choose files" click adds to the list — it does not replace it. */
+  const chooseRateLists = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return
+
+    const incoming = Array.from(fileList)
+    const isDuplicate = (a: File, b: File) =>
+      a.name === b.name && a.size === b.size && a.lastModified === b.lastModified
+
+    setData('vendor_rate_list', [
+      ...data.vendor_rate_list,
+      ...incoming.filter((file) => !data.vendor_rate_list.some((existing) => isDuplicate(existing, file))),
+    ])
+    clearRateListErrors()
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const removeRateList = (index: number) => {
+    setData('vendor_rate_list', data.vendor_rate_list.filter((_, i) => i !== index))
+    clearRateListErrors()
+  }
+
+  const rateListTotalSize = data.vendor_rate_list.reduce((total, file) => total + file.size, 0)
+
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    post(ROUTES.projects)
+    post(ROUTES.projects, { forceFormData: true })
   }
 
   return (
@@ -149,6 +190,85 @@ export default function ProjectCreate({
               onChange={(event) => update('estimate_target_total', event.target.value)}
               {...(errors.estimate_target_total ? { error: errors.estimate_target_total } : {})}
             />
+
+            <div>
+              <label
+                htmlFor="project-vendor-rate-list"
+                className="mb-2 block text-md font-medium text-white"
+              >
+                Upload Vendor Rate List (Optional)
+              </label>
+
+              <input
+                ref={fileInputRef}
+                id="project-vendor-rate-list"
+                type="file"
+                accept=".xlsx"
+                multiple
+                onChange={(event) => chooseRateLists(event.target.files)}
+                className="sr-only"
+              />
+
+              <Button
+                type="button"
+                variant="secondary"
+                leftIcon={FileSpreadsheet}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Choose files
+              </Button>
+
+              {data.vendor_rate_list.length > 0 && (
+                <div className="mt-3 rounded-panel border border-hairline bg-white/4 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="flex items-center gap-2 text-sm font-medium text-white">
+                      <Layers size={14} aria-hidden className="text-brand" />
+                      {data.vendor_rate_list.length} workbook
+                      {data.vendor_rate_list.length === 1 ? '' : 's'} selected
+                    </p>
+                    <p className="text-2xs text-white/70">{formatFileSize(rateListTotalSize)}</p>
+                  </div>
+
+                  <ul className="space-y-1.5">
+                    {data.vendor_rate_list.map((file, index) => (
+                      <li
+                        key={`${file.name}-${file.size}-${file.lastModified}`}
+                        className="flex min-w-0 items-center gap-2 rounded-panel border border-hairline bg-navy-950/35 px-3 py-1.5"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-sm text-white/85">
+                          {file.name}
+                        </span>
+                        <span className="shrink-0 text-2xs text-white/60">
+                          {formatFileSize(file.size)}
+                        </span>
+                        <IconButton
+                          icon={X}
+                          label={`Remove ${file.name}`}
+                          size="sm"
+                          onClick={() => removeRateList(index)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {vendorRateListErrors.length > 0 ? (
+                <div className="mt-2 space-y-1">
+                  {vendorRateListErrors.map((message, index) => (
+                    <p key={index} className="text-sm text-red-300">
+                      {message}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-white/75">
+                  Excel workbooks of your own rates — upload as many as you have.
+                  Your estimates price off them once uploaded, pooled together
+                  like one book; until then they use the shared price book.
+                </p>
+              )}
+            </div>
 
             {/*
               Told, not asked. A project and the job on it are at the same

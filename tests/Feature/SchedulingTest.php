@@ -540,6 +540,9 @@ class SchedulingTest extends TestCase
     private function makeJob(array $attributes = []): Job
     {
         return Job::create([
+            'project_id' => $this->user->projects()->create([
+                'name' => 'Test Project', 'client' => 'Riverside Hospital', 'status' => 'draft',
+            ])->id,
             'foreman_id' => $this->foreman->id,
             'name' => 'Test Job',
             'client' => 'Riverside Hospital',

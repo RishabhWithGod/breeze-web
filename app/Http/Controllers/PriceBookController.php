@@ -11,11 +11,13 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * The company's own rates, read from the estimates it has already priced.
+ * This user's own rates — or, while they have not uploaded a rate list of
+ * their own, the universal book everyone falls back to.
  *
  * A screen rather than a database client, because the people who need to check
  * a rate are estimators, not anyone with MySQL open. Read-only for now: the
- * numbers arrive through `pricebook:import` and nothing here writes them.
+ * numbers arrive through `pricebook:import` or the project form's upload, and
+ * nothing here writes them.
  */
 class PriceBookController extends Controller
 {
@@ -30,8 +32,10 @@ class PriceBookController extends Controller
         $search = trim($filters['search'] ?? '');
         $unit = $filters['unit'] ?? 'all';
         $section = $filters['section'] ?? 'all';
+        $scope = $this->scopeFor($request);
 
         $items = PriceBookItem::query()
+            ->where('user_id', $scope)
             ->search($search)
             ->when($unit !== 'all', fn ($query) => $query->where('unit', $unit))
             ->when($section !== 'all', fn ($query) => $query->where('section', $section))
@@ -61,17 +65,20 @@ class PriceBookController extends Controller
         return Inertia::render('PriceBook', [
             'items' => JsonResource::collection($items),
             'filters' => ['search' => $search, 'unit' => $unit, 'section' => $section],
-            'units' => PriceBookItem::query()->distinct()->orderBy('unit')->pluck('unit'),
-            'sections' => PriceBookItem::query()->whereNotNull('section')
+            // Whether this list is the user's own upload or the shared fallback,
+            // so the screen can say so.
+            'isUniversal' => $scope === null,
+            'units' => PriceBookItem::query()->where('user_id', $scope)->distinct()->orderBy('unit')->pluck('unit'),
+            'sections' => PriceBookItem::query()->where('user_id', $scope)->whereNotNull('section')
                 ->distinct()->orderBy('section')->pluck('section'),
             'totals' => [
-                'items' => PriceBookItem::count(),
-                'lines' => PriceBookLine::count(),
-                'imports' => PriceBookImport::count(),
+                'items' => PriceBookItem::query()->where('user_id', $scope)->count(),
+                'lines' => PriceBookLine::query()->where('user_id', $scope)->count(),
+                'imports' => PriceBookImport::query()->where('user_id', $scope)->count(),
             ],
             // Where the rates came from, so a figure on this screen can always
             // be traced to a bid somebody actually sent out.
-            'imports' => PriceBookImport::orderByDesc('id')->get()->map(fn (PriceBookImport $import) => [
+            'imports' => PriceBookImport::query()->where('user_id', $scope)->orderByDesc('id')->get()->map(fn (PriceBookImport $import) => [
                 'id' => $import->id,
                 'projectName' => $import->project_name ?? $import->file_name,
                 'fileName' => $import->file_name,
@@ -89,9 +96,14 @@ class PriceBookController extends Controller
     }
 
     /** Every line this item's rate was worked out from. */
-    public function show(PriceBookItem $priceBookItem): Response
+    public function show(Request $request, PriceBookItem $priceBookItem): Response
     {
-        $lines = PriceBookLine::where('match_key', $priceBookItem->match_key)
+        // Not this user's own book and not the universal fallback either —
+        // somebody else's rate, which this screen never shows.
+        abort_unless($priceBookItem->user_id === $this->scopeFor($request), 404);
+
+        $lines = PriceBookLine::where('user_id', $priceBookItem->user_id)
+            ->where('match_key', $priceBookItem->match_key)
             ->where('unit', $priceBookItem->unit)
             ->with('import:id,project_name,file_name')
             ->orderByDesc('price_book_import_id')
@@ -124,5 +136,20 @@ class PriceBookController extends Controller
             ],
             'lines' => $lines,
         ]);
+    }
+
+    /**
+     * Whose book this request reads: the signed-in user's own, or — while
+     * they have never uploaded a rate list — the universal one.
+     *
+     * The same rule {@see \App\Services\Takeoff\PriceBookLookup} prices
+     * estimates with, so this screen always shows the book an estimate would
+     * actually be raised against.
+     */
+    private function scopeFor(Request $request): ?int
+    {
+        $userId = $request->user()->id;
+
+        return PriceBookItem::query()->where('user_id', $userId)->exists() ? $userId : null;
     }
 }

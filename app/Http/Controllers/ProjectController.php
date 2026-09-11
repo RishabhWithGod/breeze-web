@@ -10,6 +10,7 @@ use App\Models\FeedItem;
 use App\Models\Project;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
+use App\Services\PriceBook\PriceBookImporter;
 use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -108,7 +109,7 @@ class ProjectController extends Controller
     public function create(Request $request): Response
     {
         return Inertia::render('ProjectCreate', [
-            'clients' => $this->clients->options(),
+            'clients' => $this->clients->options($request->user()),
             /*
              * Opened from a client's own screen, that client is the answer and
              * the form should not ask again. Checked against the owner rather
@@ -132,7 +133,7 @@ class ProjectController extends Controller
      * Nothing is sent to the AI engine here — this opens the project, and a
      * takeoff is started separately from the AI Takeoff module.
      */
-    public function store(StoreProjectRequest $request): RedirectResponse
+    public function store(StoreProjectRequest $request, PriceBookImporter $importer): RedirectResponse
     {
         $data = $request->validated();
 
@@ -172,6 +173,7 @@ class ProjectController extends Controller
         ]);
 
         $this->activity->record(
+            $request->user(),
             FeedItem::DASHBOARD_ACTIVITY,
             "New project opened: {$project->name}",
             'briefcase',
@@ -186,9 +188,47 @@ class ProjectController extends Controller
          */
         $request->session()->put('takeoff.preselected_client', $project->id);
 
-        return redirect()
-            ->route('projects.show', $project)
-            ->with('success', "“{$project->name}” was opened.");
+        $flash = ['success' => "“{$project->name}” was opened."];
+
+        if ($request->hasFile('vendor_rate_list')) {
+            $flash = [...$flash, ...$this->importVendorRateLists($request, $importer)];
+        }
+
+        return redirect()->route('projects.show', $project)->with($flash);
+    }
+
+    /**
+     * The uploader's own rates, folded into their price book.
+     *
+     * Any number of workbooks at once — their lines are pooled into one book
+     * and its quoted rates rebuilt once, the same way the universal book is
+     * built from a folder of them. A bad or oddly-shaped file among them must
+     * not stop the project from opening, or cost the good files their import:
+     * the takeoff and the client are what matter here, and a rate list can
+     * always be re-uploaded from the price book screen. So this only ever adds
+     * a warning to the redirect, never an exception.
+     *
+     * @return array<string, string>
+     */
+    private function importVendorRateLists(Request $request, PriceBookImporter $importer): array
+    {
+        $files = collect($request->file('vendor_rate_list'))
+            ->map(fn ($file) => ['file' => $file, 'name' => $file->getClientOriginalName()])
+            ->all();
+
+        $result = $importer->importWorkbooks($files, $request->user()->id);
+
+        $notes = [];
+
+        if ($result['failed'] !== []) {
+            $notes[] = implode(', ', $result['failed'])." couldn't be read as Excel workbooks.";
+        }
+
+        if ($result['empty'] !== []) {
+            $notes[] = implode(', ', $result['empty']).' had no priced lines the importer could read.';
+        }
+
+        return $notes === [] ? [] : ['warning' => implode(' ', $notes)];
     }
 
     /** Project detail: its details, its drawing PDFs and what has happened to it. */

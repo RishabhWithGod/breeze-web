@@ -45,6 +45,8 @@ class JobTaskController extends Controller
 
     public function store(Request $request, Job $job): RedirectResponse
     {
+        $this->authorize('view', $job);
+
         $schedule = $job->schedule ?? $this->builder->build($job, $request->user(), withTasks: false);
         abort_unless($this->policy->createTask($request->user(), $schedule), 403);
 
@@ -552,6 +554,7 @@ class JobTaskController extends Controller
      */
     public function attachment(JobTask $task, JobTaskAttachment $attachment): StreamedResponse
     {
+        $this->authorize('view', $task->job);
         abort_unless($attachment->job_task_id === $task->id, 404);
 
         return response()->streamDownload(

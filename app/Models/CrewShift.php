@@ -58,6 +58,12 @@ class CrewShift extends Model
         return $this->belongsTo(Job::class);
     }
 
+    /** Only shifts on this manager's own jobs. */
+    public function scopeOwnedBy(Builder $query, User $user): Builder
+    {
+        return $query->whereHas('job', fn (Builder $q) => $q->ownedBy($user));
+    }
+
     /** @return BelongsTo<TeamMember, $this> */
     public function teamMember(): BelongsTo
     {

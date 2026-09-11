@@ -125,6 +125,12 @@ class JobTask extends Model
         return $this->belongsTo(Job::class);
     }
 
+    /** Only tasks on this manager's own jobs. */
+    public function scopeOwnedBy(Builder $query, User $user): Builder
+    {
+        return $query->whereHas('job', fn (Builder $q) => $q->ownedBy($user));
+    }
+
     /** @return BelongsTo<User, $this> */
     public function creator(): BelongsTo
     {

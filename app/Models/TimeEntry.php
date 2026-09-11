@@ -114,6 +114,16 @@ class TimeEntry extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Entries on this manager's own jobs — not entries this manager logged
+     * themselves, which is a different question `where('user_id', ...)` still
+     * answers directly.
+     */
+    public function scopeOwnedBy(Builder $query, User $user): Builder
+    {
+        return $query->whereHas('job', fn (Builder $q) => $q->ownedBy($user));
+    }
+
     /** Whose staffing record the hours count against. */
     public function teamMember(): BelongsTo
     {

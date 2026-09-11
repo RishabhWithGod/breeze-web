@@ -62,9 +62,11 @@ class Job extends Model
     ];
 
     protected $fillable = [
+        'user_id',
         'foreman_id',
         'team_id',
         'project_id',
+        'client_id',
         'ai_result_id',
         'name',
         'client',
@@ -117,6 +119,24 @@ class Job extends Model
             'boq' => 'array',
             'metadata' => 'array',
         ];
+    }
+
+    /**
+     * Who this job belongs to, read off its project — every job is required
+     * to have one (see `StoreJobRequest`), so this never has to fall back to
+     * the client the way `Estimate`'s and `Invoice`'s do.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $job): void {
+            if ($job->user_id !== null && ! $job->isDirty('project_id')) {
+                return;
+            }
+
+            $job->user_id = $job->project_id === null
+                ? null
+                : Project::whereKey($job->project_id)->value('user_id');
+        });
     }
 
     /* ---------------------------------------------------------------- Relations */
@@ -199,6 +219,31 @@ class Job extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * The client on file, by id rather than the `client` name snapshot.
+     *
+     * Named `clientRecord` rather than `client` because that name is already
+     * the string column — a relation of the same name would never be reached.
+     *
+     * @return BelongsTo<Client, $this>
+     */
+    public function clientRecord(): BelongsTo
+    {
+        return $this->belongsTo(Client::class, 'client_id');
+    }
+
+    /** The manager this job belongs to. */
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /** Only this manager's own jobs. */
+    public function scopeOwnedBy(Builder $query, User $user): Builder
+    {
+        return $query->where('user_id', $user->id);
     }
 
     /** @return BelongsTo<AiResult, $this> */

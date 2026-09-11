@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Invoice;
+use App\Models\User;
 use App\Services\Billing\InvoiceSummaryCalculator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -19,13 +20,25 @@ class InvoiceSummaryTest extends TestCase
 {
     use RefreshDatabase;
 
+    private User $manager;
+
+    private int $clientId;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->manager = User::factory()->create();
+        $this->clientId = $this->manager->clients()->create(['name' => 'Test Client'])->id;
+    }
+
     public function test_total_outstanding_only_counts_non_draft_invoices(): void
     {
         $this->makeInvoice(['status' => 'draft', 'total' => 1000, 'paid_amount' => 0]);
         $this->makeInvoice(['status' => 'sent', 'total' => 500, 'paid_amount' => 0]);
         $this->makeInvoice(['status' => 'sent', 'total' => 300, 'paid_amount' => 100]);
 
-        $summary = app(InvoiceSummaryCalculator::class)->calculate();
+        $summary = app(InvoiceSummaryCalculator::class)->calculate($this->manager);
 
         // Draft is excluded; sent contributes its full outstanding balance.
         $this->assertSame(700.0, $summary['totalOutstanding']);
@@ -42,7 +55,7 @@ class InvoiceSummaryTest extends TestCase
             'due_date' => now()->addDays(5)->toDateString(),
         ]);
 
-        $summary = app(InvoiceSummaryCalculator::class)->calculate();
+        $summary = app(InvoiceSummaryCalculator::class)->calculate($this->manager);
 
         $this->assertSame(400.0, $summary['overdue']);
     }
@@ -52,7 +65,7 @@ class InvoiceSummaryTest extends TestCase
         $this->makeInvoice(['status' => 'paid', 'total' => 250, 'paid_amount' => 250, 'paid_at' => now()]);
         $this->makeInvoice(['status' => 'paid', 'total' => 600, 'paid_amount' => 600, 'paid_at' => now()->subMonths(2)]);
 
-        $summary = app(InvoiceSummaryCalculator::class)->calculate();
+        $summary = app(InvoiceSummaryCalculator::class)->calculate($this->manager);
 
         $this->assertSame(250.0, $summary['paidThisMonth']);
     }
@@ -68,7 +81,7 @@ class InvoiceSummaryTest extends TestCase
             'invoice_date' => '2026-08-01', 'paid_at' => '2026-08-21 00:00:00',
         ]);
 
-        $summary = app(InvoiceSummaryCalculator::class)->calculate();
+        $summary = app(InvoiceSummaryCalculator::class)->calculate($this->manager);
 
         // 10 days and 20 days paid — average 15, not a fabricated figure.
         $this->assertSame(15.0, $summary['averageDaysToPay']);
@@ -78,7 +91,7 @@ class InvoiceSummaryTest extends TestCase
     {
         $this->makeInvoice(['status' => 'sent', 'total' => 100, 'paid_amount' => 0]);
 
-        $summary = app(InvoiceSummaryCalculator::class)->calculate();
+        $summary = app(InvoiceSummaryCalculator::class)->calculate($this->manager);
 
         $this->assertNull($summary['averageDaysToPay']);
     }
@@ -89,6 +102,7 @@ class InvoiceSummaryTest extends TestCase
         $sequence++;
 
         return Invoice::create([
+            'client_id' => $this->clientId,
             'invoice_number' => "INV-{$sequence}",
             'client' => 'Test Client',
             'invoice_date' => $attributes['invoice_date'] ?? now()->toDateString(),

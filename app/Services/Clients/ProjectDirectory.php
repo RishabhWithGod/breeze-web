@@ -3,6 +3,7 @@
 namespace App\Services\Clients;
 
 use App\Models\Project;
+use App\Models\User;
 use Illuminate\Support\Collection;
 
 /**
@@ -12,14 +13,16 @@ use Illuminate\Support\Collection;
  * and job belongs to one. Forms pick a client first and then one of their
  * projects, so each option carries the client it is under and the sites it
  * runs at, and the form narrows itself rather than asking the same question
- * twice.
+ * twice. Scoped to one manager's own register — never every project in the
+ * system.
  */
 class ProjectDirectory
 {
-    /** Every project, with what a form fills in once one is picked. */
-    public function options(): Collection
+    /** This manager's projects, with what a form fills in once one is picked. */
+    public function options(User $user): Collection
     {
         return Project::with(['addresses', 'clientRecord:id,name', 'selectedUpload', 'primaryUpload'])
+            ->where('user_id', $user->id)
             ->orderBy('name')
             ->get(['id', 'client_id', 'name', 'project_type', 'selected_upload_id'])
             ->map(fn (Project $project) => [

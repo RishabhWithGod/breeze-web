@@ -58,6 +58,7 @@ class EstimateBuilder
         string $fallbackName,
         float $quantity,
         int &$position,
+        PriceBookLookup $priceBook,
         ?int $finalSymbolId = null,
     ): void {
         /*
@@ -91,7 +92,7 @@ class EstimateBuilder
             'description' => 'Install labor — '.$description,
             'unit' => 'hr',
             'quantity' => round($rates['labor_hours'] * $quantity, 4),
-            'unit_cost' => $this->priceBook->laborRate(),
+            'unit_cost' => $priceBook->laborRate(),
             'source' => 'ai',
             // The hours are the price book's even when the rate per hour is a
             // fallback, so the line is labelled by where the hours came from.
@@ -125,11 +126,14 @@ class EstimateBuilder
                 return $result->estimate;
             }
 
-            $estimate = $this->open($result, $job, $engineLines, reviewed: false);
+            $catalog = $this->catalog->forUser($user->id);
+            $priceBook = $this->priceBook->forUser($user->id);
+
+            $estimate = $this->open($result, $job, $engineLines, reviewed: false, priceBook: $priceBook);
 
             $engineLines->isNotEmpty()
-                ? $this->writeEngineLines($estimate, $engineLines, collect())
-                : $this->writeReviewLines($estimate, $counted);
+                ? $this->writeEngineLines($estimate, $engineLines, collect(), $catalog, $priceBook)
+                : $this->writeReviewLines($estimate, $counted, $catalog, $priceBook);
 
             $estimate->recalculateTotals();
             $this->scaleToTarget($estimate, $this->projectTarget($result));
@@ -184,11 +188,14 @@ class EstimateBuilder
             $engineEstimate = $result->ai_estimate ?? [];
             $engineLines = $result->boqLines()->get();
 
-            $estimate = $this->open($result, $job, $engineLines, reviewed: true);
+            $catalog = $this->catalog->forUser($user->id);
+            $priceBook = $this->priceBook->forUser($user->id);
+
+            $estimate = $this->open($result, $job, $engineLines, reviewed: true, priceBook: $priceBook);
 
             $engineLines->isNotEmpty()
-                ? $this->writeEngineLines($estimate, $engineLines, $symbols)
-                : $this->writeCatalogLines($estimate, $symbols);
+                ? $this->writeEngineLines($estimate, $engineLines, $symbols, $catalog, $priceBook)
+                : $this->writeCatalogLines($estimate, $symbols, $catalog, $priceBook);
 
             $estimate->recalculateTotals();
             $this->scaleToTarget($estimate, $this->projectTarget($result));
@@ -227,7 +234,7 @@ class EstimateBuilder
      *
      * @param  Collection<int, BoqLine>  $engineLines
      */
-    private function open(AiResult $result, ?Job $job, Collection $engineLines, bool $reviewed): Estimate
+    private function open(AiResult $result, ?Job $job, Collection $engineLines, bool $reviewed, PriceBookLookup $priceBook): Estimate
     {
         $project = $result->project;
         $engineEstimate = $result->ai_estimate ?? [];
@@ -236,7 +243,10 @@ class EstimateBuilder
             'job_id' => $job?->id,
             'project_id' => $project->id,
             'ai_result_id' => $result->id,
-            'number' => Estimate::nextNumber(),
+            // The estimate's own owner, not necessarily whoever is signed in
+            // when this runs — this can fire from a queued takeoff with no
+            // acting user at all, so the project's manager is authoritative.
+            'number' => Estimate::nextNumber($project->user),
             'client' => $job?->client ?? ($project->client === 'Unassigned' ? 'Unassigned' : $project->client),
             'project' => $job?->name ?? $project->name,
             'issued_on' => now()->toDateString(),
@@ -248,8 +258,8 @@ class EstimateBuilder
              * carries one markup line and the bids carry two. Falls back to
              * config while nothing has been imported.
              */
-            'markup_pct' => $this->markupPercent(),
-            'tax_pct' => $this->taxPercent($engineEstimate),
+            'markup_pct' => $this->markupPercent($priceBook),
+            'tax_pct' => $this->taxPercent($engineEstimate, $priceBook),
             'notes' => $this->notes($engineLines, $engineEstimate, $reviewed),
             'amount' => 0,
         ]);
@@ -272,11 +282,14 @@ class EstimateBuilder
             $manual = $estimate->items()->where('source', 'manual')->count();
             $engineLines = $result->boqLines()->get();
 
+            $catalog = $this->catalog->forUser($user->id);
+            $priceBook = $this->priceBook->forUser($user->id);
+
             $estimate->items()->where('source', 'ai')->delete();
 
             $engineLines->isNotEmpty()
-                ? $this->writeEngineLines($estimate, $engineLines, $symbols)
-                : $this->writeCatalogLines($estimate, $symbols);
+                ? $this->writeEngineLines($estimate, $engineLines, $symbols, $catalog, $priceBook)
+                : $this->writeCatalogLines($estimate, $symbols, $catalog, $priceBook);
 
             // Manual lines keep their own positions after the rewritten AI block.
             $estimate->update([
@@ -326,7 +339,7 @@ class EstimateBuilder
      *
      * @param  Collection<int, SymbolReview>  $reviews
      */
-    private function writeReviewLines(Estimate $estimate, Collection $reviews): void
+    private function writeReviewLines(Estimate $estimate, Collection $reviews, SymbolCatalog $catalog, PriceBookLookup $priceBook): void
     {
         $position = 0;
 
@@ -340,10 +353,11 @@ class EstimateBuilder
 
             $this->writeDevice(
                 $estimate,
-                $this->catalog->for($review->name),
+                $catalog->for($review->name),
                 $review->name,
                 $count,
                 $position,
+                $priceBook,
             );
         }
     }
@@ -354,7 +368,7 @@ class EstimateBuilder
      * @param  Collection<int, BoqLine>  $lines
      * @param  Collection<int, FinalSymbol>  $symbols
      */
-    private function writeEngineLines(Estimate $estimate, Collection $lines, Collection $symbols): void
+    private function writeEngineLines(Estimate $estimate, Collection $lines, Collection $symbols, SymbolCatalog $catalog, PriceBookLookup $priceBook): void
     {
         $symbolsById = $symbols->keyBy('id');
         $position = 0;
@@ -366,7 +380,7 @@ class EstimateBuilder
             $quantity = $symbol ? $symbol->count : (float) $line->quantity;
             $name = $symbol?->name ?? $line->item;
 
-            $rates = $this->catalog->for($name);
+            $rates = $catalog->for($name);
             $lineUnit = Str::lower(trim($line->unit ?: 'ea'));
 
             /*
@@ -411,7 +425,7 @@ class EstimateBuilder
                 'description' => 'Install labor — '.($rates['description'] ?? Str::of($line->item)->headline()->value()),
                 'unit' => 'hr',
                 'quantity' => $hours,
-                'unit_cost' => $this->priceBook->laborRate(),
+                'unit_cost' => $priceBook->laborRate(),
                 'source' => 'ai',
                 'pricing_source' => $rates['source'],
                 'price_book_item_id' => $rates['price_book_item_id'] ?? null,
@@ -464,17 +478,18 @@ class EstimateBuilder
      *
      * @param  Collection<int, FinalSymbol>  $symbols
      */
-    private function writeCatalogLines(Estimate $estimate, Collection $symbols): void
+    private function writeCatalogLines(Estimate $estimate, Collection $symbols, SymbolCatalog $catalog, PriceBookLookup $priceBook): void
     {
         $position = 0;
 
         foreach ($symbols as $symbol) {
             $this->writeDevice(
                 $estimate,
-                $this->catalog->for($symbol->name),
+                $catalog->for($symbol->name),
                 $symbol->name,
                 (int) $symbol->count,
                 $position,
+                $priceBook,
                 $symbol->id,
             );
         }
@@ -505,12 +520,12 @@ class EstimateBuilder
      *
      * @param  array<string, mixed>  $engineEstimate
      */
-    private function taxPercent(array $engineEstimate): float
+    private function taxPercent(array $engineEstimate, PriceBookLookup $priceBook): float
     {
         $rate = (float) ($engineEstimate['tax_rate'] ?? 0);
 
         if ($rate <= 0) {
-            return round($this->priceBook->bidRates()['tax_pct'], 2);
+            return round($priceBook->bidRates()['tax_pct'], 2);
         }
 
         // Stored as a fraction by the engine (0.15 → 15%).
@@ -525,9 +540,9 @@ class EstimateBuilder
      * the bid sheets do, so that is what is reproduced: 1.10 × 1.12 is a 23.2%
      * markup, not 22%.
      */
-    private function markupPercent(): float
+    private function markupPercent(PriceBookLookup $priceBook): float
     {
-        $rates = $this->priceBook->bidRates();
+        $rates = $priceBook->bidRates();
         $overhead = $rates['overhead_pct'] / 100;
         $profit = $rates['profit_pct'] / 100;
 

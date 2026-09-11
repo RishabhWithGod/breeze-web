@@ -48,6 +48,8 @@ class JobScheduleController extends Controller
 
     public function show(Request $request, Job $job): Response
     {
+        $this->authorize('view', $job);
+
         $schedule = $job->schedule ?? $this->builder->build($job, $request->user());
 
         $tasks = $schedule->tasks()
@@ -121,6 +123,8 @@ class JobScheduleController extends Controller
      */
     public function update(Request $request, Job $job): RedirectResponse
     {
+        $this->authorize('view', $job);
+
         $schedule = $job->schedule ?? $this->builder->build($job, $request->user(), withTasks: false);
         $this->authorizeAbility($request, 'update', $schedule);
 
@@ -497,6 +501,10 @@ class JobScheduleController extends Controller
 
         if ($schedule->starts_on && $schedule->ends_on) {
             $conflicts = CrewShift::query()
+                // Other jobs the same manager runs — not this one, and never
+                // another manager's, which this schedule has no business
+                // reading conflicts against.
+                ->whereHas('job', fn ($query) => $query->where('user_id', $schedule->job->user_id))
                 ->whereBetween('scheduled_date', [
                     $schedule->starts_on->toDateString(),
                     $schedule->ends_on->toDateString(),

@@ -128,12 +128,17 @@ class InvoicePaymentController extends Controller
             $creator->notify(new InvoiceStatusChanged($invoice, InvoiceStatusChanged::PAID));
         }
 
-        $this->activity->record(
-            FeedItem::DASHBOARD_ACTIVITY,
-            "Invoice {$invoice->invoice_number} paid online via Stripe",
-            'file-text',
-            'butter',
-        );
+        // A payment webhook, not a signed-in request — there is no acting
+        // user, so the activity is recorded against the invoice's own owner.
+        if ($invoice->owner) {
+            $this->activity->record(
+                $invoice->owner,
+                FeedItem::DASHBOARD_ACTIVITY,
+                "Invoice {$invoice->invoice_number} paid online via Stripe",
+                'file-text',
+                'butter',
+            );
+        }
 
         return redirect()->route('invoices.show', $invoice)->with('success', "{$invoice->invoice_number} was paid via Stripe.");
     }

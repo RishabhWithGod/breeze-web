@@ -11,6 +11,7 @@ use App\Models\Job;
 use App\Models\Project;
 use App\Services\Billing\InvoiceSummaryCalculator;
 use App\Services\Dashboard\JobPerformanceCalculator;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -22,7 +23,7 @@ class DashboardController extends Controller
         private readonly InvoiceSummaryCalculator $invoiceSummary,
     ) {}
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
         return Inertia::render('Home', [
             'summary' => $this->summary(),
@@ -41,7 +42,7 @@ class DashboardController extends Controller
             'performance' => $this->performance->series(),
             // Same figures as the Invoice Summary card — one calculator, so the
             // two screens can never disagree with each other.
-            'billing' => $this->invoiceSummary->calculate(),
+            'billing' => $this->invoiceSummary->calculate($request->user()),
             'draftEstimates' => $this->draftEstimates(),
             'reviewsNeedingAttention' => $this->reviewsNeedingAttention(),
         ]);

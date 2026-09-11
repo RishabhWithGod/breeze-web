@@ -34,6 +34,8 @@ class EstimateDetailController extends Controller
 
     public function show(Request $request, Estimate $estimate): Response
     {
+        $this->authorize('view', $estimate);
+
         // Opened as a step, so the flow is remembered from here too — coming
         // back to an estimate is a normal way to re-enter it.
         if ($request->boolean('flow') && $estimate->aiResult?->project !== null) {
@@ -190,6 +192,8 @@ class EstimateDetailController extends Controller
      */
     public function edit(Request $request, Estimate $estimate): Response
     {
+        $this->authorize('update', $estimate);
+
         $estimate->load(['job', 'takeoffProject', 'aiResult']);
 
         return Inertia::render('EstimateEdit', [
@@ -234,29 +238,34 @@ class EstimateDetailController extends Controller
 
             // Shown beside the rate fields so the effect of a change is visible.
             'totals' => EstimateBuilder::totalsFor($estimate),
-            'clients' => $this->clients->options(),
+            'clients' => $this->clients->options($request->user()),
             // Their projects — the list narrows to the picked client's.
-            'projects' => app(ProjectDirectory::class)->options(),
+            'projects' => app(ProjectDirectory::class)->options($request->user()),
         ]);
     }
 
     /** Header fields: client, status, dates, markup, tax, notes. */
     public function update(Request $request, Estimate $estimate): RedirectResponse
     {
+        $this->authorize('update', $estimate);
+
+        $userId = $request->user()->id;
+
         $validated = $request->validate([
             /*
              * What the estimate is on. Every drawing and takeoff hangs off a
              * project, so the estimate does too — and it is the one thing that
-             * has to be answered, because the client is read from it.
+             * has to be answered, because the client is read from it. Must be
+             * one of this manager's own.
              */
-            'project_id' => ['required', 'integer', 'exists:projects,id'],
+            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->where('user_id', $userId)],
             /*
              * Who it is for. Sent by the form because that is the field the
              * project list is narrowed by, but not required: a project belongs
              * to exactly one client, and Estimate::booted derives the column
              * from the project either way.
              */
-            'client_id' => ['nullable', 'integer', 'exists:clients,id'],
+            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')->where('user_id', $userId)],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
             'issued_on' => ['required', 'date'],
             'markup_pct' => ['required', 'numeric', 'min:0', 'max:200'],
@@ -271,7 +280,7 @@ class EstimateDetailController extends Controller
          * another one's project — and a project with no client record yet falls
          * back to the name it carries, because neither column may be empty.
          */
-        $project = Project::with('clientRecord:id,name')->find($validated['project_id']);
+        $project = Project::where('user_id', $userId)->with('clientRecord:id,name')->find($validated['project_id']);
         $validated['client_id'] = $project?->client_id;
         $validated['client'] = $project?->clientRecord?->name ?? $project?->client ?? 'Unassigned';
         $validated['project'] = $project?->name ?? $validated['client'];
@@ -324,6 +333,8 @@ class EstimateDetailController extends Controller
 
     public function storeItem(Request $request, Estimate $estimate): RedirectResponse
     {
+        $this->authorize('update', $estimate);
+
         $validated = $request->validate([
             'category' => ['required', Rule::in(EstimateItem::CATEGORIES)],
             'description' => ['required', 'string', 'max:200'],
@@ -351,6 +362,7 @@ class EstimateDetailController extends Controller
 
     public function updateItem(Request $request, Estimate $estimate, EstimateItem $item): RedirectResponse
     {
+        $this->authorize('update', $estimate);
         abort_unless($item->estimate_id === $estimate->id, 404);
 
         $validated = $request->validate([
@@ -377,6 +389,7 @@ class EstimateDetailController extends Controller
 
     public function destroyItem(Estimate $estimate, EstimateItem $item): RedirectResponse
     {
+        $this->authorize('update', $estimate);
         abort_unless($item->estimate_id === $estimate->id, 404);
 
         $description = $item->description;
@@ -394,6 +407,8 @@ class EstimateDetailController extends Controller
     /** Client-ready PDF. */
     public function pdf(Estimate $estimate, EstimatePdfWriter $writer): StreamedResponse
     {
+        $this->authorize('view', $estimate);
+
         $contents = $writer->render($estimate);
 
         return ResponseFactory::streamDownload(
@@ -406,6 +421,8 @@ class EstimateDetailController extends Controller
     /** CSV of the line items, for a spreadsheet workflow. */
     public function exportCsv(Estimate $estimate): StreamedResponse
     {
+        $this->authorize('view', $estimate);
+
         $rows = $estimate->items()->get();
 
         return ResponseFactory::streamDownload(function () use ($estimate, $rows) {

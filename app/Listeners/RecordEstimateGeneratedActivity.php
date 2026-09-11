@@ -14,7 +14,10 @@ class RecordEstimateGeneratedActivity implements ShouldHandleEventsAfterCommit
     public function handle(EstimateGenerated $event): void
     {
         $client = $event->estimate->client ?? 'a client';
+        $owner = $event->estimate->owner;
 
-        $this->recorder->record(FeedItem::DASHBOARD_ACTIVITY, "Estimate {$event->estimate->number} generated for {$client}", 'file-text', 'lilac');
+        if ($owner) {
+            $this->recorder->record($owner, FeedItem::DASHBOARD_ACTIVITY, "Estimate {$event->estimate->number} generated for {$client}", 'file-text', 'lilac');
+        }
     }
 }

@@ -8,12 +8,12 @@ use App\Models\User;
 /**
  * Who may do what to an invoice.
  *
- * Built on `users.role`, the same free-text column `TimeEntryPolicy` and
- * `JobSchedulePolicy` already match case-insensitively. Anyone signed in may
- * view invoices — the same openness Estimates and Jobs already have, neither
- * of which has a policy restricting viewing either. Only a Project
- * Manager/Admin/Owner may create, change, send, mark paid, or delete one:
- * this is money moving, not a schedule.
+ * Two questions, both of which must clear: *is this your invoice* (owned by
+ * the manager the client/project belongs to) and *is this the kind of thing
+ * your role does* (`users.role`, matched case-insensitively, the same as
+ * `TimeEntryPolicy` and `JobSchedulePolicy`). Only a Project Manager/Admin/
+ * Owner may create, change, send, mark paid, or delete one: this is money
+ * moving, not a schedule.
  */
 class InvoicePolicy
 {
@@ -27,7 +27,7 @@ class InvoicePolicy
 
     public function view(User $user, Invoice $invoice): bool
     {
-        return true;
+        return $invoice->user_id === $user->id;
     }
 
     public function create(User $user): bool
@@ -37,23 +37,23 @@ class InvoicePolicy
 
     public function update(User $user, Invoice $invoice): bool
     {
-        return $this->holds($user, self::MANAGERS) && $invoice->isEditable();
+        return $this->view($user, $invoice) && $this->holds($user, self::MANAGERS) && $invoice->isEditable();
     }
 
     /** A paid invoice is history — it may never be deleted, only a draft or sent one. */
     public function delete(User $user, Invoice $invoice): bool
     {
-        return $this->holds($user, self::MANAGERS) && $invoice->isEditable();
+        return $this->view($user, $invoice) && $this->holds($user, self::MANAGERS) && $invoice->isEditable();
     }
 
     public function send(User $user, Invoice $invoice): bool
     {
-        return $this->holds($user, self::MANAGERS) && $invoice->status === Invoice::STATUS_DRAFT;
+        return $this->view($user, $invoice) && $this->holds($user, self::MANAGERS) && $invoice->status === Invoice::STATUS_DRAFT;
     }
 
     public function markPaid(User $user, Invoice $invoice): bool
     {
-        return $this->holds($user, self::MANAGERS) && $invoice->status === Invoice::STATUS_SENT;
+        return $this->view($user, $invoice) && $this->holds($user, self::MANAGERS) && $invoice->status === Invoice::STATUS_SENT;
     }
 
     /** Derived so the client can hide what it cannot do, rather than fail on submit. */

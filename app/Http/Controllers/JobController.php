@@ -15,6 +15,7 @@ use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
 use App\Models\Upload;
+use App\Models\User;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
@@ -68,6 +69,7 @@ class JobController extends Controller
         $view = $filters['view'] ?? 'all';
 
         $jobs = Job::query()
+            ->ownedBy($request->user())
             ->with(['foreman', 'team:id,name', 'activeAssignments.assigner'])
             ->withCount(['teamMembers', 'estimates'])
             ->search($filters['search'] ?? null)
@@ -97,7 +99,7 @@ class JobController extends Controller
             // No foreman column or filter on the list, so no options to offer.
             // `?foreman=` is still honoured for a deep link.
             'activity' => FeedItemResource::collection(
-                FeedItem::scope(FeedItem::HISTORY_ACTIVITY)->get()
+                FeedItem::scope(FeedItem::HISTORY_ACTIVITY)->visibleTo($request->user())->get()
             )->resolve(),
         ]);
     }
@@ -106,9 +108,9 @@ class JobController extends Controller
     public function create(Request $request): Response
     {
         return Inertia::render('JobCreate', [
-            'clients' => $this->clients->options(),
+            'clients' => $this->clients->options($request->user()),
             // Their projects, each carrying its sites and its default drawing.
-            'projects' => app(ProjectDirectory::class)->options(),
+            'projects' => app(ProjectDirectory::class)->options($request->user()),
             'uploads' => $this->linkOptions->uploads(),
             // The crews a job can be handed to. Once one is picked it narrows
             // who a task on the job can be given to.
@@ -130,7 +132,7 @@ class JobController extends Controller
         unset($data['upload_id']);
 
         // `client` is a snapshot of the picked client's name, never typed.
-        $data = $this->clients->withClientSnapshot($data);
+        $data = $this->clients->withClientSnapshot($data, $request->user());
 
         // Refused here rather than trusted: the ids must be this client's own.
         // Against the client's own book — a project and its job share a place.
@@ -149,7 +151,7 @@ class JobController extends Controller
         $job->recordActivity('created', $isDraft ? 'Job saved as a draft' : 'Job created');
 
         if (! $isDraft) {
-            $this->activity->record(FeedItem::DASHBOARD_ACTIVITY, "New job created: {$job->name}", 'briefcase', 'lilac');
+            $this->activity->record($request->user(), FeedItem::DASHBOARD_ACTIVITY, "New job created: {$job->name}", 'briefcase', 'lilac');
         }
 
         // The selected PDF already carries an estimate — link it rather than
@@ -171,7 +173,7 @@ class JobController extends Controller
             );
         } elseif (! empty($data['create_estimate'])) {
             // "Create estimate for this job" — a real linked estimate, not a flag.
-            $estimate = $this->makeEstimateFor($job);
+            $estimate = $this->makeEstimateFor($job, $request->user());
             $job->recordActivity(
                 'estimate_created',
                 "Estimate {$estimate->number} created",
@@ -197,6 +199,8 @@ class JobController extends Controller
     /** Job detail screen. */
     public function show(Request $request, Job $job): Response
     {
+        $this->authorize('view', $job);
+
         $job->load([
             'project',
             'team:id,name',
@@ -242,7 +246,7 @@ class JobController extends Controller
             'jobCosting' => $canViewTimeCosts ? $jobCosting : JobCostSummary::redact($jobCosting),
             // Whoever plans the work may add to it; everyone else still reads.
             'canPlanWork' => app(JobSchedulePolicy::class)
-                ->createTask($request->user(), $job->schedule ?? new JobSchedule),
+                ->createTask($request->user(), $job->schedule ?? new JobSchedule(['job_id' => $job->id])),
             /** Where Back goes — see App\Support\JobOrigin. */
             'back' => JobOrigin::back($request->query('from')),
             // The same trail as a bare name, so the Edit link can carry it on
@@ -253,10 +257,12 @@ class JobController extends Controller
 
     public function edit(Request $request, Job $job): Response
     {
+        $this->authorize('update', $job);
+
         return Inertia::render('JobEdit', [
             'job' => (new JobDetailResource($job->load('teamMembers', 'addresses', 'team:id,name', 'project:id,client_id', 'aiResult:id,upload_id')))->resolve(),
-            'clients' => $this->clients->options(),
-            'projects' => app(ProjectDirectory::class)->options(),
+            'clients' => $this->clients->options($request->user()),
+            'projects' => app(ProjectDirectory::class)->options($request->user()),
             // The same list the create form offers, so a job can be corrected
             // onto the right drawing instead of being raised again.
             'uploads' => $this->linkOptions->uploads(),
@@ -313,7 +319,9 @@ class JobController extends Controller
 
     public function update(UpdateJobRequest $request, Job $job): RedirectResponse
     {
-        $data = $this->clients->withClientSnapshot($request->validated());
+        $this->authorize('update', $job);
+
+        $data = $this->clients->withClientSnapshot($request->validated(), $request->user());
         $newStatus = $data['status'];
         unset($data['status']);
 
@@ -341,6 +349,8 @@ class JobController extends Controller
 
     public function destroy(Job $job): RedirectResponse
     {
+        $this->authorize('delete', $job);
+
         $job->recordActivity('deleted', 'Job deleted');
         $job->delete();
 
@@ -352,9 +362,9 @@ class JobController extends Controller
     }
 
     /** Undo for the delete above. */
-    public function restore(int $job): RedirectResponse
+    public function restore(Request $request, int $job): RedirectResponse
     {
-        $trashed = Job::onlyTrashed()->findOrFail($job);
+        $trashed = Job::onlyTrashed()->ownedBy($request->user())->findOrFail($job);
         $trashed->restore();
         $trashed->recordActivity('restored', 'Job restored');
 
@@ -363,6 +373,8 @@ class JobController extends Controller
 
     public function archive(Job $job): RedirectResponse
     {
+        $this->authorize('update', $job);
+
         $job->update(['archived_at' => now()]);
         $job->recordActivity('archived', 'Job archived');
 
@@ -371,6 +383,8 @@ class JobController extends Controller
 
     public function unarchive(Job $job): RedirectResponse
     {
+        $this->authorize('update', $job);
+
         $job->update(['archived_at' => null]);
         $job->recordActivity('unarchived', 'Job restored from the archive');
 
@@ -380,6 +394,8 @@ class JobController extends Controller
     /** Copies the record, its team and its intake options into a new draft. */
     public function duplicate(Job $job): RedirectResponse
     {
+        $this->authorize('view', $job);
+
         $copy = Job::create([
             'name' => "{$job->name} (Copy)",
             'project_id' => $job->project_id,
@@ -419,6 +435,8 @@ class JobController extends Controller
     /** Status change from the detail screen's dropdown. */
     public function changeStatus(Request $request, Job $job): RedirectResponse
     {
+        $this->authorize('update', $job);
+
         $validated = $request->validate([
             'status' => ['required', Rule::in(Job::STATUSES)],
         ]);
@@ -433,12 +451,15 @@ class JobController extends Controller
     {
         $validated = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
-            'ids.*' => ['integer', 'exists:work_jobs,id'],
+            'ids.*' => ['integer', Rule::exists('work_jobs', 'id')->where('user_id', $request->user()->id)],
             'action' => ['required', Rule::in(['archive', 'unarchive', 'delete', 'status'])],
             'status' => ['nullable', Rule::in(Job::STATUSES), 'required_if:action,status'],
         ]);
 
-        $jobs = Job::whereIn('id', $validated['ids'])->get();
+        // Belt and braces: even a ownership-scoped `exists` rule only checked
+        // the ids at validation time — this is what actually keeps the bulk
+        // action from touching a job that is not this manager's own.
+        $jobs = Job::whereIn('id', $validated['ids'])->ownedBy($request->user())->get();
         $count = $jobs->count();
 
         foreach ($jobs as $job) {
@@ -467,12 +488,12 @@ class JobController extends Controller
     }
 
     /** Creates a linked estimate carrying the job's client and budget. */
-    private function makeEstimateFor(Job $job): Estimate
+    private function makeEstimateFor(Job $job, User $user): Estimate
     {
         return Estimate::create([
             'job_id' => $job->id,
             'project_id' => $job->project_id,
-            'number' => Estimate::nextNumber(),
+            'number' => Estimate::nextNumber($user),
             // Both name columns are the client's — see ClientDirectory.
             'client' => $job->client ?? 'Unassigned',
             'project' => $job->client ?? 'Unassigned',

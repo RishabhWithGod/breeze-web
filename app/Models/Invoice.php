@@ -47,10 +47,12 @@ class Invoice extends Model
     public const SORTS = ['date-desc', 'date-asc', 'amount-desc', 'amount-asc', 'number-asc'];
 
     protected $fillable = [
+        'user_id',
         'invoice_number',
         'job_id',
         'estimate_id',
         'project_id',
+        'client_id',
         'client',
         'invoice_date',
         'due_date',
@@ -81,6 +83,23 @@ class Invoice extends Model
         ];
     }
 
+    /**
+     * Who this invoice belongs to, read off the client it names — an invoice
+     * always has one, where it does not always have a project.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $invoice): void {
+            if ($invoice->user_id !== null && ! $invoice->isDirty(['client_id', 'job_id'])) {
+                return;
+            }
+
+            $invoice->user_id = $invoice->client_id !== null
+                ? Client::whereKey($invoice->client_id)->value('user_id')
+                : ($invoice->job_id !== null ? Job::whereKey($invoice->job_id)->value('user_id') : null);
+        });
+    }
+
     /* ---------------------------------------------------------------- Relations */
 
     /** @return BelongsTo<Job, $this> */
@@ -108,10 +127,28 @@ class Invoice extends Model
         return $this->belongsTo(Project::class);
     }
 
+    /** @return BelongsTo<Client, $this> */
+    public function clientRecord(): BelongsTo
+    {
+        return $this->belongsTo(Client::class, 'client_id');
+    }
+
     /** @return BelongsTo<User, $this> */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** The manager this invoice belongs to. */
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /** Only this manager's own invoices. */
+    public function scopeOwnedBy(Builder $query, User $user): Builder
+    {
+        return $query->where('user_id', $user->id);
     }
 
     /** @return HasMany<InvoiceItem, $this> */
@@ -244,14 +281,16 @@ class Invoice extends Model
      * unique DB column, so a genuine race still cannot produce a duplicate: the
      * loser's insert fails outright instead of silently succeeding.
      */
-    public static function nextNumber(): string
+    public static function nextNumber(User $user): string
     {
         $integerType = match (static::query()->getConnection()->getDriverName()) {
             'mysql', 'mariadb' => 'SIGNED',
             default => 'INTEGER',
         };
 
+        // One series per manager — see `Estimate::nextNumber()`.
         $highest = (int) static::withTrashed()
+            ->where('user_id', $user->id)
             ->selectRaw("MAX(CAST(SUBSTR(invoice_number, 5) AS {$integerType})) AS seq")
             ->value('seq');
 

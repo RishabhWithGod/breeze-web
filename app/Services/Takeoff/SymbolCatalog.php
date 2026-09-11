@@ -20,6 +20,12 @@ class SymbolCatalog
 {
     public function __construct(private readonly PriceBookLookup $priceBook) {}
 
+    /** A copy of this catalog reading rates from one user's own price book. */
+    public function forUser(?int $userId): self
+    {
+        return new self($this->priceBook->forUser($userId));
+    }
+
     /**
      * @return array{
      *     category: string,

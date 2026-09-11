@@ -5,6 +5,7 @@ namespace App\Services\Takeoff;
 use App\Models\PriceBookImport;
 use App\Models\PriceBookItem;
 use App\Models\PriceBookLine;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
@@ -27,6 +28,10 @@ use Illuminate\Support\Facades\Cache;
  *
  * Nothing here guesses a rate. An item the price book has never seen comes back
  * unmatched, and the estimate says so on the line itself.
+ *
+ * Scoped to one user's own book via {@see forUser()} — every lookup here
+ * prefers that user's uploaded rates and falls back to the universal book
+ * (the one `pricebook:import` seeds) only when they have none of their own.
  */
 class PriceBookLookup
 {
@@ -35,6 +40,25 @@ class PriceBookLookup
 
     /** @var Collection<int, PriceBookItem>|null */
     private ?Collection $items = null;
+
+    /** Whose book this instance reads — null means the universal book. */
+    private ?int $userId = null;
+
+    /**
+     * A copy of this lookup scoped to one user's own price book.
+     *
+     * A clone rather than a mutation: the container may hand the unscoped
+     * instance to more than one collaborator in the same request, and scoping
+     * one caller's copy must not leak into another's.
+     */
+    public function forUser(?int $userId): self
+    {
+        $scoped = clone $this;
+        $scoped->userId = $userId;
+        $scoped->items = null;
+
+        return $scoped;
+    }
 
     /**
      * The company's rate for this symbol, or null when it has never priced one.
@@ -192,9 +216,20 @@ class PriceBookLookup
     /** @return Collection<int, PriceBookItem> */
     private function all(): Collection
     {
-        return $this->items ??= PriceBookItem::query()
-            ->get(['id', 'match_key', 'unit', 'description', 'section', 'subsection',
-                'unit_material_cost', 'unit_manhours', 'sample_count']);
+        if ($this->items !== null) {
+            return $this->items;
+        }
+
+        $columns = ['id', 'match_key', 'unit', 'description', 'section', 'subsection',
+            'unit_material_cost', 'unit_manhours', 'sample_count'];
+
+        $own = $this->userId !== null
+            ? PriceBookItem::query()->where('user_id', $this->userId)->get($columns)
+            : collect();
+
+        return $this->items = $own->isNotEmpty()
+            ? $own
+            : PriceBookItem::query()->whereNull('user_id')->get($columns);
     }
 
     /**
@@ -207,8 +242,8 @@ class PriceBookLookup
      */
     public function laborRate(): float
     {
-        return (float) Cache::remember('price-book.labor-rate', self::CACHE_TTL, function () {
-            $rates = PriceBookLine::query()
+        return (float) Cache::remember($this->cacheKey('labor-rate'), self::CACHE_TTL, function () {
+            $rates = $this->scopedLines()
                 ->whereNotNull('manhour_rate')
                 ->where('manhour_rate', '>', 0)
                 ->pluck('manhour_rate')
@@ -233,7 +268,7 @@ class PriceBookLookup
      */
     public function bidRates(): array
     {
-        return Cache::remember('price-book.bid-rates', self::CACHE_TTL, function () {
+        return Cache::remember($this->cacheKey('bid-rates'), self::CACHE_TTL, function () {
             return [
                 'tax_pct' => $this->medianOf('material_tax_pct')
                     ?? (float) config('ai.estimating.tax_pct'),
@@ -246,7 +281,7 @@ class PriceBookLookup
 
     private function medianOf(string $column): ?float
     {
-        $values = PriceBookImport::query()
+        $values = $this->scopedImports()
             ->whereNotNull($column)
             ->pluck($column)
             ->map(fn ($value) => (float) $value)
@@ -254,6 +289,32 @@ class PriceBookLookup
             ->values();
 
         return $values->isEmpty() ? null : $this->median($values->all());
+    }
+
+    /** Cache key for a metric, split by whose book it was read from. */
+    private function cacheKey(string $metric): string
+    {
+        return 'price-book.'.$metric.'.'.($this->userId ?? 'universal');
+    }
+
+    /** This user's own priced lines, or the universal book while they have none. */
+    private function scopedLines(): Builder
+    {
+        $hasOwn = $this->userId !== null && PriceBookLine::query()->where('user_id', $this->userId)->exists();
+
+        return $hasOwn
+            ? PriceBookLine::query()->where('user_id', $this->userId)
+            : PriceBookLine::query()->whereNull('user_id');
+    }
+
+    /** This user's own imports, or the universal book while they have none. */
+    private function scopedImports(): Builder
+    {
+        $hasOwn = $this->userId !== null && PriceBookImport::query()->where('user_id', $this->userId)->exists();
+
+        return $hasOwn
+            ? PriceBookImport::query()->where('user_id', $this->userId)
+            : PriceBookImport::query()->whereNull('user_id');
     }
 
     /** @param list<float> $values */

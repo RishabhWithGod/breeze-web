@@ -215,7 +215,7 @@ class JobTaskSetupController extends Controller
                 // separately.
                 $lineIds = array_values(array_unique(array_merge(
                     $laborLineIds,
-                    $this->pairedMaterialLines($laborLineIds),
+                    $this->pairedMaterialLines($job, $laborLineIds),
                 )));
 
                 $task = $schedule->tasks()->create([
@@ -431,7 +431,7 @@ class JobTaskSetupController extends Controller
         // it already correctly holds.
         $ids = array_values(array_unique(array_merge(
             $laborIds,
-            $this->pairedMaterialLines($laborIds, $task->id),
+            $this->pairedMaterialLines($job, $laborIds, $task->id),
         )));
 
         DB::transaction(function () use ($task, $job, $title, $data, $ids) {
@@ -692,16 +692,26 @@ class JobTaskSetupController extends Controller
      * already correctly holds just because it wasn't resubmitted (the
      * picker never lets material be submitted directly).
      *
+     * Scoped to `$job`'s own estimates as well. A symbol id is only unique
+     * within the takeoff that produced it, and the match here is what decides
+     * which rows get stamped with this task's id — unscoped, a free material
+     * line on another manager's estimate that happened to share a symbol
+     * would be quietly claimed into this job's task.
+     *
      * @param  list<int>  $laborLineIds
      * @return list<int>
      */
-    private function pairedMaterialLines(array $laborLineIds, ?int $editingTaskId = null): array
+    private function pairedMaterialLines(Job $job, array $laborLineIds, ?int $editingTaskId = null): array
     {
         if ($laborLineIds === []) {
             return [];
         }
 
-        $symbolIds = EstimateItem::whereIn('id', $laborLineIds)
+        $estimateIds = $this->estimateIds($job);
+
+        $symbolIds = EstimateItem::query()
+            ->whereIn('id', $laborLineIds)
+            ->whereIn('estimate_id', $estimateIds)
             ->whereNotNull('final_symbol_id')
             ->pluck('final_symbol_id')
             ->unique()
@@ -712,6 +722,7 @@ class JobTaskSetupController extends Controller
         }
 
         return EstimateItem::query()
+            ->whereIn('estimate_id', $estimateIds)
             ->whereIn('final_symbol_id', $symbolIds)
             ->where('category', '!=', EstimateItem::CATEGORY_LABOR)
             ->where(function ($query) use ($editingTaskId) {
@@ -764,13 +775,19 @@ class JobTaskSetupController extends Controller
     /**
      * Planning a job is a planning decision — the same one `JobTaskController`
      * gates on. Checked against the job's schedule when it has one, and against
-     * the one it is about to get when it does not: the policy asks about the
-     * user's role, not about that particular schedule.
+     * the one it is about to get when it does not.
+     *
+     * The stand-in schedule must name the job. The policy asks two questions —
+     * the user's role, and whether the job is theirs — and it reads the second
+     * off `$schedule->job`. A bare `new JobSchedule` names no job, which the
+     * policy reads as "nothing to own, nothing to deny": every job with no
+     * schedule yet would then be plannable by anyone holding a planning role,
+     * whoever raised it. Naming the job is what makes the check real.
      */
     private function authorisePlanning(Job $job, User $user): void
     {
         abort_unless(
-            $this->policy->createTask($user, $job->schedule ?? new JobSchedule),
+            $this->policy->createTask($user, $job->schedule ?? new JobSchedule(['job_id' => $job->id])),
             403,
         );
     }

@@ -21,6 +21,8 @@ class StoreJobRequest extends FormRequest
      */
     public function rules(): array
     {
+        $userId = $this->user()->id;
+
         return [
             'name' => ['required', 'string', 'min:3', 'max:160'],
             /*
@@ -29,9 +31,16 @@ class StoreJobRequest extends FormRequest
              *
              * One site per job: the screen offers radios, and the rule has to
              * agree with it or a hand-made request could still send several.
+             * Refused here rather than trusted: the address must be on one of
+             * this manager's own clients.
              */
             'address_ids' => ['required', 'array', 'size:1'],
-            'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
+            'address_ids.*' => [
+                'integer', 'distinct',
+                Rule::exists('client_addresses', 'id')->where(
+                    fn ($query) => $query->whereIn('client_id', fn ($sub) => $sub->select('id')->from('clients')->where('user_id', $userId))
+                ),
+            ],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
             /*
@@ -54,20 +63,26 @@ class StoreJobRequest extends FormRequest
             'notify_client' => ['boolean'],
             /** "Save as Draft" instead of "Create Job". */
             'save_as_draft' => ['boolean'],
-            /** Who the work is for, from the client register. */
-            'client_id' => ['required', 'integer', 'exists:clients,id'],
+            /** Who the work is for, from this manager's own client register. */
+            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->where('user_id', $userId)],
             /*
              * And which of their projects it is on. Every drawing, takeoff and
              * estimate hangs off a project, so the job does too — the client
-             * alone cannot say which set of drawings this is.
+             * alone cannot say which set of drawings this is. Also this
+             * manager's own.
              */
-            'project_id' => ['required', 'integer', 'exists:projects,id'],
+            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->where('user_id', $userId)],
             /*
              * Required: a job is the work on a drawing. Without one there is no
              * takeoff, no estimate, and nothing for the task step that follows
-             * to plan from.
+             * to plan from. Must be one of this manager's own projects' drawings.
              */
-            'upload_id' => ['required', 'integer', 'exists:uploads,id'],
+            'upload_id' => [
+                'required', 'integer',
+                Rule::exists('uploads', 'id')->where(
+                    fn ($query) => $query->whereIn('project_id', fn ($sub) => $sub->select('id')->from('projects')->where('user_id', $userId))
+                ),
+            ],
         ];
     }
 

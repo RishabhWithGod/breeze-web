@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -11,11 +12,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Kept beside the rates it produced so any figure this system quotes can be
  * traced to the bid it came off — which job, at what labour rates, to what
  * total. A rate with no provenance is a guess with a decimal point.
+ *
+ * `user_id` is null for the universal book seeded by `pricebook:import`, and
+ * set to whoever uploaded it otherwise — a user's own estimates are priced
+ * off their own imports first, and only fall back to the universal ones.
  */
 class PriceBookImport extends Model
 {
     protected $fillable = [
-        'file_name', 'file_hash', 'project_name',
+        'user_id', 'file_name', 'file_hash', 'project_name',
         'material_cost', 'labor_cost', 'material_tax', 'total_cost', 'base_bid_price',
         'material_tax_pct', 'overhead_pct', 'profit_pct',
         'electrician_rate', 'supervisor_rate', 'unskilled_rate', 'composite_labor_rate',
@@ -39,5 +44,11 @@ class PriceBookImport extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(PriceBookLine::class);
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

@@ -10,13 +10,14 @@ use App\Models\User;
 /**
  * Who may do what to a schedule.
  *
- * Built on `users.role`, which already exists. The distinctions that matter on site:
- * anyone on the job can see the schedule and tick off their own work; changing the
- * plan, staffing it, or deleting work is a planning decision and belongs to the
- * people accountable for the date.
+ * Two questions, both of which must clear: *is this the kind of thing your
+ * role does* (`users.role`, free text entered by the office), and *is it
+ * your job* (`work_jobs.user_id` — the manager the job was raised under).
+ * A site supervisor's role lets them replan a schedule; it was never meant to
+ * let them replan a schedule on a job that is not theirs.
  *
- * Roles are matched case-insensitively on the job title stored against the user,
- * because that column is free text entered by the office.
+ * Roles are matched case-insensitively on the job title stored against the
+ * user.
  */
 class JobSchedulePolicy
 {
@@ -29,44 +30,46 @@ class JobSchedulePolicy
     /** Roles that may remove work from a schedule. */
     private const DELETERS = ['project manager', 'admin', 'owner'];
 
-    /** Everyone signed in can read a schedule; it is the shared plan. */
+    /** Anyone signed in can read the shared plan — for a job that is theirs. */
     public function view(User $user, JobSchedule $schedule): bool
     {
-        return true;
+        return $this->owns($user, $schedule->job);
     }
 
     /** Dates, working week, holidays, status. */
     public function update(User $user, JobSchedule $schedule): bool
     {
-        return $this->holds($user, self::PLANNERS);
+        return $this->holds($user, self::PLANNERS) && $this->owns($user, $schedule->job);
     }
 
     public function createTask(User $user, JobSchedule $schedule): bool
     {
-        return $this->holds($user, self::PLANNERS);
+        return $this->holds($user, self::PLANNERS) && $this->owns($user, $schedule->job);
     }
 
     /** Reordering and rescheduling are both changes to the plan. */
     public function reorder(User $user, JobSchedule $schedule): bool
     {
-        return $this->holds($user, self::PLANNERS);
+        return $this->holds($user, self::PLANNERS) && $this->owns($user, $schedule->job);
     }
 
     public function updateTask(User $user, JobTask $task): bool
     {
-        return $this->holds($user, self::PLANNERS);
+        return $this->holds($user, self::PLANNERS) && $this->owns($user, $task->job);
     }
 
     /**
      * Completing work is not a planning decision.
      *
-     * A planner can close anything; anyone else can close a task they are actually on,
-     * which is what lets a crew tick off their own work without the office doing it
-     * for them.
+     * A planner can close anything on their own jobs; anyone else can close a
+     * task they are actually on, which is what lets a crew tick off their own
+     * work without the office doing it for them — and being on the task at
+     * all already implies it is a job they have a real reason to be on.
      */
     public function completeTask(User $user, JobTask $task): bool
     {
-        return $this->holds($user, self::PLANNERS) || $this->isAssigned($user, $task);
+        return ($this->holds($user, self::PLANNERS) && $this->owns($user, $task->job))
+            || $this->isAssigned($user, $task);
     }
 
     /** Recording a delay is reporting, so the same rule as completing. */
@@ -77,30 +80,32 @@ class JobSchedulePolicy
 
     public function assign(User $user, JobTask $task): bool
     {
-        return $this->holds($user, self::STAFFERS);
+        return $this->holds($user, self::STAFFERS) && $this->owns($user, $task->job);
     }
 
     public function deleteTask(User $user, JobTask $task): bool
     {
-        return $this->holds($user, self::DELETERS);
+        return $this->holds($user, self::DELETERS) && $this->owns($user, $task->job);
     }
 
-    /** Anyone who can see the schedule can comment on its work. */
+    /** Comment who can see the work: the job's own manager, or whoever is on it. */
     public function comment(User $user, JobTask $task): bool
     {
-        return true;
+        return $this->owns($user, $task->job) || $this->isAssigned($user, $task);
     }
 
     /** Derived so the client can hide what it cannot do, rather than fail on submit. */
     public function abilities(User $user, JobSchedule $schedule): array
     {
+        $owns = $this->owns($user, $schedule->job);
+
         return [
-            'updateSchedule' => $this->update($user, $schedule),
-            'createTask' => $this->createTask($user, $schedule),
-            'reorder' => $this->reorder($user, $schedule),
-            'assign' => $this->holds($user, self::STAFFERS),
-            'deleteTask' => $this->holds($user, self::DELETERS),
-            'comment' => true,
+            'updateSchedule' => $this->holds($user, self::PLANNERS) && $owns,
+            'createTask' => $this->holds($user, self::PLANNERS) && $owns,
+            'reorder' => $this->holds($user, self::PLANNERS) && $owns,
+            'assign' => $this->holds($user, self::STAFFERS) && $owns,
+            'deleteTask' => $this->holds($user, self::DELETERS) && $owns,
+            'comment' => $owns,
         ];
     }
 
@@ -110,6 +115,20 @@ class JobSchedulePolicy
     private function holds(User $user, array $roles): bool
     {
         return in_array(mb_strtolower(trim((string) $user->role)), $roles, true);
+    }
+
+    /**
+     * Whether `$job` is this manager's own.
+     *
+     * A handful of call sites probe an ability with no real job in view yet —
+     * a generic "does this role manage things at all" check on a stand-in
+     * schedule that names none. Nothing to own means nothing to deny; the
+     * role check alone answers those. Anywhere a job is actually named, this
+     * is the check that matters.
+     */
+    private function owns(User $user, ?Job $job): bool
+    {
+        return $job === null || $job->user_id === $user->id;
     }
 
     /**

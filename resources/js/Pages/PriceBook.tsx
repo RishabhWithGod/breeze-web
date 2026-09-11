@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { Head, Link, router } from '@inertiajs/react'
 import { Pin, SearchX } from 'lucide-react'
 import {
+  Alert,
   Badge,
   Card,
   EmptyState,
@@ -55,6 +56,8 @@ export interface PriceBookProps {
   sections: readonly string[]
   totals: { items: number; lines: number; imports: number }
   imports: readonly ImportRow[]
+  /** True while this user has never uploaded a rate list of their own. */
+  isUniversal: boolean
 }
 
 /**
@@ -72,6 +75,7 @@ export default function PriceBook({
   sections,
   totals,
   imports,
+  isUniversal,
 }: PriceBookProps) {
   const [search, setSearch] = useState(filters.search)
 
@@ -185,6 +189,14 @@ export default function PriceBook({
         title="Price Book"
         subtitle={`${totals.items} items, from ${totals.lines} priced lines across ${totals.imports} estimating workbooks`}
       />
+
+      {isUniversal && (
+        <Alert tone="info" title="Showing the shared price book" className="mb-6">
+          You haven't uploaded a vendor rate list of your own yet — these are
+          the universal rates every estimate falls back to. Upload one from
+          the Add Project screen and your estimates will price off it instead.
+        </Alert>
+      )}
 
       {/* ------------------------------------------------ Where it came from */}
       <Card accent="brand" padding="lg" className="mb-6">

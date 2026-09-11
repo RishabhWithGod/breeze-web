@@ -22,8 +22,16 @@ class StoreDocumentRequest extends FormRequest
                 Rule::file()->extensions(config('documents.extensions')),
             ],
             'name' => ['nullable', 'string', 'max:150'],
-            // The takeoff this paperwork is filed under.
-            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            /*
+             * The takeoff this paperwork is filed under — one of this
+             * manager's own, so a hand-made request cannot file a document
+             * into another manager's project (where `DocumentPolicy` would
+             * then hide it from the uploader anyway).
+             */
+            'project_id' => [
+                'nullable', 'integer',
+                Rule::exists('projects', 'id')->where('user_id', $this->user()->id),
+            ],
             'description' => ['nullable', 'string', 'max:1000'],
             /*
              * Not asked for on the form any more. Still accepted so a caller
