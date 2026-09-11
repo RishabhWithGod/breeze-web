@@ -1,8 +1,8 @@
-import { useRef } from 'react'
+import { useRef, type ChangeEvent } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { ArrowLeft, FileSpreadsheet, FolderKanban, Layers, MapPin, X } from 'lucide-react'
+import { ArrowLeft, DollarSign, FileSpreadsheet, FolderKanban, Layers, MapPin, X } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -18,6 +18,24 @@ import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { ClientOption, ResumableTakeoff } from '@/types'
 import { formatFileSize } from '@/utils'
+
+/** Keeps only digits and a single decimal point, at most 2 decimal places. */
+function sanitizeMoneyInput(value: string): string {
+  const cleaned = value.replace(/[^\d.]/g, '')
+  const firstDot = cleaned.indexOf('.')
+  if (firstDot === -1) return cleaned
+
+  const wholePart = cleaned.slice(0, firstDot)
+  const decimalPart = cleaned.slice(firstDot + 1).replace(/\./g, '').slice(0, 2)
+  return `${wholePart}.${decimalPart}`
+}
+
+/** US thousands grouping for display -- the value sent to the server stays plain. */
+function formatMoneyDisplay(raw: string): string {
+  const [wholePart = '', decimalPart] = raw.split('.')
+  const grouped = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return decimalPart === undefined ? grouped : `${grouped}.${decimalPart}`
+}
 
 interface ProjectDraft {
   client_id: string
@@ -71,6 +89,9 @@ export default function ProjectCreate({
   }
 
   const selectClient = (clientId: string) => update('client_id', clientId)
+
+  const updateEstimateCost = (event: ChangeEvent<HTMLInputElement>) =>
+    update('estimate_target_total', sanitizeMoneyInput(event.target.value))
 
   const selectedClient = clients.find((option) => String(option.id) === data.client_id)
   const primarySite = selectedClient?.addresses.find((site) => site.isPrimary)
@@ -180,14 +201,13 @@ export default function ProjectCreate({
 
             <TextInput
               id="project-estimate-target-total"
-              type="number"
+              type="text"
               inputMode="decimal"
-              min={0}
-              step={50}
+              leftIcon={DollarSign}
               label="Estimate Project Cost (Optional)"
-              placeholder="e.g. 24850"
-              value={data.estimate_target_total}
-              onChange={(event) => update('estimate_target_total', event.target.value)}
+              placeholder="e.g. 24,850"
+              value={formatMoneyDisplay(data.estimate_target_total)}
+              onChange={updateEstimateCost}
               {...(errors.estimate_target_total ? { error: errors.estimate_target_total } : {})}
             />
 
