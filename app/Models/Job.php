@@ -73,6 +73,7 @@ class Job extends Model
         'location',
         'latitude',
         'longitude',
+        'geofence_radius',
         'place_id',
         'description',
         'job_type',
@@ -99,6 +100,7 @@ class Job extends Model
             'end_date' => 'date',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
+            'geofence_radius' => 'integer',
             'budget' => 'decimal:2',
             'estimated_hours' => 'decimal:2',
             // `actual_hours`/`delay_hours`/`delay_reason` are deliberately not
@@ -383,6 +385,20 @@ class Job extends Model
         return $this->hasMany(TimeEntry::class);
     }
 
+    /** GPS check-in/check-out — distinct from {@see timeEntries()}, which is
+     *  logged work hours with an approval workflow; this is raw presence. */
+    public function attendances(): HasMany
+    {
+        return $this->hasMany(JobAttendance::class, 'job_id');
+    }
+
+    /** One row per foreman assigned to this job — their own submit/approve
+     *  progress, independent of every other foreman's. */
+    public function foremanCompletions(): HasMany
+    {
+        return $this->hasMany(JobForemanCompletion::class);
+    }
+
     /** @return HasMany<Document, $this> */
     public function documents(): HasMany
     {
@@ -575,6 +591,211 @@ class Job extends Model
             $this->notifiableForemen(),
             new JobReviewStatusChanged($this, JobReviewStatusChanged::REVERTED),
         );
+    }
+
+    /**
+     * The foreman ids actually assigned to this job's tasks — the set every
+     * per-foreman completion check is scoped against. Falls back to the
+     * job's own header `foreman_id`, same as {@see assignedForemen()}, for
+     * jobs raised before tasks carried their own foreman.
+     *
+     * @return Collection<int, int>
+     */
+    public function assignedForemanIds(): Collection
+    {
+        $fromTasks = $this->tasks()->whereNotNull('foreman_id')->pluck('foreman_id')->unique()->values();
+
+        return $fromTasks->isNotEmpty()
+            ? $fromTasks
+            : collect($this->foreman_id === null ? [] : [$this->foreman_id]);
+    }
+
+    /**
+     * Open tasks belonging to one foreman — scoped to `foreman_id` when the
+     * job's tasks actually carry one, the same convention
+     * {@see assignedForemanIds()} uses; falls back to every task on the job
+     * for one raised before tasks carried their own foreman, where the
+     * header field names the only foreman there is.
+     */
+    public function myOpenTasksCount(int $foremanId): int
+    {
+        $hasPerTaskForemen = $this->tasks()->whereNotNull('foreman_id')->exists();
+
+        return $hasPerTaskForemen
+            ? $this->tasks()->where('foreman_id', $foremanId)->open()->count()
+            : $this->tasks()->open()->count();
+    }
+
+    /** This foreman's own completion row, created empty the first time it's touched. */
+    public function foremanCompletionFor(int $foremanId): JobForemanCompletion
+    {
+        return $this->foremanCompletions()->firstOrCreate(['foreman_id' => $foremanId]);
+    }
+
+    /** Ids of foremen who have submitted their own tasks but are not yet approved. */
+    public function readyForemanIds(): Collection
+    {
+        return $this->foremanCompletions()
+            ->whereNotNull('ready_for_review_at')
+            ->whereNull('approved_at')
+            ->pluck('foreman_id');
+    }
+
+    /**
+     * Whether every foreman actually assigned to this job has been approved
+     * — the real gate for closing the job itself, as opposed to
+     * {@see isReadyForReview()}, which is only a bridged, whole-job echo of
+     * that for the handful of call sites (timer, notes, attachments) that
+     * predate per-foreman tracking and only care about "is anyone still
+     * mid-review at all."
+     */
+    public function isFullyApprovedByForemen(): bool
+    {
+        $ids = $this->assignedForemanIds();
+        if ($ids->isEmpty()) {
+            return $this->isReadyForReview();
+        }
+
+        return $this->foremanCompletions()
+            ->whereIn('foreman_id', $ids)
+            ->whereNotNull('approved_at')
+            ->count() === $ids->count();
+    }
+
+    /**
+     * Foremen currently waiting on a supervisor's review, `id` alongside
+     * `name` so a caller can target one specifically — a supervisor
+     * approving one foreman from their task list must never sweep up
+     * whichever other foreman also happens to be ready at the same moment.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    public function readyForemen(): array
+    {
+        $ids = $this->readyForemanIds();
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return Foreman::whereKey($ids)->orderBy('name')->get(['id', 'name'])
+            ->map(fn (Foreman $f) => ['id' => $f->id, 'name' => $f->name])
+            ->all();
+    }
+
+    /**
+     * Assigned foremen who have not yet been approved, `id` alongside
+     * `name` — for the "waiting on: ..." list the app shows a foreman or
+     * supervisor once their own review has moved forward.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    public function pendingForemen(): array
+    {
+        $ids = $this->assignedForemanIds();
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $approvedIds = $this->foremanCompletions()
+            ->whereIn('foreman_id', $ids)
+            ->whereNotNull('approved_at')
+            ->pluck('foreman_id');
+
+        $pendingIds = $ids->diff($approvedIds);
+        if ($pendingIds->isEmpty()) {
+            return [];
+        }
+
+        return Foreman::whereKey($pendingIds)->orderBy('name')->get(['id', 'name'])
+            ->map(fn (Foreman $f) => ['id' => $f->id, 'name' => $f->name])
+            ->all();
+    }
+
+    /**
+     * One foreman's own sign-off: their own tasks are all closed, but only a
+     * supervisor's approval of this row — not the whole job's — moves them
+     * on. Does not touch `ready_for_review_at`/`status` directly; those stay
+     * a bridged echo, only flipped once every foreman here is ready/approved
+     * (see {@see JobController::changeStatus()}).
+     */
+    public function markForemanReadyForReview(int $foremanId): void
+    {
+        $completion = $this->foremanCompletionFor($foremanId);
+        $completion->ready_for_review_at = now();
+        $completion->approved_at = null;
+        $completion->save();
+
+        $this->recordActivity(
+            'foreman_ready_for_review',
+            'A foreman marked their own tasks ready for supervisor review.',
+        );
+
+        if (! $this->isReadyForReview() && $this->haveAllForemenSubmitted()) {
+            // Every assigned foreman has now submitted their own portion —
+            // bridge the legacy whole-job flag for the call sites that only
+            // ever understood one shared review state (timer/notes/attachments).
+            $this->markReadyForReview();
+        }
+
+        Notification::send(
+            $this->notifiableSupervisors(),
+            new JobReviewStatusChanged($this, JobReviewStatusChanged::READY_FOR_REVIEW),
+        );
+    }
+
+    /**
+     * Undoes one foreman's own sign-off — a supervisor reopened one of
+     * *their* tasks while reviewing. Never touches another foreman's
+     * already-approved row: their portion staying approved regardless of
+     * this one being sent back is the whole point of tracking this
+     * per-foreman rather than job-wide.
+     */
+    public function clearForemanReadyForReview(int $foremanId): void
+    {
+        $completion = $this->foremanCompletions()->where('foreman_id', $foremanId)->first();
+        if ($completion === null
+            || ($completion->ready_for_review_at === null && $completion->approved_at === null)) {
+            return;
+        }
+
+        $completion->ready_for_review_at = null;
+        $completion->approved_at = null;
+        $completion->save();
+
+        // The bridged whole-job flag only ever meant "everyone was ready" —
+        // one foreman being sent back makes that no longer true.
+        $this->clearReadyForReview();
+
+        Notification::send(
+            $completion->foreman?->user !== null ? collect([$completion->foreman->user]) : collect(),
+            new JobReviewStatusChanged($this, JobReviewStatusChanged::REVERTED),
+        );
+    }
+
+    /** Records this foreman's own portion as signed off by a supervisor. */
+    public function approveForeman(int $foremanId): JobForemanCompletion
+    {
+        $completion = $this->foremanCompletionFor($foremanId);
+        $completion->approved_at = now();
+        $completion->save();
+
+        return $completion;
+    }
+
+    /** Whether every foreman assigned to this job has at least submitted
+     *  their own tasks for review (approved or still waiting either way) —
+     *  what the legacy whole-job `ready_for_review_at` bridge is keyed on. */
+    private function haveAllForemenSubmitted(): bool
+    {
+        $ids = $this->assignedForemanIds();
+        if ($ids->isEmpty()) {
+            return false;
+        }
+
+        return $this->foremanCompletions()
+            ->whereIn('foreman_id', $ids)
+            ->where(fn (Builder $q) => $q->whereNotNull('ready_for_review_at')->orWhereNotNull('approved_at'))
+            ->count() === $ids->count();
     }
 
     /**

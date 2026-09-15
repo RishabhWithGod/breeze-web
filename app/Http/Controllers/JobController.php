@@ -139,10 +139,20 @@ class JobController extends Controller
         $addresses = $this->sites->resolve((int) $data['client_id'], $data['address_ids']);
         unset($data['address_ids']);
 
+        // The selected PDF already carries an estimate — link it rather than
+        // raising a second one from the checkbox below.
+        $linkedEstimate = $aiResult?->estimate;
+
         $job = Job::create([
             ...$data,
             'ai_result_id' => $aiResult?->id,
             'status' => $isDraft ? 'draft' : 'planning',
+            /*
+             * Never typed on this form: a job's budget is the estimate raised
+             * against its drawing, so it is read from there directly. Null
+             * while that drawing has no estimate yet.
+             */
+            'budget' => $linkedEstimate?->amount,
         ]);
 
         $this->sites->attach($job, $addresses);
@@ -153,10 +163,6 @@ class JobController extends Controller
         if (! $isDraft) {
             $this->activity->record($request->user(), FeedItem::DASHBOARD_ACTIVITY, "New job created: {$job->name}", 'briefcase', 'lilac');
         }
-
-        // The selected PDF already carries an estimate — link it rather than
-        // raising a second one from the checkbox below.
-        $linkedEstimate = $aiResult?->estimate;
 
         if ($linkedEstimate && $linkedEstimate->job_id === null) {
             $linkedEstimate->update([

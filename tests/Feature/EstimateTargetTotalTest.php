@@ -5,10 +5,11 @@ namespace Tests\Feature;
 use App\Models\AiJob;
 use App\Models\AiResult;
 use App\Models\EstimateItem;
-use App\Models\PriceBookImport;
-use App\Models\PriceBookItem;
-use App\Models\PriceBookLine;
+use App\Models\ProjectRateImport;
+use App\Models\ProjectRateItem;
+use App\Models\ProjectRateLine;
 use App\Models\User;
+use App\Services\Estimating\WorkbookReader;
 use App\Services\Takeoff\EstimateBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -32,7 +33,8 @@ class EstimateTargetTotalTest extends TestCase
             'estimate_target_total' => 5000,
         ]);
 
-        $import = PriceBookImport::create([
+        $import = ProjectRateImport::create([
+            'project_id' => $project->id,
             'file_name' => 'Electrical Estimate - TEST.xlsx',
             'file_hash' => str_repeat('c', 64),
             'project_name' => 'TEST PROJECT',
@@ -47,8 +49,9 @@ class EstimateTargetTotalTest extends TestCase
             ['EM2, NEW BATTERY 2/HEAD EM FIXTURE', 'EA', 60.0, 1.25, 'LIGHTING FIXTURES'],
             ['3/4" CONDUIT - EMT', 'FT', 0.8296, 0.062, 'BRANCH WIRING'],
         ] as [$description, $unit, $cost, $hours, $section]) {
-            PriceBookLine::create([
-                'price_book_import_id' => $import->id,
+            ProjectRateLine::create([
+                'project_rate_import_id' => $import->id,
+                'project_id' => $project->id,
                 'section' => $section,
                 'description' => $description,
                 'quantity' => 10,
@@ -56,11 +59,12 @@ class EstimateTargetTotalTest extends TestCase
                 'unit_material_cost' => $cost,
                 'manhour_rate' => 48,
                 'unit_manhours' => $hours,
-                'match_key' => PriceBookLine::keyFor($description),
+                'match_key' => WorkbookReader::keyFor($description),
             ]);
 
-            PriceBookItem::create([
-                'match_key' => PriceBookLine::keyFor($description),
+            ProjectRateItem::create([
+                'project_id' => $project->id,
+                'match_key' => WorkbookReader::keyFor($description),
                 'unit' => $unit,
                 'description' => $description,
                 'section' => $section,
@@ -147,7 +151,8 @@ class EstimateTargetTotalTest extends TestCase
 
         $estimate = app(EstimateBuilder::class)->fromFinalJson($result, $user);
 
-        // Config catalog fallback, unscaled: whatever the natural price comes to.
-        $this->assertNotSame('5000.00', $estimate->grand_total);
+        // No target to scale to, and no rate list uploaded: the line prices
+        // at zero rather than at the budget figure from the other test.
+        $this->assertSame('0.00', $estimate->grand_total);
     }
 }

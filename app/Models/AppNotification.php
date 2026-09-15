@@ -53,7 +53,7 @@ class AppNotification extends Model
         'jobs' => 'Jobs',
         'tasks' => 'Tasks',
         'estimates' => 'Estimates',
-        'scheduling' => 'Scheduling',
+        'scheduling' => 'Calendar',
         'ai-takeoff' => 'AI Takeoff',
         'time-tracking' => 'Time Tracking',
         'documents' => 'Documents',

@@ -38,7 +38,7 @@ class JobController extends Controller
             ->paginate(min((int) $request->integer('per_page', 20), 50));
 
         return $this->ok([
-            'jobs' => $jobs->getCollection()->map(fn (Job $job) => $this->summarize($job))->all(),
+            'jobs' => $jobs->getCollection()->map(fn (Job $job) => $this->summarize($job, $request))->all(),
             'meta' => [
                 'currentPage' => $jobs->currentPage(),
                 'lastPage' => $jobs->lastPage(),
@@ -55,7 +55,7 @@ class JobController extends Controller
         $job->load(['foreman:id,name,initials,role,user_id', 'activeAssignments']);
 
         return $this->ok([
-            ...$this->summarize($job),
+            ...$this->summarize($job, $request),
             'description' => $job->description,
             'assignments' => $job->activeAssignments->map(fn ($a) => [
                 'role' => $a->role,
@@ -65,6 +65,73 @@ class JobController extends Controller
             'crewTime' => $this->crewTime($job),
             'myTasksComplete' => $this->myTasksComplete($request, $job),
         ]);
+    }
+
+    /**
+     * A supervisor's targeted sign-off on one foreman's own portion of this
+     * job — never anyone else's, whatever else happens to be ready at the
+     * same moment. Reached from the task list, once that foreman's tasks
+     * read as done.
+     */
+    public function approveForeman(Request $request, Job $job, Foreman $foreman): JsonResponse
+    {
+        abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
+
+        $actingForeman = $request->user()->foreman;
+        abort_unless(
+            $actingForeman?->role === Foreman::ROLE_SUPERVISOR,
+            403,
+            'Only a supervisor can approve a foreman’s work.',
+        );
+
+        if ($job->isLocked()) {
+            return $this->fail('This job is already completed and can no longer be changed.', 409);
+        }
+
+        $completion = $job->foremanCompletions()->where('foreman_id', $foreman->id)->first();
+        if ($completion === null || ! $completion->isReadyForReview()) {
+            return $this->fail(
+                "{$foreman->name} hasn't submitted their tasks for review yet.",
+                422,
+                ['code' => 'not_ready_for_review'],
+            );
+        }
+
+        // Already approved — a second tap (a retried request, or two
+        // supervisors on the same job) changes nothing rather than erroring.
+        if (! $completion->isApproved()) {
+            $job->approveForeman($foreman->id);
+        }
+
+        return $this->ok([
+            'jobId' => $job->id,
+            'foremanId' => $foreman->id,
+            'foremanName' => $foreman->name,
+            'fullyApproved' => $job->isFullyApprovedByForemen(),
+            'pendingForemen' => $job->pendingForemen(),
+        ], "{$foreman->name}'s work is approved.");
+    }
+
+    /**
+     * The requesting foreman's own submit/approve state on this job — `null`
+     * for anyone the concept doesn't apply to (a supervisor, an electrician
+     * with no crew-register row), same reasoning as {@see myTasksComplete()}.
+     *
+     * @return array{myReadyForReviewAt: string|null, myApprovedAt: string|null}|array{}
+     */
+    private function myForemanCompletion(Request $request, Job $job): array
+    {
+        $foreman = $request->user()->foreman;
+        if ($foreman === null || $foreman->role !== Foreman::ROLE_FOREMAN) {
+            return [];
+        }
+
+        $completion = $job->foremanCompletions()->where('foreman_id', $foreman->id)->first();
+
+        return [
+            'myReadyForReviewAt' => $completion?->ready_for_review_at?->toISOString(),
+            'myApprovedAt' => $completion?->approved_at?->toISOString(),
+        ];
     }
 
     /**
@@ -188,32 +255,82 @@ class JobController extends Controller
         if ($data['status'] === 'completed') {
             // The same `Foreman::role` distinction the `in-progress` branch
             // above already draws: only a supervisor's account can actually
-            // close a job out. Everyone else completing every task on it
-            // only ever gets it as far as ready-for-review.
-            $isSupervisor = $request->user()->foreman?->role === Foreman::ROLE_SUPERVISOR;
+            // close a job out. Everyone else completing their own tasks only
+            // ever gets their own portion as far as ready-for-review — never
+            // gated on any other foreman's still-open work (see
+            // `prepareCompletion()`'s own doc comment).
+            $foreman = $request->user()->foreman;
+            $isSupervisor = $foreman?->role === Foreman::ROLE_SUPERVISOR;
 
             if (! $isSupervisor) {
-                if ($blocker = $this->prepareCompletion($request, $job, $data['reason'] ?? null)) {
+                if ($foreman === null) {
+                    // No crew-register row at all — an assignment-based
+                    // electrician, not part of the foreman/supervisor split
+                    // (`job_task_assignments`, not `foremen`). There is
+                    // nothing to scope a per-foreman submission to, so this
+                    // is the same single, whole-job gate as before
+                    // per-foreman tracking existed — hours are finalized
+                    // right now too, since there is no later "every foreman
+                    // approved" moment on this job to defer it to.
+                    if ($blocker = $this->prepareLegacyCompletion($request, $job, $data['reason'] ?? null)) {
+                        return $blocker;
+                    }
+
+                    $job->markReadyForReview();
+
+                    return $this->ok([
+                        'jobId' => $job->id,
+                        'from' => $job->status,
+                        'to' => $job->status,
+                        'readyForReviewAt' => $job->ready_for_review_at?->toISOString(),
+                    ], 'Marked ready for supervisor review.');
+                }
+
+                if ($blocker = $this->prepareCompletion($request, $job, $foreman)) {
                     return $blocker;
                 }
 
-                $job->markReadyForReview();
+                $job->markForemanReadyForReview($foreman->id);
 
                 return $this->ok([
                     'jobId' => $job->id,
                     'from' => $job->status,
                     'to' => $job->status,
-                    'readyForReviewAt' => $job->ready_for_review_at?->toISOString(),
-                ], 'Marked ready for supervisor review.');
+                    'readyForReviewAt' => now()->toISOString(),
+                ], 'Your tasks are marked ready for supervisor review.');
             }
 
-            if (! $job->isReadyForReview()) {
+            // This is the final close-out only — approving any one
+            // foreman's own portion happens individually, from the task
+            // list, via `approveForeman()` above. A job with real
+            // per-foreman rows only reaches here once every one of them is
+            // already approved that way; a legacy, assignment-only job (no
+            // per-foreman rows) has no individual approvals to wait on, only
+            // its own single whole-job `readyForReviewAt`.
+            $hasForemanRows = $job->assignedForemanIds()->isNotEmpty();
+
+            if ($hasForemanRows) {
+                if (! $job->isFullyApprovedByForemen()) {
+                    return $this->fail(
+                        'Waiting for the crew to be reviewed and approved first.',
+                        422,
+                        ['code' => 'not_ready_for_review', 'pendingForemen' => $job->pendingForemen()],
+                    );
+                }
+
+                if ($blocker = $this->finalizeHours($job, $data['reason'] ?? null)) {
+                    return $blocker;
+                }
+            } elseif (! $job->isReadyForReview()) {
                 return $this->fail(
                     'Waiting for the crew to finish their tasks first.',
                     422,
                     ['code' => 'not_ready_for_review'],
                 );
             }
+            // Else: legacy job, already ready for review — its hours were
+            // finalized already at submission (`prepareLegacyCompletion()`),
+            // nothing left to do but let it close below.
         }
 
         $from = $job->status;
@@ -232,28 +349,16 @@ class JobController extends Controller
     }
 
     /**
-     * Finalizes a job's worked time before it's allowed to complete.
+     * The whole-job gate this endpoint used before per-foreman tracking
+     * existed — still the right one for a job with no `foremen`-table
+     * staffing at all (an assignment-only crew, `job_task_assignments`),
+     * where there is no foreman to scope a submission to and so no later
+     * "every foreman approved" moment to defer hours-finalizing to either.
      *
-     * A job is not one foreman's to close: it only actually completes once
-     * every task on it — from every foreman assigned, not just whoever
-     * tapped this — is itself done. A foreman finishing their own slice
-     * gets `myTasksComplete` (see `show()`) to know they're personally
-     * done; the job as a whole stays open until the last one closes theirs.
-     *
-     * Once that's true, if the technician still has a clock running on this
-     * job, it's stopped first so its hours count — a foreman who taps "Mark
-     * Complete" without remembering to stop the clock shouldn't lose that
-     * time. The total — every foreman's logged hours on the job combined —
-     * is then compared against `Job::estimated_hours`: if it ran over, a
-     * reason is required (the same "why the extra time" the web app will
-     * show later) before the job is allowed to close. All three numbers —
-     * worked total, delay, reason — are saved on the job itself so the web
-     * app has them.
-     *
-     * Returns a 422 response if completion should be blocked, or null to
-     * let `changeStatus()` proceed.
+     * Combines the old `prepareCompletion()` (open-task check, stop the
+     * clock) with `finalizeHours()` in one step, exactly as it always ran.
      */
-    private function prepareCompletion(Request $request, Job $job, ?string $reason): ?JsonResponse
+    private function prepareLegacyCompletion(Request $request, Job $job, ?string $reason): ?JsonResponse
     {
         $openTasks = $job->tasks()->open()->count();
         if ($openTasks > 0) {
@@ -270,6 +375,60 @@ class JobController extends Controller
             $this->timer->stop($active);
         }
 
+        return $this->finalizeHours($job, $reason);
+    }
+
+    /**
+     * Gates one foreman marking their own slice of the job ready for review.
+     *
+     * Scoped to this foreman's own tasks only — a job is not one foreman's
+     * to close, but neither is any *one* foreman's submission anyone else's
+     * to block: another foreman's still-open tasks never stop this one from
+     * submitting theirs (`Job::markForemanReadyForReview()` records it
+     * independently; the job as a whole only closes once every foreman's
+     * row is approved — see `changeStatus()`/`finalizeHours()`).
+     *
+     * If the technician still has a clock running on this job, it's stopped
+     * first so its hours count. Returns a 422 response if this foreman
+     * isn't actually done yet, or null to let `changeStatus()` proceed.
+     */
+    private function prepareCompletion(Request $request, Job $job, Foreman $foreman): ?JsonResponse
+    {
+        $openTasks = $job->myOpenTasksCount($foreman->id);
+        if ($openTasks > 0) {
+            return $this->fail(
+                "You still have {$openTasks} open ".
+                str('task')->plural($openTasks)." on this job.",
+                422,
+                ['code' => 'tasks_incomplete', 'openTasksCount' => $openTasks],
+            );
+        }
+
+        $active = $this->timer->active($request->user());
+        if ($active !== null && $active->job_id === $job->id) {
+            $this->timer->stop($active);
+        }
+
+        return null;
+    }
+
+    /**
+     * The last step before a job actually closes — called once every
+     * assigned foreman's own portion has been approved, never before, since
+     * the total worked time is job-wide (every foreman's hours combined),
+     * not any one of theirs.
+     *
+     * The total is compared against `Job::estimated_hours`: if it ran over,
+     * a reason is required (the same "why the extra time" the web app shows
+     * later) before the job is allowed to close — supplied by the
+     * supervisor's own request here, since they are the one closing it out.
+     * All three numbers are saved on the job itself so the web app has them.
+     *
+     * Returns a 422 response if closing should be blocked, or null to let
+     * `changeStatus()` proceed.
+     */
+    private function finalizeHours(Job $job, ?string $reason): ?JsonResponse
+    {
         $actualHours = round((float) $job->timeEntries()->sum('hours'), 2);
         $estimatedHours = (float) ($job->estimated_hours ?? 0);
         $delayHours = round(max(0, $actualHours - $estimatedHours), 2);
@@ -291,7 +450,7 @@ class JobController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function summarize(Job $job): array
+    private function summarize(Job $job, Request $request): array
     {
         return [
             'id' => $job->id,
@@ -306,6 +465,9 @@ class JobController extends Controller
              */
             'latitude' => $job->latitude === null ? null : (float) $job->latitude,
             'longitude' => $job->longitude === null ? null : (float) $job->longitude,
+            // Metres. Null lets the app fall back to its own 100 m default
+            // rather than every job needing one set explicitly.
+            'geofenceRadius' => $job->geofence_radius,
             'placeId' => $job->place_id,
             'jobType' => $job->job_type,
             'status' => $job->status,
@@ -335,6 +497,15 @@ class JobController extends Controller
             // supervisor's own tap while this is set actually finishes the
             // job (`changeStatus()`).
             'readyForReviewAt' => $job->ready_for_review_at?->toISOString(),
+            ...$this->myForemanCompletion($request, $job),
+            // Who the job is still waiting on before it can actually close —
+            // meaningful to a foreman wondering why the job isn't done once
+            // their own part is approved, and to a supervisor picking whom
+            // to approve next from the task list.
+            'pendingForemen' => $job->pendingForemen(),
+            // Whose own portion is submitted and waiting on a supervisor's
+            // targeted approve tap (`approveForeman()`) right now.
+            'foremenReadyForReview' => $job->readyForemen(),
             'foreman' => $job->foreman ? [
                 'name' => $job->foreman->name,
                 'initials' => $job->foreman->initials,

@@ -296,14 +296,21 @@ class FinalTakeoffController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
             // The crew, as the Create Job screen asks for it — this is the same
-            // step of the same flow, reached from the takeoff instead.
-            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            // step of the same flow, reached from the takeoff instead. Required:
+            // a job needs a crew to be planned into tasks against.
+            'team_id' => ['required', 'integer', 'exists:teams,id'],
             // The same two the Create Job screen requires — this is the same
             // step of the same flow, reached from the takeoff instead.
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'budget' => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
+            /*
+             * No budget field here — this job's budget is the estimate raised
+             * against it, never a figure typed on this form. See
+             * `EstimateBuilder`, which keeps it in sync every time the
+             * estimate is (re)priced.
+             */
         ], [
+            'team_id.required' => 'Pick the crew this job is handed to',
             'start_date.required' => 'Pick the day this job starts',
             'end_date.required' => 'Pick the day this job is due to finish',
             'end_date.after_or_equal' => 'End date must be on or after the start date',

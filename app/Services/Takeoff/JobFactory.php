@@ -147,7 +147,7 @@ class JobFactory
             'start_date' => $attributes['start_date'] ?? $client->due_date,
             'end_date' => $attributes['end_date'] ?? null,
             ...$this->takeoffFields($result, $payload, $reviewed),
-            'budget' => $attributes['budget'] ?? $this->budget($payload),
+            'budget' => $this->budget($result),
         ]);
 
         $job->recordInitialStatus();
@@ -190,7 +190,7 @@ class JobFactory
         // The budget follows the takeoff only while nobody has overridden it.
         if (! $wasReviewed && $reviewed) {
             $job->update([
-                'budget' => $this->budget($payload),
+                'budget' => $this->budget($job->aiResult),
                 'description' => $this->describe($payload, $reviewed),
             ]);
 
@@ -263,7 +263,7 @@ class JobFactory
             ->where('status', SymbolReview::STATUS_APPROVED)
             ->get();
 
-        $boq = $this->boq->fromReviews($counted);
+        $boq = $this->boq->forProject($result->project_id, $result->project->user_id)->fromReviews($counted);
         $upload = $result->upload;
 
         return [
@@ -307,12 +307,17 @@ class JobFactory
         ];
     }
 
-    /** @param  array<string, mixed>  $payload */
-    private function budget(array $payload): ?float
+    /**
+     * The job's budget — the real, generated estimate's total, never the
+     * engine's own guess. Null while no estimate has been raised for this
+     * takeoff yet; {@see \App\Services\Takeoff\EstimateBuilder} syncs this
+     * column the moment one is.
+     */
+    private function budget(?AiResult $result): ?float
     {
-        $engine = Arr::get($payload, 'engine.estimate.grand_total');
-
-        return (float) ($engine ?: Arr::get($payload, 'boq.totals.material_cost')) ?: null;
+        return $result?->estimate?->amount !== null
+            ? (float) $result->estimate->amount
+            : null;
     }
 
     /** @param  array<string, mixed>  $payload */

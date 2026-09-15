@@ -1,12 +1,12 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import {
+  Camera,
   Check,
   ChevronDown,
-  DollarSign,
-  Eye,
   Filter,
+  MapPin,
   Pencil,
   Plus,
   SearchX,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import {
   Alert,
+  Badge,
   Button,
   ButtonLink,
   ConfirmDialog,
@@ -40,6 +41,7 @@ import {
 } from '@/constants'
 import { useDisclosure } from '@/hooks'
 import type {
+  AttendanceRow,
   Paginated,
   SharedPageProps,
   TableColumn,
@@ -67,10 +69,40 @@ export interface TimeEntriesProps {
   jobs: readonly TimeTrackingJobOption[]
   teamMembers: readonly TimeEntryPersonRef[]
   taskTypes: readonly string[]
+  attendance: readonly AttendanceRow[]
   can: TimeTrackingAbilities
 }
 
+const ATTENDANCE_METHOD_LABEL: Record<NonNullable<AttendanceRow['checkInMethod']>, string> = {
+  manual: 'Manual',
+  automatic: 'GPS match',
+  photo: 'Photo',
+}
+
 const taskTypeLabel = (value: string) => value.replace(/-/g, ' ')
+
+/**
+ * 'Site Supervisor' is the real stored value — role-based checks elsewhere
+ * in the app match on that exact string, so it stays as-is everywhere but
+ * here. This page just shows it shorter, as "Supervisor" (same shortening
+ * `Teams.tsx` already does for its own role display).
+ */
+const roleLabel = (role: string) => (role === 'Site Supervisor' ? 'Supervisor' : role)
+
+const formatTime = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—'
+
+const formatMeters = (value: number | null) =>
+  value === null ? '—' : value >= 1000 ? `${(value / 1000).toFixed(1)} km` : `${Math.round(value)} m`
+
+/**
+ * One row of the merged table — a logged [TimeEntry] or a GPS
+ * [AttendanceRow]. They come from unrelated tables with no shared key, so
+ * every column renders off `kind` rather than a common shape.
+ */
+type MergedRow =
+  | { readonly id: string; readonly kind: 'entry'; readonly entry: TimeEntry }
+  | { readonly id: string; readonly kind: 'attendance'; readonly row: AttendanceRow }
 
 /**
  * Time Log Viewer — the crew's weekly summary and every logged entry,
@@ -82,6 +114,7 @@ export default function TimeEntries({
   jobs,
   teamMembers,
   taskTypes,
+  attendance,
   can,
 }: TimeEntriesProps) {
   const { flash, auth } = usePage<SharedPageProps>().props
@@ -181,90 +214,166 @@ export default function TimeEntries({
     )
   }
 
-  const rows = entries.data
   const { meta } = entries
 
-  const columns: TableColumn<TimeEntry>[] = [
+  /**
+   * One table, one list. A logged entry and a GPS check-in come from
+   * unrelated models with no foreign key between them, so there is no
+   * database-level union — they are simply concatenated here, entries
+   * first, then whichever check-ins fell in the last 14 days.
+   */
+  const rows: readonly MergedRow[] = useMemo(
+    () => [
+      ...entries.data.map((entry): MergedRow => ({ id: `entry-${entry.id}`, kind: 'entry', entry })),
+      ...attendance.map((row): MergedRow => ({ id: `attendance-${row.id}`, kind: 'attendance', row })),
+    ],
+    [entries.data, attendance],
+  )
+
+  const columns: TableColumn<MergedRow>[] = [
     {
       key: 'date',
       header: 'Date',
-      render: (entry) => <span className="whitespace-nowrap text-white">{formatDate(entry.date)}</span>,
+      render: (item) => (
+        <span className="whitespace-nowrap text-white">
+          {formatDate(item.kind === 'entry' ? item.entry.date : item.row.date)}
+        </span>
+      ),
     },
     {
       key: 'member',
       header: 'Employee',
-      render: (entry) => (
-        <span className="text-white">{entry.teamMember?.name ?? entry.user?.name ?? '—'}</span>
-      ),
+      render: (item) => {
+        const name =
+          item.kind === 'entry'
+            ? (item.entry.teamMember?.name ?? item.entry.user?.name ?? '—')
+            : item.row.employee
+        const role =
+          item.kind === 'entry'
+            ? (item.entry.teamMember?.role ?? item.entry.user?.role ?? null)
+            : item.row.employeeRole
+
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-white">{name}</span>
+            {role && (
+              <Badge tone="info" size="sm">
+                {roleLabel(role)}
+              </Badge>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'job',
       header: 'Job',
-      render: (entry) => <span className="text-white">{entry.job?.name ?? '—'}</span>,
-    },
-    {
-      key: 'task',
-      header: 'Task',
-      render: (entry) => (
-        <span className="text-white/85">{entry.jobTask?.title ?? entry.taskLabel ?? '—'}</span>
+      width: 'w-56',
+      render: (item) => (
+        <span className="whitespace-nowrap text-white">
+          {(item.kind === 'entry' ? item.entry.job : item.row.job)?.name ?? '—'}
+        </span>
       ),
     },
     {
       key: 'start',
-      header: 'Start',
-      render: (entry) => <span className="text-white/85">{entry.startTime?.slice(0, 5) ?? '—'}</span>,
+      header: 'Check In',
+      render: (item) =>
+        item.kind === 'entry' ? (
+          <span className="text-white/85">{item.entry.startTime?.slice(0, 5) ?? '—'}</span>
+        ) : (
+          <div>
+            <span className="text-white/85">{formatTime(item.row.checkInAt)}</span>
+            <span className="ml-1.5 text-2xs text-white/60">{formatMeters(item.row.checkInDistanceMeters)}</span>
+          </div>
+        ),
     },
     {
       key: 'end',
-      header: 'End',
-      render: (entry) => <span className="text-white/85">{entry.endTime?.slice(0, 5) ?? '—'}</span>,
+      header: 'Check Out',
+      render: (item) =>
+        item.kind === 'entry' ? (
+          <span className="text-white/85">{item.entry.endTime?.slice(0, 5) ?? '—'}</span>
+        ) : (
+          <div>
+            <span className="text-white/85">{formatTime(item.row.checkOutAt)}</span>
+            <span className="ml-1.5 text-2xs text-white/60">{formatMeters(item.row.checkOutDistanceMeters)}</span>
+          </div>
+        ),
     },
     {
       key: 'hours',
       header: 'Hours',
       align: 'right',
-      render: (entry) => (
-        <span className="inline-flex items-center gap-1.5 tabular-nums text-white">
-          {entry.billable && (
-            <DollarSign size={13} className="text-status-success" aria-label="Billable" />
-          )}
-          {formatHours(entry.hours)}
-          {entry.overtimeHours > 0 && (
-            <span className="text-xs text-status-warning">(+{formatHours(entry.overtimeHours)} OT)</span>
-          )}
-        </span>
-      ),
+      render: (item) =>
+        item.kind === 'entry' ? (
+          <span className="inline-flex items-center gap-1.5 tabular-nums text-white">
+            {formatHours(item.entry.hours)}
+            {item.entry.overtimeHours > 0 && (
+              <span className="text-xs text-status-warning">(+{formatHours(item.entry.overtimeHours)} OT)</span>
+            )}
+          </span>
+        ) : (
+          <span className="tabular-nums text-white">{formatHours(item.row.hours)}</span>
+        ),
     },
     {
       key: 'status',
       header: 'Status',
-      render: (entry) => (
-        <StatusChip tone={TIME_ENTRY_STATUS_TONE[entry.status]} label={TIME_ENTRY_STATUS_LABEL[entry.status]} />
-      ),
+      render: (item) =>
+        item.kind === 'entry' ? (
+          <StatusChip
+            tone={TIME_ENTRY_STATUS_TONE[item.entry.status]}
+            label={TIME_ENTRY_STATUS_LABEL[item.entry.status]}
+          />
+        ) : item.row.status === 'checkedIn' ? (
+          <Badge tone="success">On site</Badge>
+        ) : (
+          <Badge tone="neutral">Checked out</Badge>
+        ),
+    },
+    {
+      key: 'verified',
+      header: 'Verified',
+      render: (item) => {
+        if (item.kind === 'entry') return <span className="text-white/40">—</span>
+
+        const method = item.row.checkInMethod
+
+        return (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs text-white/70">
+              {method === 'automatic' ? <MapPin size={13} /> : method === 'photo' ? <Camera size={13} /> : null}
+              {method ? ATTENDANCE_METHOD_LABEL[method] : '—'}
+            </span>
+            {item.row.photoUrl && (
+              <a href={item.row.photoUrl} target="_blank" rel="noreferrer">
+                <img
+                  src={item.row.photoUrl}
+                  alt="Check-in photo"
+                  className="h-8 w-8 rounded-md border border-hairline object-cover"
+                />
+              </a>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'actions',
       header: 'Actions',
       width: 'w-40',
-      render: (entry) => {
+      render: (item) => {
+        // Nothing else to do with a check-in — a click anywhere on its row
+        // already opens the detail screen (see `onRowClick` on the table).
+        if (item.kind === 'attendance') return null
+
+        const entry = item.entry
         const isMine = entry.user?.id === auth.user?.id
         const canEdit = isMine && entry.isEditable
 
         return (
           <div className="flex items-center gap-1">
-            <ButtonLink size="sm" variant="ghost" leftIcon={Eye} href={routeTo.timeEntry(entry.id)}>
-              View
-            </ButtonLink>
-            <Button
-              size="sm"
-              variant="ghost"
-              leftIcon={Trash2}
-              disabled={!canEdit}
-              className="text-status-danger hover:text-status-danger disabled:text-white/40"
-              onClick={() => openDelete(entry)}
-            >
-              Delete
-            </Button>
             <MoreMenu
               ariaLabel={`More actions for the entry on ${entry.date}`}
               items={[
@@ -291,6 +400,13 @@ export default function TimeEntries({
                   icon: X,
                   disabled: !(can.approve && entry.status === 'submitted'),
                   onSelect: () => openReject(entry),
+                },
+                {
+                  label: 'Delete',
+                  icon: Trash2,
+                  disabled: !canEdit,
+                  destructive: true,
+                  onSelect: () => openDelete(entry),
                 },
               ]}
             />
@@ -452,8 +568,13 @@ export default function TimeEntries({
               headerVariant="plain"
               columns={columns}
               rows={rows}
-              getRowId={(entry) => entry.id}
+              getRowId={(item) => item.id}
               caption="Time entries"
+              onRowClick={(item) =>
+                router.visit(
+                  item.kind === 'entry' ? routeTo.timeEntry(item.entry.id) : routeTo.attendance(item.row.id),
+                )
+              }
             />
           )}
 
@@ -464,7 +585,11 @@ export default function TimeEntries({
             page={meta.current_page}
             pageCount={meta.last_page}
             onPageChange={(page) => updateQuery({ ...draft, page })}
-            summary={meta.total === 0 ? 'No entries to display' : `Showing ${rows.length} of ${meta.total} entries`}
+            summary={
+              rows.length === 0
+                ? 'No entries to display'
+                : `Showing ${rows.length} of ${meta.total + attendance.length} entries`
+            }
           />
         </div>
       </div>

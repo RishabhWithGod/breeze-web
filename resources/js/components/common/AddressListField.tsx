@@ -107,7 +107,7 @@ export function AddressListField({
           */}
           <SelectField
             id={`address-type-${index}`}
-            label="Site Type"
+            label="Location Type"
             className="mt-4 lg:max-w-xs"
             options={SITE_TYPE_OPTIONS}
             value={row.site_type}
@@ -130,7 +130,7 @@ export function AddressListField({
         disabled={disabled}
         onClick={() => onChange([...addresses, emptyAddress()])}
       >
-        Add another site
+        Add another location
       </Button>
     </div>
   )

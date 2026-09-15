@@ -238,13 +238,17 @@ export interface JobDraft {
   description: string
   job_type: JobType | ''
   /**
-   * The crew this job is handed to. Empty means none yet — a real state, and
-   * what narrows the foreman and supervisor pickers on the job's tasks.
+   * The crew this job is handed to. Required — it narrows the foreman and
+   * supervisor pickers on the job's tasks, so a task cannot be staffed until
+   * one is picked.
    */
   team_id: string
   start_date: string
   end_date: string
-  budget: string
+  /*
+   * No `budget` field: a job's budget is the estimate raised against its
+   * drawing, written server-side — never typed on this form.
+   */
   save_as_draft: boolean
   /**
    * Which of the client's projects the work is on. Every drawing, takeoff and

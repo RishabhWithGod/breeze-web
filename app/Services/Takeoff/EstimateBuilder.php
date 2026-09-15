@@ -9,8 +9,10 @@ use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\FinalSymbol;
 use App\Models\Job;
+use App\Models\Project;
 use App\Models\SymbolReview;
 use App\Models\User;
+use App\Services\Estimating\ProjectRateBook;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +41,7 @@ class EstimateBuilder
 
     public function __construct(
         private readonly SymbolCatalog $catalog,
+        private readonly ProjectRateBook $rateBook,
         private readonly PriceBookLookup $priceBook,
     ) {}
 
@@ -47,10 +50,13 @@ class EstimateBuilder
      *
      * Written in one place because all three paths into this class need the
      * same three things and used to disagree about them: the fuller name the
-     * price book knows the item by, the rate's provenance so a guess can be
+     * rate list knows the item by, the rate's provenance so a guess can be
      * marked as one, and a labour line at hours the company actually books.
      *
      * @param  array<string, mixed>  $rates
+     * @param  list<int>  $matchedRateItemIds  Appended to when `$rates` came
+     *     from this project's own rate list, so the caller can find what's
+     *     left over once every device has been written.
      */
     private function writeDevice(
         Estimate $estimate,
@@ -58,7 +64,10 @@ class EstimateBuilder
         string $fallbackName,
         float $quantity,
         int &$position,
+        ProjectRateBook $rateBook,
         PriceBookLookup $priceBook,
+        ?float $clientLaborRate,
+        array &$matchedRateItemIds,
         ?int $finalSymbolId = null,
     ): void {
         /*
@@ -78,9 +87,14 @@ class EstimateBuilder
             'source' => 'ai',
             'pricing_source' => $rates['source'],
             'price_book_item_id' => $rates['price_book_item_id'] ?? null,
+            'project_rate_item_id' => $rates['project_rate_item_id'] ?? null,
             'pricing_confidence' => $rates['confidence'],
             'position' => $position++,
         ]);
+
+        if ($rates['source'] === 'vendor-rate-list' && $rates['project_rate_item_id']) {
+            $matchedRateItemIds[] = $rates['project_rate_item_id'];
+        }
 
         if ($rates['labor_hours'] <= 0) {
             return;
@@ -92,12 +106,13 @@ class EstimateBuilder
             'description' => 'Install labor — '.$description,
             'unit' => 'hr',
             'quantity' => round($rates['labor_hours'] * $quantity, 4),
-            'unit_cost' => $priceBook->laborRate(),
+            'unit_cost' => $this->effectiveLaborRate($rateBook, $priceBook, $clientLaborRate),
             'source' => 'ai',
-            // The hours are the price book's even when the rate per hour is a
-            // fallback, so the line is labelled by where the hours came from.
+            // The hours are the same book's rates came from, so the line is
+            // labelled by where the hours came from.
             'pricing_source' => $rates['source'],
             'price_book_item_id' => $rates['price_book_item_id'] ?? null,
+            'project_rate_item_id' => $rates['project_rate_item_id'] ?? null,
             'pricing_confidence' => $rates['confidence'],
             'position' => $position++,
         ]);
@@ -126,18 +141,24 @@ class EstimateBuilder
                 return $result->estimate;
             }
 
-            $catalog = $this->catalog->forUser($user->id);
-            $priceBook = $this->priceBook->forUser($user->id);
+            $project = $result->project;
+            $catalog = $this->catalog->forProject($project->id, $project->user_id);
+            $rateBook = $this->rateBook->forProject($project->id);
+            $priceBook = $this->priceBook->forUser($project->user_id);
+            $clientLaborRate = $this->clientLaborRate($project);
 
-            $estimate = $this->open($result, $job, $engineLines, reviewed: false, priceBook: $priceBook);
+            $estimate = $this->open($result, $job, $engineLines, reviewed: false, rateBook: $rateBook, priceBook: $priceBook);
 
-            $engineLines->isNotEmpty()
-                ? $this->writeEngineLines($estimate, $engineLines, collect(), $catalog, $priceBook)
-                : $this->writeReviewLines($estimate, $counted, $catalog, $priceBook);
+            $matchedRateItemIds = $engineLines->isNotEmpty()
+                ? $this->writeEngineLines($estimate, $engineLines, collect(), $catalog, $rateBook, $priceBook, $clientLaborRate)
+                : $this->writeReviewLines($estimate, $counted, $catalog, $rateBook, $priceBook, $clientLaborRate);
+
+            $this->writeUnmatchedRateBookLines($estimate, $rateBook, $matchedRateItemIds);
 
             $estimate->recalculateTotals();
             $this->scaleToTarget($estimate, $this->projectTarget($result));
             $estimate->refresh();
+            $this->syncJobBudget($estimate);
 
             $result->update(['estimate_id' => $estimate->id]);
             $result->setRelation('estimate', $estimate);
@@ -188,18 +209,24 @@ class EstimateBuilder
             $engineEstimate = $result->ai_estimate ?? [];
             $engineLines = $result->boqLines()->get();
 
-            $catalog = $this->catalog->forUser($user->id);
-            $priceBook = $this->priceBook->forUser($user->id);
+            $project = $result->project;
+            $catalog = $this->catalog->forProject($project->id, $project->user_id);
+            $rateBook = $this->rateBook->forProject($project->id);
+            $priceBook = $this->priceBook->forUser($project->user_id);
+            $clientLaborRate = $this->clientLaborRate($project);
 
-            $estimate = $this->open($result, $job, $engineLines, reviewed: true, priceBook: $priceBook);
+            $estimate = $this->open($result, $job, $engineLines, reviewed: true, rateBook: $rateBook, priceBook: $priceBook);
 
-            $engineLines->isNotEmpty()
-                ? $this->writeEngineLines($estimate, $engineLines, $symbols, $catalog, $priceBook)
-                : $this->writeCatalogLines($estimate, $symbols, $catalog, $priceBook);
+            $matchedRateItemIds = $engineLines->isNotEmpty()
+                ? $this->writeEngineLines($estimate, $engineLines, $symbols, $catalog, $rateBook, $priceBook, $clientLaborRate)
+                : $this->writeCatalogLines($estimate, $symbols, $catalog, $rateBook, $priceBook, $clientLaborRate);
+
+            $this->writeUnmatchedRateBookLines($estimate, $rateBook, $matchedRateItemIds);
 
             $estimate->recalculateTotals();
             $this->scaleToTarget($estimate, $this->projectTarget($result));
             $estimate->refresh();
+            $this->syncJobBudget($estimate);
 
             $result->update(['estimate_id' => $estimate->id]);
             $result->setRelation('estimate', $estimate);
@@ -217,7 +244,7 @@ class EstimateBuilder
                 meta: [
                     'estimate_id' => $estimate->id,
                     'user_id' => $user->id,
-                    'source' => $engineLines->isNotEmpty() ? 'engine-boq' : 'price-book',
+                    'source' => $engineLines->isNotEmpty() ? 'engine-boq' : 'vendor-rate-list',
                     'engine_grand_total' => Arr::get($engineEstimate, 'grand_total'),
                 ],
             );
@@ -234,7 +261,7 @@ class EstimateBuilder
      *
      * @param  Collection<int, BoqLine>  $engineLines
      */
-    private function open(AiResult $result, ?Job $job, Collection $engineLines, bool $reviewed, PriceBookLookup $priceBook): Estimate
+    private function open(AiResult $result, ?Job $job, Collection $engineLines, bool $reviewed, ProjectRateBook $rateBook, PriceBookLookup $priceBook): Estimate
     {
         $project = $result->project;
         $engineEstimate = $result->ai_estimate ?? [];
@@ -253,13 +280,14 @@ class EstimateBuilder
             // Draft only while no job has been raised against it yet.
             'status' => Estimate::statusFor($job),
             /*
-             * The rates these jobs are actually bid at, read off the imported
-             * workbooks — overheads and profit together, because the estimate
-             * carries one markup line and the bids carry two. Falls back to
-             * config while nothing has been imported.
+             * The rates these jobs are actually bid at, read off this
+             * project's own imported workbook first — overheads and profit
+             * together, because the estimate carries one markup line and the
+             * bids carry two. Falls back to the price book while nothing has
+             * been imported for this project, then to config.
              */
-            'markup_pct' => $this->markupPercent($priceBook),
-            'tax_pct' => $this->taxPercent($engineEstimate, $priceBook),
+            'markup_pct' => $this->markupPercent($rateBook, $priceBook),
+            'tax_pct' => $this->taxPercent($engineEstimate, $rateBook, $priceBook),
             'notes' => $this->notes($engineLines, $engineEstimate, $reviewed),
             'amount' => 0,
         ]);
@@ -282,14 +310,19 @@ class EstimateBuilder
             $manual = $estimate->items()->where('source', 'manual')->count();
             $engineLines = $result->boqLines()->get();
 
-            $catalog = $this->catalog->forUser($user->id);
-            $priceBook = $this->priceBook->forUser($user->id);
+            $project = $result->project;
+            $catalog = $this->catalog->forProject($project->id, $project->user_id);
+            $rateBook = $this->rateBook->forProject($project->id);
+            $priceBook = $this->priceBook->forUser($project->user_id);
+            $clientLaborRate = $this->clientLaborRate($project);
 
             $estimate->items()->where('source', 'ai')->delete();
 
-            $engineLines->isNotEmpty()
-                ? $this->writeEngineLines($estimate, $engineLines, $symbols, $catalog, $priceBook)
-                : $this->writeCatalogLines($estimate, $symbols, $catalog, $priceBook);
+            $matchedRateItemIds = $engineLines->isNotEmpty()
+                ? $this->writeEngineLines($estimate, $engineLines, $symbols, $catalog, $rateBook, $priceBook, $clientLaborRate)
+                : $this->writeCatalogLines($estimate, $symbols, $catalog, $rateBook, $priceBook, $clientLaborRate);
+
+            $this->writeUnmatchedRateBookLines($estimate, $rateBook, $matchedRateItemIds);
 
             // Manual lines keep their own positions after the rewritten AI block.
             $estimate->update([
@@ -310,6 +343,7 @@ class EstimateBuilder
             $estimate->recalculateTotals();
             $this->scaleToTarget($estimate, $this->projectTarget($result));
             $estimate->refresh();
+            $this->syncJobBudget($estimate);
 
             $estimate->job?->recordActivity(
                 'estimate_updated',
@@ -335,13 +369,15 @@ class EstimateBuilder
     }
 
     /**
-     * Price-book lines from the engine's own counts, for a drawing it did not price.
+     * Lines from the engine's own counts, for a drawing it did not price.
      *
      * @param  Collection<int, SymbolReview>  $reviews
+     * @return list<int>  The rate list items matched along the way.
      */
-    private function writeReviewLines(Estimate $estimate, Collection $reviews, SymbolCatalog $catalog, PriceBookLookup $priceBook): void
+    private function writeReviewLines(Estimate $estimate, Collection $reviews, SymbolCatalog $catalog, ProjectRateBook $rateBook, PriceBookLookup $priceBook, ?float $clientLaborRate): array
     {
         $position = 0;
+        $matchedRateItemIds = [];
 
         foreach ($reviews as $review) {
             $count = (int) $review->final_count;
@@ -357,9 +393,14 @@ class EstimateBuilder
                 $review->name,
                 $count,
                 $position,
+                $rateBook,
                 $priceBook,
+                $clientLaborRate,
+                $matchedRateItemIds,
             );
         }
+
+        return $matchedRateItemIds;
     }
 
     /**
@@ -367,11 +408,13 @@ class EstimateBuilder
      *
      * @param  Collection<int, BoqLine>  $lines
      * @param  Collection<int, FinalSymbol>  $symbols
+     * @return list<int>  The rate list items matched along the way.
      */
-    private function writeEngineLines(Estimate $estimate, Collection $lines, Collection $symbols, SymbolCatalog $catalog, PriceBookLookup $priceBook): void
+    private function writeEngineLines(Estimate $estimate, Collection $lines, Collection $symbols, SymbolCatalog $catalog, ProjectRateBook $rateBook, PriceBookLookup $priceBook, ?float $clientLaborRate): array
     {
         $symbolsById = $symbols->keyBy('id');
         $position = 0;
+        $matchedRateItemIds = [];
 
         foreach ($lines as $line) {
             $symbol = $line->final_symbol_id ? $symbolsById->get($line->final_symbol_id) : null;
@@ -383,35 +426,28 @@ class EstimateBuilder
             $rates = $catalog->for($name);
             $lineUnit = Str::lower(trim($line->unit ?: 'ea'));
 
-            /*
-             * The company's own rate wherever it has one. The engine's price is
-             * a constant in its source — twenty dollars for anything it does
-             * not recognise — so a rate off a real bid beats it every time. The
-             * engine's figure is kept only for what the price book has never
-             * been shown, and the line says which of the two it is.
-             */
-            $fromPriceBook = $rates['source'] === 'price-book';
-
             $this->writeEngineLine(
                 $estimate,
                 $line,
                 $symbol,
                 $quantity,
-                $lineUnit,
-                $fromPriceBook ? $rates : null,
+                $rates,
                 $position,
             );
 
+            if ($rates['source'] === 'vendor-rate-list' && $rates['project_rate_item_id']) {
+                $matchedRateItemIds[] = $rates['project_rate_item_id'];
+            }
+
             /*
              * Labour, in the hours an estimator actually books. Only when the
-             * price book's unit is the line's unit: its rate for conduit is
+             * rate list's unit is the line's unit: its rate for conduit is
              * hours per *foot*, and charging that per device — or a per-device
              * rate across a 250 ft run — is wrong by two orders of magnitude in
-             * whichever direction the mismatch happens to fall.
+             * whichever direction the mismatch happens to fall. Nothing to book
+             * at all for a line this project's rate list has never seen.
              */
-            $unitsAgree = $fromPriceBook
-                ? Str::lower($rates['unit']) === $lineUnit
-                : $lineUnit === 'ea';
+            $unitsAgree = $rates['matched'] && Str::lower($rates['unit']) === $lineUnit;
 
             $hours = $unitsAgree ? round($rates['labor_hours'] * $quantity, 4) : 0.0;
 
@@ -425,28 +461,37 @@ class EstimateBuilder
                 'description' => 'Install labor — '.($rates['description'] ?? Str::of($line->item)->headline()->value()),
                 'unit' => 'hr',
                 'quantity' => $hours,
-                'unit_cost' => $priceBook->laborRate(),
+                'unit_cost' => $this->effectiveLaborRate($rateBook, $priceBook, $clientLaborRate),
                 'source' => 'ai',
                 'pricing_source' => $rates['source'],
                 'price_book_item_id' => $rates['price_book_item_id'] ?? null,
+                'project_rate_item_id' => $rates['project_rate_item_id'] ?? null,
                 'pricing_confidence' => $rates['confidence'],
                 'position' => $position++,
             ]);
         }
+
+        return $matchedRateItemIds;
     }
 
     /**
      * The material line for one engine BOQ row.
      *
-     * @param  array<string, mixed>|null  $rates  the price book's, or null to keep the engine's own figure
+     * The price is only ever this project's own uploaded rate list, or the
+     * price book once that has nothing to say. The engine's own `unit_price`
+     * on the BOQ line is never used — it is a guess the drawing's analysis
+     * made up, not a rate anyone has actually charged, and the whole point of
+     * matching against a real rate list is that a line either carries a real
+     * number or carries none at all for the estimator to fill in.
+     *
+     * @param  array<string, mixed>  $rates  from {@see SymbolCatalog::for()} — matched or not, always present
      */
     private function writeEngineLine(
         Estimate $estimate,
         BoqLine $line,
         ?FinalSymbol $symbol,
         float $quantity,
-        string $lineUnit,
-        ?array $rates,
+        array $rates,
         int &$position,
     ): void {
         $engineDescription = $line->description === ''
@@ -455,32 +500,39 @@ class EstimateBuilder
 
         $estimate->items()->create([
             'final_symbol_id' => $symbol?->id,
-            'category' => $rates['category'] ?? $this->categoryFor($line->item),
+            'category' => $rates['matched'] ? $rates['category'] : $this->categoryFor($line->item),
             // The workbook's own wording where there is one: the drawing had
             // room for a tag, the schedule has the thing itself.
             'description' => $rates['description'] ?? $engineDescription,
-            'unit' => $rates === null ? ($line->unit ?: 'ea') : $rates['unit'],
+            // The engine's own unit where nothing matched — it read the
+            // drawing correctly even when the rate list has nothing to say
+            // about the rate, and "FT" should not silently become "EA".
+            'unit' => $rates['matched'] ? $rates['unit'] : ($line->unit ?: 'ea'),
             'quantity' => $quantity,
-            'unit_cost' => $rates['unit_cost'] ?? (float) $line->unit_price,
+            'unit_cost' => $rates['unit_cost'],
             'source' => 'ai',
-            'pricing_source' => $rates === null ? 'engine' : 'price-book',
+            'pricing_source' => $rates['source'],
             'price_book_item_id' => $rates['price_book_item_id'] ?? null,
-            'pricing_confidence' => $rates['confidence'] ?? null,
+            'project_rate_item_id' => $rates['project_rate_item_id'] ?? null,
+            'pricing_confidence' => $rates['confidence'],
             'position' => $position++,
         ]);
     }
 
     /**
-     * Fallback when the engine priced nothing: the configured price book.
+     * Fallback when the engine priced nothing: this project's own vendor rate
+     * list, then the price book.
      *
      * Only reached for a response whose `boq` was empty, and the estimate's notes
      * say so.
      *
      * @param  Collection<int, FinalSymbol>  $symbols
+     * @return list<int>  The rate list items matched along the way.
      */
-    private function writeCatalogLines(Estimate $estimate, Collection $symbols, SymbolCatalog $catalog, PriceBookLookup $priceBook): void
+    private function writeCatalogLines(Estimate $estimate, Collection $symbols, SymbolCatalog $catalog, ProjectRateBook $rateBook, PriceBookLookup $priceBook, ?float $clientLaborRate): array
     {
         $position = 0;
+        $matchedRateItemIds = [];
 
         foreach ($symbols as $symbol) {
             $this->writeDevice(
@@ -489,10 +541,15 @@ class EstimateBuilder
                 $symbol->name,
                 (int) $symbol->count,
                 $position,
+                $rateBook,
                 $priceBook,
+                $clientLaborRate,
+                $matchedRateItemIds,
                 $symbol->id,
             );
         }
+
+        return $matchedRateItemIds;
     }
 
     private function categoryFor(string $item): string
@@ -514,22 +571,25 @@ class EstimateBuilder
      * The tax an estimate is raised at.
      *
      * The engine's rate first, because it read the drawing's own jurisdiction;
-     * then the rate these jobs were actually bid at; then config. The imported
-     * bids are the middle step and they matter: the configured 8.25% belongs to
-     * nowhere these workbooks priced, which is between 6.5% and 7.5%.
+     * then the rate this project's own workbook was actually bid at; then the
+     * price book's; then config. The imported bid is the important step:
+     * the configured 8.25% belongs to nowhere any of these workbooks priced,
+     * which is between 6.5% and 7.5%.
      *
      * @param  array<string, mixed>  $engineEstimate
      */
-    private function taxPercent(array $engineEstimate, PriceBookLookup $priceBook): float
+    private function taxPercent(array $engineEstimate, ProjectRateBook $rateBook, PriceBookLookup $priceBook): float
     {
         $rate = (float) ($engineEstimate['tax_rate'] ?? 0);
 
-        if ($rate <= 0) {
-            return round($priceBook->bidRates()['tax_pct'], 2);
+        if ($rate > 0) {
+            // Stored as a fraction by the engine (0.15 → 15%).
+            return round($rate <= 1 ? $rate * 100 : $rate, 2);
         }
 
-        // Stored as a fraction by the engine (0.15 → 15%).
-        return round($rate <= 1 ? $rate * 100 : $rate, 2);
+        $bidRates = $rateBook->isPopulated() ? $rateBook->bidRates() : $priceBook->bidRates();
+
+        return round($bidRates['tax_pct'], 2);
     }
 
     /**
@@ -538,11 +598,12 @@ class EstimateBuilder
      * The workbooks keep them apart — 10% overheads, then 12% profit on top —
      * and an estimate here has a single markup field. Compounding them is what
      * the bid sheets do, so that is what is reproduced: 1.10 × 1.12 is a 23.2%
-     * markup, not 22%.
+     * markup, not 22%. Read off this project's own workbook first, the price
+     * book once it has nothing to say.
      */
-    private function markupPercent(PriceBookLookup $priceBook): float
+    private function markupPercent(ProjectRateBook $rateBook, PriceBookLookup $priceBook): float
     {
-        $rates = $priceBook->bidRates();
+        $rates = $rateBook->isPopulated() ? $rateBook->bidRates() : $priceBook->bidRates();
         $overhead = $rates['overhead_pct'] / 100;
         $profit = $rates['profit_pct'] / 100;
 
@@ -553,12 +614,85 @@ class EstimateBuilder
         return round(((1 + $overhead) * (1 + $profit) - 1) * 100, 2);
     }
 
+    /**
+     * What an hour of labour costs.
+     *
+     * The client's own rate wins outright when they have set one — set from
+     * the client's own record, it is what every one of their estimates is
+     * meant to bill an hour at, regardless of what any workbook says a
+     * vendor once charged. Only once they have not is it read off this
+     * project's own uploaded workbook, then the price book.
+     */
+    private function effectiveLaborRate(ProjectRateBook $rateBook, PriceBookLookup $priceBook, ?float $clientLaborRate): float
+    {
+        if ($clientLaborRate !== null) {
+            return $clientLaborRate;
+        }
+
+        return $rateBook->isPopulated() ? $rateBook->laborRate() : $priceBook->laborRate();
+    }
+
+    /** The client's own labor rate override for this project, if they have set one. */
+    private function clientLaborRate(Project $project): ?float
+    {
+        $rate = $project->clientRecord?->labor_rate;
+
+        return $rate !== null ? (float) $rate : null;
+    }
+
+    /**
+     * Rows this project's own rate list has priced but nothing on the
+     * drawing claimed — a vendor bid on them, so they still belong in front
+     * of the estimator, at zero quantity with their price already filled in,
+     * rather than a workbook row that silently never made it onto the
+     * estimate.
+     *
+     * @param  list<int>  $matchedRateItemIds
+     */
+    private function writeUnmatchedRateBookLines(Estimate $estimate, ProjectRateBook $rateBook, array $matchedRateItemIds): void
+    {
+        $leftover = $rateBook->unmatchedItems($matchedRateItemIds);
+
+        if ($leftover->isEmpty()) {
+            return;
+        }
+
+        $position = (int) ($estimate->items()->max('position') ?? -1) + 1;
+
+        foreach ($leftover as $item) {
+            $estimate->items()->create([
+                'category' => $this->categoryFor($item->description),
+                'description' => $item->description,
+                'unit' => $item->unit,
+                'quantity' => 0,
+                'unit_cost' => round((float) ($item->unit_material_cost ?? 0), 4),
+                'source' => 'ai',
+                'pricing_source' => 'vendor-rate-list',
+                'project_rate_item_id' => $item->id,
+                'pricing_confidence' => 'exact',
+                'position' => $position++,
+            ]);
+        }
+    }
+
     /** The budget the project was opened with, if the estimator set one. */
     private function projectTarget(AiResult $result): ?float
     {
         $target = $result->project->estimate_target_total ?? null;
 
         return $target !== null ? (float) $target : null;
+    }
+
+    /**
+     * Keeps a job's budget the figure its own estimate came to.
+     *
+     * A job's budget is never typed on the create-job form — it is this,
+     * always, kept in step every time the estimate behind it is priced or
+     * repriced, whether that happens before or after the job itself exists.
+     */
+    private function syncJobBudget(Estimate $estimate): void
+    {
+        $estimate->job?->update(['budget' => $estimate->amount]);
     }
 
     /**
@@ -579,7 +713,13 @@ class EstimateBuilder
         }
 
         $items = $estimate->items()->orderBy('position')->get();
-        $aiItems = $items->where('source', 'ai')->values();
+        // A zero-quantity line (a rate list row nothing on the drawing
+        // claimed) has no share of the subtotal to scale — including it
+        // would risk the last-item rounding remainder landing on a line
+        // whose quantity can't absorb it.
+        $aiItems = $items->where('source', 'ai')
+            ->filter(fn (EstimateItem $item) => (float) $item->quantity > 0)
+            ->values();
 
         if ($aiItems->isEmpty()) {
             return;
@@ -663,7 +803,7 @@ class EstimateBuilder
 
         if ($lines->isEmpty()) {
             return 'The AI engine returned no priced bill of quantities for this drawing, '
-                ."so these lines come from the configured price book. {$stage}. Review every rate.";
+                ."so these lines come from this project's own uploaded vendor rate list. {$stage}. Review every rate.";
         }
 
         $currency = (string) ($engineEstimate['currency'] ?? 'USD');

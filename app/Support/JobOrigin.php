@@ -22,7 +22,7 @@ final class JobOrigin
 {
     /** @var array<string, array{0: string, 1: string}> name => [button label, route] */
     private const ORIGINS = [
-        'scheduling' => ['Back to scheduling', 'scheduling.index'],
+        'scheduling' => ['Back to calendar', 'scheduling.index'],
         'scheduling-calendar' => ['Back to calendar', 'scheduling.calendar'],
         'scheduling-availability' => ['Back to availability', 'scheduling.availability'],
         'tasks' => ['Back to tasks', 'tasks.index'],

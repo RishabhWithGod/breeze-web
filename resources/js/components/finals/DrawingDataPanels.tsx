@@ -51,24 +51,10 @@ export function WireSizesPanel({ wireSizes, bare = false }: WireSizesPanelProps)
     },
     {
       key: 'count',
-      header: 'Occurrences',
+      header: 'Count',
       align: 'right',
       width: 'w-32',
       render: (row) => row.count,
-    },
-    {
-      key: 'context',
-      header: 'Read from',
-      render: (row) => (
-        <span className="text-white/90">{row.context || '—'}</span>
-      ),
-    },
-    {
-      key: 'page',
-      header: 'Page',
-      align: 'right',
-      width: 'w-20',
-      render: (row) => row.page,
     },
   ]
 

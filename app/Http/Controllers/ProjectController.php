@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreProjectRequest;
+use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectDocumentResource;
 use App\Http\Resources\ProjectListResource;
 use App\Models\Client;
@@ -10,7 +11,7 @@ use App\Models\FeedItem;
 use App\Models\Project;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
-use App\Services\PriceBook\PriceBookImporter;
+use App\Services\Estimating\ProjectRateBookImporter;
 use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -133,7 +134,7 @@ class ProjectController extends Controller
      * Nothing is sent to the AI engine here — this opens the project, and a
      * takeoff is started separately from the AI Takeoff module.
      */
-    public function store(StoreProjectRequest $request, PriceBookImporter $importer): RedirectResponse
+    public function store(StoreProjectRequest $request, ProjectRateBookImporter $importer): RedirectResponse
     {
         $data = $request->validated();
 
@@ -191,37 +192,40 @@ class ProjectController extends Controller
         $flash = ['success' => "“{$project->name}” was opened."];
 
         if ($request->hasFile('vendor_rate_list')) {
-            $flash = [...$flash, ...$this->importVendorRateLists($request, $importer)];
+            $flash = [...$flash, ...$this->importVendorRateLists($request, $importer, $project)];
         }
 
         return redirect()->route('projects.show', $project)->with($flash);
     }
 
     /**
-     * The uploader's own rates, folded into their price book.
+     * The project's own rates, folded into its own rate book.
      *
-     * Any number of workbooks at once — their lines are pooled into one book
-     * and its quoted rates rebuilt once, the same way the universal book is
-     * built from a folder of them. A bad or oddly-shaped file among them must
+     * Any number of files at once, in whatever format the vendor actually
+     * sent — Excel, PDF, or Word — {@see \App\Services\Estimating\RateListReader}
+     * reads whichever one it is, and their lines are pooled into this one
+     * project's rate book and its quoted rates rebuilt once. Scoped strictly
+     * to this project: nothing here is shared with any other project or with
+     * the company-wide price book. A bad or unreadable file among them must
      * not stop the project from opening, or cost the good files their import:
      * the takeoff and the client are what matter here, and a rate list can
-     * always be re-uploaded from the price book screen. So this only ever adds
-     * a warning to the redirect, never an exception.
+     * always be re-uploaded later. So this only ever adds a warning to the
+     * redirect, never an exception.
      *
      * @return array<string, string>
      */
-    private function importVendorRateLists(Request $request, PriceBookImporter $importer): array
+    private function importVendorRateLists(Request $request, ProjectRateBookImporter $importer, Project $project): array
     {
         $files = collect($request->file('vendor_rate_list'))
             ->map(fn ($file) => ['file' => $file, 'name' => $file->getClientOriginalName()])
             ->all();
 
-        $result = $importer->importWorkbooks($files, $request->user()->id);
+        $result = $importer->importWorkbooks($files, $project->id);
 
         $notes = [];
 
         if ($result['failed'] !== []) {
-            $notes[] = implode(', ', $result['failed'])." couldn't be read as Excel workbooks.";
+            $notes[] = implode(', ', $result['failed'])." couldn't be read as a rate list.";
         }
 
         if ($result['empty'] !== []) {
@@ -258,6 +262,63 @@ class ProjectController extends Controller
             ],
             'documents' => ProjectDocumentResource::collection($documents)->resolve($request),
         ]);
+    }
+
+    /**
+     * Full-page edit form: the same fields Add Project takes, filled in with
+     * what is already on record.
+     */
+    public function edit(Request $request, Project $project): Response
+    {
+        $this->authorize('update', $project);
+
+        return Inertia::render('ProjectEdit', [
+            'project' => [
+                'id' => $project->id,
+                'name' => $project->name,
+                'clientId' => $project->client_id,
+                'estimateTargetTotal' => $project->estimate_target_total,
+            ],
+            'clients' => $this->clients->options($request->user()),
+        ]);
+    }
+
+    /**
+     * Corrects the project's own details — who it is for, what it is called,
+     * the budget its estimate is meant to land on — and folds in any more
+     * vendor rate lists handed over alongside them.
+     *
+     * The site stays whatever the picked client's primary address is, exactly
+     * as it does on Add Project: never a second copy of the client's own book,
+     * free to drift from it.
+     */
+    public function update(UpdateProjectRequest $request, Project $project, ProjectRateBookImporter $importer): RedirectResponse
+    {
+        $this->authorize('update', $project);
+
+        $data = $request->validated();
+
+        $client = $request->user()->clients()->with('primaryAddress')->findOrFail($data['client_id']);
+        $site = $client->primaryAddress;
+
+        $project->update([
+            'client_id' => $client->id,
+            'name' => $data['name'],
+            'client' => $client->name,
+            'location' => $site?->address,
+            'latitude' => $site?->latitude,
+            'longitude' => $site?->longitude,
+            'place_id' => $site?->place_id,
+            'estimate_target_total' => $data['estimate_target_total'] ?? null,
+        ]);
+
+        $flash = ['success' => "“{$project->name}” was updated."];
+
+        if ($request->hasFile('vendor_rate_list')) {
+            $flash = [...$flash, ...$this->importVendorRateLists($request, $importer, $project)];
+        }
+
+        return redirect()->route('projects.show', $project)->with($flash);
     }
 
     /**

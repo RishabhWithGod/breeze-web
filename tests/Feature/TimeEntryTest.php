@@ -177,6 +177,50 @@ class TimeEntryTest extends TestCase
         $this->assertSame('Added a note without touching the times.', $entry->description);
     }
 
+    /**
+     * A correction locks the original and raises a fresh row pointing back at
+     * it via `corrects_id` — the detail page has to let someone reach the
+     * other side from *either* row, not just show an `isCorrection` badge
+     * with nowhere to click.
+     */
+    public function test_show_links_a_correction_to_the_entry_it_corrects_and_back(): void
+    {
+        $job = $this->makeJob();
+
+        $original = TimeEntry::create([
+            'job_id' => $job->id,
+            'user_id' => $this->user->id,
+            'date' => '2026-08-10',
+            'hours' => 5,
+            'source' => TimeEntry::SOURCE_MANUAL,
+            'status' => TimeEntry::STATUS_LOCKED,
+        ]);
+
+        $correction = TimeEntry::create([
+            'job_id' => $job->id,
+            'user_id' => $this->user->id,
+            'date' => '2026-08-10',
+            'hours' => 6,
+            'source' => TimeEntry::SOURCE_MANUAL,
+            'status' => TimeEntry::STATUS_DRAFT,
+            'corrects_id' => $original->id,
+        ]);
+
+        $this->actingAs($this->user)
+            ->get("/time-tracking/entries/{$original->id}")
+            ->assertInertia(fn ($page) => $page
+                ->where('corrects', null)
+                ->where('corrections.0.id', $correction->id)
+                ->where('corrections.0.status', TimeEntry::STATUS_DRAFT));
+
+        $this->actingAs($this->user)
+            ->get("/time-tracking/entries/{$correction->id}")
+            ->assertInertia(fn ($page) => $page
+                ->where('corrects.id', $original->id)
+                ->where('corrects.status', TimeEntry::STATUS_LOCKED)
+                ->where('corrections', []));
+    }
+
     public function test_deleting_an_entry_is_a_soft_delete_and_only_allowed_while_editable(): void
     {
         $job = $this->makeJob();

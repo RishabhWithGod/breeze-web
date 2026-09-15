@@ -107,9 +107,10 @@ class JobTaskWorkflowService
         } elseif ($wasCompleted) {
             $task->completed_at = null;
             // Reopening a task undoes the crew's "everything is done" claim
-            // — if a supervisor already signed off the job for review, send
-            // it back so the crew has to close this again first.
-            $task->job?->clearReadyForReview();
+            // for whichever foreman owns it — if their own portion was
+            // already signed off, send it back so they have to close this
+            // again first. Never touches another foreman's own row.
+            $this->clearOwningForemanReview($task);
         }
 
         $task->save();
@@ -169,7 +170,7 @@ class JobTaskWorkflowService
         if ($wasCompleted && $task->status !== JobTask::STATUS_COMPLETED) {
             // Unchecking a line dropped an already-completed task back
             // open — same "send it back to the crew" rule as `setStatus()`.
-            $task->job?->clearReadyForReview();
+            $this->clearOwningForemanReview($task);
         }
 
         $task->save();
@@ -210,6 +211,17 @@ class JobTaskWorkflowService
         }
 
         return $task;
+    }
+
+    /** Sends the foreman who actually owns this task back to review — falls
+     *  back to the whole-job flag for a task with no per-task foreman. */
+    private function clearOwningForemanReview(JobTask $task): void
+    {
+        if ($task->foreman_id !== null) {
+            $task->job?->clearForemanReadyForReview($task->foreman_id);
+        } else {
+            $task->job?->clearReadyForReview();
+        }
     }
 
     /**

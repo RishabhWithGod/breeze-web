@@ -152,11 +152,9 @@ class JobTaskSetupController extends Controller
             'tasks' => ['required', 'array', 'min:1', 'max:50'],
             'tasks.*.title' => ['required', 'string', 'max:200'],
             'tasks.*.foreman_id' => ['required', 'integer', 'exists:foremen,id'],
-            /*
-             * Who is over the task. Optional: plenty of work needs somebody
-             * running it and nobody above them.
-             */
-            'tasks.*.supervisor_id' => ['nullable', 'integer', 'exists:foremen,id'],
+            // Who is over the task — required alongside the foreman, so every
+            // task always has both someone running it and someone above them.
+            'tasks.*.supervisor_id' => ['required', 'integer', 'exists:foremen,id'],
             /*
              * No `distinct`: with a nested wildcard it compares across every
              * task, not within one, and would report the right refusal under an
@@ -171,6 +169,7 @@ class JobTaskSetupController extends Controller
             'tasks.required' => 'A job needs at least one task.',
             'tasks.*.title.required' => 'Give the task a name, or remove the row.',
             'tasks.*.foreman_id.required' => 'Pick the foreman running this task.',
+            'tasks.*.supervisor_id.required' => 'Pick the supervisor overseeing this task.',
             'tasks.*.estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
             'tasks.*.estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
@@ -374,7 +373,7 @@ class JobTaskSetupController extends Controller
             'title' => ['required', 'string', 'max:200'],
             'status' => ['required', Rule::in(JobTask::STATUSES)],
             'foreman_id' => ['required', 'integer', 'exists:foremen,id'],
-            'supervisor_id' => ['nullable', 'integer', 'exists:foremen,id'],
+            'supervisor_id' => ['required', 'integer', 'exists:foremen,id'],
             'estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],
@@ -382,11 +381,12 @@ class JobTaskSetupController extends Controller
         ], [
             'title.required' => 'Give the task a name.',
             'foreman_id.required' => 'Pick the foreman running this task.',
+            'supervisor_id.required' => 'Pick the supervisor overseeing this task.',
             'estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
             'estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
 
-        $this->refuseOffCrew($job, [$data['foreman_id'], $data['supervisor_id'] ?? null]);
+        $this->refuseOffCrew($job, [$data['foreman_id'], $data['supervisor_id']]);
 
         $title = trim($data['title']);
 

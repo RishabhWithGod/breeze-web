@@ -8,6 +8,7 @@ use App\Events\TimeEntrySubmitted;
 use App\Http\Resources\TimeEntryActivityResource;
 use App\Http\Resources\TimeEntryResource;
 use App\Models\Job;
+use App\Models\JobAttendance;
 use App\Models\JobTask;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
@@ -23,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response as ResponseFactory;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -65,8 +67,127 @@ class TimeEntryController extends Controller
             'jobs' => Job::query()->active()->orderBy('name')->get(['id', 'name', 'client', 'status']),
             'teamMembers' => TeamMember::orderBy('name')->get(['id', 'name', 'role']),
             'taskTypes' => JobTask::CATEGORIES,
+            'attendance' => $this->attendanceFor($request, $filters, $canViewCrew),
             'can' => app(TimeEntryPolicy::class)->abilities($request->user()),
         ]);
+    }
+
+    /**
+     * Job-site check-ins — GPS presence from the mobile app's own
+     * check-in/check-out feature (`Api\V1\AttendanceController`), shown
+     * alongside the logged/approved work-hour entries above but kept
+     * distinct: no task, no approval workflow, just "was this technician
+     * at the site, and for how long." Same crew-visibility rule as
+     * {@see filtered()} — a foreman/electrician sees only their own, a
+     * supervisor/manager sees everyone's.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<int, array<string, mixed>>
+     */
+    private function attendanceFor(Request $request, array $filters, bool $canViewCrew): array
+    {
+        // Unlike the time-entry list, which shows everything ever logged
+        // until filtered, this section defaults to a recent window rather
+        // than every day since the feature launched.
+        $from = $filters['from'] ?: now()->subDays(14)->toDateString();
+        $to = $filters['to'] ?: now()->toDateString();
+
+        return JobAttendance::query()
+            ->with(['job:id,name', 'user:id,name,role'])
+            ->when(! $canViewCrew, fn ($q) => $q->where('user_id', $request->user()->id))
+            ->when(! empty($filters['job']), fn ($q) => $q->where('job_id', $filters['job']))
+            ->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to)
+            ->orderByDesc('date')
+            ->orderByDesc('check_in_at')
+            ->limit(100)
+            ->get()
+            ->map(fn (JobAttendance $row) => [
+                'id' => $row->id,
+                'date' => $row->date->toDateString(),
+                'employee' => $row->user?->name ?? 'Unknown',
+                'employeeRole' => $row->user?->role,
+                'job' => $row->job ? ['id' => $row->job->id, 'name' => $row->job->name] : null,
+                'status' => $row->status,
+                'checkInAt' => $row->check_in_at?->toISOString(),
+                'checkOutAt' => $row->check_out_at?->toISOString(),
+                'checkInMethod' => $row->check_in_method,
+                'checkOutMethod' => $row->check_out_method,
+                'checkInDistanceMeters' => $row->check_in_distance_meters !== null
+                    ? (float) $row->check_in_distance_meters
+                    : null,
+                'checkOutDistanceMeters' => $row->check_out_distance_meters !== null
+                    ? (float) $row->check_out_distance_meters
+                    : null,
+                'hours' => round($row->workingSeconds() / 3600, 2),
+                'photoUrl' => $row->check_in_photo_path
+                    ? route('attendance.photo', $row->id)
+                    : null,
+            ])
+            ->all();
+    }
+
+    /** The read-only "View" screen for one GPS check-in/check-out — every
+     *  field {@see JobAttendance} carries, not just the list's summary
+     *  columns. Same crew-visibility rule as {@see attendancePhoto()}. */
+    public function showAttendance(Request $request, JobAttendance $attendance): Response
+    {
+        $canViewCrew = (bool) $request->user()->can('viewCrew', TimeEntry::class);
+        abort_unless($canViewCrew || $attendance->user_id === $request->user()->id, 403);
+
+        $attendance->load(['job', 'user']);
+        $job = $attendance->job;
+
+        return Inertia::render('AttendanceShow', [
+            'attendance' => [
+                'id' => $attendance->id,
+                'date' => $attendance->date->toDateString(),
+                'status' => $attendance->status,
+                'employee' => ['name' => $attendance->user?->name ?? 'Unknown'],
+                'job' => $job ? [
+                    'id' => $job->id,
+                    'name' => $job->name,
+                    'client' => $job->client,
+                    'status' => $job->status,
+                ] : null,
+                'hours' => round($attendance->workingSeconds() / 3600, 2),
+                'bankedSeconds' => $attendance->banked_seconds,
+                'checkIn' => [
+                    'at' => $attendance->check_in_at?->toISOString(),
+                    'method' => $attendance->check_in_method,
+                    'accuracyMeters' => $attendance->check_in_accuracy !== null ? (float) $attendance->check_in_accuracy : null,
+                    'distanceMeters' => $attendance->check_in_distance_meters !== null ? (float) $attendance->check_in_distance_meters : null,
+                    'lat' => $attendance->check_in_lat !== null ? (float) $attendance->check_in_lat : null,
+                    'lng' => $attendance->check_in_lng !== null ? (float) $attendance->check_in_lng : null,
+                    'photoUrl' => $attendance->check_in_photo_path ? route('attendance.photo', $attendance->id) : null,
+                ],
+                'checkOut' => [
+                    'at' => $attendance->check_out_at?->toISOString(),
+                    'method' => $attendance->check_out_method,
+                    'accuracyMeters' => $attendance->check_out_accuracy !== null ? (float) $attendance->check_out_accuracy : null,
+                    'distanceMeters' => $attendance->check_out_distance_meters !== null ? (float) $attendance->check_out_distance_meters : null,
+                    'lat' => $attendance->check_out_lat !== null ? (float) $attendance->check_out_lat : null,
+                    'lng' => $attendance->check_out_lng !== null ? (float) $attendance->check_out_lng : null,
+                ],
+            ],
+        ]);
+    }
+
+    /** The check-in selfie, when one exists — same crew-visibility rule as
+     *  the list itself, not the general time-entry `view` policy (an
+     *  attendance row has no task/job-ownership shape for that to key off). */
+    public function attendancePhoto(Request $request, JobAttendance $attendance): StreamedResponse
+    {
+        $canViewCrew = (bool) $request->user()->can('viewCrew', TimeEntry::class);
+        abort_unless($canViewCrew || $attendance->user_id === $request->user()->id, 403);
+        abort_if($attendance->check_in_photo_path === null, 404);
+
+        return ResponseFactory::streamDownload(
+            fn () => print Storage::disk('local')->get($attendance->check_in_photo_path),
+            "attendance-{$attendance->id}.jpg",
+            ['Content-Type' => 'image/jpeg'],
+            'inline',
+        );
     }
 
     /** The same rows the screen lists, as a download. */
@@ -174,7 +295,16 @@ class TimeEntryController extends Controller
         $this->authorize('view', $entry);
         $user = $request->user();
 
-        $entry->load(['job.foreman', 'jobTask.members', 'user', 'teamMember.user']);
+        $entry->load([
+            'job.foreman',
+            'jobTask.members',
+            'user',
+            'teamMember.user',
+            'corrects.teamMember',
+            'corrects.user',
+            'corrections.teamMember',
+            'corrections.user',
+        ]);
 
         $canViewCosts = (bool) $user->can('viewJobCosts', TimeEntry::class);
         $job = $entry->job;
@@ -224,6 +354,10 @@ class TimeEntryController extends Controller
                     'role' => $member->pivot->role ?? null,
                 ])->all(),
             ] : null,
+            'corrects' => $entry->corrects ? $this->correctionRef($entry->corrects) : null,
+            'corrections' => $entry->corrections->map(
+                fn (TimeEntry $correction) => $this->correctionRef($correction)
+            )->all(),
             'jobTimeSummary' => $job ? $this->jobTimeSummaryFor($entry, $job, $teamMember) : null,
             'relatedEntries' => $job ? $this->relatedEntriesFor($entry, $job) : [],
             'can' => [
@@ -258,6 +392,23 @@ class TimeEntryController extends Controller
             'employeeJobBillableHours' => round(
                 (float) $personQuery->clone()->where('billable', true)->sum('hours'), 2
             ),
+        ];
+    }
+
+    /**
+     * The compact shape a "Correction" link needs — enough to identify and
+     * jump to the other entry, not the whole resource.
+     *
+     * @return array{id: int, date: string, employee: string, hours: float, status: string}
+     */
+    private function correctionRef(TimeEntry $entry): array
+    {
+        return [
+            'id' => $entry->id,
+            'date' => $entry->date->toDateString(),
+            'employee' => $entry->teamMember?->name ?? $entry->user?->name ?? 'Unknown',
+            'hours' => (float) $entry->hours,
+            'status' => $entry->status,
         ];
     }
 

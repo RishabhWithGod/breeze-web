@@ -283,13 +283,18 @@ export interface EstimateItemRow {
   /** `ai` lines came from the takeoff, `manual` were added by hand. */
   readonly source: 'ai' | 'manual'
   /**
-   * Where the rate came from: `price-book` is a price the company has charged
-   * before, `catalog` is a plausible constant standing in for one, `engine` is
-   * the AI's own figure. Null on lines raised before this was recorded.
+   * Where the rate came from: `vendor-rate-list` is a price this project's
+   * own uploaded workbook has actually charged before; `price-book` is a
+   * price the estimator's price book has charged, reached only once the
+   * project's own rate list had nothing to say; `unmatched` means neither
+   * has ever seen this item, so the line is priced at zero for the
+   * estimator to fill in by hand. Null on lines raised before this was
+   * recorded.
    */
-  readonly pricingSource: 'price-book' | 'catalog' | 'engine' | null
-  /** How the price book match was made — a `words` match is a suggestion. */
+  readonly pricingSource: 'vendor-rate-list' | 'price-book' | 'unmatched' | null
+  /** How the match was made — a `words` match is a suggestion. */
   readonly pricingConfidence: 'exact' | 'tag' | 'words' | null
+  readonly projectRateItemId: number | null
   readonly priceBookItemId: number | null
 }
 

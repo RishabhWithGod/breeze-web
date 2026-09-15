@@ -166,9 +166,14 @@ class JobTaskController extends Controller
 
         if ($wasCompleted && $task->status !== JobTask::STATUS_COMPLETED) {
             // Same rule as the mobile reopen path — a task leaving
-            // `completed` here undoes the crew's sign-off just as much as
-            // reopening it from the app does.
-            $task->job?->clearReadyForReview();
+            // `completed` here undoes its own foreman's sign-off just as
+            // much as reopening it from the app does, without touching any
+            // other foreman's already-approved portion of the same job.
+            if ($task->foreman_id !== null) {
+                $task->job?->clearForemanReadyForReview($task->foreman_id);
+            } else {
+                $task->job?->clearReadyForReview();
+            }
         }
 
         $this->settle($task->schedule, $task->job, 'task_updated', "Task updated: {$task->title}");

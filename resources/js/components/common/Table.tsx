@@ -27,6 +27,13 @@ export interface TableProps<T> {
   variant?: 'spaced' | 'lined'
   caption?: string
   className?: string
+  /**
+   * Makes the whole row a click target, for a table whose only action is
+   * "open this row's detail screen" — a click landing anywhere inside a
+   * real control (a link, a button, the more-menu trigger) is left alone so
+   * that control's own behaviour still wins.
+   */
+  onRowClick?: (row: T, index: number) => void
 }
 
 /**
@@ -43,6 +50,7 @@ export function Table<T>({
   variant = 'spaced',
   caption,
   className,
+  onRowClick,
 }: TableProps<T>) {
   const isLined = variant === 'lined'
 
@@ -98,7 +106,19 @@ export function Table<T>({
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, delay: Math.min(rowIndex, 8) * 0.03 }}
-              className="group"
+              className={cn('group', onRowClick && 'cursor-pointer')}
+              onClick={
+                onRowClick
+                  ? (event) => {
+                      const target = event.target as HTMLElement
+                      // A real control inside the row — a link, a button, the
+                      // more-menu trigger — keeps its own click behaviour
+                      // instead of also navigating the row.
+                      if (target.closest('a, button, [role="button"], input, select, textarea, label')) return
+                      onRowClick(row, rowIndex)
+                    }
+                  : undefined
+              }
             >
               {columns.map((column) => (
                 <td

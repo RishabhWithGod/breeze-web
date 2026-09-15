@@ -185,7 +185,7 @@ export default function JobTaskEdit({
                 {/* Who runs it. One per task — see JobTask::foreman(). */}
                 <CrewMemberPicker
                   id="task-foreman"
-                  label="Foreman"
+                  label="Foreman*"
                   role="foreman"
                   people={foremen}
                   value={foremanId}
@@ -201,7 +201,7 @@ export default function JobTaskEdit({
                 {/* Who is over it — from the same crew as the foreman. */}
                 <CrewMemberPicker
                   id="task-supervisor"
-                  label="Supervisor"
+                  label="Supervisor*"
                   role="supervisor"
                   people={supervisors}
                   value={supervisorId}
@@ -209,7 +209,7 @@ export default function JobTaskEdit({
                   teamId={team?.id ?? null}
                   teamName={team?.name ?? null}
                   emptyLabel={
-                    supervisors.length > 0 ? 'No supervisor' : 'No supervisor on this crew'
+                    supervisors.length > 0 ? 'Select supervisor' : 'No supervisor on this crew'
                   }
                   disabled={processing}
                   {...(errors['supervisor_id'] ? { error: errors['supervisor_id'] } : {})}

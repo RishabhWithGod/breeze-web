@@ -93,6 +93,28 @@ export function DateControl({
     if (parsed !== '' || masked === '') emit(parsed)
   }
 
+  /**
+   * Opens the picker from anywhere in the box, not only the calendar icon.
+   *
+   * The visible field is a plain text input, so nothing about clicking it
+   * would otherwise ask the browser for its date picker — `showPicker()` on
+   * the real (hidden) date input behind it does. Wrapped in a `try` because a
+   * browser without the method, or one that refuses it outside a direct user
+   * gesture, should leave typing and the calendar icon working rather than
+   * throw.
+   */
+  const openPicker = () => {
+    const element = native.current
+
+    if (!element || disabled || typeof element.showPicker !== 'function') return
+
+    try {
+      element.showPicker()
+    } catch {
+      // The icon region still opens it natively, as a fallback.
+    }
+  }
+
   return (
     <div className="relative">
       <input
@@ -108,6 +130,7 @@ export function DateControl({
         aria-invalid={invalid || undefined}
         value={text}
         onChange={(event) => typed(event.target.value)}
+        onClick={openPicker}
         /* A half-finished date is not a date: leaving the field abandons it
            rather than leaving a number the form does not have. */
         onBlur={() => setText(isoToUsDate(iso))}
@@ -121,9 +144,11 @@ export function DateControl({
       />
 
       {/*
-        The picker itself, transparent over the calendar icon. Clicking there
-        opens the browser's own date picker — `showPicker()` would be neater but
-        is not everywhere yet, and a real input always works.
+        The real date input `showPicker()` opens. Left transparent over just
+        the calendar icon rather than the whole box: the rest of the box has
+        to keep receiving clicks and typing for the visible text field above
+        it, and this is also what a browser without `showPicker()` falls back
+        to — clicking the icon still opens the native picker directly.
       */}
       <input
         ref={native}

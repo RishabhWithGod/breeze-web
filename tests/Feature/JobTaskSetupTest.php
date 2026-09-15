@@ -34,12 +34,17 @@ class JobTaskSetupTest extends TestCase
 
     private Foreman $foreman;
 
+    private Foreman $supervisor;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->user = User::factory()->create(['role' => 'Project Manager']);
         $this->foreman = Foreman::create(['name' => 'Casey Reed', 'initials' => 'CR']);
+        $this->supervisor = Foreman::create([
+            'name' => 'Robin Ashby', 'initials' => 'RA', 'role' => Foreman::ROLE_SUPERVISOR,
+        ]);
 
         $client = $this->user->projects()->create([
             'name' => 'Harborview', 'client' => 'Harborview', 'status' => 'draft',
@@ -280,6 +285,7 @@ class JobTaskSetupTest extends TestCase
             'tasks' => [[
                 'title' => 'Rough-in',
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$labour->id],
             ]],
         ]);
@@ -301,7 +307,7 @@ class JobTaskSetupTest extends TestCase
     public function test_adding_and_editing_from_a_job_returns_to_that_job(): void
     {
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $task = JobTask::sole();
@@ -320,13 +326,14 @@ class JobTaskSetupTest extends TestCase
                 'title' => 'Rough-in, first floor',
                 'status' => $task->status,
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [],
             ])
             ->assertRedirect($backToJob);
 
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', ['job' => $this->job, 'from' => 'job']), [
-                'tasks' => [['title' => 'Second fix', 'foreman_id' => $this->foreman->id]],
+                'tasks' => [['title' => 'Second fix', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
             ])
             ->assertRedirect($backToJob);
     }
@@ -334,7 +341,7 @@ class JobTaskSetupTest extends TestCase
     public function test_someone_who_cannot_plan_work_still_reads_the_jobs_tasks(): void
     {
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $electrician = User::factory()->create(['role' => 'Electrician']);
@@ -354,6 +361,7 @@ class JobTaskSetupTest extends TestCase
             'tasks' => [[
                 'title' => 'Rough-in',
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$labour->id],
             ]],
         ]);
@@ -383,6 +391,7 @@ class JobTaskSetupTest extends TestCase
             'tasks' => [[
                 'title' => 'Rough-in',
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$labour->id, $secondLabour->id],
             ]],
         ]);
@@ -396,6 +405,7 @@ class JobTaskSetupTest extends TestCase
                 'title' => $task->title,
                 'status' => $task->status,
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$secondLabour->id],
             ])
             ->assertSessionHasNoErrors();
@@ -416,8 +426,8 @@ class JobTaskSetupTest extends TestCase
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
             'tasks' => [
-                ['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'estimate_item_ids' => [$labour->id]],
-                ['title' => 'Second fix', 'foreman_id' => $this->foreman->id, 'estimate_item_ids' => [$secondLabour->id]],
+                ['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id, 'estimate_item_ids' => [$labour->id]],
+                ['title' => 'Second fix', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id, 'estimate_item_ids' => [$secondLabour->id]],
             ],
         ]);
 
@@ -429,6 +439,7 @@ class JobTaskSetupTest extends TestCase
                 'title' => $roughIn->title,
                 'status' => $roughIn->status,
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$labour->id, $secondLabour->id],
             ])
             ->assertSessionHasErrors('estimate_item_ids');
@@ -446,6 +457,7 @@ class JobTaskSetupTest extends TestCase
             'tasks' => [[
                 'title' => 'Rough-in',
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$labour->id],
             ]],
         ]);
@@ -457,6 +469,7 @@ class JobTaskSetupTest extends TestCase
                 'title' => $task->title,
                 'status' => $task->status,
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [],
             ])
             ->assertSessionHasErrors('estimate_item_ids');
@@ -471,8 +484,8 @@ class JobTaskSetupTest extends TestCase
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
             'tasks' => [
-                ['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'estimate_item_ids' => [$labour->id]],
-                ['title' => 'Second fix', 'foreman_id' => $this->foreman->id, 'estimate_item_ids' => [$secondLabour->id]],
+                ['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id, 'estimate_item_ids' => [$labour->id]],
+                ['title' => 'Second fix', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id, 'estimate_item_ids' => [$secondLabour->id]],
             ],
         ]);
 
@@ -496,7 +509,7 @@ class JobTaskSetupTest extends TestCase
     public function test_removing_a_task_from_a_job_returns_to_that_job(): void
     {
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $this->actingAs($this->user)
@@ -507,7 +520,7 @@ class JobTaskSetupTest extends TestCase
     public function test_only_someone_who_plans_the_work_may_remove_a_task(): void
     {
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $electrician = User::factory()->create(['role' => 'Electrician']);
@@ -522,7 +535,7 @@ class JobTaskSetupTest extends TestCase
     public function test_a_task_cannot_be_saved_without_a_foreman(): void
     {
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $task = JobTask::sole();
@@ -542,7 +555,7 @@ class JobTaskSetupTest extends TestCase
     public function test_adding_tasks_from_the_task_list_returns_there(): void
     {
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         // Opened from the list rather than reached while raising the job: the
@@ -556,7 +569,7 @@ class JobTaskSetupTest extends TestCase
 
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', ['job' => $this->job, 'from' => 'tasks']), [
-                'tasks' => [['title' => 'Second fix', 'foreman_id' => $this->foreman->id]],
+                'tasks' => [['title' => 'Second fix', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
             ])
             ->assertRedirect(route('tasks.index'));
 
@@ -602,9 +615,9 @@ class JobTaskSetupTest extends TestCase
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [
-                    ['title' => 'Survey the floor', 'foreman_id' => $dana->id],
-                    ['title' => 'Rough-in first floor', 'foreman_id' => $dana->id],
-                    ['title' => 'Final inspection', 'foreman_id' => $dana->id],
+                    ['title' => 'Survey the floor', 'foreman_id' => $dana->id, 'supervisor_id' => $this->supervisor->id],
+                    ['title' => 'Rough-in first floor', 'foreman_id' => $dana->id, 'supervisor_id' => $this->supervisor->id],
+                    ['title' => 'Final inspection', 'foreman_id' => $dana->id, 'supervisor_id' => $this->supervisor->id],
                 ],
             ])
             // The end of the flow: the takeoff is now a job with its work laid out.
@@ -627,11 +640,11 @@ class JobTaskSetupTest extends TestCase
         $dana = Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW']);
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Survey the floor', 'foreman_id' => $dana->id]],
+            'tasks' => [['title' => 'Survey the floor', 'foreman_id' => $dana->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Final inspection', 'foreman_id' => $dana->id]],
+            'tasks' => [['title' => 'Final inspection', 'foreman_id' => $dana->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $tasks = $this->job->refresh()->schedule->tasks;
@@ -643,15 +656,15 @@ class JobTaskSetupTest extends TestCase
     public function test_a_duplicate_name_is_reported_on_its_own_row_and_saves_nothing(): void
     {
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Survey the floor', 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Survey the floor', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [
-                    ['title' => 'Rough-in first floor', 'foreman_id' => $this->foreman->id],
+                    ['title' => 'Rough-in first floor', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id],
                     // Same name as the one already planned, in a different case.
-                    ['title' => '  SURVEY THE FLOOR  ', 'foreman_id' => $this->foreman->id],
+                    ['title' => '  SURVEY THE FLOOR  ', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id],
                 ],
             ])
             ->assertSessionHasErrors('tasks.1.title');
@@ -665,8 +678,8 @@ class JobTaskSetupTest extends TestCase
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [
-                    ['title' => 'Survey the floor', 'foreman_id' => $this->foreman->id],
-                    ['title' => 'Survey the floor', 'foreman_id' => $this->foreman->id],
+                    ['title' => 'Survey the floor', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id],
+                    ['title' => 'Survey the floor', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id],
                 ],
             ])
             ->assertSessionHasErrors('tasks.1.title');
@@ -677,7 +690,7 @@ class JobTaskSetupTest extends TestCase
     public function test_the_step_shows_what_is_already_planned(): void
     {
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Survey the floor', 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Survey the floor', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $this->actingAs($this->user)
@@ -706,6 +719,7 @@ class JobTaskSetupTest extends TestCase
                     'title' => 'Rough-in first floor',
                     'estimate_item_ids' => [$first->id, $second->id],
                     'foreman_id' => $dana->id,
+                    'supervisor_id' => $this->supervisor->id,
                 ]],
             ])
             ->assertSessionHasNoErrors();
@@ -721,14 +735,14 @@ class JobTaskSetupTest extends TestCase
         [$first, $second] = $this->makeEstimateLines();
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Rough-in first floor', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Rough-in first floor', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         // The screen greys it out; the request refuses it, which is what stops a
         // stale tab from quietly moving priced work between two tasks.
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
-                'tasks' => [['title' => 'Second fix', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id]],
+                'tasks' => [['title' => 'Second fix', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
             ])
             ->assertSessionHasErrors('tasks.0.estimate_item_ids');
 
@@ -743,8 +757,8 @@ class JobTaskSetupTest extends TestCase
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [
-                    ['title' => 'Rough-in first floor', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id],
-                    ['title' => 'Second fix', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id],
+                    ['title' => 'Rough-in first floor', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id],
+                    ['title' => 'Second fix', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id],
                 ],
             ])
             ->assertSessionHasErrors('tasks.1.estimate_item_ids');
@@ -766,7 +780,7 @@ class JobTaskSetupTest extends TestCase
 
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
-                'tasks' => [['title' => 'Rough-in', 'estimate_item_ids' => [$theirLine->id], 'foreman_id' => $this->foreman->id]],
+                'tasks' => [['title' => 'Rough-in', 'estimate_item_ids' => [$theirLine->id], 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
             ])
             ->assertSessionHasErrors('tasks.0.estimate_item_ids');
 
@@ -778,7 +792,7 @@ class JobTaskSetupTest extends TestCase
         [$first] = $this->makeEstimateLines();
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Rough-in first floor', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Rough-in first floor', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $this->job->refresh()->schedule->tasks->sole()->delete();
@@ -793,7 +807,7 @@ class JobTaskSetupTest extends TestCase
         $second = $this->makeSecondLabourLine($first);
 
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $this->job), [
-            'tasks' => [['title' => 'Rough-in first floor', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id]],
+            'tasks' => [['title' => 'Rough-in first floor', 'estimate_item_ids' => [$first->id], 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
         $this->actingAs($this->user)
@@ -817,8 +831,8 @@ class JobTaskSetupTest extends TestCase
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [
-                    ['title' => 'Rough-in first floor', 'foreman_id' => $dana->id],
-                    ['title' => 'Second fix', 'foreman_id' => $dana->id],
+                    ['title' => 'Rough-in first floor', 'foreman_id' => $dana->id, 'supervisor_id' => $this->supervisor->id],
+                    ['title' => 'Second fix', 'foreman_id' => $dana->id, 'supervisor_id' => $this->supervisor->id],
                 ],
             ])
             ->assertSessionHasNoErrors();
@@ -835,9 +849,22 @@ class JobTaskSetupTest extends TestCase
         // plan, it is a note.
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
-                'tasks' => [['title' => 'Rough-in first floor']],
+                'tasks' => [['title' => 'Rough-in first floor', 'supervisor_id' => $this->supervisor->id]],
             ])
             ->assertSessionHasErrors('tasks.0.foreman_id');
+
+        $this->assertNull($this->job->refresh()->schedule);
+    }
+
+    public function test_every_task_needs_a_supervisor(): void
+    {
+        // A foreman with nobody above them is not a plan either — both are
+        // required, the same way.
+        $this->actingAs($this->user)
+            ->post(route('jobs.tasks.setup.store', $this->job), [
+                'tasks' => [['title' => 'Rough-in first floor', 'foreman_id' => $this->foreman->id]],
+            ])
+            ->assertSessionHasErrors('tasks.0.supervisor_id');
 
         $this->assertNull($this->job->refresh()->schedule);
     }
@@ -849,7 +876,7 @@ class JobTaskSetupTest extends TestCase
 
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
-                'tasks' => [['title' => 'Rough-in first floor', 'foreman_id' => $dana->id]],
+                'tasks' => [['title' => 'Rough-in first floor', 'foreman_id' => $dana->id, 'supervisor_id' => $this->supervisor->id]],
             ])
             ->assertSessionHasErrors('tasks.0.estimate_item_ids');
     }
@@ -864,7 +891,7 @@ class JobTaskSetupTest extends TestCase
          */
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
-                'tasks' => [['title' => 'Rough-in first floor', 'foreman_id' => $dana->id]],
+                'tasks' => [['title' => 'Rough-in first floor', 'foreman_id' => $dana->id, 'supervisor_id' => $this->supervisor->id]],
             ])
             ->assertSessionHasNoErrors();
 
@@ -1031,6 +1058,7 @@ class JobTaskSetupTest extends TestCase
                 'tasks' => [[
                     'title' => 'Rough-in first floor',
                     'foreman_id' => $this->foreman->id,
+                    'supervisor_id' => $this->supervisor->id,
                     'estimate_item_ids' => [$labour->id],
                 ]],
             ])
@@ -1048,6 +1076,7 @@ class JobTaskSetupTest extends TestCase
                 'tasks' => [[
                     'title' => 'Rough-in first floor',
                     'foreman_id' => $this->foreman->id,
+                    'supervisor_id' => $this->supervisor->id,
                     'estimate_item_ids' => [$labour->id],
                 ]],
             ])
@@ -1080,6 +1109,7 @@ class JobTaskSetupTest extends TestCase
                 'tasks' => [[
                     'title' => 'Walk the site',
                     'foreman_id' => $this->foreman->id,
+                    'supervisor_id' => $this->supervisor->id,
                     'estimate_item_ids' => [$unpriced->id],
                 ]],
             ])
@@ -1118,6 +1148,7 @@ class JobTaskSetupTest extends TestCase
                 'tasks' => [[
                     'title' => 'Install receptacles',
                     'foreman_id' => $this->foreman->id,
+                    'supervisor_id' => $this->supervisor->id,
                     // Only the labor line is picked — its material is never
                     // offered as its own row.
                     'estimate_item_ids' => [$labour->id],
@@ -1142,6 +1173,7 @@ class JobTaskSetupTest extends TestCase
             'tasks' => [[
                 'title' => 'Rough-in',
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$labour->id],
             ]],
         ]);
@@ -1158,6 +1190,7 @@ class JobTaskSetupTest extends TestCase
             'tasks' => [[
                 'title' => 'Install receptacles',
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$labour->id],
             ]],
         ]);
@@ -1172,6 +1205,7 @@ class JobTaskSetupTest extends TestCase
                 'title' => 'Install receptacles, corrected',
                 'status' => $task->status,
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$labour->id],
             ])
             ->assertSessionHasNoErrors();
@@ -1189,6 +1223,7 @@ class JobTaskSetupTest extends TestCase
             'tasks' => [[
                 'title' => 'Install receptacles',
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$labour->id],
             ]],
         ]);
@@ -1203,6 +1238,7 @@ class JobTaskSetupTest extends TestCase
                 'title' => $task->title,
                 'status' => $task->status,
                 'foreman_id' => $this->foreman->id,
+                'supervisor_id' => $this->supervisor->id,
                 'estimate_item_ids' => [$secondLabour->id],
             ])
             ->assertSessionHasNoErrors();

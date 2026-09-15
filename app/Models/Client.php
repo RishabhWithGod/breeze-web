@@ -20,7 +20,25 @@ class Client extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['user_id', 'name', 'notes'];
+    protected $fillable = ['user_id', 'name', 'notes', 'labor_rate'];
+
+    protected function casts(): array
+    {
+        return [
+            'labor_rate' => 'decimal:2',
+        ];
+    }
+
+    /**
+     * What an hour of this client's labor is billed at — this client's own
+     * override where one has been set, the usual rate where one has not.
+     */
+    public function effectiveLaborRate(): float
+    {
+        return $this->labor_rate !== null
+            ? (float) $this->labor_rate
+            : (float) config('ai.estimating.labor_rate');
+    }
 
     /** @return BelongsTo<User, $this> */
     public function owner(): BelongsTo

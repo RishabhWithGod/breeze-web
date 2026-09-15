@@ -167,3 +167,26 @@ export function maskUsDate(text: string): string {
 
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
 }
+
+/** "24850" -> "24,850"; keeps a decimal point being typed, e.g. "24,850." */
+export function formatAmountInput(raw: string): string {
+  if (raw === '') return ''
+
+  const [wholePart = '', ...rest] = raw.split('.')
+  const withCommas = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
+  return rest.length > 0 ? `${withCommas}.${rest.join('')}` : withCommas
+}
+
+/** Strips commas and anything but digits/a single decimal point from typed input. */
+export function cleanAmountInput(raw: string): string {
+  const withoutCommas = raw.replace(/,/g, '')
+  const firstDot = withoutCommas.indexOf('.')
+
+  if (firstDot === -1) return withoutCommas.replace(/\D/g, '')
+
+  const wholePart = withoutCommas.slice(0, firstDot).replace(/\D/g, '')
+  const decimalPart = withoutCommas.slice(firstDot + 1).replace(/\D/g, '')
+
+  return `${wholePart}.${decimalPart}`
+}

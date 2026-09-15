@@ -17,6 +17,15 @@ class BillOfQuantities
     public function __construct(private readonly SymbolCatalog $catalog) {}
 
     /**
+     * A copy of this compiler reading rates from one project's own rate list
+     * first, `$userId`'s price book as a fallback.
+     */
+    public function forProject(int $projectId, ?int $userId = null): self
+    {
+        return new self($this->catalog->forProject($projectId, $userId));
+    }
+
+    /**
      * @param  Collection<int, FinalSymbol>  $symbols
      * @return array{
      *     lines: list<array<string, mixed>>,
@@ -83,8 +92,8 @@ class BillOfQuantities
                  * What the company calls it. A drawing labels a fixture "EM2";
                  * the estimating workbook says "EM2, NEW BATTERY 2/HEAD EM
                  * FIXTURE" — the same item, described well enough to order.
-                 * Null when the price book has never seen it, so the screens
-                 * keep showing the symbol's own name.
+                 * Null when this project's rate list has never seen it, so
+                 * the screens keep showing the symbol's own name.
                  */
                 'description' => $rates['description'],
                 'count' => $count,

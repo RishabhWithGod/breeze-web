@@ -44,11 +44,11 @@ class StoreJobRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
             /*
-             * The crew this job is handed to. Optional: work is often raised
-             * before anyone knows who will run it. Once it is set, it narrows
-             * who a task on this job can be given to.
+             * The crew this job is handed to. Required: a job needs a crew to
+             * be planned into tasks against, and it narrows who a task on
+             * this job can be given to.
              */
-            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            'team_id' => ['required', 'integer', 'exists:teams,id'],
             /*
              * When the work runs. Required: a job with no dates cannot be
              * scheduled, cannot be crewed, and shows as a blank row on every
@@ -57,7 +57,11 @@ class StoreJobRequest extends FormRequest
              */
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'budget' => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
+            /*
+             * No budget field: a job's budget is the estimate raised against
+             * its drawing, never a figure typed on this form. The controller
+             * writes it from the linked estimate directly.
+             */
             'create_estimate' => ['boolean'],
             'assign_team' => ['boolean'],
             'notify_client' => ['boolean'],
@@ -93,6 +97,7 @@ class StoreJobRequest extends FormRequest
             'name.required' => 'Job name is required',
             'name.min' => 'Use at least 3 characters',
             'client_id.required' => 'Client is required',
+            'team_id.required' => 'Pick the crew this job is handed to',
             'client_id.exists' => 'Pick a client from the list',
             'project_id.required' => 'Pick the project this job is on',
             'project_id.exists' => 'Pick a project from the list',
@@ -103,7 +108,6 @@ class StoreJobRequest extends FormRequest
             'start_date.required' => 'Pick the day this job starts',
             'end_date.required' => 'Pick the day this job is due to finish',
             'end_date.after_or_equal' => 'End date must be on or after the start date',
-            'budget.gt' => 'Enter an amount greater than zero',
         ];
     }
 }

@@ -10,6 +10,7 @@ import {
   FileText,
   ListChecks,
   PencilLine,
+  Plus,
   Sparkles,
   Wallet,
 } from 'lucide-react'
@@ -23,7 +24,7 @@ import {
   StatusChip,
   WorkflowProgress,
 } from '@/components/common'
-import { EstimateItemsTable } from '@/components/estimates'
+import { AddEstimateLineCard, EstimateItemsTable } from '@/components/estimates'
 import {
   EquipmentPanel,
   PanelSchedulesPanel,
@@ -97,6 +98,8 @@ export interface EstimateShowProps {
   totals: EstimateTotals
   categories: readonly SelectOption[]
   statuses: readonly string[]
+  /** What a labor line defaults to — the "Add a line" form fills this in the moment Labor is picked. */
+  laborRate: number
   /** Read off the same drawing but not priced by the engine. */
   drawingData: {
     wireSizes: readonly WireSizeRow[]
@@ -119,6 +122,7 @@ export default function EstimateShow({
   backUrl,
   totals,
   categories,
+  laborRate,
   drawingData,
 }: EstimateShowProps) {
   const { flash } = usePage<SharedPageProps>().props
@@ -165,7 +169,7 @@ export default function EstimateShow({
    */
   const [open, setOpen] = useState<Readonly<Record<string, boolean>>>({})
 
-  const sectionKeys = ['lines', 'details', ...drawingPanels.map((p) => p.key), 'totals']
+  const sectionKeys = ['lines', 'details', ...drawingPanels.map((p) => p.key), 'totals', 'addLine']
   const allOpen = sectionKeys.every((key) => open[key])
 
   const toggle = (key: string) =>
@@ -173,6 +177,17 @@ export default function EstimateShow({
 
   const setAll = (isOpen: boolean) =>
     setOpen(Object.fromEntries(sectionKeys.map((key) => [key, isOpen])))
+
+  /**
+   * How many lines were priced off a known rate — the project's own rate
+   * list or the price book — versus how many came up empty and were priced
+   * at zero for the estimator to fill in. Same split the per-line "Needs a
+   * rate" badge already flags, just totalled.
+   */
+  const matchedCount = items.filter(
+    (item) => item.pricingSource === 'vendor-rate-list' || item.pricingSource === 'price-book',
+  ).length
+  const unmatchedCount = items.length - matchedCount
 
   const breakdown: readonly { label: string; value: number; strong?: boolean }[] = [
     { label: 'Materials and fixtures', value: totals.material },
@@ -304,6 +319,7 @@ export default function EstimateShow({
             estimateId={estimate.id}
             items={items}
             categories={categories}
+            laborRate={laborRate}
           />
         </CollapsibleCard>
 
@@ -342,6 +358,8 @@ export default function EstimateShow({
                 label: 'Drawing',
                 value: estimate.drawingName ?? 'Not from a drawing',
               },
+              { label: 'Matched lines', value: String(matchedCount) },
+              { label: 'Unmatched lines', value: String(unmatchedCount) },
             ].map((field) => (
               <div
                 key={field.label}
@@ -454,6 +472,27 @@ export default function EstimateShow({
               </div>
             </div>
           </div>
+        </CollapsibleCard>
+
+        <CollapsibleCard
+          title="Addendum"
+          subtitle="Add new addendum"
+          icon={Plus}
+          tone="neutral"
+          summary={
+            <span className="tabular-nums text-white/80">
+              {items.length} {items.length === 1 ? 'line' : 'lines'} so far
+            </span>
+          }
+          isOpen={Boolean(open['addLine'])}
+          onToggle={() => toggle('addLine')}
+        >
+          <AddEstimateLineCard
+            estimateId={estimate.id}
+            items={items}
+            categories={categories}
+            laborRate={laborRate}
+          />
         </CollapsibleCard>
       </div>
 

@@ -120,6 +120,62 @@ export interface TimeEntryJobTimeSummary {
   readonly employeeJobBillableHours: number
 }
 
+/** GPS job-site presence — the mobile app's check-in/check-out feature.
+ *  Distinct from a [TimeEntry]: no task, no approval workflow, just "was
+ *  this technician at the site, and for how long." */
+export interface AttendanceRow {
+  readonly id: number
+  readonly date: string
+  readonly employee: string
+  readonly employeeRole: string | null
+  readonly job: { readonly id: number; readonly name: string } | null
+  readonly status: 'checkedIn' | 'checkedOut'
+  readonly checkInAt: string | null
+  readonly checkOutAt: string | null
+  readonly checkInMethod: 'manual' | 'automatic' | 'photo' | null
+  readonly checkOutMethod: 'manual' | 'automatic' | 'photo' | null
+  readonly checkInDistanceMeters: number | null
+  readonly checkOutDistanceMeters: number | null
+  readonly hours: number
+  readonly photoUrl: string | null
+}
+
+/** One side of a GPS check-in/check-out cycle — the detail screen's
+ *  "Check In"/"Check Out" cards read the same shape for either. */
+export interface AttendanceEventDetail {
+  readonly at: string | null
+  readonly method: 'manual' | 'automatic' | 'photo' | null
+  readonly accuracyMeters: number | null
+  readonly distanceMeters: number | null
+  readonly lat: number | null
+  readonly lng: number | null
+}
+
+/** The Attendance detail screen — a single [AttendanceRow], in full: every
+ *  field `JobAttendance` carries, not just the list's summary columns. */
+export interface AttendanceDetail {
+  readonly id: number
+  readonly date: string
+  readonly status: 'checkedIn' | 'checkedOut'
+  readonly employee: { readonly name: string }
+  readonly job: { readonly id: number; readonly name: string; readonly client: string | null; readonly status: string } | null
+  readonly hours: number
+  readonly bankedSeconds: number
+  readonly checkIn: AttendanceEventDetail & { readonly photoUrl: string | null }
+  readonly checkOut: AttendanceEventDetail
+}
+
+/** The Time Entry detail screen's "Correction" link — enough to identify and
+ *  jump to the other entry on either side of a correction (see
+ *  `TimeEntry.corrects_id`). */
+export interface TimeEntryCorrectionRef {
+  readonly id: number
+  readonly date: string
+  readonly employee: string
+  readonly hours: number
+  readonly status: TimeEntryStatus
+}
+
 /** One row of the detail screen's "Related Entries" table. */
 export interface TimeEntryRelatedRow {
   readonly id: number

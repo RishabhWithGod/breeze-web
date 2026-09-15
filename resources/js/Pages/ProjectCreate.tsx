@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { ArrowLeft, FileSpreadsheet, FolderKanban, Layers, MapPin, X } from 'lucide-react'
+import { ArrowLeft, DollarSign, FileText, FolderKanban, Layers, MapPin, X } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -17,7 +17,7 @@ import {
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { ClientOption, ResumableTakeoff } from '@/types'
-import { formatFileSize } from '@/utils'
+import { cleanAmountInput, formatAmountInput, formatFileSize } from '@/utils'
 
 interface ProjectDraft {
   client_id: string
@@ -180,14 +180,13 @@ export default function ProjectCreate({
 
             <TextInput
               id="project-estimate-target-total"
-              type="number"
+              type="text"
               inputMode="decimal"
-              min={0}
-              step={50}
+              leftIcon={DollarSign}
               label="Estimate Project Cost (Optional)"
-              placeholder="e.g. 24850"
-              value={data.estimate_target_total}
-              onChange={(event) => update('estimate_target_total', event.target.value)}
+              placeholder="e.g. 24,850"
+              value={formatAmountInput(data.estimate_target_total)}
+              onChange={(event) => update('estimate_target_total', cleanAmountInput(event.target.value))}
               {...(errors.estimate_target_total ? { error: errors.estimate_target_total } : {})}
             />
 
@@ -196,14 +195,14 @@ export default function ProjectCreate({
                 htmlFor="project-vendor-rate-list"
                 className="mb-2 block text-md font-medium text-white"
               >
-                Upload Vendor Rate List (Optional)
+                Upload Vendor Rate List — Excel, PDF or Word (Optional)
               </label>
 
               <input
                 ref={fileInputRef}
                 id="project-vendor-rate-list"
                 type="file"
-                accept=".xlsx"
+                accept=".xlsx,.pdf,.doc,.docx,.rtf,.odt"
                 multiple
                 onChange={(event) => chooseRateLists(event.target.files)}
                 className="sr-only"
@@ -212,7 +211,7 @@ export default function ProjectCreate({
               <Button
                 type="button"
                 variant="secondary"
-                leftIcon={FileSpreadsheet}
+                leftIcon={FileText}
                 onClick={() => fileInputRef.current?.click()}
               >
                 Choose files
@@ -223,7 +222,7 @@ export default function ProjectCreate({
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <p className="flex items-center gap-2 text-sm font-medium text-white">
                       <Layers size={14} aria-hidden className="text-brand" />
-                      {data.vendor_rate_list.length} workbook
+                      {data.vendor_rate_list.length} file
                       {data.vendor_rate_list.length === 1 ? '' : 's'} selected
                     </p>
                     <p className="text-2xs text-white/70">{formatFileSize(rateListTotalSize)}</p>
@@ -263,9 +262,10 @@ export default function ProjectCreate({
                 </div>
               ) : (
                 <p className="mt-2 text-sm text-white/75">
-                  Excel workbooks of your own rates — upload as many as you have.
-                  Your estimates price off them once uploaded, pooled together
-                  like one book; until then they use the shared price book.
+                  Excel, PDF, or Word — however the vendor sent it, upload as many
+                  as you have. A symbol this project's own rate list has priced
+                  uses that price; anything else falls back to your price book,
+                  or the shared one.
                 </p>
               )}
             </div>

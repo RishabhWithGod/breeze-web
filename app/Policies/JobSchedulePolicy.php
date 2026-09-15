@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
@@ -56,6 +57,22 @@ class JobSchedulePolicy
     public function updateTask(User $user, JobTask $task): bool
     {
         return $this->holds($user, self::PLANNERS) && $this->owns($user, $task->job);
+    }
+
+    /**
+     * Reopening work once it is already signed off — unchecking a completed
+     * checklist line, or sending a task back during review.
+     *
+     * `updateTask()` alone (planner role + owning the job outright) is too
+     * narrow here: a site supervisor is commonly assigned to watch a
+     * specific task without being the job's own manager (`work_jobs.user_id`),
+     * and reopening the work they are literally supervising is exactly their
+     * job. `updateTask()` still applies on its own for a manager who owns the
+     * job but isn't named on any task.
+     */
+    public function reopenTask(User $user, JobTask $task): bool
+    {
+        return $this->updateTask($user, $task) || $this->isTaskSupervisor($user, $task);
     }
 
     /**
@@ -151,9 +168,48 @@ class JobSchedulePolicy
             return true;
         }
 
+        // A job raised before tasks carried their own foreman/supervisor
+        // names its one crew lead on the job's own header field instead
+        // (`work_jobs.foreman_id` — which, per `Foreman`'s own doc comment,
+        // can be a supervisor's register row too) — the same legacy
+        // fallback `Job::assignedForemen()` reads from when no task has one
+        // of its own.
+        if ($foremanId !== null
+            && $task->foreman_id === null
+            && $task->supervisor_id === null
+            && $task->job?->foreman_id === $foremanId) {
+            return true;
+        }
+
         $name = mb_strtolower(trim($user->name));
 
         return $task->assignments
             ->contains(fn ($assignment) => mb_strtolower(trim((string) $assignment->member?->name)) === $name);
+    }
+
+    /**
+     * Whether this user is a supervisor with a real claim to this specific
+     * task — named on it directly (`job_tasks.supervisor_id`), or, when the
+     * task has no foreman/supervisor of its own, via the job's own legacy
+     * header field (same fallback as {@see isAssigned()}). Deliberately
+     * requires the supervisor *role* on top of the assignment: a plain
+     * foreman named the same way is still covered by {@see isAssigned()}
+     * for everyday actions, but reopening already-signed-off work is a
+     * supervisor's call, not the crew's own.
+     */
+    private function isTaskSupervisor(User $user, JobTask $task): bool
+    {
+        $foreman = $user->foreman;
+        if ($foreman === null || $foreman->role !== Foreman::ROLE_SUPERVISOR) {
+            return false;
+        }
+
+        if ($task->supervisor_id === $foreman->id) {
+            return true;
+        }
+
+        return $task->supervisor_id === null
+            && $task->foreman_id === null
+            && $task->job?->foreman_id === $foreman->id;
     }
 }

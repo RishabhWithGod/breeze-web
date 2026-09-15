@@ -1248,10 +1248,11 @@ class MobileJobsAndTasksTest extends TestCase
 
     /**
      * The scenario the user asked for directly: two foremen split across a
-     * job's tasks. Finishing your own slice never completes the *job* —
-     * `myTasksComplete` is the only thing that flips for you personally —
-     * until literally every task, from every foreman, is closed does
-     * `changeStatus('completed')` actually succeed for anyone.
+     * job's tasks. Finishing your own slice submits *your own* portion for
+     * review and a supervisor can approve it independently — neither your
+     * submission nor the supervisor's approval of it is ever blocked by the
+     * other foreman's still-open work. The job as a whole only actually
+     * completes once every foreman's portion has been approved.
      */
     public function test_a_job_is_ready_for_review_once_every_task_across_every_foreman_is_done(): void
     {
@@ -1295,27 +1296,44 @@ class MobileJobsAndTasksTest extends TestCase
             ->assertJsonPath('data.myTasksComplete', false);
         auth()->forgetGuards();
 
-        // ...so the job itself still refuses to complete, even for the
-        // foreman whose own half is entirely finished.
+        // ...so foreman A can still submit their own half — B's open work
+        // never blocks it — and the job stays open either way.
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanAUser))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'completed'])
-            ->assertStatus(422)
-            ->assertJsonPath('errors.code', 'tasks_incomplete');
+            ->assertOk()
+            ->assertJsonPath('message', 'Your tasks are marked ready for supervisor review.');
         auth()->forgetGuards();
         $this->assertNotSame('completed', $job->fresh()->status);
 
-        // Foreman B finishes their half too — now every task on the job is
-        // done, from both foremen, and the job can actually complete.
+        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
+        $supervisor->update(['role' => Foreman::ROLE_SUPERVISOR]);
+        $tasks->first()->update(['supervisor_id' => $supervisor->id]);
+
+        // A supervisor can approve foreman A's submitted portion right now,
+        // targeted at A specifically — B hasn't even finished, let alone
+        // submitted, yet it doesn't stop A's own approval. The job as a
+        // whole still isn't ready to close, since B is still unapproved.
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisorUser))
+            ->postJson("/api/v1/jobs/{$job->id}/foremen/{$foremanA->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.fullyApproved', false);
+        auth()->forgetGuards();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisorUser))
+            ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'completed'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.code', 'not_ready_for_review');
+        auth()->forgetGuards();
+        $this->assertNotSame('completed', $job->fresh()->status);
+
+        // Foreman B finishes and submits their own half too — now every
+        // task on the job is done, from both foremen.
         foreach ($tasks->skip($half) as $task) {
             $task->status = \App\Models\JobTask::STATUS_COMPLETED;
             $task->completed_at = now();
             $task->save();
         }
 
-        // Every task is done now, from both foremen — foreman B's own tap
-        // gets the job as far as ready-for-review; it takes a supervisor's
-        // sign-off (see `MobileJobCompletionWorkflowTest`) to actually
-        // close it out.
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanBUser))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'completed'])
             ->assertOk();
@@ -1323,15 +1341,20 @@ class MobileJobsAndTasksTest extends TestCase
 
         $job->refresh();
         $this->assertSame('in-progress', $job->status);
-        $this->assertNotNull($job->ready_for_review_at);
 
-        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
-        $supervisor->update(['role' => Foreman::ROLE_SUPERVISOR]);
-        $tasks->first()->update(['supervisor_id' => $supervisor->id]);
+        // The supervisor approves B specifically too (A stays approved,
+        // untouched by this second, separate tap) — with everyone approved,
+        // the job itself finally closes.
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisorUser))
+            ->postJson("/api/v1/jobs/{$job->id}/foremen/{$foremanB->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.fullyApproved', true);
+        auth()->forgetGuards();
 
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisorUser))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'completed'])
             ->assertOk();
+        auth()->forgetGuards();
 
         $this->assertSame('completed', $job->fresh()->status);
     }

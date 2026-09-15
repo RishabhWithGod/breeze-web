@@ -70,7 +70,6 @@ export default function JobCreate({
       team_id: '',
       start_date: '',
       end_date: '',
-      budget: '',
       save_as_draft: false,
       project_id: '',
       upload_id: '',
@@ -123,20 +122,6 @@ export default function JobCreate({
   }
 
   /**
-   * What a drawing has been priced at, as the budget field reads it.
-   *
-   * A job's budget is the estimate that was signed off on that drawing — it is
-   * the whole point of pricing one. Empty when the drawing has no estimate yet,
-   * so the caller can leave whatever is already in the field rather than
-   * blanking it to zero.
-   */
-  const estimatedBudget = (uploadId: string): string | null => {
-    const amount = uploads.find((upload) => String(upload.id) === uploadId)?.estimate?.amount
-
-    return amount === undefined || amount === null ? null : String(amount)
-  }
-
-  /**
    * And the project answers the rest: its drawing, its site, and through that
    * site the kind of building the work is in. The name is filled only if still
    * blank — never over something already typed.
@@ -154,8 +139,6 @@ export default function JobCreate({
       upload_id: uploadId,
       address_ids: primary ? [primary.id] : [],
       name: current.name || (project?.name ?? ''),
-      // And with the drawing comes what it was priced at.
-      budget: estimatedBudget(uploadId) ?? current.budget,
       /*
        * The type comes from the site, because it is the building that decides
        * it — a client can own a house and a warehouse. Only a site that has
@@ -280,24 +263,7 @@ export default function JobCreate({
                   options={uploadOptions}
                   value={data.upload_id}
                   disabled={!data.project_id}
-                  onChange={(event) => {
-                    /*
-                     * The drawing decides the budget: it is what its estimate
-                     * came to. Picking a different drawing is picking different
-                     * numbers, so the figure follows — a drawing with no
-                     * estimate yet leaves the field alone rather than zeroing
-                     * it, and it stays editable either way.
-                     */
-                    const uploadId = event.target.value
-
-                    setData((current) => ({
-                      ...current,
-                      upload_id: uploadId,
-                      budget: estimatedBudget(uploadId) ?? current.budget,
-                    }))
-
-                    if (errors.upload_id) clearErrors('upload_id')
-                  }}
+                  onChange={(event) => update('upload_id', event.target.value)}
                   {...(errors.upload_id ? { error: errors.upload_id } : {})}
                 />
               </div>
@@ -401,6 +367,7 @@ export default function JobCreate({
               onChange={(next) => update('team_id', next)}
               hint="Tasks on this job are handed to this crew."
               disabled={processing}
+              required
               {...(errors.team_id ? { error: errors.team_id } : {})}
             />
 
@@ -433,26 +400,6 @@ export default function JobCreate({
                 {...(errors.end_date ? { error: errors.end_date } : {})}
               />
             </div>
-
-            {/*
-              The estimate is named beside the figure: a number that appears on
-              its own looks like a default rather than this drawing's own price.
-            */}
-            <TextInput
-              id="job-budget"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step={50}
-              label="Budget ($)"
-              placeholder="Enter budget amount"
-              value={data.budget}
-              onChange={(event) => update('budget', event.target.value)}
-              {...(linkedEstimate
-                ? { hint: `From estimate ${linkedEstimate.number} — change it if this job is not the whole estimate.` }
-                : {})}
-              {...(errors.budget ? { error: errors.budget } : {})}
-            />
 
             <TextArea
               id="job-description"

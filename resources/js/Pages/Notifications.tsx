@@ -126,7 +126,7 @@ export default function Notifications({ notifications, filters, tabCounts, categ
             <EmptyState
               icon={SearchX}
               title={emptyTitle(filters.tab)}
-              description="Notifications from Jobs, Estimates, Scheduling, AI Takeoff, Time Tracking, Documents, Billing and Job Costing all appear here."
+              description="Notifications from Jobs, Estimates, Calendar, AI Takeoff, Time Tracking, Documents, Billing and Job Costing all appear here."
             />
           ) : (
             <ul className="divide-y divide-hairline">

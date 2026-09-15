@@ -1,7 +1,7 @@
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, DollarSign, Save } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -13,11 +13,12 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import { toTitleCase } from '@/utils'
+import { cleanAmountInput, formatAmountInput, toTitleCase } from '@/utils'
 
 interface ClientEditForm {
   name: string
   notes: string
+  labor_rate: string
 }
 
 export interface ClientEditProps {
@@ -25,6 +26,8 @@ export interface ClientEditProps {
     readonly id: number
     readonly name: string
     readonly notes: string | null
+    /** Resolved — the client's own rate, or the configured default. */
+    readonly laborRate: number
   }
 }
 
@@ -40,6 +43,7 @@ export default function ClientEdit({ client }: ClientEditProps) {
     useForm<ClientEditForm>({
       name: client.name,
       notes: client.notes ?? '',
+      labor_rate: String(client.laborRate),
     })
 
   const update = <K extends FormDataKeys<ClientEditForm>>(
@@ -97,6 +101,19 @@ export default function ClientEdit({ client }: ClientEditProps) {
               value={data.name}
               onChange={(event) => update('name', toTitleCase(event.target.value))}
               {...(errors.name ? { error: errors.name } : {})}
+            />
+
+            <TextInput
+              id="client-labor-rate"
+              type="text"
+              inputMode="decimal"
+              leftIcon={DollarSign}
+              label="Labor Rate ($/hr)"
+              placeholder="e.g. 50"
+              hint="What an hour of this client's labor is billed at. Every estimate on their projects prices labor at this rate."
+              value={formatAmountInput(data.labor_rate)}
+              onChange={(event) => update('labor_rate', cleanAmountInput(event.target.value))}
+              {...(errors.labor_rate ? { error: errors.labor_rate } : {})}
             />
 
             <TextArea

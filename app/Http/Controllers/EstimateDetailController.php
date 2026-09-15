@@ -43,7 +43,7 @@ class EstimateDetailController extends Controller
         }
 
         $estimate->load([
-            'job', 'takeoffProject', 'items',
+            'job', 'takeoffProject', 'items', 'clientRecord',
             'aiResult.wireSizes', 'aiResult.equipment', 'aiResult.panelSchedules',
         ]);
 
@@ -102,6 +102,17 @@ class EstimateDetailController extends Controller
                     'label' => EstimateItem::CATEGORY_LABELS[$category],
                 ]),
             'statuses' => Estimate::STATUSES,
+            /*
+             * What a labor line defaults to — this client's own rate where
+             * they have set one, since that is what every hour on their
+             * estimates is actually billed at; the configured default
+             * otherwise. The "Add a line" form fills this in the moment
+             * Labor is picked, so an estimator never has to remember the
+             * number, only correct it when a particular hour really did
+             * cost something else.
+             */
+            'laborRate' => $estimate->clientRecord?->effectiveLaborRate()
+                ?? (float) config('ai.estimating.labor_rate'),
 
             /*
              * Read off the same drawing but not priced by the engine: wire runs are
