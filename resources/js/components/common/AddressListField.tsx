@@ -130,7 +130,7 @@ export function AddressListField({
         disabled={disabled}
         onClick={() => onChange([...addresses, emptyAddress()])}
       >
-        Add another location
+        Add Another Location
       </Button>
     </div>
   )

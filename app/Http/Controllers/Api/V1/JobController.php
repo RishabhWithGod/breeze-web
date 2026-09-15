@@ -113,11 +113,12 @@ class JobController extends Controller
     }
 
     /**
-     * The requesting foreman's own submit/approve state on this job — `null`
-     * for anyone the concept doesn't apply to (a supervisor, an electrician
-     * with no crew-register row), same reasoning as {@see myTasksComplete()}.
+     * The requesting foreman's own start/submit/approve state on this job —
+     * `null` for anyone the concept doesn't apply to (a supervisor, an
+     * electrician with no crew-register row), same reasoning as
+     * {@see myTasksComplete()}.
      *
-     * @return array{myReadyForReviewAt: string|null, myApprovedAt: string|null}|array{}
+     * @return array{myStartedAt: string|null, myReadyForReviewAt: string|null, myApprovedAt: string|null}|array{}
      */
     private function myForemanCompletion(Request $request, Job $job): array
     {
@@ -129,6 +130,7 @@ class JobController extends Controller
         $completion = $job->foremanCompletions()->where('foreman_id', $foreman->id)->first();
 
         return [
+            'myStartedAt' => $completion?->started_at?->toISOString(),
             'myReadyForReviewAt' => $completion?->ready_for_review_at?->toISOString(),
             'myApprovedAt' => $completion?->approved_at?->toISOString(),
         ];
@@ -195,7 +197,12 @@ class JobController extends Controller
             ->orderBy('name')
             ->get();
 
-        return $foremen->map(function (Foreman $foreman) use ($job) {
+        $completions = $job->foremanCompletions()
+            ->whereIn('foreman_id', $foremanIds)
+            ->get()
+            ->keyBy('foreman_id');
+
+        return $foremen->map(function (Foreman $foreman) use ($job, $completions) {
             $totalSeconds = (int) round(
                 (float) $job->timeEntries()->where('user_id', $foreman->user_id)->sum('hours') * 3600
             );
@@ -210,6 +217,12 @@ class JobController extends Controller
                 'startedAt' => $session?->started_at?->toISOString(),
                 'accumulatedSeconds' => $session?->accumulated_seconds,
                 'liveElapsedSeconds' => $session ? $this->timer->elapsedSeconds($session) : null,
+                // This foreman's own portion, signed off — a supervisor's
+                // crew list should read "Completed" for them, not whatever
+                // their last timer session status happened to be (usually
+                // "paused", since completing stops the clock rather than
+                // resuming it).
+                'approvedAt' => $completions->get($foreman->id)?->approved_at?->toISOString(),
             ];
         })->values()->all();
     }
@@ -234,7 +247,8 @@ class JobController extends Controller
             // job on the clock. `Foreman::role` (the crew register), not
             // `User::role`, is the authority here — the same distinction
             // `ElectricianJobAccess`/`JobSchedulePolicy` already draw.
-            if ($request->user()->foreman?->role === Foreman::ROLE_SUPERVISOR) {
+            $foreman = $request->user()->foreman;
+            if ($foreman?->role === Foreman::ROLE_SUPERVISOR) {
                 return $this->fail('Only a foreman can start this job.', 403);
             }
 
@@ -249,6 +263,18 @@ class JobController extends Controller
                     "This job isn't scheduled to start until {$job->start_date->toFormattedDateString()}.",
                     422,
                 );
+            }
+
+            // This foreman's own start, recorded independent of the job's
+            // single shared status below — another foreman already having
+            // started (or finished) theirs must never make this tap a
+            // no-op for this one. `changeStatus()` on the job itself still
+            // runs too, right below, exactly as before: the *first* foreman
+            // to start still puts the job on the clock for `hasStarted()`
+            // gates elsewhere (checklist, notes, timer) that only ever
+            // understood one shared "has work begun on this job" flag.
+            if ($foreman !== null) {
+                $job->markForemanStarted($foreman->id);
             }
         }
 

@@ -14,6 +14,7 @@ class JobForemanCompletion extends Model
     protected $fillable = [
         'job_id',
         'foreman_id',
+        'started_at',
         'ready_for_review_at',
         'approved_at',
     ];
@@ -21,6 +22,7 @@ class JobForemanCompletion extends Model
     protected function casts(): array
     {
         return [
+            'started_at' => 'datetime',
             'ready_for_review_at' => 'datetime',
             'approved_at' => 'datetime',
         ];
@@ -34,6 +36,11 @@ class JobForemanCompletion extends Model
     public function foreman(): BelongsTo
     {
         return $this->belongsTo(Foreman::class);
+    }
+
+    public function isStarted(): bool
+    {
+        return $this->started_at !== null;
     }
 
     public function isReadyForReview(): bool

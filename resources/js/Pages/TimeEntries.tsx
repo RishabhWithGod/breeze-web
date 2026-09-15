@@ -92,9 +92,6 @@ const roleLabel = (role: string) => (role === 'Site Supervisor' ? 'Supervisor' :
 const formatTime = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—'
 
-const formatMeters = (value: number | null) =>
-  value === null ? '—' : value >= 1000 ? `${(value / 1000).toFixed(1)} km` : `${Math.round(value)} m`
-
 /**
  * One row of the merged table — a logged [TimeEntry] or a GPS
  * [AttendanceRow]. They come from unrelated tables with no shared key, so
@@ -278,28 +275,20 @@ export default function TimeEntries({
     {
       key: 'start',
       header: 'Check In',
-      render: (item) =>
-        item.kind === 'entry' ? (
-          <span className="text-white/85">{item.entry.startTime?.slice(0, 5) ?? '—'}</span>
-        ) : (
-          <div>
-            <span className="text-white/85">{formatTime(item.row.checkInAt)}</span>
-            <span className="ml-1.5 text-2xs text-white/60">{formatMeters(item.row.checkInDistanceMeters)}</span>
-          </div>
-        ),
+      render: (item) => (
+        <span className="whitespace-nowrap text-white/85">
+          {item.kind === 'entry' ? (item.entry.startTime?.slice(0, 5) ?? '—') : formatTime(item.row.checkInAt)}
+        </span>
+      ),
     },
     {
       key: 'end',
       header: 'Check Out',
-      render: (item) =>
-        item.kind === 'entry' ? (
-          <span className="text-white/85">{item.entry.endTime?.slice(0, 5) ?? '—'}</span>
-        ) : (
-          <div>
-            <span className="text-white/85">{formatTime(item.row.checkOutAt)}</span>
-            <span className="ml-1.5 text-2xs text-white/60">{formatMeters(item.row.checkOutDistanceMeters)}</span>
-          </div>
-        ),
+      render: (item) => (
+        <span className="whitespace-nowrap text-white/85">
+          {item.kind === 'entry' ? (item.entry.endTime?.slice(0, 5) ?? '—') : formatTime(item.row.checkOutAt)}
+        </span>
+      ),
     },
     {
       key: 'hours',
@@ -307,14 +296,14 @@ export default function TimeEntries({
       align: 'right',
       render: (item) =>
         item.kind === 'entry' ? (
-          <span className="inline-flex items-center gap-1.5 tabular-nums text-white">
+          <span className="inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap tabular-nums text-white">
             {formatHours(item.entry.hours)}
             {item.entry.overtimeHours > 0 && (
               <span className="text-xs text-status-warning">(+{formatHours(item.entry.overtimeHours)} OT)</span>
             )}
           </span>
         ) : (
-          <span className="tabular-nums text-white">{formatHours(item.row.hours)}</span>
+          <span className="whitespace-nowrap tabular-nums text-white">{formatHours(item.row.hours)}</span>
         ),
     },
     {

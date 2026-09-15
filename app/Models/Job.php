@@ -632,6 +632,26 @@ class Job extends Model
         return $this->foremanCompletions()->firstOrCreate(['foreman_id' => $foremanId]);
     }
 
+    /**
+     * Records this foreman's own start — independent of the job's single
+     * shared `status`, and of every other foreman's own row. One foreman
+     * starting (or finishing) their own work is never what tells another
+     * foreman's own "Start Job" to stop showing.
+     *
+     * Idempotent: a foreman tapping Start a second time (a retried request,
+     * or simply reopening the job) leaves the original timestamp alone.
+     */
+    public function markForemanStarted(int $foremanId): void
+    {
+        $completion = $this->foremanCompletionFor($foremanId);
+        if ($completion->isStarted()) {
+            return;
+        }
+
+        $completion->started_at = now();
+        $completion->save();
+    }
+
     /** Ids of foremen who have submitted their own tasks but are not yet approved. */
     public function readyForemanIds(): Collection
     {
