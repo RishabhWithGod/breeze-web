@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Events\ScheduleChanged;
+use App\Models\EstimateItem;
+use App\Models\EstimateItemAttachment;
 use App\Models\Job;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
@@ -561,6 +563,26 @@ class JobTaskController extends Controller
     {
         $this->authorize('view', $task->job);
         abort_unless($attachment->job_task_id === $task->id, 404);
+
+        return response()->streamDownload(
+            fn () => print(Storage::disk('local')->get($attachment->path)),
+            $attachment->name,
+            ['Content-Type' => $attachment->mime_type ?? 'application/octet-stream'],
+            'inline',
+        );
+    }
+
+    /**
+     * One material line's own photo — the same `inline` shape as
+     * {@see attachment()} above, just one level finer (`EstimateItem`
+     * rather than the whole task). The mobile-only equivalent is
+     * `Api\V1\EstimateItemAttachmentController::show()`.
+     */
+    public function materialAttachment(EstimateItem $item, EstimateItemAttachment $attachment): StreamedResponse
+    {
+        abort_unless($item->job_task_id !== null, 404);
+        $this->authorize('view', $item->task->job);
+        abort_unless($attachment->estimate_item_id === $item->id, 404);
 
         return response()->streamDownload(
             fn () => print(Storage::disk('local')->get($attachment->path)),

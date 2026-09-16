@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One editable line on an estimate. `total` is always quantity × unit cost, kept
@@ -107,6 +108,18 @@ class EstimateItem extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(JobTask::class, 'job_task_id');
+    }
+
+    /** This material line's own notes — one per line, not the whole task. */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(EstimateItemComment::class)->oldest('id');
+    }
+
+    /** This material line's own photos. */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(EstimateItemAttachment::class)->latest('id');
     }
 
     /** @return BelongsTo<FinalSymbol, $this> */

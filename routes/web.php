@@ -431,6 +431,8 @@ Route::middleware('auth')->group(function () {
     Route::post('schedule-tasks/{task}/comments', [JobTaskController::class, 'comment'])->name('tasks.comments.store');
     Route::get('schedule-tasks/{task}/attachments/{attachment}', [JobTaskController::class, 'attachment'])
         ->name('tasks.attachments.show');
+    Route::get('estimate-items/{item}/attachments/{attachment}', [JobTaskController::class, 'materialAttachment'])
+        ->name('estimate-items.attachments.show');
 
     // Team members
     Route::post('jobs/{job}/team', [JobTeamController::class, 'store'])->name('jobs.team.store');

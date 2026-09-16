@@ -260,11 +260,18 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
       </Card>
 
       {/* ============================================ Field notes & photos ======= */}
-      {job.tasks.some((task) => task.comments.length > 0 || task.attachments.length > 0) && (
+      {job.tasks.some(
+        (task) =>
+          task.comments.length > 0 ||
+          task.attachments.length > 0 ||
+          task.materialLines.some(
+            (line) => line.comments.length > 0 || line.attachments.length > 0,
+          ),
+      ) && (
         <Card accent="info" padding="lg" className="mt-6">
           <SectionHeading
             title="Field Notes & Photos"
-            subtitle="Left by the crew, from the mobile app"
+            subtitle="Left by the crew, from the mobile app — by task, then by material"
           />
           <JobTaskFieldNotesPanel tasks={job.tasks} />
         </Card>
