@@ -139,6 +139,82 @@ class MobileJobCompletionWorkflowTest extends TestCase
         return $response;
     }
 
+    /** A supervisor's targeted sign-off on one foreman's own portion — the
+     *  step that has to happen, per foreman, before `completeAsRequest()`'s
+     *  final close-out can succeed. */
+    private function approveForemanAsRequest(Job $job, User $supervisorUser, Foreman $foreman): \Illuminate\Testing\TestResponse
+    {
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisorUser))
+            ->postJson("/api/v1/jobs/{$job->id}/foremen/{$foreman->id}/approve");
+        auth()->forgetGuards();
+
+        return $response;
+    }
+
+    private function startAsRequest(Job $job, User $user): \Illuminate\Testing\TestResponse
+    {
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress']);
+        auth()->forgetGuards();
+
+        return $response;
+    }
+
+    /* -------------------------------------------------------- crew start */
+
+    public function test_one_foremans_start_does_not_start_another_foremans_own_work(): void
+    {
+        [$foremanAUser, $foremanA] = $this->makeMobileForeman('Robert');
+        [$foremanBUser, $foremanB] = $this->makeMobileForeman('Priya');
+        $job = $this->makeJob(['foreman_id' => $foremanA->id, 'status' => 'scheduled']);
+
+        $schedule = app(\App\Services\Scheduling\ScheduleBuilder::class)->build(
+            $job,
+            User::factory()->create(['role' => 'Project Manager']),
+            withTasks: true,
+        );
+        $tasks = $schedule->tasks()->orderBy('position')->get();
+        $this->assertGreaterThanOrEqual(2, $tasks->count());
+        $half = intdiv($tasks->count(), 2);
+        foreach ($tasks as $i => $task) {
+            $task->update(['foreman_id' => $i < $half ? $foremanA->id : $foremanB->id]);
+        }
+
+        // Foreman A starts the job — the shared job-wide status does flip,
+        // since other gates (checklist, notes, timer) only ever understood
+        // one "has work begun" flag for the whole job.
+        $this->startAsRequest($job, $foremanAUser)->assertOk();
+        $job->refresh();
+        $this->assertSame('in-progress', $job->status);
+
+        // A's own start is recorded...
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanAUser))
+            ->getJson("/api/v1/jobs/{$job->id}")
+            ->assertOk()
+            ->assertJsonPath('data.myStartedAt', fn ($v) => $v !== null);
+        auth()->forgetGuards();
+
+        // ...but B's own start is untouched — the job being in-progress
+        // job-wide is not the same as B having tapped Start themselves.
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanBUser))
+            ->getJson("/api/v1/jobs/{$job->id}")
+            ->assertOk()
+            ->assertJsonPath('data.myStartedAt', null);
+        auth()->forgetGuards();
+
+        // B can still start their own — no error just because the job is
+        // already in-progress from A's own tap.
+        $this->startAsRequest($job, $foremanBUser)
+            ->assertOk()
+            ->assertJsonPath('message', 'Status unchanged.');
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanBUser))
+            ->getJson("/api/v1/jobs/{$job->id}")
+            ->assertOk()
+            ->assertJsonPath('data.myStartedAt', fn ($v) => $v !== null);
+        auth()->forgetGuards();
+    }
+
     /* ---------------------------------------------------- crew submission */
 
     public function test_a_foreman_completing_every_task_marks_the_job_ready_for_review_not_completed(): void
@@ -185,18 +261,149 @@ class MobileJobCompletionWorkflowTest extends TestCase
 
     public function test_a_supervisor_completes_a_job_once_it_is_ready_for_review(): void
     {
-        [$foremanUser, , $job, $tasks] = $this->jobWithEveryTaskDone();
+        [$foremanUser, $foreman, $job, $tasks] = $this->jobWithEveryTaskDone();
 
         [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         $this->completeAsRequest($job, $foremanUser)->assertOk();
 
+        // The targeted, per-foreman approve is what actually clears the
+        // "not ready" gate below — a single foreman on the job, but the
+        // rule (approve first, close second) is the same regardless.
+        $this->approveForemanAsRequest($job, $supervisorUser, $foreman)
+            ->assertOk()
+            ->assertJsonPath('data.fullyApproved', true);
+
         $this->completeAsRequest($job, $supervisorUser)
             ->assertOk()
             ->assertJsonPath('data.to', 'completed');
 
         $this->assertSame('completed', $job->fresh()->status);
+    }
+
+    public function test_approving_a_foreman_who_has_not_submitted_is_refused(): void
+    {
+        [, $foreman, $job, $tasks] = $this->jobWithEveryTaskDone();
+
+        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        $tasks->first()->update(['supervisor_id' => $supervisor->id]);
+
+        // Every task is closed, but the foreman hasn't tapped Complete yet.
+        $this->approveForemanAsRequest($job, $supervisorUser, $foreman)
+            ->assertStatus(422)
+            ->assertJsonPath('errors.code', 'not_ready_for_review');
+    }
+
+    public function test_only_a_supervisor_can_approve_a_foreman(): void
+    {
+        [$foremanUser, $foreman, $job] = $this->jobWithEveryTaskDone();
+        $this->completeAsRequest($job, $foremanUser)->assertOk();
+
+        // A foreman — even the one who submitted — has no authority to
+        // approve their own work; only the supervisor role can.
+        $this->approveForemanAsRequest($job, $foremanUser, $foreman)->assertStatus(403);
+    }
+
+    public function test_approving_one_foreman_never_touches_another_foremans_own_review(): void
+    {
+        [$foremanAUser, $foremanA] = $this->makeMobileForeman('Robert');
+        [$foremanBUser, $foremanB] = $this->makeMobileForeman('Priya');
+        $job = $this->makeJob(['foreman_id' => $foremanA->id]);
+
+        $schedule = app(\App\Services\Scheduling\ScheduleBuilder::class)->build(
+            $job,
+            User::factory()->create(['role' => 'Project Manager']),
+            withTasks: true,
+        );
+        $tasks = $schedule->tasks()->orderBy('position')->get();
+        $this->assertGreaterThanOrEqual(2, $tasks->count());
+
+        $half = intdiv($tasks->count(), 2);
+        foreach ($tasks as $i => $task) {
+            $task->foreman_id = $i < $half ? $foremanA->id : $foremanB->id;
+            $task->status = JobTask::STATUS_COMPLETED;
+            $task->completed_at = now();
+            $task->save();
+        }
+
+        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        $tasks->first()->update(['supervisor_id' => $supervisor->id]);
+
+        $this->completeAsRequest($job, $foremanAUser)->assertOk();
+        $this->completeAsRequest($job, $foremanBUser)->assertOk();
+
+        // Approving A specifically must leave B's own row untouched — not
+        // implicitly approved just because both happened to be ready.
+        $this->approveForemanAsRequest($job, $supervisorUser, $foremanA)->assertOk();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanBUser))
+            ->getJson("/api/v1/jobs/{$job->id}")
+            ->assertOk()
+            ->assertJsonPath('data.myApprovedAt', null)
+            ->assertJsonPath('data.myReadyForReviewAt', fn ($v) => $v !== null);
+        auth()->forgetGuards();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanAUser))
+            ->getJson("/api/v1/jobs/{$job->id}")
+            ->assertOk()
+            ->assertJsonPath('data.myApprovedAt', fn ($v) => $v !== null);
+        auth()->forgetGuards();
+
+        // The job LIST endpoint — what the app's own job list/home screen
+        // actually reads, not just the detail screen — has to carry this
+        // same per-foreman state too, or the list keeps showing "in
+        // progress" for a foreman whose own portion the detail screen
+        // already reports as approved.
+        $listResponse = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanAUser))
+            ->getJson('/api/v1/jobs')
+            ->assertOk();
+        auth()->forgetGuards();
+        $listedJob = collect($listResponse->json('data.jobs'))->firstWhere('id', $job->id);
+        $this->assertNotNull($listedJob);
+        $this->assertNotNull($listedJob['myApprovedAt']);
+
+        $listResponseB = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanBUser))
+            ->getJson('/api/v1/jobs')
+            ->assertOk();
+        auth()->forgetGuards();
+        $listedJobB = collect($listResponseB->json('data.jobs'))->firstWhere('id', $job->id);
+        $this->assertNotNull($listedJobB);
+        $this->assertNull($listedJobB['myApprovedAt']);
+
+        $this->assertNotSame('completed', $job->fresh()->status);
+    }
+
+    public function test_crew_time_reports_approved_for_a_supervisor_rather_than_the_last_timer_status(): void
+    {
+        [$foremanUser, $foreman, $job, $tasks] = $this->jobWithEveryTaskDone();
+
+        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        $tasks->first()->update(['supervisor_id' => $supervisor->id]);
+
+        // A paused session left over from before completion — exactly the
+        // stale-looking state a supervisor's crew list must not surface as
+        // this foreman's actual status once they're done.
+        \App\Models\TimerSession::create([
+            'user_id' => $foremanUser->id,
+            'job_id' => $job->id,
+            'team_member_id' => null,
+            'started_at' => now()->subHour(),
+            'accumulated_seconds' => 1800,
+            'status' => 'paused',
+            'billable' => true,
+        ]);
+
+        $this->completeAsRequest($job, $foremanUser)->assertOk();
+        $this->approveForemanAsRequest($job, $supervisorUser, $foreman)->assertOk();
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisorUser))
+            ->getJson("/api/v1/jobs/{$job->id}")
+            ->assertOk();
+
+        $entry = collect($response->json('data.crewTime'))->firstWhere('foremanId', $foreman->id);
+        $this->assertNotNull($entry);
+        $this->assertNotNull($entry['approvedAt']);
     }
 
     /* --------------------------------------- crew locked out while reviewing */
@@ -310,6 +517,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
         $tasks->first()->fresh()->update(['status' => JobTask::STATUS_COMPLETED, 'completed_at' => now()]);
         $this->completeAsRequest($job, $foremanUser)->assertOk();
 
+        $this->approveForemanAsRequest($job, $supervisorUser, $foreman)->assertOk();
         $this->completeAsRequest($job, $supervisorUser)->assertOk();
         $this->assertSame('completed', $job->fresh()->status);
     }
@@ -345,6 +553,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         $this->completeAsRequest($job, $foremanUser)->assertOk();
+        $this->approveForemanAsRequest($job, $supervisorUser, $foreman)->assertOk();
         $this->completeAsRequest($job, $supervisorUser)->assertOk();
 
         return [$foremanUser, $foreman, $job, $tasks];

@@ -1,8 +1,8 @@
-import { useRef, type ChangeEvent } from 'react'
+import { useRef } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { ArrowLeft, DollarSign, FileSpreadsheet, FolderKanban, Layers, MapPin, X } from 'lucide-react'
+import { ArrowLeft, DollarSign, FileText, FolderKanban, Layers, MapPin, X } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -17,25 +17,7 @@ import {
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { ClientOption, ResumableTakeoff } from '@/types'
-import { formatFileSize } from '@/utils'
-
-/** Keeps only digits and a single decimal point, at most 2 decimal places. */
-function sanitizeMoneyInput(value: string): string {
-  const cleaned = value.replace(/[^\d.]/g, '')
-  const firstDot = cleaned.indexOf('.')
-  if (firstDot === -1) return cleaned
-
-  const wholePart = cleaned.slice(0, firstDot)
-  const decimalPart = cleaned.slice(firstDot + 1).replace(/\./g, '').slice(0, 2)
-  return `${wholePart}.${decimalPart}`
-}
-
-/** US thousands grouping for display -- the value sent to the server stays plain. */
-function formatMoneyDisplay(raw: string): string {
-  const [wholePart = '', decimalPart] = raw.split('.')
-  const grouped = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  return decimalPart === undefined ? grouped : `${grouped}.${decimalPart}`
-}
+import { cleanAmountInput, formatAmountInput, formatFileSize } from '@/utils'
 
 interface ProjectDraft {
   client_id: string
@@ -89,9 +71,6 @@ export default function ProjectCreate({
   }
 
   const selectClient = (clientId: string) => update('client_id', clientId)
-
-  const updateEstimateCost = (event: ChangeEvent<HTMLInputElement>) =>
-    update('estimate_target_total', sanitizeMoneyInput(event.target.value))
 
   const selectedClient = clients.find((option) => String(option.id) === data.client_id)
   const primarySite = selectedClient?.addresses.find((site) => site.isPrimary)
@@ -206,8 +185,8 @@ export default function ProjectCreate({
               leftIcon={DollarSign}
               label="Estimate Project Cost (Optional)"
               placeholder="e.g. 24,850"
-              value={formatMoneyDisplay(data.estimate_target_total)}
-              onChange={updateEstimateCost}
+              value={formatAmountInput(data.estimate_target_total)}
+              onChange={(event) => update('estimate_target_total', cleanAmountInput(event.target.value))}
               {...(errors.estimate_target_total ? { error: errors.estimate_target_total } : {})}
             />
 
@@ -216,14 +195,14 @@ export default function ProjectCreate({
                 htmlFor="project-vendor-rate-list"
                 className="mb-2 block text-md font-medium text-white"
               >
-                Upload Vendor Rate List (Optional)
+                Upload Vendor Rate List — Excel, PDF or Word (Optional)
               </label>
 
               <input
                 ref={fileInputRef}
                 id="project-vendor-rate-list"
                 type="file"
-                accept=".xlsx"
+                accept=".xlsx,.pdf,.doc,.docx,.rtf,.odt"
                 multiple
                 onChange={(event) => chooseRateLists(event.target.files)}
                 className="sr-only"
@@ -232,7 +211,7 @@ export default function ProjectCreate({
               <Button
                 type="button"
                 variant="secondary"
-                leftIcon={FileSpreadsheet}
+                leftIcon={FileText}
                 onClick={() => fileInputRef.current?.click()}
               >
                 Choose files
@@ -243,7 +222,7 @@ export default function ProjectCreate({
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <p className="flex items-center gap-2 text-sm font-medium text-white">
                       <Layers size={14} aria-hidden className="text-brand" />
-                      {data.vendor_rate_list.length} workbook
+                      {data.vendor_rate_list.length} file
                       {data.vendor_rate_list.length === 1 ? '' : 's'} selected
                     </p>
                     <p className="text-2xs text-white/70">{formatFileSize(rateListTotalSize)}</p>
@@ -283,9 +262,10 @@ export default function ProjectCreate({
                 </div>
               ) : (
                 <p className="mt-2 text-sm text-white/75">
-                  Excel workbooks of your own rates — upload as many as you have.
-                  Your estimates price off them once uploaded, pooled together
-                  like one book; until then they use the shared price book.
+                  Excel, PDF, or Word — however the vendor sent it, upload as many
+                  as you have. A symbol this project's own rate list has priced
+                  uses that price; anything else falls back to your price book,
+                  or the shared one.
                 </p>
               )}
             </div>

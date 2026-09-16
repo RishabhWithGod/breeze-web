@@ -340,7 +340,7 @@ export function JobSitePicker({
 
           <SelectField
             id="new-site-type"
-            label="Site Type"
+            label="Location Type"
             className="mt-4 lg:max-w-xs"
             options={SITE_TYPE_OPTIONS}
             value={draft.site_type}
@@ -358,7 +358,7 @@ export function JobSitePicker({
             isLoading={saving}
             onClick={() => (editing === 'new' ? addSite() : saveEdit(editing))}
           >
-            {editing === 'new' ? 'Add site' : 'Save site'}
+            {editing === 'new' ? 'Add location' : 'Save site'}
           </Button>
         </div>
       ) : (
@@ -371,7 +371,7 @@ export function JobSitePicker({
           disabled={disabled}
           onClick={() => setEditing('new')}
         >
-          Add a site
+          Add location
         </Button>
       )}
 

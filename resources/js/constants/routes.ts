@@ -135,6 +135,7 @@ export const routeTo = {
   jobTaskSetupFromJob: (jobId: number, origin: JobOrigin | null = null) =>
     `/jobs/${jobId}/tasks/setup?from=job${origin ? `&origin=${origin}` : ''}`,
   project: (projectId: number) => `/projects/${projectId}`,
+  projectEdit: (projectId: number) => `/projects/${projectId}/edit`,
   /** AI Takeoff upload, opened with this client already picked. */
   uploadForProject: (projectId: number) => `/ai-takeoff/upload?project=${projectId}`,
   /** Starts an AI takeoff run against the project's drawing already on file. */
@@ -308,6 +309,7 @@ export const routeTo = {
   timeEntryReopen: (entryId: number) => `/time-tracking/entries/${entryId}/reopen`,
   timeEntriesExport: (format: 'csv' | 'xlsx') => `/time-tracking/entries/export/${format}`,
   jobTimeEntryTasks: (jobId: number) => `/time-tracking/jobs/${jobId}/tasks`,
+  attendance: (attendanceId: number) => `/time-tracking/attendance/${attendanceId}`,
   timeTrackingReportsExport: (format: 'csv' | 'xlsx') =>
     `/time-tracking/reports/export/${format}`,
 

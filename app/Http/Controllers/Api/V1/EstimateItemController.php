@@ -40,7 +40,7 @@ class EstimateItemController extends Controller
         // requires below) may keep checking things off — the supervisor
         // doing the review needs this endpoint to stay open to THEM
         // specifically, to send a line back.
-        if ($task->job?->isReadyForReview() && ! $this->policy->updateTask($request->user(), $task)) {
+        if ($task->job?->isReadyForReview() && ! $this->policy->reopenTask($request->user(), $task)) {
             return $this->fail(
                 'This job has been submitted for review — wait for your supervisor to act on it.',
                 409,
@@ -53,12 +53,13 @@ class EstimateItemController extends Controller
 
         // The task is only ever completed by every line being checked, so
         // once it is, unchecking one is un-declaring it done — a foreman
-        // who checked it off cannot walk that back alone. A supervisor (or
-        // above) can, the same authority reopening a task's own status
-        // already requires.
+        // who checked it off cannot walk that back alone. A supervisor
+        // watching this task can, any time, the one exception being a job
+        // that is already completed and locked — caught above, before this
+        // point, for everyone including them.
         if (! $data['completed']
             && $task->status === JobTask::STATUS_COMPLETED
-            && ! $this->policy->updateTask($request->user(), $task)) {
+            && ! $this->policy->reopenTask($request->user(), $task)) {
             return $this->fail('Only a supervisor can reopen a completed task’s checklist.', 403);
         }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Head, router, usePage } from '@inertiajs/react'
+import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
@@ -39,6 +39,7 @@ import type {
   TimeEntry,
   TimeEntryActionAbilities,
   TimeEntryActivity,
+  TimeEntryCorrectionRef,
   TimeEntryEmployeeDetail,
   TimeEntryJobDetail,
   TimeEntryJobTimeSummary,
@@ -53,6 +54,8 @@ export interface TimeEntryShowProps {
   employee: TimeEntryEmployeeDetail
   job: TimeEntryJobDetail | null
   task: TimeEntryTaskDetail | null
+  corrects: TimeEntryCorrectionRef | null
+  corrections: readonly TimeEntryCorrectionRef[]
   jobTimeSummary: TimeEntryJobTimeSummary | null
   relatedEntries: readonly TimeEntryRelatedRow[]
   can: TimeEntryActionAbilities
@@ -72,6 +75,8 @@ export default function TimeEntryShow({
   employee,
   job,
   task,
+  corrects,
+  corrections,
   jobTimeSummary,
   relatedEntries,
   can,
@@ -198,6 +203,35 @@ export default function TimeEntryShow({
         </span>
       </div>
 
+      {/* A locked entry that's since been corrected, or a draft that corrects
+          one, needs a way to reach the other side — neither direction was
+          linked anywhere on this page before. */}
+      {corrects && (
+        <Alert tone="warning" className="mb-6">
+          This entry corrects{' '}
+          <Link href={routeTo.timeEntry(corrects.id)} className="font-medium text-brand hover:underline">
+            entry #{corrects.id}
+          </Link>{' '}
+          ({formatDate(corrects.date)}, {formatHours(corrects.hours)}, now {TIME_ENTRY_STATUS_LABEL[corrects.status]}).
+        </Alert>
+      )}
+      {corrections.length > 0 && (
+        <Alert tone="warning" className="mb-6">
+          {corrections.length === 1 ? 'A correction has' : `${corrections.length} corrections have`} been filed
+          for this entry:{' '}
+          {corrections.map((correction, index) => (
+            <span key={correction.id}>
+              {index > 0 && ', '}
+              <Link href={routeTo.timeEntry(correction.id)} className="font-medium text-brand hover:underline">
+                entry #{correction.id}
+              </Link>{' '}
+              ({TIME_ENTRY_STATUS_LABEL[correction.status]})
+            </span>
+          ))}
+          .
+        </Alert>
+      )}
+
       {/* ============================================ Summary cards =========== */}
       <div className="grid gap-6 xl:grid-cols-2">
         <Card accent="brand" padding="lg">
@@ -293,10 +327,18 @@ export default function TimeEntryShow({
               <p className="mt-4 border-t border-hairline pt-4 text-md text-white/90">{task.description}</p>
             )}
           </>
-        ) : (
+        ) : entry.taskLabel ? (
           <p className="text-md text-white/70">
-            {entry.taskLabel ? `Not linked to a scheduled task — logged as "${entry.taskLabel}".` : 'No task recorded for this entry.'}
+            Not linked to a scheduled task — logged as &ldquo;{entry.taskLabel}&rdquo;.
           </p>
+        ) : entry.source === 'timer' ? (
+          <p className="text-md text-white/70">
+            Logged by starting and stopping the job timer, which tracks time against the whole
+            job rather than one task — see &ldquo;Job Information&rdquo; above for what job this
+            time belongs to.
+          </p>
+        ) : (
+          <p className="text-md text-white/70">No task recorded for this entry.</p>
         )}
       </Card>
 
@@ -305,8 +347,8 @@ export default function TimeEntryShow({
         <SectionHeading as="h3" title="Time Details" subtitle="Calculated by the server — never recomputed here" />
         <dl className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
           <Field label="Date" value={formatDate(entry.date)} />
-          <Field label="Start Time" value={entry.startTime?.slice(0, 5) ?? '—'} />
-          <Field label="End Time" value={entry.endTime?.slice(0, 5) ?? '—'} />
+          <Field label="Check In" value={entry.startTime?.slice(0, 5) ?? '—'} />
+          <Field label="Check Out" value={entry.endTime?.slice(0, 5) ?? '—'} />
           <Field label="Break" value={`${entry.breakMinutes} min`} />
           <Field label="Total Hours" value={formatHours(entry.hours)} strong />
           <Field label="Overtime" value={formatHours(entry.overtimeHours)} />

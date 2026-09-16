@@ -194,6 +194,30 @@ class EstimateTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('inFlow', true));
     }
 
+    /**
+     * The rate a labor line defaults to — read off config, not typed on the
+     * form. The "Add a line" screen fills this in the moment Labor is picked.
+     */
+    public function test_the_estimate_screen_carries_the_configured_labor_rate(): void
+    {
+        [$project] = $this->makeTakeoffDrawing();
+
+        $estimate = Estimate::create([
+            'project_id' => $project->id,
+            'number' => 'EST-5002',
+            'client' => $project->name,
+            'project' => $project->name,
+            'issued_on' => now()->toDateString(),
+            'amount' => 500,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($this->user)
+            ->get(route('estimates.show', $estimate))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('laborRate', fn ($value) => (float) $value === (float) config('ai.estimating.labor_rate')));
+    }
+
     public function test_back_from_an_estimate_returns_to_the_job_it_was_opened_from(): void
     {
         $job = Job::create([

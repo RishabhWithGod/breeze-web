@@ -49,7 +49,7 @@ class JobTaskNoteController extends Controller
         // crew actually on it, or a planner overseeing it.
         abort_unless($this->policy->completeTask($request->user(), $task), 403, 'You are not assigned to this task.');
         abort_if($task->job?->isLocked(), 409, 'This job is completed and locked.');
-        if ($task->job?->isReadyForReview() && ! $this->policy->updateTask($request->user(), $task)) {
+        if ($task->job?->isReadyForReview() && ! $this->policy->reopenTask($request->user(), $task)) {
             return $this->fail(
                 'This job has been submitted for review — wait for your supervisor to act on it.',
                 409,

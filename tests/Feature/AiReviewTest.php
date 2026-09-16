@@ -9,9 +9,9 @@ use App\Models\Job;
 use App\Models\JobAssignment;
 use App\Models\Project;
 use App\Models\SymbolReview;
+use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
-use App\Services\Takeoff\SymbolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -46,12 +46,21 @@ class AiReviewTest extends TestCase
 
     private AiResult $result;
 
+    private Team $team;
+
     protected function setUp(): void
     {
         parent::setUp();
         // No Storage::fake: the drawing has to be a real file for the engine.
         $this->user = User::factory()->create();
         $this->result = $this->ingestRealAnalysis($this->user);
+        $this->team = Team::create(['name' => 'Fixture Crew']);
+    }
+
+    /** The job step's required fields — a crew, and the days the work runs. */
+    private function jobDates(): array
+    {
+        return [...self::JOB_DATES, 'team_id' => $this->team->id];
     }
 
     protected function tearDown(): void
@@ -846,7 +855,7 @@ class AiReviewTest extends TestCase
         $this->finalise();
 
         $this->actingAs($this->user)
-            ->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES)
+            ->post("/takeoffs/{$this->result->id}/job", $this->jobDates())
             ->assertRedirect();
 
         $job = Job::latest('id')->firstOrFail();
@@ -862,8 +871,9 @@ class AiReviewTest extends TestCase
         $this->assertSame($this->result->project_name, $job->metadata['project_name']);
         $this->assertSame('sample-drawing.pdf', $job->metadata['drawing_name']);
         $this->assertNotEmpty($job->boq['lines']);
-        // The engine's grand total becomes the opening budget.
-        $this->assertSame((float) $this->result->ai_estimate['grand_total'], (float) $job->budget);
+        // Never the engine's own guess — nothing yet, until an estimate is
+        // actually raised against this job.
+        $this->assertNull($job->budget);
         $this->assertSame($job->id, $this->result->fresh()->work_job_id);
         $this->assertSame('converted', $job->project->status);
     }
@@ -871,7 +881,7 @@ class AiReviewTest extends TestCase
     public function test_the_estimate_is_generated_from_the_engines_bill_of_quantities(): void
     {
         $this->finalise();
-        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES);
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", $this->jobDates());
 
         $this->actingAs($this->user)
             ->post("/takeoffs/{$this->result->id}/estimate")
@@ -883,31 +893,17 @@ class AiReviewTest extends TestCase
         $this->assertSame($this->result->id, $estimate->ai_result_id);
         $this->assertSame(Job::latest('id')->firstOrFail()->id, $estimate->job_id);
 
-        // One line per engine BOQ line, priced at the engine's own rates —
-        // plus one labor line per "ea" (per-device) line whose item resolves
-        // to a real price-book rate, since the engine's own BOQ prices
-        // material only.
-        $catalog = app(SymbolCatalog::class);
-        $expectedLaborLines = collect($engine['boq'])
-            ->filter(fn (array $line) => Str::lower(trim($line['unit'] ?? 'ea')) === 'ea')
-            ->filter(fn (array $line) => $catalog->for($line['item'])['labor_hours'] > 0)
-            ->count();
-
-        $this->assertSame(
-            count($engine['boq']) + $expectedLaborLines,
-            $estimate->items()->count(),
-        );
+        // One line per engine BOQ line — no price book uploaded, so every
+        // line is unmatched: priced at zero rather than at the engine's own
+        // guessed rate. No labor lines either, since those only appear for a
+        // line the price book actually matched.
+        $this->assertSame(count($engine['boq']), $estimate->items()->count());
         $this->assertDatabaseHas('estimate_items', [
             'estimate_id' => $estimate->id,
-            'unit_cost' => number_format((float) $engine['boq'][0]['unit_price'], 2, '.', ''),
+            'unit_cost' => '0.0000',
+            'pricing_source' => 'unmatched',
         ]);
-        if ($expectedLaborLines > 0) {
-            $this->assertDatabaseHas('estimate_items', [
-                'estimate_id' => $estimate->id,
-                'category' => EstimateItem::CATEGORY_LABOR,
-                'unit_cost' => number_format((float) config('ai.estimating.labor_rate'), 2, '.', ''),
-            ]);
-        }
+        $this->assertSame(0, $estimate->items()->where('category', EstimateItem::CATEGORY_LABOR)->count());
 
         // Tax comes from the engine's rate (a fraction) as a percentage.
         $this->assertSame(
@@ -921,6 +917,11 @@ class AiReviewTest extends TestCase
             (float) $estimate->subtotal,
         );
         $this->assertSame((float) $estimate->grand_total, (float) $estimate->amount);
+
+        // The job's budget is never typed — it is this estimate's total,
+        // kept in step the moment the estimate is priced.
+        $job = Job::latest('id')->firstOrFail();
+        $this->assertSame((float) $estimate->amount, (float) $job->fresh()->budget);
 
         // A rate change re-derives the totals rather than being stored blindly.
         $before = (float) $estimate->grand_total;
@@ -1036,7 +1037,7 @@ class AiReviewTest extends TestCase
     public function test_creating_the_job_twice_refreshes_it_instead_of_duplicating_it(): void
     {
         $this->finalise();
-        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES);
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", $this->jobDates());
         $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/estimate");
 
         $job = Job::latest('id')->firstOrFail();
@@ -1064,7 +1065,7 @@ class AiReviewTest extends TestCase
 
         // Creating the job and estimate again brings the same two records up to
         // the reviewed numbers rather than duplicating them.
-        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES);
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", $this->jobDates());
         $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/estimate");
 
         $this->assertDatabaseCount('work_jobs', 1);
@@ -1092,7 +1093,7 @@ class AiReviewTest extends TestCase
     public function test_a_job_can_be_staffed_by_role_and_keeps_its_assignment_history(): void
     {
         $this->finalise();
-        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES);
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", $this->jobDates());
         $job = Job::latest('id')->firstOrFail();
 
         // Creating the job assigns nobody — staffing is a separate, explicit step.
@@ -1142,7 +1143,7 @@ class AiReviewTest extends TestCase
         $this->finalise();
         $this->assertDatabaseHas('app_notifications', ['type' => 'review-completed']);
 
-        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", self::JOB_DATES);
+        $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/job", $this->jobDates());
         $this->actingAs($this->user)->post("/takeoffs/{$this->result->id}/estimate");
         $this->assertDatabaseHas('app_notifications', ['type' => 'estimate-ready']);
     }

@@ -1,40 +1,26 @@
 import { useState } from 'react'
 import { router } from '@inertiajs/react'
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
-import {
-  Badge,
-  Button,
-  EmptyState,
-  IconButton,
-  SelectField,
-  TextInput,
-} from '@/components/common'
+import { Check, Pencil, Trash2, X } from 'lucide-react'
+import { Badge, Button, EmptyState, IconButton } from '@/components/common'
 import { ESTIMATE_CATEGORY_LABEL, routeTo } from '@/constants'
-import type { EstimateCategory, EstimateItemRow, SelectOption } from '@/types'
+import type { EstimateItemRow, SelectOption } from '@/types'
 import { formatCurrency } from '@/utils'
+import { EMPTY_LINE_DRAFT, type LineDraft } from './estimateLineDraft'
+import { EstimateLineFields } from './EstimateLineFields'
 
 /**
  * Where this line's rate came from.
  *
- * Two figures side by side on an estimate can be a price the company has
- * charged for years and a constant somebody typed into a config file, and
- * nothing about them looks different. Only the ones that need a second look are
- * marked: a rate off a real bid is the expected case and does not need a badge
- * arguing for itself.
+ * A price can come from this project's own uploaded rate list, from the
+ * estimator's price book once the project's own list had nothing to say, or
+ * from nowhere at all. A line neither has ever seen is priced at zero rather
+ * than a guess, and flagged so it doesn't get sent out unread.
  */
 function PricingBadge({ item }: { item: EstimateItemRow }) {
-  if (item.pricingSource === 'catalog') {
+  if (item.pricingSource === 'unmatched') {
     return (
       <Badge tone="warning" size="sm" className="ml-2">
-        Estimated rate
-      </Badge>
-    )
-  }
-
-  if (item.pricingSource === 'engine') {
-    return (
-      <Badge tone="neutral" size="sm" className="ml-2">
-        AI rate
+        Needs a rate
       </Badge>
     )
   }
@@ -42,7 +28,10 @@ function PricingBadge({ item }: { item: EstimateItemRow }) {
   // A word match found this item by every word in its name appearing somewhere
   // in a description — "Panel" landing on one specific panelboard. Right often
   // enough to offer, not often enough to send out unread.
-  if (item.pricingSource === 'price-book' && item.pricingConfidence === 'words') {
+  if (
+    (item.pricingSource === 'vendor-rate-list' || item.pricingSource === 'price-book') &&
+    item.pricingConfidence === 'words'
+  ) {
     return (
       <Badge tone="info" size="sm" className="ml-2">
         Check match
@@ -53,21 +42,12 @@ function PricingBadge({ item }: { item: EstimateItemRow }) {
   return null
 }
 
-/** Blank line used by the "add line" row. */
-const EMPTY_DRAFT = {
-  category: 'material' as EstimateCategory,
-  description: '',
-  unit: 'ea',
-  quantity: '1',
-  unit_cost: '0',
-}
-
-type Draft = typeof EMPTY_DRAFT
-
 export interface EstimateItemsTableProps {
   estimateId: number
   items: readonly EstimateItemRow[]
   categories: readonly SelectOption[]
+  /** What a labor line defaults to the moment Labor is picked. */
+  laborRate: number
 }
 
 /**
@@ -75,19 +55,20 @@ export interface EstimateItemsTableProps {
  *
  * Quantities and rates generated from the takeoff are only defaults — every cell
  * here writes through to the database, and the estimate's totals are recomputed
- * server-side on each change.
+ * server-side on each change. Adding a new line lives in its own card, further
+ * down the page next to the totals it changes — this one is for what is
+ * already on the estimate.
  */
 export function EstimateItemsTable({
   estimateId,
   items,
   categories,
+  laborRate,
 }: EstimateItemsTableProps) {
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
-  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState<LineDraft>(EMPTY_LINE_DRAFT)
 
   const startEdit = (item: EstimateItemRow) => {
-    setAdding(false)
     setEditingId(item.id)
     setDraft({
       category: item.category,
@@ -98,29 +79,21 @@ export function EstimateItemsTable({
     })
   }
 
-  const payload = () => ({
-    category: draft.category,
-    description: draft.description,
-    unit: draft.unit,
-    quantity: Number(draft.quantity) || 0,
-    unit_cost: Number(draft.unit_cost) || 0,
-  })
-
   const saveEdit = (id: number) => {
-    router.put(routeTo.estimateItem(estimateId, id), payload(), {
-      preserveScroll: true,
-      onSuccess: () => setEditingId(null),
-    })
-  }
-
-  const create = () => {
-    router.post(routeTo.estimateItems(estimateId), payload(), {
-      preserveScroll: true,
-      onSuccess: () => {
-        setAdding(false)
-        setDraft(EMPTY_DRAFT)
+    router.put(
+      routeTo.estimateItem(estimateId, id),
+      {
+        category: draft.category,
+        description: draft.description,
+        unit: draft.unit,
+        quantity: Number(draft.quantity) || 0,
+        unit_cost: Number(draft.unit_cost) || 0,
       },
-    })
+      {
+        preserveScroll: true,
+        onSuccess: () => setEditingId(null),
+      },
+    )
   }
 
   const grouped = (['material', 'fixture', 'labor', 'equipment'] as const)
@@ -131,68 +104,12 @@ export function EstimateItemsTable({
     }))
     .filter((group) => group.rows.length > 0)
 
-  /*
-   * The line being added or corrected. Every box is labelled: five unlabelled
-   * cells in a row say nothing about which one takes the rate and which takes
-   * the count, and a wrong guess is priced work.
-   */
-  const editor = (
-    <div className="grid gap-3 rounded-panel bg-white/8 p-3 sm:grid-cols-12">
-      <SelectField
-        id="item-category"
-        label="Category"
-        className="sm:col-span-2"
-        options={categories}
-        value={draft.category}
-        onChange={(event) =>
-          setDraft({ ...draft, category: event.target.value as EstimateCategory })
-        }
-      />
-      <TextInput
-        id="item-description"
-        label="Description"
-        placeholder="e.g. 20A single-pole switch"
-        className="sm:col-span-5"
-        value={draft.description}
-        onChange={(event) => setDraft({ ...draft, description: event.target.value })}
-      />
-      <TextInput
-        id="item-unit"
-        label="Unit"
-        placeholder="ea"
-        className="sm:col-span-1"
-        value={draft.unit}
-        onChange={(event) => setDraft({ ...draft, unit: event.target.value })}
-      />
-      <TextInput
-        id="item-quantity"
-        label="Qty"
-        className="sm:col-span-2"
-        type="number"
-        step="0.01"
-        min={0}
-        value={draft.quantity}
-        onChange={(event) => setDraft({ ...draft, quantity: event.target.value })}
-      />
-      <TextInput
-        id="item-unit-cost"
-        label="Unit cost ($)"
-        className="sm:col-span-2"
-        type="number"
-        step="0.01"
-        min={0}
-        value={draft.unit_cost}
-        onChange={(event) => setDraft({ ...draft, unit_cost: event.target.value })}
-      />
-    </div>
-  )
-
   return (
     <div className="flex flex-col gap-5">
       {grouped.length === 0 && (
         <EmptyState
           title="No line items yet"
-          description="Add a line, or generate the estimate from a reviewed takeoff."
+          description="Add a line from the card below, or generate the estimate from a reviewed takeoff."
         />
       )}
 
@@ -200,7 +117,7 @@ export function EstimateItemsTable({
         <section key={group.category}>
           <div className="mb-2 flex items-center justify-between gap-3">
             <h4 className="text-md font-semibold text-white">{group.label}</h4>
-            <span className="text-sm text-white/85">
+            <span className="text-lg font-bold text-brand-soft">
               {formatCurrency(
                 group.rows.reduce((total, item) => total + item.total, 0),
                 2,
@@ -213,7 +130,12 @@ export function EstimateItemsTable({
               <li key={item.id} className="rounded-panel bg-white/5 px-3 py-2.5">
                 {editingId === item.id ? (
                   <div className="flex flex-col gap-2">
-                    {editor}
+                    <EstimateLineFields
+                      draft={draft}
+                      onChange={setDraft}
+                      categories={categories}
+                      laborRate={laborRate}
+                    />
                     <div className="flex gap-2">
                       <Button size="sm" leftIcon={Check} onClick={() => saveEdit(item.id)}>
                         Save line
@@ -277,42 +199,6 @@ export function EstimateItemsTable({
           </ul>
         </section>
       ))}
-
-      {adding ? (
-        <div className="flex flex-col gap-2">
-          {editor}
-          <div className="flex gap-2">
-            <Button size="sm" leftIcon={Plus} onClick={create}>
-              Add line
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              leftIcon={X}
-              onClick={() => {
-                setAdding(false)
-                setDraft(EMPTY_DRAFT)
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <Button
-          variant="secondary"
-          size="sm"
-          leftIcon={Plus}
-          className="self-start"
-          onClick={() => {
-            setEditingId(null)
-            setDraft(EMPTY_DRAFT)
-            setAdding(true)
-          }}
-        >
-          Add a line
-        </Button>
-      )}
     </div>
   )
 }

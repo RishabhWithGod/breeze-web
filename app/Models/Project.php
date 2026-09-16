@@ -137,6 +137,12 @@ class Project extends Model
         return $this->hasMany(Upload::class);
     }
 
+    /** This project's own uploaded vendor rate lists — see `ProjectRateImport`. */
+    public function rateImports(): HasMany
+    {
+        return $this->hasMany(ProjectRateImport::class);
+    }
+
     /** @return HasMany<AiJob, $this> */
     public function aiJobs(): HasMany
     {

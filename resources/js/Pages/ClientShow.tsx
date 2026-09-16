@@ -435,7 +435,7 @@ function EditSiteDialog({ clientId, site, onClose }: EditSiteDialogProps) {
             from, so correcting it here corrects the next job's default. */}
         <SelectField
           id="edit-site-type"
-          label="Site Type"
+          label="Location Type"
           options={SITE_TYPE_OPTIONS}
           value={form.data.site_type}
           onChange={(event) => form.setData('site_type', event.target.value)}

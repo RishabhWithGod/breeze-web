@@ -11,6 +11,8 @@ export interface TeamPickerProps {
   hint?: string
   error?: string
   disabled?: boolean
+  /** Marks the field with the same asterisk every other required field on the form uses. */
+  required?: boolean
 }
 
 /**
@@ -29,6 +31,7 @@ export function TeamPicker({
   hint,
   error,
   disabled = false,
+  required = false,
 }: TeamPickerProps) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
@@ -99,7 +102,7 @@ export function TeamPicker({
     <div>
       <SearchSelect
         id="job-team"
-        label="Team"
+        label={required ? 'Team*' : 'Team'}
         options={teams.map((team) => ({ label: team.name, value: String(team.id) }))}
         value={value}
         onChange={onChange}

@@ -3,27 +3,41 @@
 namespace App\Services\Takeoff;
 
 use App\Models\EstimateItem;
+use App\Services\Estimating\ProjectRateBook;
 use Illuminate\Support\Str;
 
 /**
  * Resolves a reviewed symbol name to the rates its bill of quantities and
  * estimate lines are priced at.
  *
- * The company's own price book is asked first — rates read off estimates it has
- * actually sent out, with the install hours an estimator wrote beside each one.
- * Only when the price book has never seen the item does this fall back to the
- * keyword catalog in config, which is a set of plausible numbers and nothing
- * more. Every answer says which of the two it came from, so a line priced on a
- * guess can be marked as one instead of passing for a quote.
+ * Two sources, tried in order, because the project's own workbook is worth
+ * more than a company-wide guess but a guess still beats nothing:
+ *
+ *   1. this project's own uploaded vendor rate list — a rate the drawing's
+ *      own vendor actually quoted;
+ *   2. failing that, the estimator's price book — their own uploaded book
+ *      where they have one, the shared universal book where they do not;
+ *   3. failing both, unmatched — priced at zero rather than a plausible
+ *      number nobody actually charged, so the estimator always knows which
+ *      lines are real quotes and which still need a rate typed in by hand.
  */
 class SymbolCatalog
 {
-    public function __construct(private readonly PriceBookLookup $priceBook) {}
+    public function __construct(
+        private readonly ProjectRateBook $rateBook,
+        private readonly PriceBookLookup $priceBook,
+    ) {}
 
-    /** A copy of this catalog reading rates from one user's own price book. */
-    public function forUser(?int $userId): self
+    /**
+     * A copy of this catalog reading this project's own rate list first, then
+     * `$userId`'s price book (their own, or the universal one) as a fallback.
+     */
+    public function forProject(int $projectId, ?int $userId = null): self
     {
-        return new self($this->priceBook->forUser($userId));
+        return new self(
+            $this->rateBook->forProject($projectId),
+            $this->priceBook->forUser($userId),
+        );
     }
 
     /**
@@ -36,45 +50,40 @@ class SymbolCatalog
      *     matched: bool,
      *     description: string|null,
      *     source: string,
+     *     project_rate_item_id: int|null,
      *     price_book_item_id: int|null,
      *     confidence: string|null,
      * }
      */
     public function for(string $symbolName): array
     {
+        $priced = $this->rateBook->find($symbolName);
+
+        if ($priced !== null) {
+            return $this->fromRateBook($priced);
+        }
+
         $priced = $this->priceBook->find($symbolName);
 
         if ($priced !== null) {
             return $this->fromPriceBook($priced);
         }
 
-        $needle = Str::lower($symbolName);
-
-        foreach ((array) config('estimating.catalog') as $entry) {
-            foreach ((array) ($entry['match'] ?? []) as $keyword) {
-                if (str_contains($needle, Str::lower($keyword))) {
-                    return $this->shape($entry, matched: true);
-                }
-            }
-        }
-
-        return $this->shape((array) config('estimating.default'), matched: false);
+        return $this->unmatched($symbolName);
     }
 
     /**
-     * A rate the company has charged before.
+     * A rate this project's own vendor rate list has charged.
      *
      * The description comes back too, and it is the more useful half: a drawing
      * labels a fixture `EM2`, the workbook calls it "EM2, NEW BATTERY 2/HEAD EM
      * FIXTURE", and the second is what belongs on an estimate somebody has to
-     * read. No consumables are attached — the workbooks price boxes, rings,
-     * screws and whips as lines of their own, so adding the config catalog's
-     * per-device extras on top would charge for them twice.
+     * read.
      *
      * @param  array<string, mixed>  $priced
      * @return array<string, mixed>
      */
-    private function fromPriceBook(array $priced): array
+    private function fromRateBook(array $priced): array
     {
         $item = $priced['item'];
 
@@ -91,7 +100,34 @@ class SymbolCatalog
             'materials' => [],
             'matched' => true,
             'description' => $priced['description'],
+            'source' => 'vendor-rate-list',
+            'project_rate_item_id' => $item->id,
+            'price_book_item_id' => null,
+            'confidence' => $priced['confidence'],
+        ];
+    }
+
+    /**
+     * A rate the price book has charged, reached only once this project's own
+     * rate list has had nothing to say about the symbol.
+     *
+     * @param  array<string, mixed>  $priced
+     * @return array<string, mixed>
+     */
+    private function fromPriceBook(array $priced): array
+    {
+        $item = $priced['item'];
+
+        return [
+            'category' => $this->categoryFor($item->section, $item->description),
+            'unit' => Str::lower($priced['unit'] ?: 'ea'),
+            'unit_cost' => round((float) ($priced['unit_cost'] ?? 0), 4),
+            'labor_hours' => round((float) ($priced['labor_hours'] ?? 0), 6),
+            'materials' => [],
+            'matched' => true,
+            'description' => $priced['description'],
             'source' => 'price-book',
+            'project_rate_item_id' => null,
             'price_book_item_id' => $item->id,
             'confidence' => $priced['confidence'],
         ];
@@ -134,32 +170,26 @@ class SymbolCatalog
     }
 
     /**
-     * A rate from the config catalog: plausible, and nobody's actual price.
-     *
-     * @param  array<string, mixed>  $entry
-     * @return array<string, mixed>
+     * Nothing on file for this symbol, in either the project's own rate list
+     * or the price book. Priced at zero rather than a guess — the line still
+     * belongs on the estimate (so nothing on the drawing goes unaccounted
+     * for), but its rate is the estimator's to type in, not a plausible
+     * number standing in for one.
      */
-    private function shape(array $entry, bool $matched): array
+    private function unmatched(string $symbolName): array
     {
         return [
-            'category' => (string) $entry['category'],
-            'unit' => (string) ($entry['unit'] ?? 'ea'),
-            'unit_cost' => round((float) ($entry['unit_cost'] ?? 0), 2),
-            'labor_hours' => round((float) ($entry['labor_hours'] ?? 0), 3),
-            'materials' => collect($entry['materials'] ?? [])
-                ->map(fn (array $material) => [
-                    'description' => (string) $material[0],
-                    'unit' => (string) ($material[1] ?? 'ea'),
-                    'unit_cost' => round((float) ($material[2] ?? 0), 2),
-                    // Quantity of this consumable per device (default one each).
-                    'per_device' => round((float) ($material[3] ?? 1), 2),
-                ])
-                ->all(),
-            'matched' => $matched,
-            // Nothing to rename by: the config catalog is keyed on keywords, so
-            // it has no fuller wording of its own to offer.
+            'category' => $this->categoryFor(null, $symbolName),
+            'unit' => 'ea',
+            'unit_cost' => 0.0,
+            'labor_hours' => 0.0,
+            'materials' => [],
+            'matched' => false,
+            // Nothing to rename by: neither book has ever seen this one, so
+            // there is no fuller wording to offer in place of the symbol.
             'description' => null,
-            'source' => 'catalog',
+            'source' => 'unmatched',
+            'project_rate_item_id' => null,
             'price_book_item_id' => null,
             'confidence' => null,
         ];

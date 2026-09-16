@@ -183,10 +183,10 @@ export default function Scheduling({
 
   return (
     <PageTransition>
-      <Head title="Scheduling Calendar" />
+      <Head title="Calendar" />
 
       <PageHeader
-        title="Scheduling Calendar"
+        title="Calendar"
         subtitle="Manage and assign your crew to jobs efficiently"
         actions={
           <>

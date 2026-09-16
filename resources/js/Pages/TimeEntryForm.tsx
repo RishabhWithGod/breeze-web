@@ -55,7 +55,7 @@ export default function TimeEntryForm({ entry, jobs }: TimeEntryFormProps) {
       break_minutes: String(entry?.breakMinutes ?? 0),
       hours: entry ? String(entry.hours) : '',
       description: entry?.description ?? '',
-      billable: entry?.billable ?? true,
+      billable: entry?.billable ?? false,
     })
 
   const [tasks, setTasks] = useState<readonly TimeTrackingTaskOption[]>([])

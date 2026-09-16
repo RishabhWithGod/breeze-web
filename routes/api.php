@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AttendanceController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\EstimateItemController;
 use App\Http\Controllers\Api\V1\JobController;
@@ -56,6 +57,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('jobs', [JobController::class, 'index'])->name('jobs.index');
             Route::get('jobs/{job}', [JobController::class, 'show'])->name('jobs.show');
             Route::post('jobs/{job}/status', [JobController::class, 'changeStatus'])->name('jobs.status');
+            Route::post('jobs/{job}/foremen/{foreman}/approve', [JobController::class, 'approveForeman'])->name('jobs.foremen.approve');
 
             Route::get('jobs/{job}/tasks', [JobTaskController::class, 'index'])->name('jobs.tasks.index');
             Route::get('tasks/{task}', [JobTaskController::class, 'show'])->name('tasks.show');
@@ -72,6 +74,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('tasks/attachments/{attachment}', [JobTaskAttachmentController::class, 'show'])->name('tasks.attachments.show');
 
             Route::get('jobs/{job}/schedule', [ScheduleController::class, 'show'])->name('jobs.schedule.show');
+
+            Route::get('jobs/{job}/attendance', [AttendanceController::class, 'index'])->name('jobs.attendance.index');
+            Route::post('jobs/{job}/attendance/check-in', [AttendanceController::class, 'checkIn'])->name('jobs.attendance.check-in');
+            Route::post('jobs/{job}/attendance/check-out', [AttendanceController::class, 'checkOut'])->name('jobs.attendance.check-out');
+            Route::get('attendance/today', [AttendanceController::class, 'today'])->name('attendance.today');
 
             Route::get('timer', [TimerController::class, 'show'])->name('timer.show');
             Route::post('timer/start', [TimerController::class, 'start'])->name('timer.start');

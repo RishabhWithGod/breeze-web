@@ -230,6 +230,8 @@ Route::middleware('auth')->group(function () {
     Route::get('projects/create', [ProjectController::class, 'create'])->name('projects.create');
     Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::get('projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
+    Route::get('projects/{project}/edit', [ProjectController::class, 'edit'])->name('projects.edit');
+    Route::put('projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
     // Recorded from whichever screen needed the site — usually Create Job.
     // The address book belongs to the client, and every project of theirs
     // picks from it.
@@ -505,6 +507,9 @@ Route::middleware('auth')->group(function () {
         Route::post('entries/{entry}/reject', [TimeEntryController::class, 'reject'])->name('time-entries.reject');
         Route::post('entries/{entry}/reopen', [TimeEntryController::class, 'reopen'])->name('time-entries.reopen');
         Route::get('jobs/{job}/tasks', [TimeEntryController::class, 'jobTasks'])->name('time-entries.job-tasks');
+
+        Route::get('attendance/{attendance}', [TimeEntryController::class, 'showAttendance'])->name('attendance.show');
+        Route::get('attendance/{attendance}/photo', [TimeEntryController::class, 'attendancePhoto'])->name('attendance.photo');
 
         Route::post('timer/start', [TimerController::class, 'start'])->name('timer.start');
         Route::post('timer/pause', [TimerController::class, 'pause'])->name('timer.pause');

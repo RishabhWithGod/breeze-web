@@ -1,7 +1,7 @@
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { ArrowLeft, FolderKanban } from 'lucide-react'
+import { ArrowLeft, DollarSign, FolderKanban } from 'lucide-react'
 import {
   AddressListField,
   Alert,
@@ -18,11 +18,12 @@ import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { useDisclosure } from '@/hooks'
 import { ROUTES } from '@/constants'
 import type { DraftAddress, ResumableTakeoff } from '@/types'
-import { emptyAddress, toTitleCase } from '@/utils'
+import { cleanAmountInput, emptyAddress, formatAmountInput, toTitleCase } from '@/utils'
 
 interface ClientDraft {
   name: string
   notes: string
+  labor_rate: string
   addresses: DraftAddress[]
 }
 
@@ -33,6 +34,8 @@ export interface ClientCreateProps {
    * not, so this screen says so before it happens.
    */
   unfinishedTakeoff: ResumableTakeoff | null
+  /** What the labor rate field starts at — the configured default. */
+  defaultLaborRate: number
 }
 
 /**
@@ -42,13 +45,14 @@ export interface ClientCreateProps {
  * itself is a project under them, and a drawing is uploaded against one of
  * those, so neither belongs on this screen.
  */
-export default function ClientCreate({ unfinishedTakeoff }: ClientCreateProps) {
+export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate }: ClientCreateProps) {
   const confirmNew = useDisclosure()
 
   const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
     useForm<ClientDraft>({
       name: '',
       notes: '',
+      labor_rate: String(defaultLaborRate),
       addresses: [emptyAddress()],
     })
 
@@ -146,6 +150,19 @@ export default function ClientCreate({ unfinishedTakeoff }: ClientCreateProps) {
               value={data.name}
               onChange={(event) => update('name', toTitleCase(event.target.value))}
               {...(errors.name ? { error: errors.name } : {})}
+            />
+
+            <TextInput
+              id="client-labor-rate"
+              type="text"
+              inputMode="decimal"
+              leftIcon={DollarSign}
+              label="Labor Rate ($/hr)"
+              placeholder="e.g. 50"
+              hint="What an hour of this client's labor is billed at. Every estimate on their projects prices labor at this rate."
+              value={formatAmountInput(data.labor_rate)}
+              onChange={(event) => update('labor_rate', cleanAmountInput(event.target.value))}
+              {...(errors.labor_rate ? { error: errors.labor_rate } : {})}
             />
 
             <div className="border-t border-hairline pt-6">

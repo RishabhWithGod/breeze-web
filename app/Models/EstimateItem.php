@@ -45,13 +45,15 @@ class EstimateItem extends Model
         'total',
         'source',
         /*
-         * Where the rate came from — 'price-book' when the company has charged
-         * it before, 'catalog' when it is a plausible constant standing in, and
-         * how sure the match was. A guess that reads like a quote is the thing
-         * these three columns exist to prevent.
+         * Where the rate came from — 'vendor-rate-list' when this project's
+         * own uploaded workbook has priced it before, 'unmatched' when it
+         * has never seen it (priced at zero, for the estimator to fill in),
+         * and how sure the match was. A guess that reads like a quote is the
+         * thing these three columns exist to prevent.
          */
         'pricing_source',
         'price_book_item_id',
+        'project_rate_item_id',
         'pricing_confidence',
         'position',
     ];
@@ -86,6 +88,12 @@ class EstimateItem extends Model
     public function estimate(): BelongsTo
     {
         return $this->belongsTo(Estimate::class);
+    }
+
+    /** The project rate list row this line was quoted at, when it was matched. */
+    public function projectRateItem(): BelongsTo
+    {
+        return $this->belongsTo(ProjectRateItem::class);
     }
 
     /**

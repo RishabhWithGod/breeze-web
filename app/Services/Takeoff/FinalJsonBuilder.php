@@ -44,7 +44,7 @@ class FinalJsonBuilder
         return DB::transaction(function () use ($result, $reviews, $approved, $reviewer) {
             $symbols = $this->rebuildFinalSymbols($result, $approved);
             $this->matchEngineBoq($result, $symbols);
-            $boq = $this->boq->build($symbols);
+            $boq = $this->boq->forProject($result->project_id, $result->project->user_id)->build($symbols);
 
             $payload = [
                 'project_id' => $result->project_id,

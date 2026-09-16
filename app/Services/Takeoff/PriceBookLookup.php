@@ -29,9 +29,12 @@ use Illuminate\Support\Facades\Cache;
  * Nothing here guesses a rate. An item the price book has never seen comes back
  * unmatched, and the estimate says so on the line itself.
  *
- * Scoped to one user's own book via {@see forUser()} — every lookup here
- * prefers that user's uploaded rates and falls back to the universal book
- * (the one `pricebook:import` seeds) only when they have none of their own.
+ * Scoped to one user's own book via {@see forUser()} — matching reads that
+ * user's own uploaded rate list where they have one, and the shared universal
+ * book where they do not, exactly the way {@see laborRate()} and
+ * {@see bidRates()} already fall back. Nothing here is a *first* choice on an
+ * estimate, though: this is the fallback a symbol reaches only once a
+ * project's own vendor rate list has had nothing to say about it.
  */
 class PriceBookLookup
 {
@@ -213,7 +216,12 @@ class PriceBookLookup
         return $item;
     }
 
-    /** @return Collection<int, PriceBookItem> */
+    /**
+     * This user's own uploaded items, or the universal book while they have
+     * none — never another user's, and never both pooled together.
+     *
+     * @return Collection<int, PriceBookItem>
+     */
     private function all(): Collection
     {
         if ($this->items !== null) {
@@ -223,13 +231,13 @@ class PriceBookLookup
         $columns = ['id', 'match_key', 'unit', 'description', 'section', 'subsection',
             'unit_material_cost', 'unit_manhours', 'sample_count'];
 
-        $own = $this->userId !== null
-            ? PriceBookItem::query()->where('user_id', $this->userId)->get($columns)
-            : collect();
+        $hasOwn = $this->userId !== null && PriceBookItem::query()->where('user_id', $this->userId)->exists();
 
-        return $this->items = $own->isNotEmpty()
-            ? $own
-            : PriceBookItem::query()->whereNull('user_id')->get($columns);
+        $query = $hasOwn
+            ? PriceBookItem::query()->where('user_id', $this->userId)
+            : PriceBookItem::query()->whereNull('user_id');
+
+        return $this->items = $query->get($columns);
     }
 
     /**

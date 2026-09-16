@@ -42,16 +42,17 @@ class StoreProjectRequest extends FormRequest
             // Optional — most projects still price off the takeoff alone.
             'estimate_target_total' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             /*
-             * The uploader's own vendor rates. Optional — while nobody has
-             * uploaded any, their estimates price off the shared universal
-             * book instead. Any number of workbooks per submit, each in the
-             * same layout `pricebook:import` reads (an "Estimate" sheet and,
-             * optionally, a "Bid Recap & Summary" one) — their lines are
-             * pooled into one book, exactly how the universal one is built
-             * from a folder of workbooks.
+             * This project's own vendor rates. Optional — while nothing has
+             * been uploaded, its estimates fall back to the price book
+             * instead. Any format a vendor actually sends: an Excel workbook,
+             * a PDF quote sheet, or a Word document (.doc/.docx), plus RTF
+             * and OpenDocument text for whatever export produced those —
+             * {@see \App\Services\Estimating\RateListReader} reads whichever
+             * one it is. Any number of files per submit; their lines are
+             * pooled into this project's one rate book.
              */
             'vendor_rate_list' => ['nullable', 'array', 'max:20'],
-            'vendor_rate_list.*' => ['file', 'mimes:xlsx', 'max:10240'],
+            'vendor_rate_list.*' => ['file', 'mimes:xlsx,pdf,doc,docx,rtf,odt', 'max:10240'],
         ];
     }
 
@@ -64,8 +65,8 @@ class StoreProjectRequest extends FormRequest
             'name.min' => 'Use at least 3 characters',
             'estimate_target_total.numeric' => 'Enter a valid amount',
             'estimate_target_total.min' => 'Amount cannot be negative',
-            'vendor_rate_list.max' => 'Upload up to 20 workbooks at a time',
-            'vendor_rate_list.*.mimes' => 'Upload Excel .xlsx workbooks',
+            'vendor_rate_list.max' => 'Upload up to 20 files at a time',
+            'vendor_rate_list.*.mimes' => 'Upload an Excel, PDF, or Word (.doc/.docx) rate list',
             'vendor_rate_list.*.max' => 'Each file must be smaller than 10MB',
         ];
     }

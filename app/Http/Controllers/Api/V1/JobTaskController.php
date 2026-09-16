@@ -128,13 +128,14 @@ class JobTaskController extends Controller
      * Sets a task's status directly, to any of the seven states — the same
      * override a planner has on web (`JobTaskController::update()`, web),
      * not the crew's own narrower complete()/updateProgress(). Gated by
-     * `updateTask()`, not `completeTask()`: a site supervisor can correct
-     * or reopen any task on a job they run, exactly as a project manager
-     * can, whether or not they are personally on it.
+     * `reopenTask()`, not `completeTask()`: a site supervisor can correct or
+     * reopen any task they are named on (or that a job they own), the same
+     * authority a project manager has, whether or not they are personally
+     * assigned to do the work itself.
      */
     public function setStatus(Request $request, JobTask $task): JsonResponse
     {
-        abort_unless($this->policy->updateTask($request->user(), $task), 403, 'You cannot change this task’s status.');
+        abort_unless($this->policy->reopenTask($request->user(), $task), 403, 'You cannot change this task’s status.');
 
         abort_unless($task->job?->hasStarted(), 422, 'Start the job before working on its tasks.');
         abort_if($task->job?->isLocked(), 409, 'This job is completed and locked.');
@@ -154,7 +155,7 @@ class JobTaskController extends Controller
 
     /**
      * Once the crew has submitted a job for review, only whoever can act on
-     * that review — a planner/supervisor, via `updateTask()`, the same
+     * that review — a planner/supervisor, via `reopenTask()`, the same
      * authority `setStatus()` above already requires to reopen a task — may
      * keep touching it. Everyone else has to wait: otherwise the crew could
      * keep quietly changing a job a supervisor is mid-review on, out from
@@ -167,7 +168,7 @@ class JobTaskController extends Controller
             return false;
         }
 
-        return ! $this->policy->updateTask($request->user(), $task);
+        return ! $this->policy->reopenTask($request->user(), $task);
     }
 
     /**

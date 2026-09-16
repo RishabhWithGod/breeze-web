@@ -43,11 +43,10 @@ interface CreateJobForm {
   address_ids: number[]
   description: string
   job_type: JobType | ''
-  /** The crew this job is handed to. Empty means none yet. */
+  /** The crew this job is handed to. Required — narrows the task pickers below it. */
   team_id: string
   start_date: string
   end_date: string
-  budget: string
 }
 
 interface FinalResultSummary {
@@ -169,7 +168,6 @@ export default function FinalSymbols({
       '',
     start_date: result.job?.startDate ?? '',
     end_date: result.job?.endDate ?? '',
-    budget: String(result.job?.budget ?? result.engineEstimate.grand_total ?? ''),
   })
 
   const updateJobField = <K extends FormDataKeys<CreateJobForm>>(
@@ -335,7 +333,7 @@ export default function FinalSymbols({
             />
           </fieldset>
 
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid gap-6 lg:grid-cols-2">
             <TextInput
               id="job-start"
               type="date"
@@ -353,18 +351,6 @@ export default function FinalSymbols({
               min={jobForm.data.start_date || undefined}
               onChange={(event) => updateJobField('end_date', event.target.value)}
               {...(jobForm.errors.end_date ? { error: jobForm.errors.end_date } : {})}
-            />
-            <TextInput
-              id="job-budget"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step={50}
-              label="Budget ($)"
-              placeholder="Enter budget amount"
-              value={jobForm.data.budget}
-              onChange={(event) => updateJobField('budget', event.target.value)}
-              {...(jobForm.errors.budget ? { error: jobForm.errors.budget } : {})}
             />
           </div>
 
@@ -388,6 +374,7 @@ export default function FinalSymbols({
             onChange={(next) => updateJobField('team_id', next)}
             hint="Tasks on this job are handed to this crew."
             disabled={jobForm.processing}
+            required
             {...(jobForm.errors.team_id ? { error: jobForm.errors.team_id } : {})}
           />
 

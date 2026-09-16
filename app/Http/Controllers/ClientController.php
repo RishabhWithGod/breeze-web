@@ -68,6 +68,10 @@ class ClientController extends Controller
              * accident and losing track of the first is not.
              */
             'unfinishedTakeoff' => app(TakeoffFlow::class)->inProgress($request),
+            // What the labor rate field starts at — the configured default,
+            // shown as a real number rather than an empty box, so leaving it
+            // alone is a decision rather than an oversight.
+            'defaultLaborRate' => (float) config('ai.estimating.labor_rate'),
         ]);
     }
 
@@ -78,6 +82,7 @@ class ClientController extends Controller
         $client = $request->user()->clients()->create([
             'name' => $data['name'],
             'notes' => $this->orNull($data['notes'] ?? null),
+            'labor_rate' => $data['labor_rate'] ?? null,
         ]);
 
         $this->writeAddresses($client, $data['addresses'] ?? []);
@@ -152,6 +157,9 @@ class ClientController extends Controller
                 'id' => $client->id,
                 'name' => $client->name,
                 'notes' => $client->notes,
+                // Resolved, not raw: a client that has never set its own
+                // rate shows the configured default rather than a blank box.
+                'laborRate' => $client->effectiveLaborRate(),
             ],
         ]);
     }
@@ -165,6 +173,7 @@ class ClientController extends Controller
         $client->update([
             'name' => $data['name'],
             'notes' => $this->orNull($data['notes'] ?? null),
+            'labor_rate' => $data['labor_rate'] ?? null,
         ]);
 
         return redirect()
@@ -208,6 +217,11 @@ class ClientController extends Controller
      */
     private function validated(Request $request, ?Client $client = null): array
     {
+        // The form posts an empty string when the field is left blank.
+        if ($request->input('labor_rate') === '') {
+            $request->merge(['labor_rate' => null]);
+        }
+
         return $request->validate([
             'name' => [
                 'required', 'string', 'min:2', 'max:160',
@@ -217,6 +231,13 @@ class ClientController extends Controller
                     ->ignore($client),
             ],
             'notes' => ['nullable', 'string', 'max:2000'],
+            /*
+             * What an hour of this client's labor is billed at. Optional —
+             * left blank, every estimate on this client's projects falls
+             * back to the usual rate; set, that exact figure prices every
+             * labor line from here on.
+             */
+            'labor_rate' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             /*
              * The address book, filled in as the client is opened. It can be
              * empty — a client can be on the register before anyone knows where
@@ -248,6 +269,8 @@ class ClientController extends Controller
         ], [
             'name.required' => 'Client name is required',
             'name.unique' => 'A client with that name is already on the register',
+            'labor_rate.numeric' => 'Enter a valid hourly rate',
+            'labor_rate.min' => 'Rate cannot be negative',
             'addresses.*.label.required' => 'Name this site, or remove the row.',
             'addresses.*.address.required' => 'Enter the address, or remove the row.',
         ]);

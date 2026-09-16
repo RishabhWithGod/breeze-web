@@ -1,7 +1,16 @@
 import { useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { ArrowLeft, FileText, FolderKanban, MapPin, Sparkles, Trash2, Upload as UploadIcon } from 'lucide-react'
+import {
+  ArrowLeft,
+  FileText,
+  FolderKanban,
+  MapPin,
+  Pencil,
+  Sparkles,
+  Trash2,
+  Upload as UploadIcon,
+} from 'lucide-react'
 import {
   Alert,
   Button,
@@ -154,6 +163,9 @@ export default function ProjectShow({
                 Run AI Takeoff
               </Button>
             )}
+            <ButtonLink href={routeTo.projectEdit(project.id)} variant="secondary" leftIcon={Pencil}>
+              Edit
+            </ButtonLink>
             <Button
               variant="white"
               leftIcon={Trash2}
@@ -162,7 +174,7 @@ export default function ProjectShow({
             >
               Delete
             </Button>
-                      <ButtonLink href={ROUTES.projects} variant="secondary" leftIcon={ArrowLeft}>
+            <ButtonLink href={ROUTES.projects} variant="secondary" leftIcon={ArrowLeft}>
               Back
             </ButtonLink>
           </>

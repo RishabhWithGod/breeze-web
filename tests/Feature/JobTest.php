@@ -9,6 +9,7 @@ use App\Models\Estimate;
 use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\Project;
+use App\Models\Team;
 use App\Models\Upload;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -78,6 +79,7 @@ class JobTest extends TestCase
     public function test_a_job_can_be_created(): void
     {
         [$project, $upload] = $this->makeTakeoffDrawing();
+        $team = Team::create(['name' => 'North Crew']);
 
         $this->actingAs($this->user)
             ->post('/jobs', [
@@ -86,10 +88,10 @@ class JobTest extends TestCase
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
                 'job_type' => 'commercial',
+                'team_id' => $team->id,
                 'foreman_id' => $this->foreman->id,
                 'start_date' => '2026-05-11',
                 'end_date' => '2026-09-04',
-                'budget' => '42300',
             ])
             ->assertSessionHas('success');
 
@@ -103,15 +105,19 @@ class JobTest extends TestCase
             'client' => $project->name,
             'location' => 'Northgate, Seattle',
             'project_id' => $project->id,
+            'team_id' => $team->id,
             // Status is derived: a submitted form plans, a draft stays a draft.
             'status' => 'planning',
-            'budget' => '42300.00',
+            // Never typed: this drawing has no estimate yet, so there is
+            // nothing yet for the budget to be.
+            'budget' => null,
         ]);
     }
 
     public function test_a_job_can_be_saved_as_a_draft(): void
     {
         [$project, $upload] = $this->makeTakeoffDrawing();
+        $team = Team::create(['name' => 'North Crew']);
 
         $this->actingAs($this->user)
             ->post('/jobs', [
@@ -119,6 +125,7 @@ class JobTest extends TestCase
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
+                'team_id' => $team->id,
                 'save_as_draft' => true,
                 'start_date' => '2026-09-07',
                 'end_date' => '2026-09-21',
@@ -139,15 +146,16 @@ class JobTest extends TestCase
                 'name' => 'no',
                 'start_date' => '2026-09-04',
                 'end_date' => '2026-05-11',
-                'budget' => '-5',
             ])
             /*
              * `project_id` is the Client field and `address_ids` the sites —
              * neither a client name nor an address is ever typed here. No
-             * foreman either: they are assigned per task, not per job.
+             * foreman either: they are assigned per task, not per job. No
+             * budget either: it is never typed, only ever read from the
+             * drawing's own estimate.
              */
             ->assertSessionHasErrors([
-                'name', 'project_id', 'address_ids', 'upload_id', 'end_date', 'budget',
+                'name', 'project_id', 'address_ids', 'upload_id', 'team_id', 'end_date',
             ]);
 
         $this->assertDatabaseCount('work_jobs', 0);
@@ -182,6 +190,7 @@ class JobTest extends TestCase
     public function test_creating_a_job_links_it_to_the_selected_project_and_drawing(): void
     {
         [$project, $upload, $result] = $this->makeTakeoffDrawing();
+        $team = Team::create(['name' => 'North Crew']);
 
         $this->actingAs($this->user)
             ->post('/jobs', [
@@ -189,6 +198,7 @@ class JobTest extends TestCase
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
+                'team_id' => $team->id,
                 'start_date' => '2026-09-07',
                 'end_date' => '2026-09-21',
             ])
@@ -203,6 +213,7 @@ class JobTest extends TestCase
     public function test_creating_a_job_links_the_drawings_existing_estimate_instead_of_duplicating_it(): void
     {
         [$project, $upload, $result] = $this->makeTakeoffDrawing();
+        $team = Team::create(['name' => 'North Crew']);
         $estimate = Estimate::create([
             'ai_result_id' => $result->id,
             'number' => 'EST-9001',
@@ -220,6 +231,7 @@ class JobTest extends TestCase
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
+                'team_id' => $team->id,
                 'start_date' => '2026-09-07',
                 'end_date' => '2026-09-21',
                 // Ticked regardless — the linked estimate takes priority over this.
@@ -231,6 +243,8 @@ class JobTest extends TestCase
 
         $this->assertSame($job->id, $estimate->fresh()->job_id);
         $this->assertDatabaseCount('estimates', 1);
+        // Read straight from the linked estimate, never typed.
+        $this->assertSame('5000.00', $job->budget);
     }
 
     public function test_a_job_can_be_deleted_and_restored(): void

@@ -29,6 +29,7 @@ class EstimateItemResource extends JsonResource
              */
             'pricingSource' => $this->pricing_source,
             'pricingConfidence' => $this->pricing_confidence,
+            'projectRateItemId' => $this->project_rate_item_id,
             'priceBookItemId' => $this->price_book_item_id,
         ];
     }

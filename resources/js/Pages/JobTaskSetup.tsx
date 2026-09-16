@@ -306,7 +306,7 @@ export default function JobTaskSetup({
                     <div className="grid gap-4 sm:grid-cols-2">
                       <CrewMemberPicker
                         id={`task-foreman-${index}`}
-                        label="Foreman"
+                        label="Foreman*"
                         role="foreman"
                         people={foremen}
                         value={row.foreman_id}
@@ -324,7 +324,7 @@ export default function JobTaskSetup({
 
                       <CrewMemberPicker
                         id={`task-supervisor-${index}`}
-                        label="Supervisor"
+                        label="Supervisor*"
                         role="supervisor"
                         people={supervisors}
                         value={row.supervisor_id}
@@ -332,7 +332,9 @@ export default function JobTaskSetup({
                         teamId={team?.id ?? null}
                         teamName={team?.name ?? null}
                         emptyLabel={
-                          supervisors.length > 0 ? 'No supervisor' : 'No supervisor on this crew'
+                          supervisors.length > 0
+                            ? 'Select supervisor'
+                            : 'No supervisor on this crew'
                         }
                         disabled={processing}
                         {...(errors[`tasks.${index}.supervisor_id`]

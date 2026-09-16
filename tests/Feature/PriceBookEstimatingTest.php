@@ -5,23 +5,32 @@ namespace Tests\Feature;
 use App\Models\AiJob;
 use App\Models\AiResult;
 use App\Models\EstimateItem;
-use App\Models\PriceBookImport;
 use App\Models\PriceBookItem;
 use App\Models\PriceBookLine;
+use App\Models\ProjectRateImport;
+use App\Models\ProjectRateItem;
+use App\Models\ProjectRateLine;
 use App\Models\User;
+use App\Services\Estimating\ProjectRateBook;
+use App\Services\Estimating\WorkbookReader;
 use App\Services\Takeoff\EstimateBuilder;
-use App\Services\Takeoff\PriceBookLookup;
 use App\Services\Takeoff\SymbolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * An estimate priced from the company's own bids rather than from constants.
+ * An estimate merges the drawing's own symbols with this project's uploaded
+ * rate list — never a guess.
  *
- * The point of the price book is that the number on the estimate is a number
- * somebody has charged. These tests hold that line: the rate, the hours, the
- * wording, and — where the price book has never seen an item — an honest mark
- * saying the figure is a stand-in.
+ * Three things happen at once when an estimate is built:
+ *
+ *   - a symbol the AI found that the project's own excel also priced is
+ *     quoted at that price, at the AI's quantity;
+ *   - a symbol the AI found that the excel never priced falls back to the
+ *     estimator's price book, and only once that also has nothing to say is
+ *     it priced at zero for the estimator to fill in by hand;
+ *   - an excel row nothing on the drawing claimed still appears, priced,
+ *     at zero quantity — a vendor bid on it, so it isn't silently dropped.
  */
 class PriceBookEstimatingTest extends TestCase
 {
@@ -56,14 +65,14 @@ class PriceBookEstimatingTest extends TestCase
         ]);
         $this->projectId = $project->id;
 
-        $this->seedPriceBook();
+        $this->seedRateBook();
     }
 
     /**
      * The drawing has room for a tag; the schedule has the thing. The estimate
      * should read like the schedule.
      */
-    public function test_a_schedule_tag_is_priced_and_named_from_the_price_book(): void
+    public function test_a_schedule_tag_is_priced_and_named_from_the_project_rate_list(): void
     {
         $this->result->finalSymbols()->create([
             'project_id' => $this->projectId,
@@ -74,13 +83,13 @@ class PriceBookEstimatingTest extends TestCase
 
         $estimate = app(EstimateBuilder::class)->fromFinalJson($this->result, $this->user);
 
-        $material = $estimate->items()->where('category', '!=', EstimateItem::CATEGORY_LABOR)->sole();
+        $material = $estimate->items()->where('description', 'EM2, NEW BATTERY 2/HEAD EM FIXTURE')->sole();
 
-        $this->assertSame('EM2, NEW BATTERY 2/HEAD EM FIXTURE', $material->description);
         $this->assertSame('60.0000', $material->unit_cost);
-        $this->assertSame('price-book', $material->pricing_source);
+        $this->assertSame('4.0000', $material->quantity);
+        $this->assertSame('vendor-rate-list', $material->pricing_source);
         $this->assertSame('tag', $material->pricing_confidence);
-        $this->assertNotNull($material->price_book_item_id);
+        $this->assertNotNull($material->project_rate_item_id);
     }
 
     /** Labour is hours the estimator booked, at the rate these jobs charged. */
@@ -94,7 +103,10 @@ class PriceBookEstimatingTest extends TestCase
         ]);
 
         $estimate = app(EstimateBuilder::class)->fromFinalJson($this->result, $this->user);
-        $labor = $estimate->items()->where('category', EstimateItem::CATEGORY_LABOR)->sole();
+        $labor = $estimate->items()
+            ->where('category', EstimateItem::CATEGORY_LABOR)
+            ->where('description', 'like', '%EM2%')
+            ->sole();
 
         // 1.25 hours a fixture, four of them.
         $this->assertSame('5.0000', $labor->quantity);
@@ -103,10 +115,72 @@ class PriceBookEstimatingTest extends TestCase
     }
 
     /**
-     * A guess must never read like a quote. Anything the price book has not
-     * seen keeps the config catalog's figure and is marked as such.
+     * An excel row nothing on the drawing claimed does not vanish — a vendor
+     * priced it, so it still belongs on the estimate, at zero quantity, for
+     * the estimator to put a real count against.
      */
-    public function test_an_item_the_price_book_has_never_seen_is_marked_as_a_stand_in(): void
+    public function test_an_excel_entry_the_ai_never_found_still_appears_at_zero_quantity(): void
+    {
+        // Only EM2 is on the drawing; the conduit run from the same workbook
+        // never shows up in the AI's symbols at all.
+        $this->result->finalSymbols()->create([
+            'project_id' => $this->projectId,
+            'name' => 'EM2',
+            'count' => 4,
+            'confidence' => 0.9,
+        ]);
+
+        $estimate = app(EstimateBuilder::class)->fromFinalJson($this->result, $this->user);
+        $leftover = $estimate->items()->where('description', '3/4" CONDUIT - EMT')->sole();
+
+        $this->assertSame('0.0000', $leftover->quantity);
+        $this->assertSame('0.8296', $leftover->unit_cost);
+        $this->assertSame('vendor-rate-list', $leftover->pricing_source);
+        $this->assertNotNull($leftover->project_rate_item_id);
+        $this->assertSame('0.00', $leftover->total);
+    }
+
+    /**
+     * A symbol the excel never priced is not immediately a guess — it falls
+     * back to the estimator's own price book first.
+     */
+    public function test_a_symbol_missing_from_the_excel_falls_back_to_the_users_price_book(): void
+    {
+        PriceBookItem::create([
+            'user_id' => $this->user->id,
+            'match_key' => PriceBookLine::keyFor('Light Fixture'),
+            'unit' => 'ea',
+            'description' => 'Light Fixture',
+            'unit_material_cost' => 42.0,
+            'unit_manhours' => 0.5,
+            'sample_count' => 1,
+        ]);
+
+        $this->result->finalSymbols()->create([
+            'project_id' => $this->projectId,
+            'name' => 'Light Fixture',
+            'count' => 3,
+            'confidence' => 0.9,
+        ]);
+
+        $estimate = app(EstimateBuilder::class)->fromFinalJson($this->result, $this->user);
+        $material = $estimate->items()
+            ->where('category', '!=', EstimateItem::CATEGORY_LABOR)
+            ->where('description', 'Light Fixture')
+            ->sole();
+
+        $this->assertSame('42.0000', $material->unit_cost);
+        $this->assertSame('price-book', $material->pricing_source);
+        $this->assertNotNull($material->price_book_item_id);
+        $this->assertNull($material->project_rate_item_id);
+    }
+
+    /**
+     * A guess must never read like a quote. Only once neither the project's
+     * own excel nor the price book has ever seen a symbol is it priced at
+     * zero, for the estimator to fill in by hand.
+     */
+    public function test_a_symbol_missing_everywhere_is_priced_at_zero(): void
     {
         $this->result->finalSymbols()->create([
             'project_id' => $this->projectId,
@@ -116,12 +190,12 @@ class PriceBookEstimatingTest extends TestCase
         ]);
 
         $estimate = app(EstimateBuilder::class)->fromFinalJson($this->result, $this->user);
-        $material = $estimate->items()->where('category', '!=', EstimateItem::CATEGORY_LABOR)->sole();
+        $material = $estimate->items()->where('description', 'Triangular Device')->sole();
 
-        $this->assertSame('catalog', $material->pricing_source);
+        $this->assertSame('unmatched', $material->pricing_source);
+        $this->assertSame('0.0000', $material->unit_cost);
+        $this->assertNull($material->project_rate_item_id);
         $this->assertNull($material->price_book_item_id);
-        // Its own name, because the catalog has no fuller wording to offer.
-        $this->assertSame('Triangular Device', $material->description);
     }
 
     /**
@@ -150,9 +224,9 @@ class PriceBookEstimatingTest extends TestCase
      */
     public function test_a_per_foot_rate_keeps_its_fractions_of_a_cent(): void
     {
-        $rates = app(SymbolCatalog::class)->for('3/4" CONDUIT - EMT');
+        $rates = app(SymbolCatalog::class)->forProject($this->projectId)->for('3/4" CONDUIT - EMT');
 
-        $this->assertSame('price-book', $rates['source']);
+        $this->assertSame('vendor-rate-list', $rates['source']);
         $this->assertSame(0.8296, $rates['unit_cost']);
         $this->assertSame('ft', $rates['unit']);
     }
@@ -160,12 +234,13 @@ class PriceBookEstimatingTest extends TestCase
     /** The rate quoted is the one these jobs usually paid, not the outlier. */
     public function test_the_quoted_rate_is_the_median_of_what_was_charged(): void
     {
-        $this->assertSame(48.0, app(PriceBookLookup::class)->laborRate());
+        $this->assertSame(48.0, app(ProjectRateBook::class)->forProject($this->projectId)->laborRate());
     }
 
-    private function seedPriceBook(): void
+    private function seedRateBook(): void
     {
-        $import = PriceBookImport::create([
+        $import = ProjectRateImport::create([
+            'project_id' => $this->projectId,
             'file_name' => 'Electrical Estimate - TEST.xlsx',
             'file_hash' => str_repeat('b', 64),
             'project_name' => 'TEST PROJECT',
@@ -180,8 +255,9 @@ class PriceBookEstimatingTest extends TestCase
             ['EM2, NEW BATTERY 2/HEAD EM FIXTURE', 'EA', 60.0, 1.25, 'LIGHTING FIXTURES'],
             ['3/4" CONDUIT - EMT', 'FT', 0.8296, 0.062, 'BRANCH WIRING'],
         ] as [$description, $unit, $cost, $hours, $section]) {
-            PriceBookLine::create([
-                'price_book_import_id' => $import->id,
+            ProjectRateLine::create([
+                'project_rate_import_id' => $import->id,
+                'project_id' => $this->projectId,
                 'section' => $section,
                 'description' => $description,
                 'quantity' => 10,
@@ -191,11 +267,12 @@ class PriceBookEstimatingTest extends TestCase
                 // labour lines are expected to pick up.
                 'manhour_rate' => 48,
                 'unit_manhours' => $hours,
-                'match_key' => PriceBookLine::keyFor($description),
+                'match_key' => WorkbookReader::keyFor($description),
             ]);
 
-            PriceBookItem::create([
-                'match_key' => PriceBookLine::keyFor($description),
+            ProjectRateItem::create([
+                'project_id' => $this->projectId,
+                'match_key' => WorkbookReader::keyFor($description),
                 'unit' => $unit,
                 'description' => $description,
                 'section' => $section,
