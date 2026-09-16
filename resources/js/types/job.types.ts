@@ -84,6 +84,23 @@ export interface TaskFieldPhoto {
   readonly url: string
 }
 
+/**
+ * One material/fixture/equipment line within a task, with its own field
+ * notes/photos — one level finer than the task's own `comments`/
+ * `attachments` below, and what the mobile Materials screen actually
+ * writes to now (labor lines are the task's checklist, not a "material",
+ * so they never appear here).
+ */
+export interface JobTaskMaterialLine {
+  readonly id: number
+  readonly description: string
+  readonly category: string | null
+  readonly quantity: number
+  readonly unit: string | null
+  readonly comments: readonly TaskFieldNote[]
+  readonly attachments: readonly TaskFieldPhoto[]
+}
+
 /** One task on a job, as the detail screen lists it. */
 export interface JobTaskSummary {
   readonly id: number
@@ -96,9 +113,15 @@ export interface JobTaskSummary {
   readonly actualHours: number | null
   /** How much of the estimate this task covers. */
   readonly lineCount: number
-  /** Left from the field, via the mobile app — read-only here. */
+  /**
+   * Left from the field, via the mobile app — read-only here. Legacy:
+   * mobile now writes per-material instead (see `materialLines`), so this
+   * stays populated only for notes/photos added before that change.
+   */
   readonly comments: readonly TaskFieldNote[]
   readonly attachments: readonly TaskFieldPhoto[]
+  /** This task's own materials, each with its own notes/photos. */
+  readonly materialLines: readonly JobTaskMaterialLine[]
 }
 
 export interface JobNote {

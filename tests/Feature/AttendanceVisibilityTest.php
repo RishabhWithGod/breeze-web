@@ -12,7 +12,9 @@ use Tests\TestCase;
 /**
  * Who sees whose GPS check-ins on the web Time Tracking page — the same
  * crew-visibility rule `TimeEntry` already uses: an electrician sees only
- * their own, a foreman/supervisor/manager sees everyone's.
+ * their own, a foreman/supervisor/manager sees everyone's. Each check-in
+ * with no timer/manual entry on the same day shows as its own
+ * attendance-only day row (`DailyTimesheetBuilder`).
  */
 class AttendanceVisibilityTest extends TestCase
 {
@@ -50,8 +52,9 @@ class AttendanceVisibilityTest extends TestCase
         $this->actingAs($me)
             ->get('/time-tracking/entries')
             ->assertInertia(fn ($page) => $page
-                ->has('attendance', 1)
-                ->where('attendance.0.employee', $me->name));
+                ->has('days.data', 1)
+                ->where('days.data.0.employee.name', $me->name)
+                ->where('days.data.0.hasAttendance', true));
     }
 
     public function test_a_manager_sees_every_technicians_check_in(): void
@@ -65,6 +68,6 @@ class AttendanceVisibilityTest extends TestCase
 
         $this->actingAs($manager)
             ->get('/time-tracking/entries')
-            ->assertInertia(fn ($page) => $page->has('attendance', 2));
+            ->assertInertia(fn ($page) => $page->has('days.data', 2));
     }
 }

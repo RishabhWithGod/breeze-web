@@ -151,6 +151,48 @@ export interface AttendanceEventDetail {
   readonly lng: number | null
 }
 
+/**
+ * One technician's one calendar day — the Time Log list's actual row.
+ * Every timer session, manual entry and GPS check-in that person logged
+ * that day is folded into `totalHours`/`sessionCount` here; the individual
+ * sessions live on the day's own detail screen ({@link TimeTrackingDayDetail}).
+ */
+export interface TimeTrackingDayRow {
+  readonly userId: number
+  readonly date: string
+  readonly employee: { readonly name: string; readonly role: string | null }
+  /** Every job touched that day, most-recently-added last. */
+  readonly jobs: readonly string[]
+  readonly totalHours: number
+  readonly sessionCount: number
+  /** `null` when the day has no timer/manual entries at all — a
+   *  GPS-check-in-only day has nothing to approve. */
+  readonly status: 'approved' | 'pending' | 'rejected' | 'mixed' | null
+  readonly hasTimerEntries: boolean
+  readonly hasAttendance: boolean
+}
+
+/** One job/site's share of a day's total — the multi-site breakdown on the
+ *  day detail screen. */
+export interface TimeTrackingDayJobHours {
+  readonly job: string
+  readonly hours: number
+}
+
+/** The day detail screen — every session behind one [TimeTrackingDayRow],
+ *  laid out the same way a single [TimeEntry]'s own detail screen is. */
+export interface TimeTrackingDayDetail {
+  readonly userId: number
+  readonly date: string
+  readonly employee: { readonly name: string; readonly role: string | null }
+  readonly totalHours: number
+  /** Same "worst session wins" rule as [TimeTrackingDayRow.status]. */
+  readonly status: 'approved' | 'pending' | 'rejected' | 'mixed' | null
+  readonly jobBreakdown: readonly TimeTrackingDayJobHours[]
+  readonly entries: readonly TimeEntry[]
+  readonly attendance: readonly AttendanceRow[]
+}
+
 /** The Attendance detail screen — a single [AttendanceRow], in full: every
  *  field `JobAttendance` carries, not just the list's summary columns. */
 export interface AttendanceDetail {

@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Api\V1\AttendanceController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\EstimateItemAttachmentController;
 use App\Http\Controllers\Api\V1\EstimateItemController;
+use App\Http\Controllers\Api\V1\EstimateItemNoteController;
 use App\Http\Controllers\Api\V1\JobController;
 use App\Http\Controllers\Api\V1\JobTaskAttachmentController;
 use App\Http\Controllers\Api\V1\JobTaskController;
@@ -72,6 +74,16 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('tasks/{task}/attachments', [JobTaskAttachmentController::class, 'index'])->name('tasks.attachments.index');
             Route::post('tasks/{task}/attachments', [JobTaskAttachmentController::class, 'store'])->name('tasks.attachments.store');
             Route::get('tasks/attachments/{attachment}', [JobTaskAttachmentController::class, 'show'])->name('tasks.attachments.show');
+
+            // One note/photo per material line — what the Materials screen
+            // actually composes against now, in place of the task-wide
+            // note/photo pair above.
+            Route::get('estimate-items/{item}/notes', [EstimateItemNoteController::class, 'index'])->name('estimate-items.notes.index');
+            Route::post('estimate-items/{item}/notes', [EstimateItemNoteController::class, 'store'])->name('estimate-items.notes.store');
+
+            Route::get('estimate-items/{item}/attachments', [EstimateItemAttachmentController::class, 'index'])->name('estimate-items.attachments.index');
+            Route::post('estimate-items/{item}/attachments', [EstimateItemAttachmentController::class, 'store'])->name('estimate-items.attachments.store');
+            Route::get('estimate-items/attachments/{attachment}', [EstimateItemAttachmentController::class, 'show'])->name('estimate-items.attachments.show');
 
             Route::get('jobs/{job}/schedule', [ScheduleController::class, 'show'])->name('jobs.schedule.show');
 

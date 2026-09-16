@@ -310,6 +310,8 @@ export const routeTo = {
   timeEntriesExport: (format: 'csv' | 'xlsx') => `/time-tracking/entries/export/${format}`,
   jobTimeEntryTasks: (jobId: number) => `/time-tracking/jobs/${jobId}/tasks`,
   attendance: (attendanceId: number) => `/time-tracking/attendance/${attendanceId}`,
+  /** One technician's one day — every session behind the day-grouped list's single total. */
+  timeEntryDay: (userId: number, date: string) => `/time-tracking/day/${userId}/${date}`,
   timeTrackingReportsExport: (format: 'csv' | 'xlsx') =>
     `/time-tracking/reports/export/${format}`,
 

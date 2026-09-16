@@ -25,6 +25,22 @@ export const TIME_ENTRY_STATUS_FILTERS: readonly SelectOption[] = [
   { label: 'Locked', value: 'locked' },
 ]
 
+/** The day-grouped list's aggregate status — "worst session wins" across
+ *  however many timer/manual entries make up that technician's day. */
+export const DAY_STATUS_LABEL: Record<'approved' | 'pending' | 'rejected' | 'mixed', string> = {
+  approved: 'Approved',
+  pending: 'Pending',
+  rejected: 'Needs review',
+  mixed: 'Mixed',
+}
+
+export const DAY_STATUS_TONE: Record<'approved' | 'pending' | 'rejected' | 'mixed', Tone> = {
+  approved: 'success',
+  pending: 'info',
+  rejected: 'danger',
+  mixed: 'warning',
+}
+
 export const BILLABLE_FILTERS: readonly SelectOption[] = [
   { label: 'Billable & Non-billable', value: 'all' },
   { label: 'Billable only', value: 'yes' },

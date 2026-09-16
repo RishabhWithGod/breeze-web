@@ -219,9 +219,15 @@ class JobController extends Controller
                     'foreman:id,name',
                     'supervisor:id,name',
                     // Field notes/photos — the crew's own Materials screen on
-                    // the mobile app, read-only here.
+                    // the mobile app, read-only here. The task-level pair is
+                    // legacy (mobile writes per-material now, below); kept
+                    // loaded only because nothing has migrated off it.
                     'comments.author:id,name',
                     'attachments.uploader:id,name',
+                    // Per-material notes/photos — what the Materials screen
+                    // actually writes to now, one line at a time.
+                    'estimateItems.comments.author:id,name',
+                    'estimateItems.attachments.uploader:id,name',
                 )
                 ->withCount('estimateItems')
                 ->orderBy('position')

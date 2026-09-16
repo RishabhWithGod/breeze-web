@@ -140,6 +140,45 @@ class JobDetailResource extends JsonResource
                         ]),
                     ])->values()->all()
                     : [],
+
+                // One row per material/fixture/equipment line — the same
+                // split the mobile Materials screen itself draws (labor is
+                // the task's own checklist, not a "material") — each with
+                // its own notes/photos, one level finer than the task-wide
+                // pair above.
+                'materialLines' => $task->relationLoaded('estimateItems')
+                    ? $task->estimateItems
+                        ->reject(fn ($item) => $item->category === \App\Models\EstimateItem::CATEGORY_LABOR)
+                        ->map(fn ($item) => [
+                            'id' => $item->id,
+                            'description' => $item->description,
+                            'category' => $item->category,
+                            'quantity' => (float) $item->quantity,
+                            'unit' => $item->unit,
+                            'comments' => $item->relationLoaded('comments')
+                                ? $item->comments->map(fn ($note) => [
+                                    'id' => $note->id,
+                                    'body' => $note->body,
+                                    'author' => $note->author?->name ?? 'Unknown',
+                                    'createdAt' => $note->created_at->toISOString(),
+                                ])->values()->all()
+                                : [],
+                            'attachments' => $item->relationLoaded('attachments')
+                                ? $item->attachments->map(fn ($photo) => [
+                                    'id' => $photo->id,
+                                    'name' => $photo->name,
+                                    'mime' => $photo->mime_type,
+                                    'sizeBytes' => $photo->size_bytes,
+                                    'uploadedBy' => $photo->uploader?->name ?? 'Unknown',
+                                    'createdAt' => $photo->created_at->toISOString(),
+                                    'url' => route('estimate-items.attachments.show', [
+                                        'item' => $item->id,
+                                        'attachment' => $photo->id,
+                                    ]),
+                                ])->values()->all()
+                                : [],
+                        ])->values()->all()
+                    : [],
             ])->values()->all(), []),
 
             'notes' => $this->notes->map(fn ($note) => [

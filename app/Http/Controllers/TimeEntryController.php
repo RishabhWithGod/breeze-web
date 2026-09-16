@@ -12,8 +12,10 @@ use App\Models\JobAttendance;
 use App\Models\JobTask;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
+use App\Models\User;
 use App\Policies\TimeEntryPolicy;
 use App\Services\Export\TimesheetExporter;
+use App\Services\TimeTracking\DailyTimesheetBuilder;
 use App\Services\TimeTracking\JobLaborSummary;
 use App\Services\TimeTracking\TaskActualHoursRecalculator;
 use App\Services\TimeTracking\TeamTimesheetBuilder;
@@ -45,6 +47,7 @@ class TimeEntryController extends Controller
     public function __construct(
         private readonly TaskActualHoursRecalculator $taskHours,
         private readonly TeamTimesheetBuilder $weekBuilder,
+        private readonly DailyTimesheetBuilder $dailyBuilder,
         private readonly TimesheetExporter $exporter,
         private readonly JobLaborSummary $laborSummary,
         private readonly TimeEntryWriteService $writer,
@@ -52,7 +55,12 @@ class TimeEntryController extends Controller
 
     public function index(Request $request): Response
     {
-        [$entries, $filters, $canViewCrew] = $this->filtered($request);
+        // The filters alone, not the flat query `filtered()` builds — the
+        // list itself now groups by day (`DailyTimesheetBuilder`), so a
+        // technician who stopped their timer four times today shows once,
+        // not four times. `filtered()` still backs `export()` below, where
+        // every session belongs in the download.
+        [$filters, $canViewCrew] = $this->parseFilters($request);
 
         $weekAnchor = filled($request->query('week')) ? Carbon::parse($request->query('week')) : now();
         $weekSummary = $this->weekBuilder->build($weekAnchor, [
@@ -60,71 +68,126 @@ class TimeEntryController extends Controller
             'userId' => $canViewCrew ? null : $request->user()->id,
         ]);
 
+        $days = $this->dailyBuilder->paginate(
+            $filters,
+            $canViewCrew,
+            $request->user()->id,
+            (int) config('time_tracking.per_page'),
+            (int) $request->query('page', 1),
+        );
+
         return Inertia::render('TimeEntries', [
-            'entries' => TimeEntryResource::collection($entries),
+            // Plain arrays, not Eloquent models — `TimeEntryResource::collection()`
+            // isn't in play here to get Laravel's `{data, meta}` shape for free,
+            // so it is built by hand to match what the frontend's `Paginated<T>`
+            // still expects.
+            'days' => [
+                'data' => $days->items(),
+                'meta' => [
+                    'current_page' => $days->currentPage(),
+                    'last_page' => $days->lastPage(),
+                    'per_page' => $days->perPage(),
+                    'total' => $days->total(),
+                    'from' => $days->firstItem(),
+                    'to' => $days->lastItem(),
+                ],
+            ],
             'filters' => $filters,
             'weekSummary' => $weekSummary,
             'jobs' => Job::query()->active()->orderBy('name')->get(['id', 'name', 'client', 'status']),
             'teamMembers' => TeamMember::orderBy('name')->get(['id', 'name', 'role']),
             'taskTypes' => JobTask::CATEGORIES,
-            'attendance' => $this->attendanceFor($request, $filters, $canViewCrew),
             'can' => app(TimeEntryPolicy::class)->abilities($request->user()),
         ]);
     }
 
     /**
-     * Job-site check-ins — GPS presence from the mobile app's own
-     * check-in/check-out feature (`Api\V1\AttendanceController`), shown
-     * alongside the logged/approved work-hour entries above but kept
-     * distinct: no task, no approval workflow, just "was this technician
-     * at the site, and for how long." Same crew-visibility rule as
-     * {@see filtered()} — a foreman/electrician sees only their own, a
-     * supervisor/manager sees everyone's.
-     *
-     * @param  array<string, mixed>  $filters
-     * @return array<int, array<string, mixed>>
+     * One technician's one day, in full — every timer/manual session and
+     * every GPS check-in cycle behind the single total the list shows.
+     * Nothing here is editable directly: each row links out to its own
+     * `TimeEntryShow`/`AttendanceShow` page, where the existing per-session
+     * approve/reject/edit actions still live untouched.
      */
-    private function attendanceFor(Request $request, array $filters, bool $canViewCrew): array
+    public function showDay(Request $request, User $user, string $date): Response
     {
-        // Unlike the time-entry list, which shows everything ever logged
-        // until filtered, this section defaults to a recent window rather
-        // than every day since the feature launched.
-        $from = $filters['from'] ?: now()->subDays(14)->toDateString();
-        $to = $filters['to'] ?: now()->toDateString();
+        $canViewCrew = (bool) $request->user()->can('viewCrew', TimeEntry::class);
+        abort_unless($canViewCrew || $user->id === $request->user()->id, 403);
 
-        return JobAttendance::query()
-            ->with(['job:id,name', 'user:id,name,role'])
-            ->when(! $canViewCrew, fn ($q) => $q->where('user_id', $request->user()->id))
-            ->when(! empty($filters['job']), fn ($q) => $q->where('job_id', $filters['job']))
-            ->whereDate('date', '>=', $from)
-            ->whereDate('date', '<=', $to)
-            ->orderByDesc('date')
-            ->orderByDesc('check_in_at')
-            ->limit(100)
-            ->get()
-            ->map(fn (JobAttendance $row) => [
-                'id' => $row->id,
-                'date' => $row->date->toDateString(),
-                'employee' => $row->user?->name ?? 'Unknown',
-                'employeeRole' => $row->user?->role,
-                'job' => $row->job ? ['id' => $row->job->id, 'name' => $row->job->name] : null,
-                'status' => $row->status,
-                'checkInAt' => $row->check_in_at?->toISOString(),
-                'checkOutAt' => $row->check_out_at?->toISOString(),
-                'checkInMethod' => $row->check_in_method,
-                'checkOutMethod' => $row->check_out_method,
-                'checkInDistanceMeters' => $row->check_in_distance_meters !== null
-                    ? (float) $row->check_in_distance_meters
-                    : null,
-                'checkOutDistanceMeters' => $row->check_out_distance_meters !== null
-                    ? (float) $row->check_out_distance_meters
-                    : null,
-                'hours' => round($row->workingSeconds() / 3600, 2),
-                'photoUrl' => $row->check_in_photo_path
-                    ? route('attendance.photo', $row->id)
-                    : null,
+        $day = Carbon::parse($date);
+
+        $entries = TimeEntry::query()
+            ->with([
+                'job:id,name',
+                'jobTask:id,title',
+                'teamMember:id,name,role',
+                'user:id,name,role,initials',
+                'approver:id,name',
+                'rejecter:id,name',
             ])
-            ->all();
+            ->where('user_id', $user->id)
+            ->whereDate('date', $day)
+            ->orderBy('start_time')
+            ->orderBy('id')
+            ->get();
+
+        $attendance = JobAttendance::query()
+            ->with('job:id,name')
+            ->where('user_id', $user->id)
+            ->whereDate('date', $day)
+            ->orderBy('check_in_at')
+            ->get();
+
+        abort_if($entries->isEmpty() && $attendance->isEmpty(), 404);
+
+        // One job's share of the day, from both tables at once — a
+        // technician who split the day between two sites sees each site's
+        // own hours here, not just a combined total.
+        $jobBreakdown = $entries->map(fn (TimeEntry $e) => [$e->job?->name ?? 'No job', (float) $e->hours])
+            ->concat($attendance->map(fn (JobAttendance $a) => [$a->job?->name ?? 'No job', $a->workingSeconds() / 3600]))
+            ->groupBy(fn ($pair) => $pair[0])
+            ->map(fn ($pairs, $job) => ['job' => $job, 'hours' => round((float) $pairs->sum(fn ($p) => $p[1]), 2)])
+            ->values();
+
+        return Inertia::render('TimeEntryDayShow', [
+            'day' => [
+                'userId' => $user->id,
+                'date' => $day->toDateString(),
+                'employee' => [
+                    'name' => $entries->first()?->teamMember?->name ?? $user->name,
+                    'role' => $user->role,
+                ],
+                'totalHours' => round(
+                    (float) $entries->sum('hours')
+                        + $attendance->sum(fn (JobAttendance $a) => $a->workingSeconds()) / 3600,
+                    2
+                ),
+                'status' => $this->dailyBuilder->aggregateStatus($entries),
+                'jobBreakdown' => $jobBreakdown,
+                'entries' => TimeEntryResource::collection($entries)->resolve($request),
+                'attendance' => $attendance->map(fn (JobAttendance $row) => [
+                    'id' => $row->id,
+                    'date' => $row->date->toDateString(),
+                    'employee' => $entries->first()?->teamMember?->name ?? $user->name,
+                    'employeeRole' => $user->role,
+                    'job' => $row->job ? ['id' => $row->job->id, 'name' => $row->job->name] : null,
+                    'status' => $row->status,
+                    'checkInAt' => $row->check_in_at?->toISOString(),
+                    'checkOutAt' => $row->check_out_at?->toISOString(),
+                    'checkInMethod' => $row->check_in_method,
+                    'checkOutMethod' => $row->check_out_method,
+                    'checkInDistanceMeters' => $row->check_in_distance_meters !== null
+                        ? (float) $row->check_in_distance_meters
+                        : null,
+                    'checkOutDistanceMeters' => $row->check_out_distance_meters !== null
+                        ? (float) $row->check_out_distance_meters
+                        : null,
+                    'hours' => round($row->workingSeconds() / 3600, 2),
+                    'photoUrl' => $row->check_in_photo_path
+                        ? route('attendance.photo', $row->id)
+                        : null,
+                ])->all(),
+            ],
+        ]);
     }
 
     /** The read-only "View" screen for one GPS check-in/check-out — every
@@ -214,14 +277,49 @@ class TimeEntryController extends Controller
     }
 
     /**
-     * The filtered query, shared by the list and the export so the two can
-     * never show different rows for the same filters.
+     * The filtered query, shared by the export so it can never show
+     * different rows than the same filters would on the day-grouped list.
      *
      * @return array{0: mixed, 1: array<string, mixed>, 2: bool}
      */
     private function filtered(Request $request, bool $paginate = true): array
     {
-        $filters = $request->validate([
+        [$filters, $canViewCrew] = $this->parseFilters($request);
+
+        $status = $filters['status'];
+        $billable = $filters['billable'];
+        $taskType = $filters['task_type'];
+
+        $query = TimeEntry::query()
+            ->with(['job', 'jobTask', 'user', 'teamMember'])
+            ->when(! $canViewCrew, fn ($q) => $q->where('user_id', $request->user()->id))
+            ->search($filters['search'] ?: null)
+            ->when(! empty($filters['from']), fn ($q) => $q->whereDate('date', '>=', $filters['from']))
+            ->when(! empty($filters['to']), fn ($q) => $q->whereDate('date', '<=', $filters['to']))
+            ->when(! empty($filters['job']), fn ($q) => $q->where('job_id', $filters['job']))
+            ->when(! empty($filters['team_member']), fn ($q) => $q->where('team_member_id', $filters['team_member']))
+            ->when($taskType !== 'all', fn ($q) => $q->whereHas('jobTask', fn ($t) => $t->where('category', $taskType)))
+            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
+            ->when($billable !== 'all', fn ($q) => $q->where('billable', $billable === 'yes'))
+            ->sorted($request->query('sort'));
+
+        $entries = $paginate
+            ? $query->paginate(config('time_tracking.per_page'))->withQueryString()
+            : $query->get();
+
+        return [$entries, $filters, $canViewCrew];
+    }
+
+    /**
+     * Just the filters — the day-grouped list (`DailyTimesheetBuilder`) needs
+     * these without ever running `filtered()`'s own flat, unpaginated
+     * `TimeEntry` query only to throw the result away.
+     *
+     * @return array{0: array<string, mixed>, 1: bool}
+     */
+    private function parseFilters(Request $request): array
+    {
+        $raw = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
@@ -233,39 +331,18 @@ class TimeEntryController extends Controller
             'sort' => ['nullable', 'string'],
         ]);
 
-        $status = $filters['status'] ?? 'all';
-        $billable = $filters['billable'] ?? 'all';
-        $taskType = $filters['task_type'] ?? 'all';
         $canViewCrew = (bool) $request->user()->can('viewCrew', TimeEntry::class);
 
-        $query = TimeEntry::query()
-            ->with(['job', 'jobTask', 'user', 'teamMember'])
-            ->when(! $canViewCrew, fn ($q) => $q->where('user_id', $request->user()->id))
-            ->search($filters['search'] ?? null)
-            ->when(! empty($filters['from']), fn ($q) => $q->whereDate('date', '>=', $filters['from']))
-            ->when(! empty($filters['to']), fn ($q) => $q->whereDate('date', '<=', $filters['to']))
-            ->when(! empty($filters['job']), fn ($q) => $q->where('job_id', $filters['job']))
-            ->when(! empty($filters['team_member']), fn ($q) => $q->where('team_member_id', $filters['team_member']))
-            ->when($taskType !== 'all', fn ($q) => $q->whereHas('jobTask', fn ($t) => $t->where('category', $taskType)))
-            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
-            ->when($billable !== 'all', fn ($q) => $q->where('billable', $billable === 'yes'))
-            ->sorted($filters['sort'] ?? null);
-
-        $entries = $paginate
-            ? $query->paginate(config('time_tracking.per_page'))->withQueryString()
-            : $query->get();
-
         return [
-            $entries,
             [
-                'search' => $filters['search'] ?? '',
-                'from' => $filters['from'] ?? '',
-                'to' => $filters['to'] ?? '',
-                'job' => $filters['job'] ?? '',
-                'team_member' => $filters['team_member'] ?? '',
-                'task_type' => $taskType,
-                'status' => $status,
-                'billable' => $billable,
+                'search' => $raw['search'] ?? '',
+                'from' => $raw['from'] ?? '',
+                'to' => $raw['to'] ?? '',
+                'job' => $raw['job'] ?? '',
+                'team_member' => $raw['team_member'] ?? '',
+                'task_type' => $raw['task_type'] ?? 'all',
+                'status' => $raw['status'] ?? 'all',
+                'billable' => $raw['billable'] ?? 'all',
             ],
             $canViewCrew,
         ];

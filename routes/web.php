@@ -431,6 +431,8 @@ Route::middleware('auth')->group(function () {
     Route::post('schedule-tasks/{task}/comments', [JobTaskController::class, 'comment'])->name('tasks.comments.store');
     Route::get('schedule-tasks/{task}/attachments/{attachment}', [JobTaskController::class, 'attachment'])
         ->name('tasks.attachments.show');
+    Route::get('estimate-items/{item}/attachments/{attachment}', [JobTaskController::class, 'materialAttachment'])
+        ->name('estimate-items.attachments.show');
 
     // Team members
     Route::post('jobs/{job}/team', [JobTeamController::class, 'store'])->name('jobs.team.store');
@@ -507,6 +509,10 @@ Route::middleware('auth')->group(function () {
         Route::post('entries/{entry}/reject', [TimeEntryController::class, 'reject'])->name('time-entries.reject');
         Route::post('entries/{entry}/reopen', [TimeEntryController::class, 'reopen'])->name('time-entries.reopen');
         Route::get('jobs/{job}/tasks', [TimeEntryController::class, 'jobTasks'])->name('time-entries.job-tasks');
+
+        // One technician's one day — every session behind the single total
+        // the day-grouped list above shows for them on that date.
+        Route::get('day/{user}/{date}', [TimeEntryController::class, 'showDay'])->name('time-entries.day');
 
         Route::get('attendance/{attendance}', [TimeEntryController::class, 'showAttendance'])->name('attendance.show');
         Route::get('attendance/{attendance}/photo', [TimeEntryController::class, 'attendancePhoto'])->name('attendance.photo');
