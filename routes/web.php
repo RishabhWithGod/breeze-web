@@ -510,6 +510,10 @@ Route::middleware('auth')->group(function () {
         Route::post('entries/{entry}/reopen', [TimeEntryController::class, 'reopen'])->name('time-entries.reopen');
         Route::get('jobs/{job}/tasks', [TimeEntryController::class, 'jobTasks'])->name('time-entries.job-tasks');
 
+        // One technician's one day — every session behind the single total
+        // the day-grouped list above shows for them on that date.
+        Route::get('day/{user}/{date}', [TimeEntryController::class, 'showDay'])->name('time-entries.day');
+
         Route::get('attendance/{attendance}', [TimeEntryController::class, 'showAttendance'])->name('attendance.show');
         Route::get('attendance/{attendance}/photo', [TimeEntryController::class, 'attendancePhoto'])->name('attendance.photo');
 
