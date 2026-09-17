@@ -265,8 +265,8 @@ export default function ProjectShow({
         isOpen={deleteProjectDialog.isOpen}
         tone="danger"
         title={`Delete “${project.name}”?`}
-        description="The client is removed from your list. Its drawings stay on file."
-        confirmLabel="Delete client"
+        description="The project is removed from your list. Its drawings stay on file."
+        confirmLabel="Delete Project"
         confirmVariant="danger"
         onConfirm={() => {
           router.delete(routeTo.project(project.id))

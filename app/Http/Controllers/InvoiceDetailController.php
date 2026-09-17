@@ -10,11 +10,13 @@ use App\Models\InvoiceItem;
 use App\Models\Job;
 use App\Models\PaymentProcessor;
 use App\Models\PaymentTransaction;
+use App\Models\TimeEntry;
 use App\Notifications\InvoiceStatusChanged;
 use App\Policies\InvoicePolicy;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Export\InvoicePdfWriter;
+use App\Services\JobCosting\JobCostSummary;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response as ResponseFactory;
@@ -38,6 +40,7 @@ class InvoiceDetailController extends Controller
     public function __construct(
         private readonly FeedItemRecorder $activity,
         private readonly ClientDirectory $clients,
+        private readonly JobCostSummary $costSummary,
     ) {}
 
     public function show(Request $request, Invoice $invoice): Response
@@ -47,9 +50,21 @@ class InvoiceDetailController extends Controller
         $invoice->load(['job', 'estimate', 'items', 'creator']);
         $abilities = app(InvoicePolicy::class);
 
+        $jobCostSummary = null;
+
+        if ($invoice->job !== null) {
+            $canViewJobCosts = (bool) $request->user()->can('viewJobCosts', TimeEntry::class);
+            $summary = $this->costSummary->for($invoice->job);
+            $jobCostSummary = $canViewJobCosts ? $summary : JobCostSummary::redact($summary);
+        }
+
         return Inertia::render('InvoiceShow', [
             'invoice' => $this->present($invoice),
             'items' => InvoiceItemResource::collection($invoice->items)->resolve($request),
+            // The estimate-vs-actual breakdown behind this invoice's job, so a
+            // manager can see what was billed against what was estimated and
+            // what actually happened — without leaving the invoice screen.
+            'jobCostSummary' => $jobCostSummary,
             'can' => [
                 'update' => $abilities->update($request->user(), $invoice),
                 'delete' => $abilities->delete($request->user(), $invoice),

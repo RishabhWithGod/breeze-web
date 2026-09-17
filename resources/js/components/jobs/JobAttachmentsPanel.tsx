@@ -10,10 +10,13 @@ import { formatFileSize, formatRelative } from '@/utils'
 export interface JobAttachmentsPanelProps {
   jobId: number
   attachments: readonly JobAttachment[]
+  /** True once the job is completed — upload and delete both hide; what's
+   *  already attached stays downloadable. */
+  readOnly?: boolean
 }
 
 /** Real multipart uploads through JobAttachmentController. */
-export function JobAttachmentsPanel({ jobId, attachments }: JobAttachmentsPanelProps) {
+export function JobAttachmentsPanel({ jobId, attachments, readOnly = false }: JobAttachmentsPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [selectedName, setSelectedName] = useState<string | null>(null)
 
@@ -47,42 +50,44 @@ export function JobAttachmentsPanel({ jobId, attachments }: JobAttachmentsPanelP
 
   return (
     <div>
-      <form onSubmit={submit} className="mb-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            ref={inputRef}
-            id="job-attachment-file"
-            type="file"
-            onChange={(event) => choose(event.target.files?.[0] ?? null)}
-            className="sr-only"
-          />
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            leftIcon={Paperclip}
-            onClick={() => inputRef.current?.click()}
-          >
-            Choose file
-          </Button>
+      {!readOnly && (
+        <form onSubmit={submit} className="mb-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              ref={inputRef}
+              id="job-attachment-file"
+              type="file"
+              onChange={(event) => choose(event.target.files?.[0] ?? null)}
+              className="sr-only"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              leftIcon={Paperclip}
+              onClick={() => inputRef.current?.click()}
+            >
+              Choose file
+            </Button>
 
-          <span className="min-w-0 flex-1 truncate text-sm text-white/85">
-            {selectedName ?? 'No file selected'}
-          </span>
+            <span className="min-w-0 flex-1 truncate text-sm text-white/85">
+              {selectedName ?? 'No file selected'}
+            </span>
 
-          <Button
-            type="submit"
-            size="sm"
-            leftIcon={Upload}
-            isLoading={processing}
-            disabled={!selectedName}
-          >
-            Upload
-          </Button>
-        </div>
+            <Button
+              type="submit"
+              size="sm"
+              leftIcon={Upload}
+              isLoading={processing}
+              disabled={!selectedName}
+            >
+              Upload
+            </Button>
+          </div>
 
-        {errors.file && <p className="mt-2 text-sm text-red-300">{errors.file}</p>}
-      </form>
+          {errors.file && <p className="mt-2 text-sm text-red-300">{errors.file}</p>}
+        </form>
+      )}
 
       {attachments.length === 0 ? (
         <p className="text-md text-white/75">No attachments yet.</p>
@@ -119,13 +124,15 @@ export function JobAttachmentsPanel({ jobId, attachments }: JobAttachmentsPanelP
                   <Download size={16} aria-hidden />
                 </a>
 
-                <IconButton
-                  icon={Trash2}
-                  label={`Delete ${attachment.name}`}
-                  size="sm"
-                  className="shrink-0 text-white/70 hover:text-status-danger"
-                  onClick={() => remove(attachment.id)}
-                />
+                {!readOnly && (
+                  <IconButton
+                    icon={Trash2}
+                    label={`Delete ${attachment.name}`}
+                    size="sm"
+                    className="shrink-0 text-white/70 hover:text-status-danger"
+                    onClick={() => remove(attachment.id)}
+                  />
+                )}
               </motion.li>
             ))}
           </AnimatePresence>

@@ -332,6 +332,7 @@ class JobController extends Controller
     public function update(UpdateJobRequest $request, Job $job): RedirectResponse
     {
         $this->authorize('update', $job);
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
 
         $data = $this->clients->withClientSnapshot($request->validated(), $request->user());
         $newStatus = $data['status'];
@@ -448,6 +449,7 @@ class JobController extends Controller
     public function changeStatus(Request $request, Job $job): RedirectResponse
     {
         $this->authorize('update', $job);
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
 
         $validated = $request->validate([
             'status' => ['required', Rule::in(Job::STATUSES)],

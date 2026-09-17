@@ -12,6 +12,8 @@ class JobNoteController extends Controller
 {
     public function store(Request $request, Job $job): RedirectResponse
     {
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
+
         $validated = $request->validate([
             'body' => ['required', 'string', 'min:2', 'max:2000'],
         ], [
@@ -31,6 +33,7 @@ class JobNoteController extends Controller
     public function destroy(Job $job, JobNote $note): RedirectResponse
     {
         abort_unless($note->job_id === $job->id, 404);
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
 
         $note->delete();
         $job->recordActivity('note_deleted', 'Note deleted');

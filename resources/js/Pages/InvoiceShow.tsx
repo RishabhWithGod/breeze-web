@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
   Briefcase,
   Check,
+  ChevronDown,
   Download,
   Pencil,
   Send,
@@ -21,14 +22,24 @@ import {
 } from '@/components/common'
 import { InvoiceItemsTable } from '@/components/billing'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ROUTES, routeTo } from '@/constants'
+import { MOTION, ROUTES, routeTo } from '@/constants'
 import { useDisclosure } from '@/hooks'
-import type { InvoiceActionAbilities, InvoiceDetail, InvoiceItemRow, SharedPageProps } from '@/types'
-import { INVOICE_STATUS_LABEL, INVOICE_STATUS_TONE, formatCurrency, formatDate } from '@/utils'
+import type {
+  InvoiceActionAbilities,
+  InvoiceDetail,
+  InvoiceItemRow,
+  JobCostRow,
+  SharedPageProps,
+} from '@/types'
+import { INVOICE_STATUS_LABEL, INVOICE_STATUS_TONE, formatCurrency, formatDate, formatHours } from '@/utils'
 
 export interface InvoiceShowProps {
   invoice: InvoiceDetail
   items: readonly InvoiceItemRow[]
+  /** The job this invoice was raised for's estimate-vs-actual breakdown —
+   *  `null` when the invoice has no job, or the field it prices is redacted
+   *  for a role without cost visibility. */
+  jobCostSummary: JobCostRow | null
   can: InvoiceActionAbilities
 }
 
@@ -37,10 +48,11 @@ export interface InvoiceShowProps {
  * workflow. Status only ever changes through the dedicated actions below;
  * nothing here lets it be typed in freely.
  */
-export default function InvoiceShow({ invoice, items, can }: InvoiceShowProps) {
+export default function InvoiceShow({ invoice, items, jobCostSummary, can }: InvoiceShowProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
+  const costDetails = useDisclosure()
 
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
@@ -170,6 +182,58 @@ export default function InvoiceShow({ invoice, items, can }: InvoiceShowProps) {
         <InvoiceItemsTable invoiceId={invoice.id} items={items} editable={can.update} />
       </Card>
 
+      {jobCostSummary && (
+        <Card accent="brand" padding="lg" className="mt-6">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 text-left"
+            aria-expanded={costDetails.isOpen}
+            onClick={costDetails.toggle}
+          >
+            <SectionHeading as="h3" title="Job Cost Details" className="mb-0" />
+            <ChevronDown
+              size={18}
+              className={`shrink-0 text-white/70 transition-transform ${costDetails.isOpen ? 'rotate-180' : ''}`}
+              aria-hidden
+            />
+          </button>
+
+          <AnimatePresence initial={false}>
+            {costDetails.isOpen && (
+              <motion.div
+                key="job-cost-details"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: MOTION.base }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4 grid gap-4 border-t border-hairline pt-4 sm:grid-cols-2">
+                  <CostColumn
+                    title="Estimated"
+                    hours={jobCostSummary.estimatedLaborHours}
+                    laborCost={jobCostSummary.estimatedLaborCost}
+                    materialCost={jobCostSummary.estimatedMaterialCost}
+                    equipmentCost={jobCostSummary.estimatedEquipmentCost}
+                    otherCost={jobCostSummary.estimatedOtherCost}
+                    totalCost={jobCostSummary.estimatedTotalCost}
+                  />
+                  <CostColumn
+                    title="Actual"
+                    hours={jobCostSummary.actualLaborHours}
+                    laborCost={jobCostSummary.actualLaborCost}
+                    materialCost={jobCostSummary.actualMaterialCost}
+                    equipmentCost={jobCostSummary.actualEquipmentCost}
+                    otherCost={jobCostSummary.actualOtherCost}
+                    totalCost={jobCostSummary.actualTotalCost}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Card>
+      )}
+
       {invoice.notes && (
         <Card accent="neutral" padding="lg" className="mt-6">
           <SectionHeading as="h3" title="Notes" />
@@ -198,6 +262,42 @@ function Field({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 truncate text-md text-white" title={value}>
         {value}
       </dd>
+    </div>
+  )
+}
+
+/** One side of the estimated/actual comparison — hours plus every cost
+ *  category, laid out the same way for both so they read as a pair. */
+function CostColumn({
+  title,
+  hours,
+  laborCost,
+  materialCost,
+  equipmentCost,
+  otherCost,
+  totalCost,
+}: {
+  title: string
+  hours: number
+  laborCost: number | null
+  materialCost: number | null
+  equipmentCost: number | null
+  otherCost: number | null
+  totalCost: number | null
+}) {
+  const money = (value: number | null) => (value === null ? '—' : formatCurrency(value, 2))
+
+  return (
+    <div className="rounded-panel border border-hairline bg-white/4 p-4">
+      <p className="mb-3 text-sm font-semibold tracking-wide text-white/80 uppercase">{title}</p>
+      <dl className="flex flex-col gap-2">
+        <TotalRow label="Labor Hours" value={formatHours(hours)} />
+        <TotalRow label="Labor" value={money(laborCost)} />
+        <TotalRow label="Materials" value={money(materialCost)} />
+        <TotalRow label="Equipment" value={money(equipmentCost)} />
+        <TotalRow label="Other" value={money(otherCost)} />
+        <TotalRow label="Total" value={money(totalCost)} strong />
+      </dl>
     </div>
   )
 }

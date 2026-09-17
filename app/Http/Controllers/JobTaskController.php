@@ -48,6 +48,7 @@ class JobTaskController extends Controller
     public function store(Request $request, Job $job): RedirectResponse
     {
         $this->authorize('view', $job);
+        $this->assertNotLocked($job);
 
         $schedule = $job->schedule ?? $this->builder->build($job, $request->user(), withTasks: false);
         abort_unless($this->policy->createTask($request->user(), $schedule), 403);
@@ -114,6 +115,7 @@ class JobTaskController extends Controller
     public function update(Request $request, JobTask $task): RedirectResponse
     {
         abort_unless($this->policy->updateTask($request->user(), $task), 403);
+        $this->assertNotLocked($task->job);
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
@@ -202,6 +204,7 @@ class JobTaskController extends Controller
     public function complete(Request $request, JobTask $task): RedirectResponse
     {
         abort_unless($this->policy->completeTask($request->user(), $task), 403);
+        $this->assertNotLocked($task->job);
 
         $data = $request->validate([
             'actual_hours' => ['nullable', 'numeric', 'min:0', 'max:9999'],
@@ -226,6 +229,7 @@ class JobTaskController extends Controller
     public function delay(Request $request, JobTask $task): RedirectResponse
     {
         abort_unless($this->policy->delayTask($request->user(), $task), 403);
+        $this->assertNotLocked($task->job);
 
         $data = $request->validate([
             'ends_on' => ['required', 'date'],
@@ -278,6 +282,7 @@ class JobTaskController extends Controller
     public function move(Request $request, JobTask $task): RedirectResponse
     {
         abort_unless($this->policy->updateTask($request->user(), $task), 403);
+        $this->assertNotLocked($task->job);
 
         $data = $request->validate([
             'starts_on' => ['required', 'date'],
@@ -344,6 +349,7 @@ class JobTaskController extends Controller
         $schedule = $job->schedule;
         abort_unless($schedule !== null, 404);
         abort_unless($this->policy->reorder($request->user(), $schedule), 403);
+        $this->assertNotLocked($job);
 
         $data = $request->validate([
             'order' => ['required', 'array', 'min:1'],
@@ -374,6 +380,7 @@ class JobTaskController extends Controller
     public function destroy(Request $request, JobTask $task): RedirectResponse
     {
         abort_unless($this->policy->deleteTask($request->user(), $task), 403);
+        $this->assertNotLocked($task->job);
 
         $title = $task->title;
         $schedule = $task->schedule;
@@ -395,6 +402,7 @@ class JobTaskController extends Controller
     public function assign(Request $request, JobTask $task): RedirectResponse
     {
         abort_unless($this->policy->assign($request->user(), $task), 403);
+        $this->assertNotLocked($task->job);
 
         $data = $request->validate([
             'team_member_id' => ['required', 'integer', 'exists:team_members,id'],
@@ -440,6 +448,7 @@ class JobTaskController extends Controller
     public function unassign(Request $request, JobTask $task, int $assignment): RedirectResponse
     {
         abort_unless($this->policy->assign($request->user(), $task), 403);
+        $this->assertNotLocked($task->job);
 
         $row = $task->assignments()->with('member')->findOrFail($assignment);
         $name = $row->member?->name ?? 'Someone';
@@ -467,6 +476,7 @@ class JobTaskController extends Controller
     public function addDependency(Request $request, JobTask $task): RedirectResponse
     {
         abort_unless($this->policy->updateTask($request->user(), $task), 403);
+        $this->assertNotLocked($task->job);
 
         $data = $request->validate([
             'depends_on_id' => ['required', 'integer', 'exists:job_tasks,id'],
@@ -519,6 +529,7 @@ class JobTaskController extends Controller
     public function removeDependency(Request $request, JobTask $task, int $dependency): RedirectResponse
     {
         abort_unless($this->policy->updateTask($request->user(), $task), 403);
+        $this->assertNotLocked($task->job);
 
         $edge = $task->dependencies()->with('dependsOn')->findOrFail($dependency);
         $title = $edge->dependsOn?->title ?? 'another task';
@@ -539,6 +550,7 @@ class JobTaskController extends Controller
     public function comment(Request $request, JobTask $task): RedirectResponse
     {
         abort_unless($this->policy->comment($request->user(), $task), 403);
+        $this->assertNotLocked($task->job);
 
         $data = $request->validate([
             'body' => ['required', 'string', 'min:1', 'max:5000'],
@@ -593,6 +605,12 @@ class JobTaskController extends Controller
     }
 
     /* ------------------------------------------------------------- internals */
+
+    /** Nothing about a completed job's tasks moves again — see `Job::isLocked()`. */
+    private function assertNotLocked(?Job $job): void
+    {
+        abort_if($job?->isLocked() === true, 409, 'This job is already completed and can no longer be changed.');
+    }
 
     /**
      * The three things every write does afterwards.

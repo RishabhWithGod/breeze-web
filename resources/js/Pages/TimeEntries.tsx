@@ -182,15 +182,27 @@ export default function TimeEntries({ days, filters, jobs, teamMembers, taskType
     {
       key: 'status',
       header: 'Status',
-      render: (day) =>
-        day.status ? (
-          <StatusChip tone={DAY_STATUS_TONE[day.status]} label={DAY_STATUS_LABEL[day.status]} />
-        ) : (
+      render: (day) => {
+        if (day.status) {
+          return <StatusChip tone={DAY_STATUS_TONE[day.status]} label={DAY_STATUS_LABEL[day.status]} />
+        }
+
+        if (day.attendanceStatus === 'checkedIn') {
+          return (
+            <Badge tone="success">
+              <Camera size={12} className="mr-1 inline" aria-hidden />
+              On site
+            </Badge>
+          )
+        }
+
+        return (
           <Badge tone="neutral">
             <Camera size={12} className="mr-1 inline" aria-hidden />
-            Check-in only
+            Checked out
           </Badge>
-        ),
+        )
+      },
     },
   ]
 

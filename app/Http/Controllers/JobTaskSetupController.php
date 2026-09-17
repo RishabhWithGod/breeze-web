@@ -140,6 +140,7 @@ class JobTaskSetupController extends Controller
     public function store(Request $request, Job $job): RedirectResponse
     {
         $this->authorisePlanning($job, $request->user());
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
 
         /*
          * Lines are required — except on a job that has no estimate at all,
@@ -292,8 +293,6 @@ class JobTaskSetupController extends Controller
 
         $this->authorisePlanning($job, $request->user());
 
-        $task->loadMissing('estimateItems:id,job_task_id');
-
         return Inertia::render('JobTaskEdit', [
             'returnUrl' => $this->returnUrl($request, $job) ?? route('tasks.index'),
             'saveUrl' => $this->carryOrigin($request, route('tasks.edit.update', $task)),
@@ -309,7 +308,10 @@ class JobTaskSetupController extends Controller
                 'status' => $task->status,
                 'foremanId' => $task->foreman_id,
                 'supervisorId' => $task->supervisor_id,
-                'lineIds' => $task->estimateItems->pluck('id')->values(),
+                'lineIds' => $task->estimateItems()
+                    ->where('category', EstimateItem::CATEGORY_LABOR)
+                    ->pluck('id')
+                    ->values(),
             ],
             /*
              * This task's own lines arrive unclaimed. They are claimed — by
@@ -366,6 +368,7 @@ class JobTaskSetupController extends Controller
         $job = $this->jobBehind($task);
 
         $this->authorisePlanning($job, $request->user());
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
 
         $hasLines = $this->estimateLineCount($job) > 0;
 
@@ -514,6 +517,7 @@ class JobTaskSetupController extends Controller
         $job = $this->jobBehind($task);
 
         $this->authorisePlanning($job, $request->user());
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
 
         $title = $task->title;
 

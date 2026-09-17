@@ -9,10 +9,13 @@ import { formatRelative } from '@/utils'
 export interface JobNotesPanelProps {
   jobId: number
   notes: readonly JobNote[]
+  /** True once the job is completed — the composer and delete both hide;
+   *  the notes already on it stay readable. */
+  readOnly?: boolean
 }
 
 /** Notes list plus composer; both go through JobNoteController. */
-export function JobNotesPanel({ jobId, notes }: JobNotesPanelProps) {
+export function JobNotesPanel({ jobId, notes, readOnly = false }: JobNotesPanelProps) {
   const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
     body: '',
   })
@@ -32,24 +35,26 @@ export function JobNotesPanel({ jobId, notes }: JobNotesPanelProps) {
 
   return (
     <div>
-      <form onSubmit={submit} className="mb-5">
-        <TextArea
-          id="job-note-body"
-          rows={3}
-          placeholder="Add a note for the crew…"
-          value={data.body}
-          onChange={(event) => {
-            setData('body', event.target.value)
-            if (errors.body) clearErrors('body')
-          }}
-          {...(errors.body ? { error: errors.body } : {})}
-        />
-        <div className="mt-3 flex justify-end">
-          <Button type="submit" size="sm" leftIcon={Send} isLoading={processing}>
-            Add note
-          </Button>
-        </div>
-      </form>
+      {!readOnly && (
+        <form onSubmit={submit} className="mb-5">
+          <TextArea
+            id="job-note-body"
+            rows={3}
+            placeholder="Add a note for the crew…"
+            value={data.body}
+            onChange={(event) => {
+              setData('body', event.target.value)
+              if (errors.body) clearErrors('body')
+            }}
+            {...(errors.body ? { error: errors.body } : {})}
+          />
+          <div className="mt-3 flex justify-end">
+            <Button type="submit" size="sm" leftIcon={Send} isLoading={processing}>
+              Add note
+            </Button>
+          </div>
+        </form>
+      )}
 
       {notes.length === 0 ? (
         <p className="text-md text-white/75">No notes yet.</p>
@@ -68,13 +73,15 @@ export function JobNotesPanel({ jobId, notes }: JobNotesPanelProps) {
                   <p className="min-w-0 text-md whitespace-pre-line text-white/90">
                     {note.body}
                   </p>
-                  <IconButton
-                    icon={Trash2}
-                    label={`Delete note by ${note.author}`}
-                    size="sm"
-                    className="shrink-0 text-white/70 hover:text-status-danger"
-                    onClick={() => remove(note.id)}
-                  />
+                  {!readOnly && (
+                    <IconButton
+                      icon={Trash2}
+                      label={`Delete note by ${note.author}`}
+                      size="sm"
+                      className="shrink-0 text-white/70 hover:text-status-danger"
+                      onClick={() => remove(note.id)}
+                    />
+                  )}
                 </div>
                 <p className="mt-2 text-sm text-white/70">
                   {note.author} · {formatRelative(note.createdAt)}

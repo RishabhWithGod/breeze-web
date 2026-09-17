@@ -16,6 +16,8 @@ class JobAttachmentController extends Controller
     /** Stores the uploaded bytes on the local disk and records the row. */
     public function store(Request $request, Job $job): RedirectResponse
     {
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
+
         $validated = $request->validate([
             // Same allowlist Documents uses (content-sniffed by
             // `Rule::file()->extensions()`, not the client-supplied
@@ -61,6 +63,7 @@ class JobAttachmentController extends Controller
     public function destroy(Job $job, JobAttachment $attachment): RedirectResponse
     {
         abort_unless($attachment->job_id === $job->id, 404);
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
 
         $name = $attachment->name;
         $attachment->deleteWithFile();
