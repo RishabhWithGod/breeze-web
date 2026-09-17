@@ -162,6 +162,7 @@ class TimeEntryController extends Controller
                     2
                 ),
                 'status' => $this->dailyBuilder->aggregateStatus($entries),
+                'attendanceStatus' => $this->dailyBuilder->aggregateAttendanceStatus($attendance),
                 'jobBreakdown' => $jobBreakdown,
                 'entries' => TimeEntryResource::collection($entries)->resolve($request),
                 'attendance' => $attendance->map(fn (JobAttendance $row) => [

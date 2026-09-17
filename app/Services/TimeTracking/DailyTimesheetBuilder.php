@@ -127,7 +127,30 @@ class DailyTimesheetBuilder
             'status' => $this->aggregateStatus($entries),
             'hasTimerEntries' => $entries->isNotEmpty(),
             'hasAttendance' => $attendance->isNotEmpty(),
+            'attendanceStatus' => $this->aggregateAttendanceStatus($attendance),
         ];
+    }
+
+    /**
+     * Whether the day's GPS attendance is still open or fully closed out —
+     * "on site" beats "checked out" the same way a pending session beats an
+     * approved one in {@see aggregateStatus()}: one still-open check-in means
+     * the day is not done, no matter how many other sites were checked out of.
+     *
+     * Public: `TimeEntryController::showDay()` renders the same rule on the
+     * day detail screen, so the list and the detail screen never disagree.
+     *
+     * @param  Collection<int, JobAttendance>  $attendance
+     */
+    public function aggregateAttendanceStatus(Collection $attendance): ?string
+    {
+        if ($attendance->isEmpty()) {
+            return null;
+        }
+
+        return $attendance->contains(fn (JobAttendance $a) => $a->isCheckedIn())
+            ? JobAttendance::STATUS_CHECKED_IN
+            : JobAttendance::STATUS_CHECKED_OUT;
     }
 
     /**

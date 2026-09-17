@@ -76,6 +76,12 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
 
+  // Once a job is completed, nothing about it changes again — see
+  // `Job::isLocked()`. Every write this screen offers is guarded the same
+  // way server-side; this just keeps the screen from offering what the
+  // server would refuse.
+  const isLocked = job.status === 'completed'
+
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
 
@@ -119,13 +125,15 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
             <ButtonLink href={back.url} variant="secondary" leftIcon={ArrowLeft}>
               {back.label}
             </ButtonLink>
-            <ButtonLink
-              href={routeTo.jobEditFrom(job.id, from)}
-              variant="dark"
-              leftIcon={PencilLine}
-            >
-              Edit
-            </ButtonLink>
+            {!isLocked && (
+              <ButtonLink
+                href={routeTo.jobEditFrom(job.id, from)}
+                variant="dark"
+                leftIcon={PencilLine}
+              >
+                Edit
+              </ButtonLink>
+            )}
           </>
         }
       />
@@ -217,6 +225,7 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
               label="Status"
               options={JOB_STATUS_OPTIONS}
               value={job.status}
+              disabled={isLocked}
               onChange={(event) => changeStatus(event.target.value as JobStatus)}
             />
 
@@ -244,7 +253,7 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
              * this job — its estimate lines, its foremen, and what is already
              * planned listed above the new rows.
              */
-            canPlanWork ? (
+            canPlanWork && !isLocked ? (
               <ButtonLink
                 href={routeTo.jobTaskSetupFromJob(job.id, from)}
                 variant="secondary"
@@ -256,7 +265,7 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
             ) : undefined
           }
         />
-        <JobTasksPanel tasks={job.tasks} canPlan={canPlanWork} jobOrigin={from} />
+        <JobTasksPanel tasks={job.tasks} canPlan={canPlanWork && !isLocked} jobOrigin={from} />
       </Card>
 
       {/* ============================================ Field notes & photos ======= */}
@@ -290,7 +299,7 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card accent="neutral" padding="lg">
           <SectionHeading title="Notes" subtitle={`${job.notes.length} recorded`} />
-          <JobNotesPanel jobId={job.id} notes={job.notes} />
+          <JobNotesPanel jobId={job.id} notes={job.notes} readOnly={isLocked} />
         </Card>
 
         <Card accent="brand" padding="lg">
@@ -298,7 +307,7 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
             title="Attachments"
             subtitle={`${job.attachments.length} uploaded`}
           />
-          <JobAttachmentsPanel jobId={job.id} attachments={job.attachments} />
+          <JobAttachmentsPanel jobId={job.id} attachments={job.attachments} readOnly={isLocked} />
         </Card>
       </div>
 

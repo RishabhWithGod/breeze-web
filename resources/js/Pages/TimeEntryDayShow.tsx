@@ -68,10 +68,15 @@ export default function TimeEntryDayShow({ day }: TimeEntryDayShowProps) {
       <div className="mb-6 flex flex-wrap items-center gap-3">
         {day.status ? (
           <StatusChip tone={DAY_STATUS_TONE[day.status]} label={DAY_STATUS_LABEL[day.status]} />
+        ) : day.attendanceStatus === 'checkedIn' ? (
+          <Badge tone="success">
+            <Camera size={12} className="mr-1 inline" aria-hidden />
+            On site
+          </Badge>
         ) : (
           <Badge tone="neutral">
             <Camera size={12} className="mr-1 inline" aria-hidden />
-            Check-in only
+            Checked out
           </Badge>
         )}
         <span className="text-sm text-white/70">

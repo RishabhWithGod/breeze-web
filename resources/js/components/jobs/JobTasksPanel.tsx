@@ -63,7 +63,7 @@ export function JobTasksPanel({ tasks, canPlan, jobOrigin = null }: JobTasksPane
 
             <div className="flex items-center gap-3">
               <span className="whitespace-nowrap text-md font-semibold tabular-nums text-white">
-                {formatHours(task.actualHours ?? 0)} /{' '}
+                {task.actualHours ? `${formatHours(task.actualHours)} / ` : ''}
                 {task.estimatedHours === null ? '—' : formatHours(task.estimatedHours)}
               </span>
               <StatusChip

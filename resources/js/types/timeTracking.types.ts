@@ -170,6 +170,9 @@ export interface TimeTrackingDayRow {
   readonly status: 'approved' | 'pending' | 'rejected' | 'mixed' | null
   readonly hasTimerEntries: boolean
   readonly hasAttendance: boolean
+  /** Whether any GPS check-in that day is still open. `null` when the day
+   *  has no attendance at all. */
+  readonly attendanceStatus: 'checkedIn' | 'checkedOut' | null
 }
 
 /** One job/site's share of a day's total — the multi-site breakdown on the
@@ -188,6 +191,8 @@ export interface TimeTrackingDayDetail {
   readonly totalHours: number
   /** Same "worst session wins" rule as [TimeTrackingDayRow.status]. */
   readonly status: 'approved' | 'pending' | 'rejected' | 'mixed' | null
+  /** Same rule as [TimeTrackingDayRow.attendanceStatus]. */
+  readonly attendanceStatus: 'checkedIn' | 'checkedOut' | null
   readonly jobBreakdown: readonly TimeTrackingDayJobHours[]
   readonly entries: readonly TimeEntry[]
   readonly attendance: readonly AttendanceRow[]
