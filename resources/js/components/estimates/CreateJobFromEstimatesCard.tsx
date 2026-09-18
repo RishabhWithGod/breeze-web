@@ -14,6 +14,13 @@ export interface CreateJobFromEstimatesCardProps {
   clientId: number | null
   clients: readonly ClientOption[]
   teams: readonly { readonly id: number; readonly name: string }[]
+  /**
+   * Opens straight into the create-job form instead of the "Create Job"
+   * button — for arriving here already meaning to raise one (the estimate
+   * screen's "Continue to Job", once this original has addenda), so it's the
+   * form that's landed on, not one more click on a list.
+   */
+  autoOpen?: boolean
 }
 
 /**
@@ -33,6 +40,7 @@ export function CreateJobFromEstimatesCard({
   clientId,
   clients,
   teams,
+  autoOpen = false,
 }: CreateJobFromEstimatesCardProps) {
   const [selected, setSelected] = useState<ReadonlySet<number>>(
     () => new Set([original.id, ...addenda.map((addendum) => addendum.id)]),
@@ -48,7 +56,7 @@ export function CreateJobFromEstimatesCard({
       return next
     })
 
-  const [creatingJob, setCreatingJob] = useState(false)
+  const [creatingJob, setCreatingJob] = useState(autoOpen)
 
   return (
     <div>

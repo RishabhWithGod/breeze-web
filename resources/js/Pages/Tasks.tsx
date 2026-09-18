@@ -160,17 +160,17 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
             width: 'w-40',
             render: (row: TaskRow) => (
               <span className="flex items-center justify-end gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={PencilLine}
-                  aria-label={`Edit ${row.title}`}
-                  disabled={row.status === 'completed'}
-                  title={row.status === 'completed' ? 'Completed tasks cannot be edited.' : undefined}
-                  onClick={() => router.visit(routeTo.taskEdit(row.id))}
-                >
-                  Edit
-                </Button>
+                {row.status !== 'completed' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={PencilLine}
+                    aria-label={`Edit ${row.title}`}
+                    onClick={() => router.visit(routeTo.taskEdit(row.id))}
+                  >
+                    Edit
+                  </Button>
+                )}
                 <IconButton
                   icon={Trash2}
                   label={`Remove ${row.title}`}

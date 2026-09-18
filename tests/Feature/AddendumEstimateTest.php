@@ -114,25 +114,50 @@ class AddendumEstimateTest extends TestCase
         $this->assertSame($job->id, $this->original->fresh()->job_id);
     }
 
-    /** Builds one estimate from a fresh takeoff fixture — a standalone one, or an addendum when `addendumFor` is given. */
-    private function buildEstimateFromTakeoff(?Estimate $addendumFor = null): Estimate
+    /**
+     * An addendum's own upload can be filed under a different project than
+     * its parent's — the upload form only preselects the parent's project,
+     * it does not lock it. The resulting addendum must still land on the
+     * *parent's* project regardless, because `EstimateMergeJobBuilder`
+     * refuses to combine estimates across two different projects, and an
+     * addendum stuck on the wrong one could then never be merged with the
+     * estimate it was raised for.
+     */
+    public function test_an_addendum_belongs_to_its_parents_project_even_when_its_own_upload_was_filed_under_another(): void
     {
+        $otherProject = $this->user->projects()->create([
+            'name' => 'A Different Site',
+            'client' => 'A Different Site',
+            'status' => 'draft',
+        ]);
+
+        $addendum = $this->buildEstimateFromTakeoff(addendumFor: $this->original, projectId: $otherProject->id);
+
+        $this->assertSame($this->projectId, $addendum->project_id);
+        $this->assertNotSame($otherProject->id, $addendum->project_id);
+    }
+
+    /** Builds one estimate from a fresh takeoff fixture — a standalone one, or an addendum when `addendumFor` is given. */
+    private function buildEstimateFromTakeoff(?Estimate $addendumFor = null, ?int $projectId = null): Estimate
+    {
+        $projectId ??= $this->projectId;
+
         $aiJob = AiJob::create([
-            'project_id' => $this->projectId,
+            'project_id' => $projectId,
             'user_id' => $this->user->id,
             'status' => 'completed',
         ]);
 
         $result = AiResult::create([
             'ai_job_id' => $aiJob->id,
-            'project_id' => $this->projectId,
+            'project_id' => $projectId,
             'addendum_for_estimate_id' => $addendumFor?->id,
             'original_payload' => [],
             'final_payload' => ['final_counts' => []],
         ]);
 
         $result->finalSymbols()->create([
-            'project_id' => $this->projectId,
+            'project_id' => $projectId,
             'name' => 'EM2',
             'count' => 2,
             'confidence' => 0.9,

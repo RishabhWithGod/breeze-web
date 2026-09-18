@@ -192,6 +192,94 @@ class JobFromSelectedEstimatesTest extends TestCase
         $this->assertSame(0, Job::count());
     }
 
+    /**
+     * The original estimate already belongs to an earlier job that is now
+     * `completed` — the most locked a job can be. Building a second job from
+     * a fresh selection must still succeed, must not touch that earlier job
+     * in any way, and must not link the two: `Job::create()` never reads an
+     * existing job id, so nothing here should be able to block or reuse one.
+     */
+    public function test_an_existing_completed_job_does_not_block_or_get_linked_to_a_new_job(): void
+    {
+        $existingJob = Job::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'client_id' => $this->address->client_id,
+            'client' => 'Harborview Data Hall',
+            'name' => 'Harborview — First Phase',
+            'team_id' => $this->team->id,
+            'status' => Job::STATUS_COMPLETED,
+            'budget' => '500.00',
+        ]);
+        $this->original->update(['job_id' => $existingJob->id]);
+
+        $response = $this->actingAs($this->user)->post('/jobs/from-estimates', [
+            'estimate_ids' => [$this->original->id, $this->addendum2->id],
+            'name' => 'Harborview — Second Phase',
+            'team_id' => $this->team->id,
+            'address_ids' => [$this->address->id],
+            'start_date' => now()->toDateString(),
+            'end_date' => now()->addWeek()->toDateString(),
+        ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $newJob = Job::where('name', 'Harborview — Second Phase')->sole();
+        $this->assertNotSame($existingJob->id, $newJob->id);
+        $response->assertRedirect(route('jobs.tasks.setup', $newJob));
+
+        $merged = $newJob->estimates()->sole();
+        $this->assertSame('800.00', $merged->grand_total);
+        $this->assertSame('800.00', $newJob->fresh()->budget);
+
+        // The earlier job is completely unaffected — status, budget, and
+        // row count all unchanged, and nothing on the new job points back to it.
+        $existingJob->refresh();
+        $this->assertSame(Job::STATUS_COMPLETED, $existingJob->status);
+        $this->assertSame('500.00', $existingJob->budget);
+        $this->assertSame(2, Job::count());
+        $this->assertNotEquals($existingJob->id, $newJob->job_id ?? null);
+    }
+
+    /**
+     * Same guarantee, but the earlier job is in an ordinary open status —
+     * confirms the new-job creation never inspects any existing job's status
+     * at all, whether locked or not.
+     */
+    public function test_an_existing_in_progress_job_does_not_block_a_new_job_either(): void
+    {
+        $existingJob = Job::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'client_id' => $this->address->client_id,
+            'client' => 'Harborview Data Hall',
+            'name' => 'Harborview — First Phase',
+            'team_id' => $this->team->id,
+            'status' => 'in-progress',
+            'budget' => '500.00',
+        ]);
+        $this->original->update(['job_id' => $existingJob->id]);
+
+        $response = $this->actingAs($this->user)->post('/jobs/from-estimates', [
+            'estimate_ids' => [$this->original->id, $this->addendum1->id],
+            'name' => 'Harborview — Third Phase',
+            'team_id' => $this->team->id,
+            'address_ids' => [$this->address->id],
+            'start_date' => now()->toDateString(),
+            'end_date' => now()->addWeek()->toDateString(),
+        ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $newJob = Job::where('name', 'Harborview — Third Phase')->sole();
+        $this->assertNotSame($existingJob->id, $newJob->id);
+
+        $existingJob->refresh();
+        $this->assertSame('in-progress', $existingJob->status);
+        $this->assertSame('500.00', $existingJob->budget);
+        $this->assertSame(2, Job::count());
+    }
+
     private function estimateWith(float $amount, string $kind, ?Estimate $parent = null): Estimate
     {
         $estimate = Estimate::create([

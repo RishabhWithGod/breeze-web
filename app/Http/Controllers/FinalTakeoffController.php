@@ -17,6 +17,7 @@ use App\Services\Clients\ProjectDirectory;
 use App\Services\Export\AnnotatedPdfWriter;
 use App\Services\Export\SymbolExporter;
 use App\Services\Takeoff\EstimateBuilder;
+use App\Services\Takeoff\EstimateMergeJobBuilder;
 use App\Services\Takeoff\JobFactory;
 use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
@@ -74,6 +75,28 @@ class FinalTakeoffController extends Controller
         ]);
         $payload = $result->final_payload ?? [];
 
+        /*
+         * "Continue to Job" from an estimate that already has addenda to fold
+         * in sends the checked sources here as `?merge_estimates=` — asking
+         * for a brand-new job built from exactly those, not this takeoff's
+         * own (possibly already-raised) one. Ownership- and kind-checked here
+         * so a hand-edited query string cannot name another manager's
+         * estimate or an already-merged one; `storeJob` re-checks the same
+         * ids from the submitted form rather than trusting this list back.
+         */
+        $mergeEstimateIds = Estimate::query()
+            ->whereIn('id', $this->parseMergeEstimateIds($request, 'merge_estimates'))
+            ->where('user_id', $request->user()->id)
+            ->where('kind', '!=', Estimate::KIND_MERGED)
+            ->pluck('id')
+            ->all();
+
+        // In that case the form must start completely fresh — the takeoff's
+        // own job (if this takeoff even has one) is not what is being edited
+        // here, a new one is about to be created from the selected sources.
+        $forFreshJob = $mergeEstimateIds !== [];
+        $workJob = $forFreshJob ? null : $result->workJob;
+
         return Inertia::render('FinalSymbols', [
             'result' => [
                 'id' => $result->id,
@@ -84,26 +107,28 @@ class FinalTakeoffController extends Controller
                 'isFinalised' => $result->isFinalised(),
                 'finalisedAt' => $result->finalised_at?->toISOString(),
                 'pageCount' => $result->page_count,
-                'workJobId' => $result->work_job_id,
-                'workJobName' => $result->workJob?->name,
+                'workJobId' => $workJob?->id,
+                'workJobName' => $workJob?->name,
                 /*
                  * The job as it stands, so the form on this screen is the same
                  * form after it is raised as before — coming back to this step
-                 * shows what was filled in, not a card about it.
+                 * shows what was filled in, not a card about it. Null while
+                 * there is none yet, or while a fresh one is about to be made.
                  */
-                'job' => $result->workJob === null ? null : [
-                    'name' => $result->workJob->name,
-                    'projectId' => $result->workJob->project_id,
-                    'addressIds' => $result->workJob->addresses->pluck('id')->all(),
-                    'description' => $result->workJob->description,
-                    'jobType' => $result->workJob->job_type,
-                    'teamId' => $result->workJob->team_id,
-                    'startDate' => $result->workJob->start_date?->toDateString(),
-                    'endDate' => $result->workJob->end_date?->toDateString(),
-                    'budget' => $result->workJob->budget === null
+                'job' => $workJob === null ? null : [
+                    'name' => $workJob->name,
+                    'projectId' => $workJob->project_id,
+                    'addressIds' => $workJob->addresses->pluck('id')->all(),
+                    'description' => $workJob->description,
+                    'jobType' => $workJob->job_type,
+                    'teamId' => $workJob->team_id,
+                    'startDate' => $workJob->start_date?->toDateString(),
+                    'endDate' => $workJob->end_date?->toDateString(),
+                    'budget' => $workJob->budget === null
                         ? null
-                        : (float) $result->workJob->budget,
+                        : (float) $workJob->budget,
                 ],
+                'mergeEstimateIds' => $mergeEstimateIds,
                 'estimateId' => $result->estimate_id,
                 'estimateNumber' => $result->estimate?->number,
                 'hasAnnotatedPdf' => $store->exists($result->upload?->annotated_path),
@@ -270,6 +295,7 @@ class FinalTakeoffController extends Controller
         AiResult $result,
         JobFactory $factory,
         EstimateBuilder $estimateBuilder,
+        EstimateMergeJobBuilder $mergeBuilder,
         JobSites $sites,
     ): RedirectResponse {
         $this->authorize('view', $result);
@@ -281,6 +307,19 @@ class FinalTakeoffController extends Controller
          */
         if (! $result->isFinalised()) {
             return $this->requireFinalisedReview($result, 'a job');
+        }
+
+        /*
+         * The same "Continue to Job" submit, but for an estimate that has
+         * addenda selected to fold in (see `show()`): a brand-new job from
+         * exactly those sources, never this takeoff's own possibly-already-
+         * raised one. Re-parsed and re-checked from the submitted form
+         * itself, not trusted from whatever `show()` last rendered.
+         */
+        $mergeEstimateIds = $this->parseMergeEstimateIds($request, 'estimate_ids');
+
+        if ($mergeEstimateIds !== []) {
+            return $this->storeMergedJob($request, $mergeEstimateIds, $mergeBuilder);
         }
 
         $attributes = $request->validate([
@@ -378,6 +417,82 @@ class FinalTakeoffController extends Controller
                 'success',
                 "“{$job->name}” was created from the reviewed takeoff, priced as {$estimate->number}."
             );
+    }
+
+    /**
+     * A brand-new job from the selected estimates/addenda, raised from this
+     * same "Continue to Job" form — never this takeoff's own job, whatever
+     * state it is in, and never a second implementation of the merge itself.
+     *
+     * @param  array<int>  $estimateIds
+     */
+    private function storeMergedJob(Request $request, array $estimateIds, EstimateMergeJobBuilder $builder): RedirectResponse
+    {
+        $userId = $request->user()->id;
+
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'min:3', 'max:160'],
+            'address_ids' => ['nullable', 'array', 'max:1'],
+            'address_ids.*' => [
+                'integer', 'distinct',
+                Rule::exists('client_addresses', 'id')->where(
+                    fn ($query) => $query->whereIn('client_id', fn ($sub) => $sub->select('id')->from('clients')->where('user_id', $userId))
+                ),
+            ],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'job_type' => ['nullable', Rule::in(Job::TYPES)],
+            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+        ], [
+            'name.required' => 'Job name is required',
+            'team_id.required' => 'Pick the crew this job is handed to',
+            'start_date.required' => 'Pick the day this job starts',
+            'end_date.required' => 'Pick the day this job is due to finish',
+            'end_date.after_or_equal' => 'End date must be on or after the start date',
+        ]);
+
+        // Re-checked from the ids themselves rather than trusted: ownership
+        // and "not already a merge" both need the rows in hand.
+        $sources = Estimate::query()
+            ->whereIn('id', $estimateIds)
+            ->where('user_id', $userId)
+            ->where('kind', '!=', Estimate::KIND_MERGED)
+            ->with('items')
+            ->get();
+
+        abort_unless(
+            $sources->count() === count($estimateIds),
+            422,
+            'One of the selected estimates could not be used — it may already be a merged estimate.',
+        );
+
+        $job = $builder->build($sources, $attributes, $request->user());
+
+        return redirect()
+            ->route('jobs.tasks.setup', $job)
+            ->with('success', "\"{$job->name}\" was created from the selected estimates.");
+    }
+
+    /**
+     * `?merge_estimates=` (a comma-separated list, from a link) or
+     * `estimate_ids[]` (a real array, from this form's own submit) — either
+     * way, the selected estimate/addendum ids, cast and deduplicated.
+     *
+     * @return array<int>
+     */
+    private function parseMergeEstimateIds(Request $request, string $field): array
+    {
+        $raw = $request->input($field);
+
+        $ids = is_array($raw) ? $raw : explode(',', (string) $raw);
+
+        return collect($ids)
+            ->map(fn ($id) => (int) trim((string) $id))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

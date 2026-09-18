@@ -47,6 +47,13 @@ interface CreateJobForm {
   team_id: string
   start_date: string
   end_date: string
+  /**
+   * Set only when this step was reached with addenda to fold in
+   * (`?merge_estimates=` — see `result.mergeEstimateIds`): tells
+   * `storeJob` to raise a brand-new job from exactly these sources instead
+   * of saving this takeoff's own. Empty otherwise, the ordinary case.
+   */
+  estimate_ids: number[]
 }
 
 interface FinalResultSummary {
@@ -74,6 +81,8 @@ interface FinalResultSummary {
     readonly budget: number | null
   } | null
   readonly workJobName: string | null
+  /** The selected sources this step will raise a brand-new job from, once submitted — see `CreateJobForm.estimate_ids`. */
+  readonly mergeEstimateIds: readonly number[]
   readonly estimateId: number | null
   readonly estimateNumber: string | null
   readonly hasAnnotatedPdf: boolean
@@ -168,6 +177,7 @@ export default function FinalSymbols({
       '',
     start_date: result.job?.startDate ?? '',
     end_date: result.job?.endDate ?? '',
+    estimate_ids: result.mergeEstimateIds.slice(),
   })
 
   const updateJobField = <K extends FormDataKeys<CreateJobForm>>(

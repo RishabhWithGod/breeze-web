@@ -49,6 +49,16 @@ export default function AddendumIndex({
     router.get(projectId ? routeTo.addendaForProject(Number(projectId)) : ROUTES.addenda)
   }
 
+  /*
+   * "Continue to Job" on the estimate screen sends the original's id here
+   * (`?original=`) once it has addenda, so the create-job form for that one
+   * original opens straight away instead of landing on a list to click
+   * through again.
+   */
+  const autoOpenOriginalId = typeof window === 'undefined'
+    ? null
+    : Number(new URLSearchParams(window.location.search).get('original')) || null
+
   return (
     <PageTransition>
       <Head title="Addendum" />
@@ -101,6 +111,7 @@ export default function AddendumIndex({
             project={projects.find((p) => p.id === selectedProjectId) ?? null}
             clients={clients}
             teams={teams}
+            autoOpen={original.id === autoOpenOriginalId}
           />
         ))}
       </div>
@@ -115,11 +126,13 @@ function OriginalCard({
   project,
   clients,
   teams,
+  autoOpen,
 }: {
   original: OriginalEstimate
   project: AddendumProject | null
   clients: readonly ClientOption[]
   teams: readonly { readonly id: number; readonly name: string }[]
+  autoOpen: boolean
 }) {
   return (
     <Card padding="lg">
@@ -139,6 +152,7 @@ function OriginalCard({
         clientId={project?.clientId ?? null}
         clients={clients}
         teams={teams}
+        autoOpen={autoOpen}
       />
     </Card>
   )

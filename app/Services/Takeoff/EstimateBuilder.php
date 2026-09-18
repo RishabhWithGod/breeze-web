@@ -270,9 +270,23 @@ class EstimateBuilder
         // `Upload::addendum_for_estimate_id`.
         $parentEstimateId = $result->addendum_for_estimate_id;
 
+        /*
+         * An addendum belongs to its parent estimate's project, full stop —
+         * whatever project its own upload form happened to have selected
+         * (it only preselects the parent's, it does not lock it) is not a
+         * second answer to "which project is this addendum on". Left as
+         * `$result->project`'s own id, a mismatched pick there quietly
+         * produces an addendum nothing can ever merge with the estimate it
+         * was raised for (`EstimateMergeJobBuilder` refuses to combine
+         * estimates across two different projects).
+         */
+        $projectId = $parentEstimateId
+            ? (Estimate::find($parentEstimateId)?->project_id ?? $project->id)
+            : $project->id;
+
         return Estimate::create([
             'job_id' => $job?->id,
-            'project_id' => $project->id,
+            'project_id' => $projectId,
             'ai_result_id' => $result->id,
             // The estimate's own owner, not necessarily whoever is signed in
             // when this runs — this can fire from a queued takeoff with no

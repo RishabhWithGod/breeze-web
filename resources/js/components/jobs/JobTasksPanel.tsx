@@ -76,16 +76,16 @@ export function JobTasksPanel({ tasks, canPlan, jobOrigin = null }: JobTasksPane
 
           {canPlan && (
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={PencilLine}
-                disabled={task.status === 'completed'}
-                title={task.status === 'completed' ? 'Completed tasks cannot be edited.' : undefined}
-                onClick={() => router.visit(routeTo.taskEditFromJob(task.id, jobOrigin))}
-              >
-                Edit
-              </Button>
+              {task.status !== 'completed' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={PencilLine}
+                  onClick={() => router.visit(routeTo.taskEditFromJob(task.id, jobOrigin))}
+                >
+                  Edit
+                </Button>
+              )}
               <IconButton
                 icon={Trash2}
                 label={`Remove ${task.title}`}

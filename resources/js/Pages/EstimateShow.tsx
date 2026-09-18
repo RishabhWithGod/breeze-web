@@ -685,18 +685,32 @@ export default function EstimateShow({
         estimate's `job_id` is not the same question either: the takeoff's
         estimate is linked to whichever job was raised first.
 
-        Unchanged by the pre-job merge workspace above: "Continue to Job" is
-        this same roadmap step (with its own workflow-progress bar) whether or
-        not there are addenda to pick from — picking them is what the
-        Addendum screen's own "Create Job" is for. In the pre-job workspace,
-        though, at least one of the original/addenda checkboxes above has to
-        be on — an empty selection is not something to raise a job from.
+        Unchanged by the pre-job merge workspace above: before a job exists,
+        "Continue to Job" is this same roadmap step (with its own
+        workflow-progress bar) — at least one of the original/addenda
+        checkboxes above has to be on first, an empty selection is not
+        something to raise a job from.
+
+        Once a job already exists, that roadmap step is normally *that job's*
+        own form (`FinalTakeoffController::show` seeds it from
+        `result.workJob`, so returning to it edits the job already raised —
+        by design, for the plain one-takeoff flow). Once there are addenda to
+        fold in, though, the checked selection above is sent along as
+        `?merge_estimates=` instead: the same screen and form, but the
+        backend renders it completely fresh (no old job data) and, on
+        submit, raises a brand-new job from exactly those sources rather
+        than resaving the takeoff's existing one — see
+        `EstimateMergeJobBuilder`.
       */}
       {inFlow && estimate.aiResultId && (
         <StepFooter
           current="estimate"
-          href={routeTo.finalSymbols(estimate.aiResultId)}
-          {...(beforeJob && selectedAddenda.size === 0
+          href={
+            !beforeJob && addenda.length > 0
+              ? `${routeTo.finalSymbols(estimate.aiResultId)}?merge_estimates=${Array.from(selectedAddenda).join(',')}`
+              : routeTo.finalSymbols(estimate.aiResultId)
+          }
+          {...(addenda.length > 0 && selectedAddenda.size === 0
             ? { blockedReason: 'Select at least one estimate or addendum above to continue.' }
             : {})}
         />
