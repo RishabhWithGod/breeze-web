@@ -80,7 +80,7 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
   // `Job::isLocked()`. Every write this screen offers is guarded the same
   // way server-side; this just keeps the screen from offering what the
   // server would refuse.
-  const isLocked = job.status === 'completed'
+  const isLocked = job.isLocked
 
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
@@ -229,7 +229,13 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
               onChange={(event) => changeStatus(event.target.value as JobStatus)}
             />
 
-            <Button variant="danger" leftIcon={Trash2} onClick={deleteDialog.open}>
+            <Button
+              variant="danger"
+              leftIcon={Trash2}
+              disabled={isLocked}
+              title={isLocked ? 'Completed jobs cannot be deleted.' : undefined}
+              onClick={deleteDialog.open}
+            >
               Delete
             </Button>
           </div>

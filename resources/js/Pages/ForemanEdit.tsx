@@ -18,7 +18,7 @@ import { formatUsPhone, toTitleCase } from '@/utils'
 
 interface ForemanDraft {
   name: string
-  /** What they do on the crew: `supervisor` or `foreman`. */
+  /** What they do on the crew: `foreman`, `journeyman` or `apprentice`. */
   role: string
   /** Which crew they are on. Empty means none — a real state, not a gap. */
   team_id: string

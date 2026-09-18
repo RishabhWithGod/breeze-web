@@ -43,7 +43,7 @@ class JobTaskSetupTest extends TestCase
         $this->user = User::factory()->create(['role' => 'Project Manager']);
         $this->foreman = Foreman::create(['name' => 'Casey Reed', 'initials' => 'CR']);
         $this->supervisor = Foreman::create([
-            'name' => 'Robin Ashby', 'initials' => 'RA', 'role' => Foreman::ROLE_SUPERVISOR,
+            'name' => 'Robin Ashby', 'initials' => 'RA', 'role' => Foreman::ROLE_FOREMAN,
         ]);
 
         $client = $this->user->projects()->create([

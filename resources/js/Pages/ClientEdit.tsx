@@ -11,6 +11,7 @@ import {
   TextArea,
   TextInput,
 } from '@/components/common'
+import { ClientSitesList, type ClientSite } from '@/components/clients'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import { cleanAmountInput, formatAmountInput, toTitleCase } from '@/utils'
@@ -28,15 +29,16 @@ export interface ClientEditProps {
     readonly notes: string | null
     /** Resolved — the client's own rate, or the configured default. */
     readonly laborRate: number
+    readonly addresses: readonly ClientSite[]
   }
 }
 
 /**
- * Edit a client's own details.
+ * Edit a client's own details, and correct any of their sites in place.
  *
- * The address book is not here: sites are added from wherever they are needed
- * — the client's screen, a project, a job — and editing them through a form
- * that has to be saved would be a second, slower way to do the same thing.
+ * Editing a site here updates that same record — see
+ * `ClientAddressController::update()` — rather than raising a new one, and the
+ * correction reaches every job and project already standing on it.
  */
 export default function ClientEdit({ client }: ClientEditProps) {
   const { data, setData, put, processing, errors, hasErrors, clearErrors } =
@@ -115,6 +117,17 @@ export default function ClientEdit({ client }: ClientEditProps) {
               onChange={(event) => update('labor_rate', cleanAmountInput(event.target.value))}
               {...(errors.labor_rate ? { error: errors.labor_rate } : {})}
             />
+
+            {/*
+              Each site saves itself the moment its own dialog is confirmed —
+              see `ClientAddressController::update()` — rather than waiting on
+              "Save changes" below, which only ever covers the fields above.
+            */}
+            <div className="border-t border-hairline pt-6">
+              <p className="mb-4 text-md font-medium text-white">Site Location(s)</p>
+
+              <ClientSitesList clientId={client.id} addresses={client.addresses} />
+            </div>
 
             <TextArea
               id="client-notes"

@@ -9,12 +9,16 @@ use App\Models\Team;
 use App\Models\User;
 use App\Policies\JobSchedulePolicy;
 use App\Rules\UsPhoneNumber;
+use App\Services\TimeTracking\TeamMemberResolver;
 use App\Support\UsPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -132,9 +136,10 @@ class ForemanController extends Controller
                  * Which hat they wear on this one. The list now mixes work they
                  * are running with work they are over, and those are different
                  * obligations — a row that does not say which is a row nobody
-                 * can act on.
+                 * can act on. Their crew-register role already says which: a
+                 * foreman oversees, a journeyman/apprentice runs it themselves.
                  */
-                'heldAs' => $task->foreman_id === $foreman->id ? 'foreman' : 'supervisor',
+                'heldAs' => $foreman->role,
             ])->values(),
             'canManage' => $this->canManage(request()->user()),
         ]);
@@ -149,7 +154,7 @@ class ForemanController extends Controller
      */
     private function load(bool $closed): Collection
     {
-        // Foreman or supervisor: both are carrying the task — see
+        // Foreman, journeyman or apprentice: all are carrying the task — see
         // JobTask::workload().
         return JobTask::workload($closed);
     }
@@ -255,6 +260,11 @@ class ForemanController extends Controller
         abort_unless($this->canManage($request->user()), 403);
 
         $data = $this->validated($request);
+        // Left blank, this defaults to the day they're actually being
+        // added — a manager correcting it to an earlier real start date is
+        // still free to, but "unset" is never the answer for someone being
+        // added right now.
+        $data['started_on'] ??= now()->toDateString();
 
         $foreman = Foreman::create([
             ...$this->details($data),
@@ -266,6 +276,10 @@ class ForemanController extends Controller
              */
             'initials' => $this->initialsFor($data['name']),
         ]);
+
+        // Every member added here also gets a real mobile-app account
+        // alongside their register entry.
+        $this->createMobileAccount($foreman, $data);
 
         /*
          * Added from inside another form — a task that needs someone the crew
@@ -283,12 +297,57 @@ class ForemanController extends Controller
     }
 
     /**
+     * Gives a web-added member a real mobile-app account — the same end
+     * state `TechnicianController::approve()` reaches for someone who
+     * signed up from the app themselves, minus the wait: a manager adding
+     * someone here has already vouched for them, so `status` and
+     * `registration_source` are left at their column defaults (`active`
+     * and `web`) rather than the `pending_approval`/`mobile` a self-signup
+     * starts at, and there is no approval step for anyone to act on.
+     *
+     * Reuses the exact same login/session/2FA machinery every other
+     * account in this app goes through — `LoginRequest::authenticate()`
+     * and `Api\V1\AuthController::login()` — nothing new is added for this
+     * account to sign in with.
+     */
+    private function createMobileAccount(Foreman $foreman, array $data): void
+    {
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => Str::lower($data['email']),
+            'password' => Hash::make($data['password']),
+            // Foreman::ROLES spells these lowercase ('foreman'/'journeyman'/
+            // 'apprentice'); the account side spells the same three
+            // capitalised — see TechnicianController::ROLES.
+            'role' => ucfirst($data['role']),
+            'phone' => $foreman->phone,
+        ]);
+
+        // `user_id` is deliberately not in `Foreman::$fillable` — see
+        // `TechnicianController::syncForemanRoster()` for why direct
+        // property assignment is used everywhere this link is made.
+        $foreman->user_id = $user->id;
+        $foreman->save();
+
+        // The same crew-record Time Tracking resolves for anyone signed
+        // in, created up front rather than left to be resolved by name on
+        // first use.
+        app(TeamMemberResolver::class)->resolveFor($user)->update(['team_id' => $foreman->team_id]);
+    }
+
+    /**
      * The same rules whether the foreman is being added or corrected.
      *
      * @return array<string, mixed>
      */
     private function validated(Request $request, ?Foreman $foreman = null): array
     {
+        // Editing never carries a password field at all — only the Add
+        // Member form does, and every member added there gets a mobile
+        // account, so email and password are required there and there
+        // alone.
+        $isCreate = $foreman === null;
+
         return $request->validate([
             'name' => [
                 'required', 'string', 'min:2', 'max:120',
@@ -315,15 +374,31 @@ class ForemanController extends Controller
              */
             'team_id' => ['nullable', 'integer', 'exists:teams,id'],
             'phone' => ['nullable', 'string', 'max:40', new UsPhoneNumber],
-            'email' => ['nullable', 'email', 'max:255'],
+            /*
+             * Every member added here is also a mobile-app login — the same
+             * rule web/mobile registration hold theirs to — so it has to be
+             * real and unique. Only editing (no password on that form)
+             * keeps this as a plain, optional contact detail.
+             */
+            'email' => $isCreate
+                ? ['required', 'email', 'max:255', Rule::unique('users', 'email')]
+                : ['nullable', 'email', 'max:255'],
             'licence_number' => ['nullable', 'string', 'max:60'],
             'started_on' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            /*
+             * Required alongside the email above — held to the same
+             * strength rule as every other account in this app.
+             */
+            ...($isCreate ? ['password' => ['required', 'confirmed', Password::defaults()]] : []),
         ], [
             'name.required' => 'Enter the member’s name',
             'name.unique' => 'Someone with that name is already on the register',
             'role.required' => 'Pick what they do on the crew',
             'email.email' => 'That does not look like an email address',
+            'email.required' => 'Enter the email this member will sign into the mobile app with.',
+            'email.unique' => 'Someone already has a mobile account with that email.',
+            'password.required' => 'Set a password for this member’s mobile app login.',
         ]);
     }
 

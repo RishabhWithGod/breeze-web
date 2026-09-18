@@ -57,14 +57,6 @@ export interface TimeEntriesProps {
 const taskTypeLabel = (value: string) => value.replace(/-/g, ' ')
 
 /**
- * 'Site Supervisor' is the real stored value — role-based checks elsewhere
- * in the app match on that exact string, so it stays as-is everywhere but
- * here. This page just shows it shorter, as "Supervisor" (same shortening
- * `Teams.tsx` already does for its own role display).
- */
-const roleLabel = (role: string) => (role === 'Site Supervisor' ? 'Supervisor' : role)
-
-/**
  * Time Log Viewer — one row per technician per day, filterable by date
  * range, job, employee, task type, status and billable. A technician who
  * stopped their timer four times today, or checked in and out of two jobs,
@@ -140,7 +132,7 @@ export default function TimeEntries({ days, filters, jobs, teamMembers, taskType
           <span className="text-white">{day.employee.name}</span>
           {day.employee.role && (
             <Badge tone="info" size="sm">
-              {roleLabel(day.employee.role)}
+              {day.employee.role}
             </Badge>
           )}
         </div>

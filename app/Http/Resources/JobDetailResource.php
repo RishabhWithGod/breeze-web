@@ -56,6 +56,11 @@ class JobDetailResource extends JsonResource
             'description' => $this->description,
             'jobType' => $this->job_type,
             'status' => $this->status,
+            // Once completed, nothing about the job can change again — see
+            // `Job::isLocked()`. Every write this screen offers is guarded the
+            // same way server-side; sending this lets it match without
+            // re-deriving the rule from `status` on its own.
+            'isLocked' => $this->isLocked(),
             'startDate' => $this->start_date?->toISOString(),
             'endDate' => $this->end_date?->toISOString(),
             'budget' => $this->budget === null ? null : (float) $this->budget,

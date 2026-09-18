@@ -60,6 +60,7 @@ class AttendanceController extends Controller
     public function checkIn(Request $request, Job $job): JsonResponse
     {
         abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be checked into.');
 
         $data = $this->validatePoint($request);
         $today = $this->businessToday();

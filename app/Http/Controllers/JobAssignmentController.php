@@ -22,6 +22,8 @@ class JobAssignmentController extends Controller
 {
     public function store(Request $request, Job $job): RedirectResponse
     {
+        $job->assertNotLocked();
+
         $validated = $request->validate([
             'role' => ['required', Rule::in(JobAssignment::ROLES)],
             'team_member_id' => ['nullable', 'integer', 'exists:team_members,id'],
@@ -85,6 +87,7 @@ class JobAssignmentController extends Controller
     public function destroy(Job $job, JobAssignment $assignment): RedirectResponse
     {
         abort_unless($assignment->job_id === $job->id, 404);
+        $job->assertNotLocked();
 
         if (! $assignment->isActive()) {
             return back();

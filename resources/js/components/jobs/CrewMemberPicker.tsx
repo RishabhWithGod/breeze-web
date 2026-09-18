@@ -7,8 +7,13 @@ import { ROUTES } from '@/constants'
 export interface CrewMemberPickerProps {
   id: string
   label: string
-  /** What this picker is for. Decides the role a new person is recorded with. */
-  role: 'foreman' | 'supervisor'
+  /**
+   * Which FK slot this picker fills — `job_tasks.foreman_id` (who runs the
+   * task: a journeyman or apprentice) or `job_tasks.supervisor_id` (who is
+   * over it: a foreman). Decides the role a person added inline is recorded
+   * with — 'journeyman' for the worker slot, 'foreman' for the other.
+   */
+  slot: 'worker' | 'foreman'
   people: readonly { readonly id: number; readonly name: string }[]
   value: string
   onChange: (id: string) => void
@@ -22,13 +27,15 @@ export interface CrewMemberPickerProps {
   emptyLabel: string
   error?: string
   disabled?: boolean
+  /** Hides the inline "Add a {role}" option — the register is the only way to add one from this form. */
+  allowInlineAdd?: boolean
 }
 
 /**
- * Who on the crew runs a task, or supervises it — and a way to record someone
- * the crew does not have yet.
+ * Who on the crew runs a task, or is the foreman over it — and a way to
+ * record someone the crew does not have yet.
  *
- * A crew with no supervisor on it, or a job whose team was only just created,
+ * A crew with no foreman on it, or a job whose team was only just created,
  * both leave a picker with nothing in it. Sending the planner to Teams and back
  * would lose every task row they had typed, so the person is recorded from here
  * and picked the moment they arrive.
@@ -39,7 +46,7 @@ export interface CrewMemberPickerProps {
 export function CrewMemberPicker({
   id,
   label,
-  role,
+  slot,
   people,
   value,
   onChange,
@@ -48,7 +55,9 @@ export function CrewMemberPicker({
   emptyLabel,
   error,
   disabled = false,
+  allowInlineAdd = true,
 }: CrewMemberPickerProps) {
+  const role = slot === 'foreman' ? 'foreman' : 'journeyman'
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -132,67 +141,68 @@ export function CrewMemberPicker({
         {...(error ? { error } : {})}
       />
 
-      {adding ? (
-        <div className="mt-3 rounded-panel border border-hairline bg-white/4 p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-white">
-              {teamName === null ? `New ${role}` : `New ${role} for ${teamName}`}
-            </p>
+      {allowInlineAdd &&
+        (adding ? (
+          <div className="mt-3 rounded-panel border border-hairline bg-white/4 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-white">
+                {teamName === null ? `New ${role}` : `New ${role} for ${teamName}`}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                leftIcon={X}
+                disabled={saving}
+                onClick={reset}
+              >
+                Cancel
+              </Button>
+            </div>
+
+            <TextInput
+              id={`${id}-new-name`}
+              label="Name*"
+              placeholder="e.g. Dana Wu"
+              autoComplete="off"
+              value={name}
+              disabled={saving}
+              onChange={(event) => setName(event.target.value)}
+              {...(addError ? { error: addError } : {})}
+            />
+
+            {/* Said plainly: a person recorded here with no crew shows on the
+                register under "Not on a team", and this is where that starts. */}
+            {teamName === null && (
+              <p className="mt-2 text-sm text-white/70">
+                This job has no crew, so they go on the register without one.
+              </p>
+            )}
+
             <Button
               type="button"
-              variant="ghost"
               size="sm"
-              leftIcon={X}
-              disabled={saving}
-              onClick={reset}
+              className="mt-4"
+              leftIcon={Plus}
+              isLoading={saving}
+              onClick={save}
             >
-              Cancel
+              Add {role}
             </Button>
           </div>
-
-          <TextInput
-            id={`${id}-new-name`}
-            label="Name*"
-            placeholder="e.g. Dana Wu"
-            autoComplete="off"
-            value={name}
-            disabled={saving}
-            onChange={(event) => setName(event.target.value)}
-            {...(addError ? { error: addError } : {})}
-          />
-
-          {/* Said plainly: a person recorded here with no crew shows on the
-              register under "Not on a team", and this is where that starts. */}
-          {teamName === null && (
-            <p className="mt-2 text-sm text-white/70">
-              This job has no crew, so they go on the register without one.
-            </p>
-          )}
-
+        ) : (
           <Button
             type="button"
+            variant="white"
             size="sm"
-            className="mt-4"
-            leftIcon={Plus}
-            isLoading={saving}
-            onClick={save}
+            className="mt-3"
+            leftIcon={UserPlus}
+            disabled={disabled}
+            onClick={() => setAdding(true)}
           >
-            Add {role}
+            Add a {role}
           </Button>
-        </div>
-      ) : (
-        <Button
-          type="button"
-          variant="white"
-          size="sm"
-          className="mt-3"
-          leftIcon={UserPlus}
-          disabled={disabled}
-          onClick={() => setAdding(true)}
-        >
-          Add a {role}
-        </Button>
-      )}
+        ))}
     </div>
   )
 }

@@ -16,10 +16,11 @@ use Tests\TestCase;
 /**
  * The crew a job is handed to, and who on it runs each task.
  *
- * Handing a job to a team is what narrows every later choice: the foreman
- * running a task and the supervisor over it are both picked from that crew
- * rather than from the whole register. A job with no crew is not narrowed —
- * otherwise work raised before teams existed could not be staffed at all.
+ * Handing a job to a team is what narrows every later choice: the journeyman
+ * (or apprentice) running a task and the foreman over it are both picked from
+ * that crew rather than from the whole register. A job with no crew is not
+ * narrowed — otherwise work raised before teams existed could not be staffed
+ * at all.
  */
 class JobCrewTest extends TestCase
 {
@@ -54,17 +55,17 @@ class JobCrewTest extends TestCase
         $this->north = Team::create(['name' => 'North Crew']);
         $this->priya = Foreman::create([
             'name' => 'Priya Raman', 'initials' => 'PR',
-            'team_id' => $this->north->id, 'role' => 'foreman',
+            'team_id' => $this->north->id, 'role' => 'journeyman',
         ]);
         $this->torres = Foreman::create([
             'name' => 'Michael Torres', 'initials' => 'MT',
-            'team_id' => $this->north->id, 'role' => 'supervisor',
+            'team_id' => $this->north->id, 'role' => 'foreman',
         ]);
         // On another crew entirely — the person the narrowing exists to exclude.
         $south = Team::create(['name' => 'South Crew']);
         $this->stranger = Foreman::create([
             'name' => 'Luis Ortega', 'initials' => 'LO',
-            'team_id' => $south->id, 'role' => 'foreman',
+            'team_id' => $south->id, 'role' => 'journeyman',
         ]);
 
         $this->job = Job::create([
@@ -290,7 +291,7 @@ class JobCrewTest extends TestCase
             ->from(route('jobs.tasks.setup', $this->job))
             ->post(route('foremen.store'), [
                 'name' => 'Alex Mercer',
-                'role' => 'supervisor',
+                'role' => 'foreman',
                 'team_id' => $this->north->id,
                 'inline' => true,
             ])
@@ -301,7 +302,7 @@ class JobCrewTest extends TestCase
 
         // Straight onto the job's crew, so the picker that offered the button
         // is the picker they land in.
-        $this->assertSame('supervisor', $added->role);
+        $this->assertSame('foreman', $added->role);
         $this->assertSame($this->north->id, $added->team_id);
     }
 
@@ -312,7 +313,7 @@ class JobCrewTest extends TestCase
             ->from(route('jobs.tasks.setup', $this->job))
             ->post(route('foremen.store'), [
                 'name' => 'Alex Mercer',
-                'role' => 'supervisor',
+                'role' => 'foreman',
                 'team_id' => $this->north->id,
                 'inline' => true,
             ]);

@@ -78,7 +78,7 @@ export function ShiftDetailModal({ shift, onClose, onRemove }: ShiftDetailModalP
               last week's answer is worse than showing none.
             */}
             <div>
-              <dt className="text-sm text-white/75">Supervisor</dt>
+              <dt className="text-sm text-white/75">Foreman</dt>
               <dd className="mt-0.5 font-semibold text-white">
                 {shift.supervisors.length > 0
                   ? shift.supervisors.map((person) => person.name).join(', ')
@@ -86,7 +86,7 @@ export function ShiftDetailModal({ shift, onClose, onRemove }: ShiftDetailModalP
               </dd>
             </div>
             <div>
-              <dt className="text-sm text-white/75">Foreman</dt>
+              <dt className="text-sm text-white/75">Crew</dt>
               <dd className="mt-0.5 font-semibold text-white">
                 {shift.foremen.length > 0
                   ? shift.foremen.map((person) => person.name).join(', ')

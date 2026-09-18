@@ -11,17 +11,26 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * The table is still `foremen` and so is the model: a foreman is what most of
  * them are, and renaming the column every task points at would rewrite who ran
- * what for no gain. What changed is that the register now records a role — a
- * supervisor is on it too — and which team they are on.
+ * what for no gain. What changed is that the register now records a role —
+ * three of them, Foreman down through Journeyman to Apprentice — and which
+ * team they are on.
  */
 class Foreman extends Model
 {
-    public const ROLE_SUPERVISOR = 'supervisor';
-
+    /** Senior tier: oversees and approves the crew's work. Was 'supervisor'. */
     public const ROLE_FOREMAN = 'foreman';
 
-    /** What someone can be on a crew. Supervisor first: it is the senior one. */
-    public const ROLES = [self::ROLE_SUPERVISOR, self::ROLE_FOREMAN];
+    /** Runs their own tasks. Was 'foreman'. */
+    public const ROLE_JOURNEYMAN = 'journeyman';
+
+    /** Runs tasks under supervision; cannot start a job alone. */
+    public const ROLE_APPRENTICE = 'apprentice';
+
+    /** What someone can be on a crew. Foreman first: it is the senior one. */
+    public const ROLES = [self::ROLE_FOREMAN, self::ROLE_JOURNEYMAN, self::ROLE_APPRENTICE];
+
+    /** Roles that run individual tasks and carry per-person completion tracking — everyone but the overseer. */
+    public const WORKER_ROLES = [self::ROLE_JOURNEYMAN, self::ROLE_APPRENTICE];
 
     /** Laravel would otherwise pluralise this to "foremans". */
     protected $table = 'foremen';
@@ -63,10 +72,10 @@ class Foreman extends Model
         return $this->belongsTo(User::class);
     }
 
-    /** "Supervisor" / "Foreman", as a screen writes it. */
+    /** "Foreman" / "Journeyman" / "Apprentice", as a screen writes it. */
     public function roleLabel(): string
     {
-        return ucfirst($this->role ?? self::ROLE_FOREMAN);
+        return ucfirst($this->role ?? self::ROLE_JOURNEYMAN);
     }
 
     /** @return HasMany<Job, $this> */

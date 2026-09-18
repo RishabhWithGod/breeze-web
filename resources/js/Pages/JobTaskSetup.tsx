@@ -149,14 +149,14 @@ export default function JobTaskSetup({
       <PageHeader
         title="Add tasks"
         /*
-         * The crew is named here because it is why the foreman and supervisor
+         * The crew is named here because it is why the crew and foreman
          * lists below are short — "where is everyone" is the first question a
          * narrowed picker raises.
          */
         subtitle={
           team === null
             ? 'This job has no crew, so anyone on the register can be given its work.'
-            : `Handed to ${team.name} — its foremen and supervisors are the ones offered below.`
+            : `Handed to ${team.name} — its crew and foremen are the ones offered below.`
         }
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
@@ -306,17 +306,18 @@ export default function JobTaskSetup({
                     <div className="grid gap-4 sm:grid-cols-2">
                       <CrewMemberPicker
                         id={`task-foreman-${index}`}
-                        label="Foreman*"
-                        role="foreman"
+                        label="Assigned to*"
+                        slot="worker"
                         people={foremen}
                         value={row.foreman_id}
                         onChange={(next) => update(index, { foreman_id: next })}
                         teamId={team?.id ?? null}
                         teamName={team?.name ?? null}
                         emptyLabel={
-                          foremen.length > 0 ? 'Select foreman' : 'No foreman on this crew'
+                          foremen.length > 0 ? 'Select who runs it' : 'No one on this crew'
                         }
                         disabled={processing}
+                        allowInlineAdd={false}
                         {...(errors[`tasks.${index}.foreman_id`]
                           ? { error: errors[`tasks.${index}.foreman_id`] }
                           : {})}
@@ -324,8 +325,8 @@ export default function JobTaskSetup({
 
                       <CrewMemberPicker
                         id={`task-supervisor-${index}`}
-                        label="Supervisor*"
-                        role="supervisor"
+                        label="Foreman*"
+                        slot="foreman"
                         people={supervisors}
                         value={row.supervisor_id}
                         onChange={(next) => update(index, { supervisor_id: next })}
@@ -333,10 +334,11 @@ export default function JobTaskSetup({
                         teamName={team?.name ?? null}
                         emptyLabel={
                           supervisors.length > 0
-                            ? 'Select supervisor'
-                            : 'No supervisor on this crew'
+                            ? 'Select foreman'
+                            : 'No foreman on this crew'
                         }
                         disabled={processing}
+                        allowInlineAdd={false}
                         {...(errors[`tasks.${index}.supervisor_id`]
                           ? { error: errors[`tasks.${index}.supervisor_id`] }
                           : {})}

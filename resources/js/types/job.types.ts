@@ -26,6 +26,8 @@ export interface Job {
   readonly description: string | null
   readonly jobType: JobType | null
   readonly status: JobStatus
+  /** True once `status` is 'completed' — nothing about the job can change again. */
+  readonly isLocked: boolean
   /** Assigned after intake, so absent on a freshly created job. */
   readonly foreman: Pick<JobForeman, 'name' | 'initials'> | null
   /** The crew the job is handed to. Null for a job with no team yet. */
@@ -261,8 +263,8 @@ export interface JobDraft {
   description: string
   job_type: JobType | ''
   /**
-   * The crew this job is handed to. Required — it narrows the foreman and
-   * supervisor pickers on the job's tasks, so a task cannot be staffed until
+   * The crew this job is handed to. Required — it narrows the crew and
+   * foreman pickers on the job's tasks, so a task cannot be staffed until
    * one is picked.
    */
   team_id: string

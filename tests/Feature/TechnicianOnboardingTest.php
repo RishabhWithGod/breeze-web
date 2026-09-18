@@ -26,10 +26,10 @@ use Tests\TestCase;
  * agree with it today.
  *
  * A second rule pinned here: `role` becomes a real operational role
- * (`Foreman`/`Site Supervisor`) immediately, not a marker — only
+ * (`Foreman`/`Journeyman`/`Apprentice`) immediately, not a marker — only
  * `registration_source` identifies "this came from the mobile app", so the
  * Teams page can still find and list them once a manager has corrected their
- * role away from the 'Foreman' default.
+ * role away from the 'Journeyman' default.
  */
 class TechnicianOnboardingTest extends TestCase
 {
@@ -44,7 +44,7 @@ class TechnicianOnboardingTest extends TestCase
     private function makeMobileTechnician(array $attributes = []): User
     {
         return User::factory()->create([
-            'role' => 'Foreman',
+            'role' => 'Journeyman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_PENDING_APPROVAL,
             ...$attributes,
@@ -69,7 +69,7 @@ class TechnicianOnboardingTest extends TestCase
             ->assertJsonStructure(['data' => ['token', 'user' => ['id', 'name', 'email', 'role', 'status']]]);
 
         $user = User::where('email', 'jamie@example.com')->sole();
-        $this->assertSame('Foreman', $user->role);
+        $this->assertSame('Journeyman', $user->role);
         $this->assertTrue($user->isPending());
         $this->assertTrue($user->isFromMobile());
         $this->assertTrue(Hash::check('correct-password', $user->password));
@@ -186,7 +186,7 @@ class TechnicianOnboardingTest extends TestCase
         });
     }
 
-    public function test_a_manager_can_approve_and_correct_the_role_to_site_supervisor(): void
+    public function test_a_manager_can_approve_and_correct_the_role_to_foreman(): void
     {
         Notification::fake();
         $manager = $this->makeManager();
@@ -194,10 +194,10 @@ class TechnicianOnboardingTest extends TestCase
         $team = Team::create(['name' => 'North Crew']);
 
         $this->actingAs($manager)
-            ->post("/technicians/{$technician->id}/approve", ['team_id' => $team->id, 'role' => 'Site Supervisor'])
+            ->post("/technicians/{$technician->id}/approve", ['team_id' => $team->id, 'role' => 'Foreman'])
             ->assertRedirect();
 
-        $this->assertSame('Site Supervisor', $technician->fresh()->role);
+        $this->assertSame('Foreman', $technician->fresh()->role);
     }
 
     public function test_approving_with_an_invalid_role_is_rejected(): void
@@ -246,13 +246,13 @@ class TechnicianOnboardingTest extends TestCase
         $team = Team::create(['name' => 'North Crew']);
 
         $this->actingAs($manager)
-            ->post("/technicians/{$technician->id}/approve", ['team_id' => $team->id, 'role' => 'Site Supervisor'])
+            ->post("/technicians/{$technician->id}/approve", ['team_id' => $team->id, 'role' => 'Foreman'])
             ->assertRedirect();
 
         $this->assertDatabaseHas('foremen', [
             'user_id' => $technician->id,
             'team_id' => $team->id,
-            'role' => 'supervisor',
+            'role' => 'foreman',
         ]);
 
         $this->actingAs($manager)
@@ -265,7 +265,7 @@ class TechnicianOnboardingTest extends TestCase
                 ->has('teams.data', 1)
                 ->where('teams.data.0.name', 'North Crew')
                 ->where('teams.data.0.members.0.name', 'Jamie Rivera')
-                ->where('teams.data.0.members.0.roleLabel', 'Supervisor'));
+                ->where('teams.data.0.members.0.roleLabel', 'Foreman'));
     }
 
     public function test_assigning_a_team_and_role_moves_an_active_technician_onto_the_roster(): void
@@ -294,7 +294,7 @@ class TechnicianOnboardingTest extends TestCase
     public function test_assigning_only_a_team_still_syncs_using_the_technicians_existing_role(): void
     {
         // `makeMobileTechnician()` already starts with the valid default
-        // 'Foreman' — a team is the only thing this call is missing before
+        // 'Journeyman' — a team is the only thing this call is missing before
         // both are known and the sync can happen.
         $manager = $this->makeManager();
         $technician = $this->makeMobileTechnician(['status' => User::STATUS_ACTIVE]);
@@ -307,7 +307,7 @@ class TechnicianOnboardingTest extends TestCase
         $this->assertDatabaseHas('foremen', [
             'user_id' => $technician->id,
             'team_id' => $team->id,
-            'role' => 'foreman',
+            'role' => 'journeyman',
         ]);
     }
 
@@ -375,12 +375,12 @@ class TechnicianOnboardingTest extends TestCase
         $team = Team::create(['name' => 'North Crew']);
 
         $this->actingAs($manager)
-            ->post("/technicians/{$technician->id}/approve", ['team_id' => $team->id, 'role' => 'Site Supervisor'])
+            ->post("/technicians/{$technician->id}/approve", ['team_id' => $team->id, 'role' => 'Foreman'])
             ->assertRedirect();
 
         $technician->refresh();
         $this->assertTrue($technician->isActive());
-        $this->assertSame('Site Supervisor', $technician->role);
+        $this->assertSame('Foreman', $technician->role);
         $this->assertDatabaseHas('team_members', ['user_id' => $technician->id, 'team_id' => $team->id]);
     }
 
@@ -391,9 +391,9 @@ class TechnicianOnboardingTest extends TestCase
         $team = Team::create(['name' => 'South Crew']);
 
         $this->actingAs($manager)
-            ->put("/technicians/{$technician->id}/team", ['role' => 'Site Supervisor'])
+            ->put("/technicians/{$technician->id}/team", ['role' => 'Foreman'])
             ->assertRedirect();
-        $this->assertSame('Site Supervisor', $technician->fresh()->role);
+        $this->assertSame('Foreman', $technician->fresh()->role);
 
         $this->actingAs($manager)
             ->put("/technicians/{$technician->id}/team", ['team_id' => $team->id])
@@ -466,7 +466,7 @@ class TechnicianOnboardingTest extends TestCase
                 ->has('pendingTechnicians', 1)
                 ->where('pendingTechnicians.0.name', 'Jamie Rivera')
                 ->where('pendingTechnicians.0.status', User::STATUS_PENDING_APPROVAL)
-                ->where('pendingTechnicians.0.role', 'Foreman')
+                ->where('pendingTechnicians.0.role', 'Journeyman')
                 ->has('activeTechnicians', 1)
                 ->where('activeTechnicians.0.name', 'Alex Chen')
                 ->has('teamOptions', 1)

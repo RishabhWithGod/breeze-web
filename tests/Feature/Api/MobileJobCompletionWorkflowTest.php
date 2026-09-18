@@ -44,15 +44,15 @@ class MobileJobCompletionWorkflowTest extends TestCase
         ]);
     }
 
-    private function makeMobileForeman(string $name = 'Robert'): array
+    private function makeMobileJourneyman(string $name = 'Robert'): array
     {
         $user = User::factory()->create([
             'name' => $name,
-            'role' => 'Foreman',
+            'role' => 'Journeyman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_ACTIVE,
         ]);
-        $foreman = new Foreman(['name' => $name, 'initials' => 'RB', 'role' => Foreman::ROLE_FOREMAN]);
+        $foreman = new Foreman(['name' => $name, 'initials' => 'RB', 'role' => Foreman::ROLE_JOURNEYMAN]);
         $foreman->user_id = $user->id;
         $foreman->save();
 
@@ -65,19 +65,19 @@ class MobileJobCompletionWorkflowTest extends TestCase
     }
 
     /**
-     * A supervisor test double for BOTH authority checks this workflow
+     * A foreman test double for BOTH authority checks this workflow
      * touches, which key off two different roles: `Api\V1\JobController
-     * ::changeStatus()`'s crew/supervisor split reads `Foreman::role` (the
+     * ::changeStatus()`'s crew/foreman split reads `Foreman::role` (the
      * crew register), while `JobSchedulePolicy::updateTask()` — what a task
      * reopen or a checklist uncheck requires — reads `User::role` (the web
-     * job-title vocabulary). A real site supervisor account carries both;
+     * job-title vocabulary). A real foreman account carries both;
      * a test double needs both set to actually exercise either path.
      */
-    private function makeMobileSupervisor(string $name = 'Dana'): array
+    private function makeMobileForeman(string $name = 'Dana'): array
     {
-        [$user, $foreman] = $this->makeMobileForeman($name);
-        $user->update(['role' => 'Site Supervisor']);
-        $foreman->update(['role' => Foreman::ROLE_SUPERVISOR]);
+        [$user, $foreman] = $this->makeMobileJourneyman($name);
+        $user->update(['role' => 'Foreman']);
+        $foreman->update(['role' => Foreman::ROLE_FOREMAN]);
 
         return [$user, $foreman];
     }
@@ -85,7 +85,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
     /** A job with every task closed and assigned to one foreman, ready for that foreman to submit it. */
     private function jobWithEveryTaskDone(): array
     {
-        [$foremanUser, $foreman] = $this->makeMobileForeman();
+        [$foremanUser, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
 
         $schedule = app(ScheduleBuilder::class)->build(
@@ -164,8 +164,8 @@ class MobileJobCompletionWorkflowTest extends TestCase
 
     public function test_one_foremans_start_does_not_start_another_foremans_own_work(): void
     {
-        [$foremanAUser, $foremanA] = $this->makeMobileForeman('Robert');
-        [$foremanBUser, $foremanB] = $this->makeMobileForeman('Priya');
+        [$foremanAUser, $foremanA] = $this->makeMobileJourneyman('Robert');
+        [$foremanBUser, $foremanB] = $this->makeMobileJourneyman('Priya');
         $job = $this->makeJob(['foreman_id' => $foremanA->id, 'status' => 'scheduled']);
 
         $schedule = app(\App\Services\Scheduling\ScheduleBuilder::class)->build(
@@ -247,7 +247,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
     {
         [, $foreman, $job, $tasks] = $this->jobWithEveryTaskDone();
 
-        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         // Every task is closed, but the crew hasn't tapped Complete yet —
@@ -263,7 +263,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
     {
         [$foremanUser, $foreman, $job, $tasks] = $this->jobWithEveryTaskDone();
 
-        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         $this->completeAsRequest($job, $foremanUser)->assertOk();
@@ -286,7 +286,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
     {
         [, $foreman, $job, $tasks] = $this->jobWithEveryTaskDone();
 
-        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         // Every task is closed, but the foreman hasn't tapped Complete yet.
@@ -307,8 +307,8 @@ class MobileJobCompletionWorkflowTest extends TestCase
 
     public function test_approving_one_foreman_never_touches_another_foremans_own_review(): void
     {
-        [$foremanAUser, $foremanA] = $this->makeMobileForeman('Robert');
-        [$foremanBUser, $foremanB] = $this->makeMobileForeman('Priya');
+        [$foremanAUser, $foremanA] = $this->makeMobileJourneyman('Robert');
+        [$foremanBUser, $foremanB] = $this->makeMobileJourneyman('Priya');
         $job = $this->makeJob(['foreman_id' => $foremanA->id]);
 
         $schedule = app(\App\Services\Scheduling\ScheduleBuilder::class)->build(
@@ -327,7 +327,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
             $task->save();
         }
 
-        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         $this->completeAsRequest($job, $foremanAUser)->assertOk();
@@ -378,7 +378,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
     {
         [$foremanUser, $foreman, $job, $tasks] = $this->jobWithEveryTaskDone();
 
-        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         // A paused session left over from before completion — exactly the
@@ -475,7 +475,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
     public function test_a_supervisor_can_still_add_a_note_while_reviewing(): void
     {
         [$foremanUser, , $job, $tasks] = $this->jobWithEveryTaskDone();
-        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         $this->completeAsRequest($job, $foremanUser)->assertOk();
@@ -489,7 +489,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
     {
         [$foremanUser, $foreman, $job, $tasks] = $this->jobWithEveryTaskDone();
 
-        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         $this->completeAsRequest($job, $foremanUser)->assertOk();
@@ -526,7 +526,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
     {
         [$foremanUser, $foreman, $job] = $this->jobWithEveryTaskDone();
 
-        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
 
         $task = $job->tasks()->first();
         $task->update(['supervisor_id' => $supervisor->id]);
@@ -549,7 +549,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
     {
         [$foremanUser, $foreman, $job, $tasks] = $this->jobWithEveryTaskDone();
 
-        [$supervisorUser, $supervisor] = $this->makeMobileSupervisor('Dana');
+        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         $this->completeAsRequest($job, $foremanUser)->assertOk();

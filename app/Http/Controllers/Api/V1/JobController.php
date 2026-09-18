@@ -68,9 +68,9 @@ class JobController extends Controller
     }
 
     /**
-     * A supervisor's targeted sign-off on one foreman's own portion of this
+     * A foreman's targeted sign-off on one crew member's own portion of this
      * job — never anyone else's, whatever else happens to be ready at the
-     * same moment. Reached from the task list, once that foreman's tasks
+     * same moment. Reached from the task list, once that crew member's tasks
      * read as done.
      */
     public function approveForeman(Request $request, Job $job, Foreman $foreman): JsonResponse
@@ -79,9 +79,9 @@ class JobController extends Controller
 
         $actingForeman = $request->user()->foreman;
         abort_unless(
-            $actingForeman?->role === Foreman::ROLE_SUPERVISOR,
+            $actingForeman?->role === Foreman::ROLE_FOREMAN,
             403,
-            'Only a supervisor can approve a foreman’s work.',
+            'Only a foreman can approve a crew member’s work.',
         );
 
         if ($job->isLocked()) {
@@ -98,7 +98,7 @@ class JobController extends Controller
         }
 
         // Already approved — a second tap (a retried request, or two
-        // supervisors on the same job) changes nothing rather than erroring.
+        // foremen on the same job) changes nothing rather than erroring.
         if (! $completion->isApproved()) {
             $job->approveForeman($foreman->id);
         }
@@ -113,17 +113,17 @@ class JobController extends Controller
     }
 
     /**
-     * The requesting foreman's own start/submit/approve state on this job —
-     * `null` for anyone the concept doesn't apply to (a supervisor, an
-     * electrician with no crew-register row), same reasoning as
-     * {@see myTasksComplete()}.
+     * The requesting crew member's own start/submit/approve state on this
+     * job — `null` for anyone the concept doesn't apply to (a foreman, who
+     * oversees rather than carries a personal slice; an electrician with no
+     * crew-register row), same reasoning as {@see myTasksComplete()}.
      *
      * @return array{myStartedAt: string|null, myReadyForReviewAt: string|null, myApprovedAt: string|null}|array{}
      */
     private function myForemanCompletion(Request $request, Job $job): array
     {
         $foreman = $request->user()->foreman;
-        if ($foreman === null || $foreman->role !== Foreman::ROLE_FOREMAN) {
+        if ($foreman === null || ! in_array($foreman->role, Foreman::WORKER_ROLES, true)) {
             return [];
         }
 
@@ -137,18 +137,19 @@ class JobController extends Controller
     }
 
     /**
-     * Whether the requesting foreman's own tasks on this job are all done —
-     * null for anyone the concept doesn't apply to (a supervisor oversees
-     * every task, not a personal slice; an electrician has no crew-register
-     * row at all). This is what the app uses to decide when "Mark Job
-     * Complete" is even worth a foreman tapping: their own part being done
-     * does not mean the *job* is done — `changeStatus()` only actually
-     * completes it once every task, from every foreman, is closed.
+     * Whether the requesting crew member's own tasks on this job are all
+     * done — null for anyone the concept doesn't apply to (a foreman
+     * oversees every task, not a personal slice; an electrician has no
+     * crew-register row at all). This is what the app uses to decide when
+     * "Mark Job Complete" is even worth a journeyman or apprentice tapping:
+     * their own part being done does not mean the *job* is done —
+     * `changeStatus()` only actually completes it once every task, from
+     * every crew member, is closed.
      */
     private function myTasksComplete(Request $request, Job $job): ?bool
     {
         $foreman = $request->user()->foreman;
-        if ($foreman === null || $foreman->role !== Foreman::ROLE_FOREMAN) {
+        if ($foreman === null || ! in_array($foreman->role, Foreman::WORKER_ROLES, true)) {
             return null;
         }
 
@@ -161,12 +162,12 @@ class JobController extends Controller
     }
 
     /**
-     * How much time every foreman on this job has put in — for a supervisor
-     * checking in on work they don't personally do (a foreman already sees
-     * their own clock via `/timer`). A job is not one foreman's anymore: it
-     * is broken into tasks each with their own foreman, so this reads every
-     * distinct one across the job's tasks, not just `job.foreman` (the
-     * single header field, which can even be a supervisor's own register
+     * How much time every journeyman/apprentice on this job has put in — for
+     * a foreman checking in on work they don't personally do (a crew member
+     * already sees their own clock via `/timer`). A job is not one person's
+     * anymore: it is broken into tasks each with their own worker, so this
+     * reads every distinct one across the job's tasks, not just `job.foreman`
+     * (the single header field, which can even be a foreman's own register
      * row — see `Foreman`'s own doc comment — so it is deliberately not the
      * source here).
      *
@@ -192,7 +193,7 @@ class JobController extends Controller
         }
 
         $foremen = Foreman::whereKey($foremanIds)
-            ->where('role', Foreman::ROLE_FOREMAN)
+            ->whereIn('role', Foreman::WORKER_ROLES)
             ->whereNotNull('user_id')
             ->orderBy('name')
             ->get();
@@ -217,7 +218,7 @@ class JobController extends Controller
                 'startedAt' => $session?->started_at?->toISOString(),
                 'accumulatedSeconds' => $session?->accumulated_seconds,
                 'liveElapsedSeconds' => $session ? $this->timer->elapsedSeconds($session) : null,
-                // This foreman's own portion, signed off — a supervisor's
+                // This crew member's own portion, signed off — a foreman's
                 // crew list should read "Completed" for them, not whatever
                 // their last timer session status happened to be (usually
                 // "paused", since completing stops the clock rather than
@@ -241,15 +242,26 @@ class JobController extends Controller
         }
 
         if ($data['status'] === 'in-progress') {
-            // Starting a job is the foreman's own call, not a supervisor's —
-            // a supervisor oversees the job rather than running it day to
-            // day, so their account never gets to be the one that puts a
-            // job on the clock. `Foreman::role` (the crew register), not
-            // `User::role`, is the authority here — the same distinction
+            // Starting a job is the crew's own call, not the foreman's — a
+            // foreman oversees the job rather than running it day to day, so
+            // their account never gets to be the one that puts a job on the
+            // clock. `Foreman::role` (the crew register), not `User::role`,
+            // is the authority here — the same distinction
             // `ElectricianJobAccess`/`JobSchedulePolicy` already draw.
             $foreman = $request->user()->foreman;
-            if ($foreman?->role === Foreman::ROLE_SUPERVISOR) {
-                return $this->fail('Only a foreman can start this job.', 403);
+            if ($foreman?->role === Foreman::ROLE_FOREMAN) {
+                return $this->fail('Only a journeyman or apprentice can start this job.', 403);
+            }
+
+            // An apprentice never starts a job alone — a journeyman or
+            // foreman needs to actually be on the crew, whether running a
+            // task themselves (`foreman_id`) or overseeing one
+            // (`supervisor_id`), before the job can go on the clock.
+            if ($foreman?->role === Foreman::ROLE_APPRENTICE && ! $job->hasSeniorCrewAssigned()) {
+                return $this->fail(
+                    'An apprentice cannot start a job without a foreman or journeyman on the crew.',
+                    403,
+                );
             }
 
             // Starting a job is only ever "today or already past due" — a job
@@ -280,15 +292,15 @@ class JobController extends Controller
 
         if ($data['status'] === 'completed') {
             // The same `Foreman::role` distinction the `in-progress` branch
-            // above already draws: only a supervisor's account can actually
+            // above already draws: only a foreman's account can actually
             // close a job out. Everyone else completing their own tasks only
             // ever gets their own portion as far as ready-for-review — never
-            // gated on any other foreman's still-open work (see
+            // gated on any other crew member's still-open work (see
             // `prepareCompletion()`'s own doc comment).
             $foreman = $request->user()->foreman;
-            $isSupervisor = $foreman?->role === Foreman::ROLE_SUPERVISOR;
+            $isForeman = $foreman?->role === Foreman::ROLE_FOREMAN;
 
-            if (! $isSupervisor) {
+            if (! $isForeman) {
                 if ($foreman === null) {
                     // No crew-register row at all — an assignment-based
                     // electrician, not part of the foreman/supervisor split
@@ -309,7 +321,7 @@ class JobController extends Controller
                         'from' => $job->status,
                         'to' => $job->status,
                         'readyForReviewAt' => $job->ready_for_review_at?->toISOString(),
-                    ], 'Marked ready for supervisor review.');
+                    ], 'Marked ready for foreman review.');
                 }
 
                 if ($blocker = $this->prepareCompletion($request, $job, $foreman)) {
@@ -323,7 +335,7 @@ class JobController extends Controller
                     'from' => $job->status,
                     'to' => $job->status,
                     'readyForReviewAt' => now()->toISOString(),
-                ], 'Your tasks are marked ready for supervisor review.');
+                ], 'Your tasks are marked ready for foreman review.');
             }
 
             // This is the final close-out only — approving any one
@@ -447,7 +459,7 @@ class JobController extends Controller
      * The total is compared against `Job::estimated_hours`: if it ran over,
      * a reason is required (the same "why the extra time" the web app shows
      * later) before the job is allowed to close — supplied by the
-     * supervisor's own request here, since they are the one closing it out.
+     * foreman's own request here, since they are the one closing it out.
      * All three numbers are saved on the job itself so the web app has them.
      *
      * Returns a 422 response if closing should be blocked, or null to let
@@ -519,26 +531,26 @@ class JobController extends Controller
             'delayHours' => $job->delay_hours !== null ? (float) $job->delay_hours : null,
             'delayReason' => $job->delay_reason,
             // Set once the crew has closed every task and tapped Complete —
-            // null again the moment a supervisor reopens one. Only a
-            // supervisor's own tap while this is set actually finishes the
+            // null again the moment a foreman reopens one. Only a
+            // foreman's own tap while this is set actually finishes the
             // job (`changeStatus()`).
             'readyForReviewAt' => $job->ready_for_review_at?->toISOString(),
             ...$this->myForemanCompletion($request, $job),
             // Who the job is still waiting on before it can actually close —
-            // meaningful to a foreman wondering why the job isn't done once
-            // their own part is approved, and to a supervisor picking whom
-            // to approve next from the task list.
+            // meaningful to a journeyman/apprentice wondering why the job
+            // isn't done once their own part is approved, and to a foreman
+            // picking whom to approve next from the task list.
             'pendingForemen' => $job->pendingForemen(),
-            // Whose own portion is submitted and waiting on a supervisor's
+            // Whose own portion is submitted and waiting on a foreman's
             // targeted approve tap (`approveForeman()`) right now.
             'foremenReadyForReview' => $job->readyForemen(),
             'foreman' => $job->foreman ? [
                 'name' => $job->foreman->name,
                 'initials' => $job->foreman->initials,
-                // "Foreman" or "Supervisor" — the register row this points
-                // to isn't always a foreman despite the relation's name (see
-                // `Foreman`'s own doc comment), so the app must not hardcode
-                // the label either.
+                // "Foreman", "Journeyman" or "Apprentice" — the register row
+                // this points to isn't always a foreman despite the
+                // relation's name (see `Foreman`'s own doc comment), so the
+                // app must not hardcode the label either.
                 'role' => $job->foreman->roleLabel(),
             ] : null,
         ];

@@ -127,7 +127,7 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
             names take less room than a number you have to open the job to read.
           */}
           <div>
-            <p className="text-sm text-white/75">Supervisor</p>
+            <p className="text-sm text-white/75">Foreman</p>
             <p className="mt-0.5 text-md font-semibold text-white">
               {job.supervisors.length > 0
                 ? job.supervisors.map((person) => person.name).join(', ')
@@ -135,7 +135,7 @@ export function UnassignedJobRow({ job, onSchedule, index = 0 }: UnassignedJobRo
             </p>
           </div>
           <div>
-            <p className="text-sm text-white/75">Foreman</p>
+            <p className="text-sm text-white/75">Crew</p>
             <p className="mt-0.5 text-md font-semibold text-white">
               {job.foremen.length > 0
                 ? job.foremen.map((person) => person.name).join(', ')

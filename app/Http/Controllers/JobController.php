@@ -267,9 +267,15 @@ class JobController extends Controller
         ]);
     }
 
-    public function edit(Request $request, Job $job): Response
+    public function edit(Request $request, Job $job): Response|RedirectResponse
     {
         $this->authorize('update', $job);
+
+        if ($job->isLocked()) {
+            return redirect()
+                ->route('jobs.show', $job)
+                ->with('warning', "“{$job->name}” is completed and can no longer be edited.");
+        }
 
         return Inertia::render('JobEdit', [
             'job' => (new JobDetailResource($job->load('teamMembers', 'addresses', 'team:id,name', 'project:id,client_id', 'aiResult:id,upload_id')))->resolve(),
@@ -332,7 +338,7 @@ class JobController extends Controller
     public function update(UpdateJobRequest $request, Job $job): RedirectResponse
     {
         $this->authorize('update', $job);
-        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
+        $job->assertNotLocked();
 
         $data = $this->clients->withClientSnapshot($request->validated(), $request->user());
         $newStatus = $data['status'];
@@ -363,6 +369,7 @@ class JobController extends Controller
     public function destroy(Job $job): RedirectResponse
     {
         $this->authorize('delete', $job);
+        $job->assertNotLocked();
 
         $job->recordActivity('deleted', 'Job deleted');
         $job->delete();
@@ -449,7 +456,7 @@ class JobController extends Controller
     public function changeStatus(Request $request, Job $job): RedirectResponse
     {
         $this->authorize('update', $job);
-        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
+        $job->assertNotLocked();
 
         $validated = $request->validate([
             'status' => ['required', Rule::in(Job::STATUSES)],
@@ -474,6 +481,13 @@ class JobController extends Controller
         // the ids at validation time — this is what actually keeps the bulk
         // action from touching a job that is not this manager's own.
         $jobs = Job::whereIn('id', $validated['ids'])->ownedBy($request->user())->get();
+
+        // A completed job cannot be changed or deleted, one at a time or in
+        // bulk — the same rule `update()`/`destroy()` enforce, just applied
+        // per-row here so the rest of a mixed selection still goes through.
+        [$locked, $jobs] = in_array($validated['action'], ['delete', 'status'], true)
+            ? $jobs->partition(fn (Job $job) => $job->isLocked())
+            : [collect(), $jobs];
         $count = $jobs->count();
 
         foreach ($jobs as $job) {
@@ -495,9 +509,16 @@ class JobController extends Controller
             'status' => "set to {$validated['status']}",
         };
 
+        $message = $count.' '.str('job')->plural($count)." {$label}.";
+
+        if ($locked->isNotEmpty()) {
+            $message .= ' '.$locked->count().' completed '.str('job')->plural($locked->count())
+                .' '.($locked->count() === 1 ? 'was' : 'were').' skipped.';
+        }
+
         return back()->with(
-            $validated['action'] === 'delete' ? 'warning' : 'success',
-            $count.' '.str('job')->plural($count)." {$label}."
+            $validated['action'] === 'delete' || $locked->isNotEmpty() ? 'warning' : 'success',
+            $message
         );
     }
 

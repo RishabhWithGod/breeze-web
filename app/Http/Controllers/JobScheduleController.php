@@ -67,6 +67,7 @@ class JobScheduleController extends Controller
                 'client' => $job->client,
                 'location' => $job->location,
                 'status' => $job->status,
+                'isLocked' => $job->isLocked(),
                 'priority' => $job->priority ?? 'medium',
                 'jobType' => $job->job_type,
                 'budget' => $job->budget === null ? null : (float) $job->budget,
@@ -124,6 +125,7 @@ class JobScheduleController extends Controller
     public function update(Request $request, Job $job): RedirectResponse
     {
         $this->authorize('view', $job);
+        $job->assertNotLocked();
 
         $schedule = $job->schedule ?? $this->builder->build($job, $request->user(), withTasks: false);
         $this->authorizeAbility($request, 'update', $schedule);

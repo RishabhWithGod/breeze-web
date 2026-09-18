@@ -48,7 +48,7 @@ class JobNotificationsTest extends TestCase
     }
 
     /** A crew-register row with a real linked account — only these can be notified. */
-    private function makeForeman(string $name, string $role = Foreman::ROLE_FOREMAN): array
+    private function makeForeman(string $name, string $role = Foreman::ROLE_JOURNEYMAN): array
     {
         $user = User::factory()->create(['name' => $name, 'role' => ucfirst($role)]);
         $foreman = new Foreman(['name' => $name, 'initials' => strtoupper(substr($name, 0, 2)), 'role' => $role]);
@@ -98,7 +98,7 @@ class JobNotificationsTest extends TestCase
     public function test_assigning_both_a_foreman_and_a_supervisor_notifies_both(): void
     {
         [$foremanUser, $foreman] = $this->makeForeman('Robert');
-        [$supervisorUser, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_SUPERVISOR);
+        [$supervisorUser, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_FOREMAN);
         $job = $this->makeJob(['status' => 'planning']);
 
         $this->actingAs($this->planner)->post(route('jobs.tasks.setup.store', $job), [
@@ -160,10 +160,10 @@ class JobNotificationsTest extends TestCase
 
     /* ---------------------------------------------------------- job started */
 
-    public function test_starting_a_job_notifies_its_supervisor(): void
+    public function test_starting_a_job_notifies_its_foreman(): void
     {
         [$foremanUser, $foreman] = $this->makeForeman('Robert');
-        [$supervisorUser, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_SUPERVISOR);
+        [$supervisorUser, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_FOREMAN);
         $job = $this->makeJob(['foreman_id' => $foreman->id, 'status' => 'scheduled']);
         $this->makeTask($job, [
             'title' => 'Rough-in', 'foreman_id' => $foreman->id,
@@ -186,7 +186,7 @@ class JobNotificationsTest extends TestCase
     public function test_a_job_already_in_progress_does_not_renotify_on_an_unrelated_status_post(): void
     {
         [$foremanUser, $foreman] = $this->makeForeman('Robert');
-        [$supervisorUser, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_SUPERVISOR);
+        [$supervisorUser, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_FOREMAN);
         $job = $this->makeJob(['foreman_id' => $foreman->id, 'status' => 'in-progress']);
         $this->makeTask($job, [
             'title' => 'Rough-in', 'foreman_id' => $foreman->id, 'supervisor_id' => $supervisor->id,
@@ -202,10 +202,10 @@ class JobNotificationsTest extends TestCase
 
     /* ------------------------------------------------------ job completion */
 
-    public function test_completing_a_job_notifies_foremen_supervisors_and_managers_except_the_actor(): void
+    public function test_completing_a_job_notifies_journeymen_foremen_and_managers_except_the_actor(): void
     {
         [$foremanUser, $foreman] = $this->makeForeman('Robert');
-        [$supervisorUser, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_SUPERVISOR);
+        [$supervisorUser, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_FOREMAN);
         $manager = User::factory()->create(['role' => 'Project Manager']);
 
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
@@ -226,11 +226,11 @@ class JobNotificationsTest extends TestCase
         Notification::assertNotSentTo($supervisorUser, JobCompleted::class);
     }
 
-    public function test_a_second_supervisor_is_notified_of_completion_but_not_the_one_who_completed_it(): void
+    public function test_a_second_foreman_is_notified_of_completion_but_not_the_one_who_completed_it(): void
     {
         [$foremanUser, $foreman] = $this->makeForeman('Robert');
-        [$actingSupervisorUser, $actingSupervisor] = $this->makeForeman('Dana', Foreman::ROLE_SUPERVISOR);
-        [$otherSupervisorUser, $otherSupervisor] = $this->makeForeman('Sam', Foreman::ROLE_SUPERVISOR);
+        [$actingSupervisorUser, $actingSupervisor] = $this->makeForeman('Dana', Foreman::ROLE_FOREMAN);
+        [$otherSupervisorUser, $otherSupervisor] = $this->makeForeman('Sam', Foreman::ROLE_FOREMAN);
 
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
         $this->makeTask($job, [

@@ -106,7 +106,7 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
     },
     {
       key: 'foreman',
-      header: 'Foreman',
+      header: 'Assigned to',
       render: (row) => (
         <span className={row.foreman ? 'text-white/90' : 'text-white/60'}>
           {row.foreman ?? 'Unassigned'}
@@ -115,7 +115,7 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
     },
     {
       key: 'supervisor',
-      header: 'Supervisor',
+      header: 'Foreman',
       // Optional work, optional column value: plenty of tasks have a foreman
       // and nobody above them.
       render: (row) => (
@@ -160,22 +160,26 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
             width: 'w-40',
             render: (row: TaskRow) => (
               <span className="flex items-center justify-end gap-1">
-                <ButtonLink
-                  href={routeTo.taskEdit(row.id)}
+                <Button
                   variant="ghost"
                   size="sm"
                   leftIcon={PencilLine}
                   aria-label={`Edit ${row.title}`}
+                  disabled={row.status === 'completed'}
+                  title={row.status === 'completed' ? 'Completed tasks cannot be edited.' : undefined}
+                  onClick={() => router.visit(routeTo.taskEdit(row.id))}
                 >
                   Edit
-                </ButtonLink>
+                </Button>
                 <IconButton
                   icon={Trash2}
                   label={`Remove ${row.title}`}
                   variant="white"
                   size="sm"
+                  disabled={row.status === 'completed'}
+                  title={row.status === 'completed' ? 'Completed tasks cannot be removed.' : undefined}
                   onClick={() => setRemoving(row)}
-                  className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                  className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white disabled:pointer-events-none disabled:opacity-40"
                 />
               </span>
             ),
@@ -268,9 +272,9 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
                 />
                 <SelectField
                   id="task-foreman-filter"
-                  label="Foreman"
+                  label="Assigned to"
                   options={[
-                    { label: 'All foremen', value: 'all' },
+                    { label: 'Everyone', value: 'all' },
                     { label: 'Unassigned', value: 'unassigned' },
                     ...foremen.map((man) => ({ label: man.name, value: man.name })),
                   ]}

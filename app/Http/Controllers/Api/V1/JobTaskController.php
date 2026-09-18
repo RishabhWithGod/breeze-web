@@ -81,7 +81,7 @@ class JobTaskController extends Controller
         abort_if(
             $this->crewLockedForReview($request, $task),
             409,
-            'This job has been submitted for review — wait for your supervisor to act on it.',
+            'This job has been submitted for review — wait for your foreman to act on it.',
         );
 
         if ($blocker = $this->checklistBlocking($task)) {
@@ -110,7 +110,7 @@ class JobTaskController extends Controller
         abort_if(
             $this->crewLockedForReview($request, $task),
             409,
-            'This job has been submitted for review — wait for your supervisor to act on it.',
+            'This job has been submitted for review — wait for your foreman to act on it.',
         );
 
         $data = $request->validate([
@@ -128,7 +128,7 @@ class JobTaskController extends Controller
      * Sets a task's status directly, to any of the seven states — the same
      * override a planner has on web (`JobTaskController::update()`, web),
      * not the crew's own narrower complete()/updateProgress(). Gated by
-     * `reopenTask()`, not `completeTask()`: a site supervisor can correct or
+     * `reopenTask()`, not `completeTask()`: a foreman can correct or
      * reopen any task they are named on (or that a job they own), the same
      * authority a project manager has, whether or not they are personally
      * assigned to do the work itself.

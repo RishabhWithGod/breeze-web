@@ -435,6 +435,8 @@ export interface JobScheduleProps {
     readonly client: string | null
     readonly location: string | null
     readonly status: string
+    /** Once completed, nothing about the job — including its tasks — can change again. */
+    readonly isLocked: boolean
     readonly priority: TaskPriority
     readonly jobType: string | null
     readonly budget: number | null

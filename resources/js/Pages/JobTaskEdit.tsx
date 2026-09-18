@@ -33,7 +33,7 @@ export interface JobTaskEditProps {
     readonly title: string
     readonly status: string
     readonly foremanId: number | null
-    /** Who is over it. Null for work with a foreman and nobody above them. */
+    /** Who is over it. Null for work with nobody above the crew running it. */
     readonly supervisorId: number | null
     readonly lineIds: readonly number[]
   }
@@ -185,31 +185,31 @@ export default function JobTaskEdit({
                 {/* Who runs it. One per task — see JobTask::foreman(). */}
                 <CrewMemberPicker
                   id="task-foreman"
-                  label="Foreman*"
-                  role="foreman"
+                  label="Assigned to*"
+                  slot="worker"
                   people={foremen}
                   value={foremanId}
                   onChange={setForemanId}
                   teamId={team?.id ?? null}
                   teamName={team?.name ?? null}
                   emptyLabel={
-                    foremen.length > 0 ? 'Select foreman' : 'No foreman on this crew'
+                    foremen.length > 0 ? 'Select who runs it' : 'No one on this crew'
                   }
                   disabled={processing}
                   {...(errors['foreman_id'] ? { error: errors['foreman_id'] } : {})}
                 />
-                {/* Who is over it — from the same crew as the foreman. */}
+                {/* Who is over it — from the same crew. */}
                 <CrewMemberPicker
                   id="task-supervisor"
-                  label="Supervisor*"
-                  role="supervisor"
+                  label="Foreman*"
+                  slot="foreman"
                   people={supervisors}
                   value={supervisorId}
                   onChange={setSupervisorId}
                   teamId={team?.id ?? null}
                   teamName={team?.name ?? null}
                   emptyLabel={
-                    supervisors.length > 0 ? 'Select supervisor' : 'No supervisor on this crew'
+                    supervisors.length > 0 ? 'Select foreman' : 'No foreman on this crew'
                   }
                   disabled={processing}
                   {...(errors['supervisor_id'] ? { error: errors['supervisor_id'] } : {})}

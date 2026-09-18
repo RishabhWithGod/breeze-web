@@ -381,6 +381,7 @@ class JobTaskController extends Controller
     {
         abort_unless($this->policy->deleteTask($request->user(), $task), 403);
         $this->assertNotLocked($task->job);
+        abort_if($task->status === JobTask::STATUS_COMPLETED, 409, 'This task is already completed and can no longer be removed.');
 
         $title = $task->title;
         $schedule = $task->schedule;

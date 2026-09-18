@@ -189,6 +189,7 @@ class JobCostingController extends Controller
                 'name' => $job->name,
                 'client' => $job->client,
                 'status' => $job->status,
+                'isLocked' => $job->isLocked(),
             ],
             'range' => ['from' => $data['from'] ?? null, 'to' => $data['to'] ?? null],
             'canViewCosts' => $canViewCosts,
@@ -208,6 +209,7 @@ class JobCostingController extends Controller
     public function storeCostEntry(Request $request, Job $job, JobCostOverrunNotifier $notifier): RedirectResponse
     {
         abort_unless(app(JobCostingPolicy::class)->manage($request->user()), 403);
+        $job->assertNotLocked();
 
         $validated = $request->validate([
             'category' => ['required', Rule::in(JobCostEntry::CATEGORIES)],
@@ -233,6 +235,7 @@ class JobCostingController extends Controller
     {
         abort_unless(app(JobCostingPolicy::class)->manage($request->user()), 403);
         abort_unless($entry->job_id === $job->id, 404);
+        $job->assertNotLocked();
 
         $description = $entry->description;
         $entry->delete();

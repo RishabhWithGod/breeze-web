@@ -60,15 +60,15 @@ class TimerController extends Controller
         abort_if($job->isLocked(), 409, 'This job is completed and locked.');
         // The crew's own clock is exactly what `prepareCompletion()`
         // stopped when they submitted for review — starting a new one on
-        // the same job before a supervisor has acted would undo that.
-        // A supervisor isn't exempt here either: they don't run a clock of
+        // the same job before a foreman has acted would undo that.
+        // A foreman isn't exempt here either: they don't run a clock of
         // their own on a job they oversee (mobile's own UI never offers
         // them the button), so there is nothing this should ever block them
         // from doing in practice.
         if ($job->isReadyForReview()
-            && $request->user()->foreman?->role !== Foreman::ROLE_SUPERVISOR) {
+            && $request->user()->foreman?->role !== Foreman::ROLE_FOREMAN) {
             return $this->fail(
-                'This job has been submitted for review — wait for your supervisor to act on it.',
+                'This job has been submitted for review — wait for your foreman to act on it.',
                 409,
             );
         }

@@ -20,6 +20,10 @@ class JobResource extends JsonResource
             'description' => $this->description,
             'jobType' => $this->job_type,
             'status' => $this->status,
+            // Once completed, nothing about the job can change again — see
+            // `Job::isLocked()`. Sent so the list/card views can disable
+            // Edit/Delete without re-deriving the rule from `status`.
+            'isLocked' => $this->isLocked(),
             // Assigned after intake, so absent on a freshly created job.
             'foreman' => $this->foreman ? [
                 'name' => $this->foreman->name,

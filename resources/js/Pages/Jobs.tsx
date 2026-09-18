@@ -156,11 +156,15 @@ export default function Jobs({ jobs, filters }: JobsProps) {
    * counting instead of triggering a cascading render.
    */
   const pageIds = rows.map((job) => job.id)
+  // A completed job can't be bulk-deleted or bulk-restatused (the server
+  // skips it either way), so it's left out of "select all" and its own
+  // checkbox is disabled — nothing to gain from selecting it.
+  const selectablePageIds = rows.filter((job) => !job.isLocked).map((job) => job.id)
   const selectedOnPage = selected.filter((id) => pageIds.includes(id))
-  const allOnPageSelected = rows.length > 0 && selectedOnPage.length === rows.length
+  const allOnPageSelected = selectablePageIds.length > 0 && selectedOnPage.length === selectablePageIds.length
 
   const toggleAll = () => {
-    setSelected(allOnPageSelected ? [] : pageIds)
+    setSelected(allOnPageSelected ? [] : selectablePageIds)
   }
 
   const toggleOne = (id: number) => {
@@ -232,7 +236,10 @@ export default function Jobs({ jobs, filters }: JobsProps) {
         <Checkbox
           id={`select-job-${job.id}`}
           label=""
-          aria-label={`Select ${job.name}`}
+          aria-label={
+            job.isLocked ? `${job.name} is completed and can't be bulk-changed` : `Select ${job.name}`
+          }
+          disabled={job.isLocked}
           checked={selected.includes(job.id)}
           onChange={() => toggleOne(job.id)}
         />
@@ -319,18 +326,22 @@ export default function Jobs({ jobs, filters }: JobsProps) {
           <ButtonLink href={routeTo.job(job.id)} size="sm" leftIcon={Eye}>
             View
           </ButtonLink>
-          <IconButton
-            icon={PencilLine}
-            label={`Edit ${job.name}`}
-            size="sm"
-            className="text-white/85 hover:text-brand"
-            onClick={() => router.visit(routeTo.jobEdit(job.id))}
-          />
+          {!job.isLocked && (
+            <IconButton
+              icon={PencilLine}
+              label={`Edit ${job.name}`}
+              size="sm"
+              className="text-white/85 hover:text-brand"
+              onClick={() => router.visit(routeTo.jobEdit(job.id))}
+            />
+          )}
           <IconButton
             icon={Trash2}
             label={`Delete ${job.name}`}
             size="sm"
-            className="text-white/85 hover:text-status-danger"
+            disabled={job.isLocked}
+            title={job.isLocked ? 'Completed jobs cannot be deleted.' : undefined}
+            className="text-white/85 hover:text-status-danger disabled:pointer-events-none disabled:opacity-40"
             onClick={() => requestDelete(job)}
           />
         </div>

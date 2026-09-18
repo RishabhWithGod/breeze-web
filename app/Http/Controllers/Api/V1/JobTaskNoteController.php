@@ -51,7 +51,7 @@ class JobTaskNoteController extends Controller
         abort_if($task->job?->isLocked(), 409, 'This job is completed and locked.');
         if ($task->job?->isReadyForReview() && ! $this->policy->reopenTask($request->user(), $task)) {
             return $this->fail(
-                'This job has been submitted for review — wait for your supervisor to act on it.',
+                'This job has been submitted for review — wait for your foreman to act on it.',
                 409,
             );
         }

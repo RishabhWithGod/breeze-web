@@ -16,14 +16,14 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import type { Paginated, SharedPageProps, TableColumn } from '@/types'
+import type { Paginated, SharedPageProps, TableColumn, Tone } from '@/types'
 import { formatDate, formatHours } from '@/utils'
 
 interface MemberRow {
   readonly id: number
   readonly name: string
   readonly initials: string
-  /** What they do on the crew: `supervisor` or `foreman`. */
+  /** What they do on the crew: `foreman`, `journeyman` or `apprentice`. */
   readonly role: string
   readonly roleLabel: string
   /** Open work only — what they are carrying now, not what they ever carried. */
@@ -80,20 +80,22 @@ export interface TeamsProps {
   canApproveTechnicians: boolean
   /** Every team, unpaginated — for the "assign a team" picker. */
   teamOptions: readonly TeamOption[]
-  /** 'Foreman' / 'Site Supervisor' — what a mobile signup can be corrected to. */
+  /** 'Foreman' / 'Journeyman' / 'Apprentice' — what a mobile signup can be corrected to. */
   technicianRoleOptions: readonly string[]
 }
 
 /** The task list, narrowed to one member — what a row's numbers describe. */
 const tasksFor = (name: string) => `${ROUTES.tasks}?foreman=${encodeURIComponent(name)}`
 
-/**
- * 'Site Supervisor' is the real stored value — `ScheduleBuilder`'s staffing
- * suggestions and other role-based checks elsewhere in the app match on that
- * exact string, so it stays as-is everywhere but here. This page just shows
- * it shorter, as "Supervisor".
- */
-const roleLabel = (role: string) => (role === 'Site Supervisor' ? 'Supervisor' : role)
+/** The stored value is already the label — kept as a function so every call site reads the same way. */
+const roleLabel = (role: string) => role
+
+/** A foreman reads differently from a journeyman or apprentice at a glance — the point of toning the chip at all. */
+const ROLE_TONE: Record<string, Tone> = {
+  foreman: 'info',
+  journeyman: 'neutral',
+  apprentice: 'brand',
+}
 
 /**
  * The crew register, read the way work is staffed: by team — plus
@@ -166,14 +168,11 @@ export default function Teams({
     {
       key: 'role',
       header: 'Role',
-      /* Toned, not just written: a supervisor reads differently from a foreman
-         at a glance, which is the point of showing it in the crew's own list. */
+      /* Toned, not just written: a foreman reads differently from a journeyman
+         or apprentice at a glance, which is the point of showing it in the
+         crew's own list. */
       render: (row) => (
-        <StatusChip
-          hideDot
-          tone={row.role === 'supervisor' ? 'info' : 'neutral'}
-          label={row.roleLabel}
-        />
+        <StatusChip hideDot tone={ROLE_TONE[row.role] ?? 'neutral'} label={row.roleLabel} />
       ),
     },
     {
@@ -647,9 +646,10 @@ function TechnicianRegisterSection({
   ]
   // A blank placeholder matters here too: a technician approved before this
   // page enforced valid roles can be sitting on a stale value (e.g. the old
-  // free-text "Technician") that isn't 'Foreman'/'Site Supervisor' — sending
-  // that stale value back on Assign fails validation with nothing shown, so
-  // the row has to fall back to an explicit "pick one" state instead.
+  // free-text "Technician") that isn't 'Foreman'/'Journeyman'/'Apprentice' —
+  // sending that stale value back on Assign fails validation with nothing
+  // shown, so the row has to fall back to an explicit "pick one" state
+  // instead.
   const roleSelectOptions = [
     { value: '', label: 'Select a role' },
     ...roleOptions.map((role) => ({ value: role, label: roleLabel(role) })),

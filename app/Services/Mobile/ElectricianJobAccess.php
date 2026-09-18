@@ -34,7 +34,7 @@ use Illuminate\Database\Eloquent\Builder;
 class ElectricianJobAccess
 {
     /** Roles that see every job on mobile too, matching their web access. */
-    private const UNRESTRICTED = ['project manager', 'site supervisor', 'foreman', 'admin', 'owner', 'estimator'];
+    private const UNRESTRICTED = ['project manager', 'foreman', 'journeyman', 'admin', 'owner', 'estimator'];
 
     public function __construct(private readonly TeamMemberResolver $resolver) {}
 
@@ -81,10 +81,11 @@ class ElectricianJobAccess
     {
         // A technician onboarded from the mobile app always stays restricted
         // to their own staffing, even once a manager corrects their role to
-        // 'Foreman'/'Site Supervisor' — on mobile those are real operational
-        // roles for a field crew member, not the web app's managerial roles
-        // this list exists for. `registration_source` is the only thing that
-        // still tells the two apart once the role string is identical.
+        // 'Foreman'/'Journeyman'/'Apprentice' — on mobile those are real
+        // operational roles for a field crew member, not the web app's
+        // managerial roles this list exists for. `registration_source` is
+        // the only thing that still tells the two apart once the role
+        // string is identical.
         if ($user->isFromMobile()) {
             return false;
         }

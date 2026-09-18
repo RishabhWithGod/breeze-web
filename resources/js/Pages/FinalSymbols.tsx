@@ -365,8 +365,8 @@ export default function FinalSymbols({
           />
 
           {/*
-            Who does the work. Picking a crew here is what narrows the foreman
-            and supervisor pickers on the task step that follows.
+            Who does the work. Picking a crew here is what narrows the crew
+            and foreman pickers on the task step that follows.
           */}
           <TeamPicker
             teams={teams}

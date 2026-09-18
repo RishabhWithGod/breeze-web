@@ -93,18 +93,18 @@ class MobileJobsAndTasksTest extends TestCase
      * `job_task_assignments` row at all — the point of these tests is that
      * neither is needed.
      */
-    private function makeMobileForeman(string $name = 'Chris'): array
+    private function makeMobileJourneyman(string $name = 'Chris'): array
     {
         $user = User::factory()->create([
             'name' => $name,
-            'role' => 'Foreman',
+            'role' => 'Journeyman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_ACTIVE,
         ]);
         // `user_id` is deliberately not in `Foreman::$fillable` (see
         // `TechnicianController::syncForemanRoster()`), so `create([...])`
         // would silently drop it — direct assignment is the real path.
-        $foreman = new Foreman(['name' => $name, 'initials' => 'CH', 'role' => 'foreman']);
+        $foreman = new Foreman(['name' => $name, 'initials' => 'CH', 'role' => 'journeyman']);
         $foreman->user_id = $user->id;
         $foreman->save();
 
@@ -207,7 +207,7 @@ class MobileJobsAndTasksTest extends TestCase
 
     public function test_a_technician_named_as_a_jobs_foreman_can_access_it_with_no_other_staffing(): void
     {
-        [$technician, $foreman] = $this->makeMobileForeman();
+        [$technician, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
         // Deliberately nothing in job_assignments or job_task_assignments —
         // `job.foreman_id` alone, the register mechanic, must be enough.
@@ -223,22 +223,22 @@ class MobileJobsAndTasksTest extends TestCase
             ->assertOk();
     }
 
-    public function test_the_jobs_foreman_field_reports_a_supervisors_real_role_not_a_hardcoded_foreman_label(): void
+    public function test_the_jobs_foreman_field_reports_the_register_rows_real_role_not_a_hardcoded_foreman_label(): void
     {
-        [$technician, $foreman] = $this->makeMobileForeman();
-        $foreman->update(['role' => Foreman::ROLE_SUPERVISOR]);
+        [$technician, $foreman] = $this->makeMobileJourneyman();
+        $foreman->update(['role' => Foreman::ROLE_APPRENTICE]);
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($technician))
             ->getJson("/api/v1/jobs/{$job->id}")
             ->assertOk();
 
-        $response->assertJsonPath('data.foreman.role', 'Supervisor');
+        $response->assertJsonPath('data.foreman.role', 'Apprentice');
     }
 
     public function test_a_technician_named_as_a_tasks_foreman_or_supervisor_can_access_the_job_and_see_the_task(): void
     {
-        [$technician, $foreman] = $this->makeMobileForeman();
+        [$technician, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob();
         $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: false);
         $schedule->tasks()->create([
@@ -264,7 +264,7 @@ class MobileJobsAndTasksTest extends TestCase
     public function test_a_mobile_onboarded_foreman_cannot_view_a_job_they_are_not_staffed_on(): void
     {
         $technician = User::factory()->create([
-            'role' => 'Site Supervisor',
+            'role' => 'Foreman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_ACTIVE,
         ]);
@@ -390,16 +390,16 @@ class MobileJobsAndTasksTest extends TestCase
             ->assertStatus(422);
     }
 
-    public function test_a_site_supervisor_can_override_the_status_of_a_task_they_are_not_personally_on(): void
+    public function test_a_foreman_can_override_the_status_of_a_task_they_are_not_personally_on(): void
     {
-        $supervisor = User::factory()->create([
+        $overseer = User::factory()->create([
             'name' => 'Sam',
-            'role' => 'Site Supervisor',
+            'role' => 'Foreman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_ACTIVE,
         ]);
-        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'supervisor']);
-        $foreman->user_id = $supervisor->id;
+        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'foreman']);
+        $foreman->user_id = $overseer->id;
         $foreman->save();
 
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
@@ -408,7 +408,7 @@ class MobileJobsAndTasksTest extends TestCase
         // Not staffed on this specific task at all — the point is that a
         // supervisor's authority does not depend on personally being on it.
 
-        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisor))
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($overseer))
             ->patchJson("/api/v1/tasks/{$task->id}/status", ['status' => 'blocked'])
             ->assertOk()
             ->assertJsonPath('data.status', 'blocked');
@@ -418,14 +418,14 @@ class MobileJobsAndTasksTest extends TestCase
 
     public function test_reopening_a_completed_task_via_status_override_clears_the_completed_timestamp(): void
     {
-        $supervisor = User::factory()->create([
+        $overseer = User::factory()->create([
             'name' => 'Sam',
-            'role' => 'Site Supervisor',
+            'role' => 'Foreman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_ACTIVE,
         ]);
-        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'supervisor']);
-        $foreman->user_id = $supervisor->id;
+        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'foreman']);
+        $foreman->user_id = $overseer->id;
         $foreman->save();
 
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
@@ -433,7 +433,7 @@ class MobileJobsAndTasksTest extends TestCase
         $task = $schedule->tasks()->first();
         $task->forceFill(['status' => 'completed', 'completion_pct' => 100, 'completed_at' => now()])->save();
 
-        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisor))
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($overseer))
             ->patchJson("/api/v1/tasks/{$task->id}/status", ['status' => 'in-progress'])
             ->assertOk();
 
@@ -746,16 +746,16 @@ class MobileJobsAndTasksTest extends TestCase
         $this->assertNull($item->fresh()->completed_at);
     }
 
-    public function test_a_site_supervisor_can_check_off_a_line_on_a_task_they_are_not_personally_on(): void
+    public function test_a_foreman_can_check_off_a_line_on_a_task_they_are_not_personally_on(): void
     {
-        $supervisor = User::factory()->create([
+        $overseer = User::factory()->create([
             'name' => 'Sam',
-            'role' => 'Site Supervisor',
+            'role' => 'Foreman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_ACTIVE,
         ]);
-        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'supervisor']);
-        $foreman->user_id = $supervisor->id;
+        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'foreman']);
+        $foreman->user_id = $overseer->id;
         $foreman->save();
 
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
@@ -763,7 +763,7 @@ class MobileJobsAndTasksTest extends TestCase
         $task = $schedule->tasks()->first();
         $item = $this->makeEstimateItemOnTask($task);
 
-        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisor))
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($overseer))
             ->patchJson("/api/v1/estimate-items/{$item->id}/completion", ['completed' => true])
             ->assertOk();
 
@@ -775,7 +775,7 @@ class MobileJobsAndTasksTest extends TestCase
         // The real-world case a plain name-matched `job_task_assignments` row
         // never covers: 'Foreman' isn't a planner role, so this only passes
         // through `JobSchedulePolicy::isAssigned()` recognizing `foreman_id`.
-        [$technician, $foreman] = $this->makeMobileForeman();
+        [$technician, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob();
         $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
         $task = $schedule->tasks()->first();
@@ -792,7 +792,7 @@ class MobileJobsAndTasksTest extends TestCase
 
     public function test_a_foreman_named_as_a_tasks_supervisor_can_check_off_its_lines(): void
     {
-        [$technician, $foreman] = $this->makeMobileForeman();
+        [$technician, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob();
         $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
         $task = $schedule->tasks()->first();
@@ -808,7 +808,7 @@ class MobileJobsAndTasksTest extends TestCase
 
     public function test_a_foreman_can_complete_their_own_task_when_named_only_via_foreman_id(): void
     {
-        [$technician, $foreman] = $this->makeMobileForeman();
+        [$technician, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob();
         $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
         $task = $schedule->tasks()->first();
@@ -879,16 +879,16 @@ class MobileJobsAndTasksTest extends TestCase
         $this->assertSame('completed', $task->fresh()->status);
     }
 
-    public function test_a_supervisors_status_override_to_completed_is_also_blocked_by_an_unchecked_line(): void
+    public function test_a_foremans_status_override_to_completed_is_also_blocked_by_an_unchecked_line(): void
     {
-        $supervisor = User::factory()->create([
+        $overseer = User::factory()->create([
             'name' => 'Sam',
-            'role' => 'Site Supervisor',
+            'role' => 'Foreman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_ACTIVE,
         ]);
-        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'supervisor']);
-        $foreman->user_id = $supervisor->id;
+        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'foreman']);
+        $foreman->user_id = $overseer->id;
         $foreman->save();
 
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
@@ -896,7 +896,7 @@ class MobileJobsAndTasksTest extends TestCase
         $task = $schedule->tasks()->first();
         $this->makeEstimateItemOnTask($task);
 
-        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisor))
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($overseer))
             ->patchJson("/api/v1/tasks/{$task->id}/status", ['status' => 'completed'])
             ->assertStatus(422);
 
@@ -1008,21 +1008,21 @@ class MobileJobsAndTasksTest extends TestCase
 
     public function test_a_status_override_is_blocked_until_the_job_has_started(): void
     {
-        $supervisor = User::factory()->create([
+        $overseer = User::factory()->create([
             'name' => 'Sam',
-            'role' => 'Site Supervisor',
+            'role' => 'Foreman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_ACTIVE,
         ]);
-        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'supervisor']);
-        $foreman->user_id = $supervisor->id;
+        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'foreman']);
+        $foreman->user_id = $overseer->id;
         $foreman->save();
 
         $job = $this->makeJob(['foreman_id' => $foreman->id, 'status' => 'draft', 'start_date' => null]);
         $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
         $task = $schedule->tasks()->first();
 
-        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisor))
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($overseer))
             ->patchJson("/api/v1/tasks/{$task->id}/status", ['status' => 'in-progress'])
             ->assertStatus(422);
     }
@@ -1057,33 +1057,68 @@ class MobileJobsAndTasksTest extends TestCase
         $this->assertNotNull($item->fresh()->completed_at);
     }
 
-    public function test_a_supervisor_cannot_start_a_job(): void
+    public function test_a_foreman_cannot_start_a_job(): void
     {
-        $supervisor = User::factory()->create([
+        $overseer = User::factory()->create([
             'name' => 'Sam',
-            'role' => 'Site Supervisor',
+            'role' => 'Foreman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_ACTIVE,
         ]);
-        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'supervisor']);
-        $foreman->user_id = $supervisor->id;
+        $foreman = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'foreman']);
+        $foreman->user_id = $overseer->id;
         $foreman->save();
 
         $job = $this->makeJob(['foreman_id' => $foreman->id, 'status' => 'scheduled', 'start_date' => now()->toDateString()]);
 
-        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisor))
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($overseer))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
             ->assertStatus(403);
 
         $this->assertSame('scheduled', $job->fresh()->status);
     }
 
-    public function test_a_foreman_can_start_a_job(): void
+    public function test_a_journeyman_can_start_a_job(): void
     {
-        [$user, $foreman] = $this->makeMobileForeman();
+        [$user, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob(['foreman_id' => $foreman->id, 'status' => 'scheduled', 'start_date' => now()->toDateString()]);
 
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
+            ->assertOk();
+
+        $this->assertSame('in-progress', $job->fresh()->status);
+    }
+
+    /**
+     * An apprentice alone cannot start a job — but with a journeyman or
+     * foreman also on the crew, they can.
+     */
+    public function test_an_apprentice_cannot_start_a_job_without_a_senior_crew_member(): void
+    {
+        $apprenticeUser = User::factory()->create([
+            'name' => 'Robin',
+            'role' => 'Apprentice',
+            'registration_source' => User::SOURCE_MOBILE,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        $apprentice = new Foreman(['name' => 'Robin', 'initials' => 'RO', 'role' => 'apprentice']);
+        $apprentice->user_id = $apprenticeUser->id;
+        $apprentice->save();
+
+        $job = $this->makeJob(['foreman_id' => $apprentice->id, 'status' => 'scheduled', 'start_date' => now()->toDateString()]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($apprenticeUser))
+            ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
+            ->assertStatus(403);
+
+        $this->assertSame('scheduled', $job->fresh()->status);
+
+        $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
+        [$journeymanUser, $journeyman] = $this->makeMobileJourneyman('Priya');
+        $schedule->tasks()->first()->update(['foreman_id' => $journeyman->id]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($apprenticeUser))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
             ->assertOk();
 
@@ -1098,7 +1133,7 @@ class MobileJobsAndTasksTest extends TestCase
 
     public function test_a_jobs_show_response_carries_a_foremans_live_timer_in_crew_time(): void
     {
-        [$user, $foreman] = $this->makeMobileForeman();
+        [$user, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob();
         app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
         $this->assignForemanToAllTasks($job, $foreman);
@@ -1135,21 +1170,21 @@ class MobileJobsAndTasksTest extends TestCase
     }
 
     /**
-     * A task's `foreman_id` can point at a supervisor's own register row
-     * instead of a real foreman (see `Foreman`'s own doc comment) — a
-     * supervisor's own clock must never surface in the crew's own time
-     * breakdown mislabeled as a foreman's.
+     * A task's `foreman_id` can point at a foreman's own register row
+     * instead of a real journeyman/apprentice (see `Foreman`'s own doc
+     * comment) — a foreman's own clock must never surface in the crew's own
+     * time breakdown mislabeled as a journeyman's.
      */
-    public function test_crew_time_excludes_a_task_lead_who_is_actually_a_supervisor(): void
+    public function test_crew_time_excludes_a_task_lead_who_is_actually_a_foreman(): void
     {
-        $supervisor = User::factory()->create([
+        $overseer = User::factory()->create([
             'name' => 'Sam',
-            'role' => 'Site Supervisor',
+            'role' => 'Foreman',
             'registration_source' => User::SOURCE_MOBILE,
             'status' => User::STATUS_ACTIVE,
         ]);
-        $lead = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'supervisor']);
-        $lead->user_id = $supervisor->id;
+        $lead = new Foreman(['name' => 'Sam', 'initials' => 'SA', 'role' => 'foreman']);
+        $lead->user_id = $overseer->id;
         $lead->save();
 
         $job = $this->makeJob();
@@ -1157,7 +1192,7 @@ class MobileJobsAndTasksTest extends TestCase
         $this->assignForemanToAllTasks($job, $lead);
 
         \App\Models\TimerSession::create([
-            'user_id' => $supervisor->id,
+            'user_id' => $overseer->id,
             'job_id' => $job->id,
             'team_member_id' => null,
             'started_at' => now(),
@@ -1166,21 +1201,21 @@ class MobileJobsAndTasksTest extends TestCase
             'billable' => true,
         ]);
 
-        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisor))
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($overseer))
             ->getJson("/api/v1/jobs/{$job->id}")
             ->assertOk()
             ->assertJsonPath('data.crewTime', []);
     }
 
     /**
-     * The scenario the user actually asked for: a supervisor overseeing a
-     * job split across two foremen sees both of them, each with their own
+     * The scenario the user actually asked for: a foreman overseeing a
+     * job split across two journeymen sees both of them, each with their own
      * time — one still running live, one only with hours already banked.
      */
     public function test_crew_time_lists_every_foreman_on_the_job_separately(): void
     {
-        [$foremanAUser, $foremanA] = $this->makeMobileForeman('Robert');
-        [$foremanBUser, $foremanB] = $this->makeMobileForeman('Priya');
+        [$foremanAUser, $foremanA] = $this->makeMobileJourneyman('Robert');
+        [$foremanBUser, $foremanB] = $this->makeMobileJourneyman('Priya');
         $job = $this->makeJob();
 
         $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
@@ -1233,7 +1268,7 @@ class MobileJobsAndTasksTest extends TestCase
 
     public function test_a_job_with_open_tasks_cannot_be_completed(): void
     {
-        [$user, $foreman] = $this->makeMobileForeman();
+        [$user, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
         app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
         // Deliberately none of the seeded tasks are touched — all still open.
@@ -1256,8 +1291,8 @@ class MobileJobsAndTasksTest extends TestCase
      */
     public function test_a_job_is_ready_for_review_once_every_task_across_every_foreman_is_done(): void
     {
-        [$foremanAUser, $foremanA] = $this->makeMobileForeman('Robert');
-        [$foremanBUser, $foremanB] = $this->makeMobileForeman('Priya');
+        [$foremanAUser, $foremanA] = $this->makeMobileJourneyman('Robert');
+        [$foremanBUser, $foremanB] = $this->makeMobileJourneyman('Priya');
         $job = $this->makeJob(['foreman_id' => $foremanA->id, 'estimated_hours' => 10]);
 
         $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
@@ -1301,12 +1336,12 @@ class MobileJobsAndTasksTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanAUser))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'completed'])
             ->assertOk()
-            ->assertJsonPath('message', 'Your tasks are marked ready for supervisor review.');
+            ->assertJsonPath('message', 'Your tasks are marked ready for foreman review.');
         auth()->forgetGuards();
         $this->assertNotSame('completed', $job->fresh()->status);
 
-        [$supervisorUser, $supervisor] = $this->makeMobileForeman('Dana');
-        $supervisor->update(['role' => Foreman::ROLE_SUPERVISOR]);
+        [$supervisorUser, $supervisor] = $this->makeMobileJourneyman('Dana');
+        $supervisor->update(['role' => Foreman::ROLE_FOREMAN]);
         $tasks->first()->update(['supervisor_id' => $supervisor->id]);
 
         // A supervisor can approve foreman A's submitted portion right now,
@@ -1373,7 +1408,7 @@ class MobileJobsAndTasksTest extends TestCase
 
     public function test_my_tasks_complete_is_null_for_a_foreman_with_no_tasks_on_this_job(): void
     {
-        [$user, $foreman] = $this->makeMobileForeman();
+        [$user, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
         // No tasks at all on this job — nothing personally assigned yet.
 

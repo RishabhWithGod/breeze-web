@@ -18,7 +18,7 @@ import { formatUsPhone, toTitleCase } from '@/utils'
 
 interface ForemanDraft {
   name: string
-  /** What they do on the crew: `supervisor` or `foreman`. */
+  /** What they do on the crew: `foreman`, `journeyman` or `apprentice`. */
   role: string
   /** Which crew they are on. Empty means none — a real state, not a gap. */
   team_id: string
@@ -27,6 +27,8 @@ interface ForemanDraft {
   licence_number: string
   started_on: string
   notes: string
+  password: string
+  password_confirmation: string
 }
 
 export interface ForemanCreateProps {
@@ -38,11 +40,11 @@ export interface ForemanCreateProps {
 /**
  * Add Member.
  *
- * A name and a role are what is required: the register exists to say who runs
- * work and who supervises it, and neither question has a sensible default. The
- * rest is what you reach for once they are on it — a number to call, a licence
- * to quote — so it is on this screen, optional, rather than on a second one
- * nobody would come back to.
+ * Name, role, email and password are required: the register exists to say who
+ * runs work and who supervises it, and every member added here also gets a
+ * real, already-approved mobile-app login — the email and password are what
+ * they sign into it with. The rest is what you reach for once they are on the
+ * register — a number to call, a licence to quote — so it stays optional.
  *
  * Initials are not asked for at all. "Dana Wu" gives "DW", and a field the app
  * can fill in itself is one more thing to type and one more thing to get wrong.
@@ -51,14 +53,20 @@ export default function ForemanCreate({ teams, roles }: ForemanCreateProps) {
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<ForemanDraft>({
       name: '',
-      // Most of the register is foremen; a supervisor is the exception you pick.
-      role: 'foreman',
+      // Most of the register is journeymen; a foreman is the exception you pick.
+      role: 'journeyman',
       team_id: '',
       phone: '',
       email: '',
       licence_number: '',
-      started_on: '',
+      // Whoever is being added is joining today unless the form says
+      // otherwise — a manager backdating a real earlier start is still
+      // free to change it, but "unset" is never the right default for
+      // someone being added right now.
+      started_on: new Date().toISOString().slice(0, 10),
       notes: '',
+      password: '',
+      password_confirmation: '',
     })
 
   /**
@@ -193,7 +201,7 @@ export default function ForemanCreate({ teams, roles }: ForemanCreateProps) {
 
               <TextInput
                 id="foreman-email"
-                label="Email"
+                label="Email*"
                 type="email"
                 placeholder="e.g. dana@example.com"
                 autoComplete="off"
@@ -201,6 +209,39 @@ export default function ForemanCreate({ teams, roles }: ForemanCreateProps) {
                 onChange={(event) => update('email', event.target.value)}
                 {...(errors.email ? { error: errors.email } : {})}
               />
+            </div>
+
+            {/*
+              Every member added here also gets a mobile-app account — the
+              email and password below are what they sign into it with,
+              already approved, no manager review to wait on.
+            */}
+            <div className="border-t border-hairline pt-6">
+              <p className="mb-1 text-md font-medium text-white">Mobile App Access</p>
+              <p className="mb-4 text-sm text-white/70">
+                This member signs into the mobile app with the email above and the password below.
+              </p>
+
+              <div className="grid gap-6 sm:grid-cols-2">
+                <TextInput
+                  id="foreman-password"
+                  label="Password*"
+                  type="password"
+                  autoComplete="new-password"
+                  value={data.password}
+                  onChange={(event) => update('password', event.target.value)}
+                  {...(errors.password ? { error: errors.password } : {})}
+                />
+
+                <TextInput
+                  id="foreman-password-confirmation"
+                  label="Confirm Password*"
+                  type="password"
+                  autoComplete="new-password"
+                  value={data.password_confirmation}
+                  onChange={(event) => update('password_confirmation', event.target.value)}
+                />
+              </div>
             </div>
 
             <TextArea

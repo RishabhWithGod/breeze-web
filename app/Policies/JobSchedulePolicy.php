@@ -14,7 +14,7 @@ use App\Models\User;
  * Two questions, both of which must clear: *is this the kind of thing your
  * role does* (`users.role`, free text entered by the office), and *is it
  * your job* (`work_jobs.user_id` — the manager the job was raised under).
- * A site supervisor's role lets them replan a schedule; it was never meant to
+ * A foreman's role lets them replan a schedule; it was never meant to
  * let them replan a schedule on a job that is not theirs.
  *
  * Roles are matched case-insensitively on the job title stored against the
@@ -23,10 +23,10 @@ use App\Models\User;
 class JobSchedulePolicy
 {
     /** Roles that may change the plan itself. */
-    private const PLANNERS = ['project manager', 'site supervisor', 'estimator', 'admin', 'owner'];
+    private const PLANNERS = ['project manager', 'foreman', 'estimator', 'admin', 'owner'];
 
     /** Roles that may staff a task. */
-    private const STAFFERS = ['project manager', 'site supervisor', 'admin', 'owner'];
+    private const STAFFERS = ['project manager', 'foreman', 'admin', 'owner'];
 
     /** Roles that may remove work from a schedule. */
     private const DELETERS = ['project manager', 'admin', 'owner'];
@@ -64,7 +64,7 @@ class JobSchedulePolicy
      * checklist line, or sending a task back during review.
      *
      * `updateTask()` alone (planner role + owning the job outright) is too
-     * narrow here: a site supervisor is commonly assigned to watch a
+     * narrow here: a foreman is commonly assigned to watch a
      * specific task without being the job's own manager (`work_jobs.user_id`),
      * and reopening the work they are literally supervising is exactly their
      * job. `updateTask()` still applies on its own for a manager who owns the
@@ -188,19 +188,19 @@ class JobSchedulePolicy
     }
 
     /**
-     * Whether this user is a supervisor with a real claim to this specific
+     * Whether this user is a foreman with a real claim to this specific
      * task — named on it directly (`job_tasks.supervisor_id`), or, when the
-     * task has no foreman/supervisor of its own, via the job's own legacy
+     * task has no worker/foreman of its own, via the job's own legacy
      * header field (same fallback as {@see isAssigned()}). Deliberately
-     * requires the supervisor *role* on top of the assignment: a plain
-     * foreman named the same way is still covered by {@see isAssigned()}
-     * for everyday actions, but reopening already-signed-off work is a
-     * supervisor's call, not the crew's own.
+     * requires the foreman *role* on top of the assignment: a plain
+     * journeyman or apprentice named the same way is still covered by
+     * {@see isAssigned()} for everyday actions, but reopening already-signed-off
+     * work is a foreman's call, not the crew's own.
      */
     private function isTaskSupervisor(User $user, JobTask $task): bool
     {
         $foreman = $user->foreman;
-        if ($foreman === null || $foreman->role !== Foreman::ROLE_SUPERVISOR) {
+        if ($foreman === null || $foreman->role !== Foreman::ROLE_FOREMAN) {
             return false;
         }
 

@@ -46,9 +46,15 @@ class JobTaskSetupController extends Controller
         private readonly TakeoffFlow $flow,
     ) {}
 
-    public function create(Request $request, Job $job): Response
+    public function create(Request $request, Job $job): Response|RedirectResponse
     {
         $this->authorisePlanning($job, $request->user());
+
+        if ($job->isLocked()) {
+            return redirect()
+                ->route('jobs.show', $job)
+                ->with('warning', "“{$job->name}” is completed and can no longer be planned.");
+        }
 
         // The last step, and still a step: remembered so leaving it mid-way
         // leaves a way back.
@@ -105,9 +111,17 @@ class JobTaskSetupController extends Controller
      *
      * Narrowed to the job's own crew: the whole point of handing a job to a
      * team is that the work on it goes to that team. A job with no crew falls
-     * back to the whole register — otherwise a job raised before teams existed
-     * could not be staffed at all, which would be a worse answer than a long
-     * list.
+     * back to the whole register for `foremen` — otherwise a job raised
+     * before teams existed could not be staffed at all, which would be a
+     * worse answer than a long list. `supervisors` stays role-filtered even
+     * then: oversight is a role, not a team membership question.
+     *
+     * `foremen` (the `job_tasks.foreman_id` slot) is who actually runs the
+     * task — a journeyman or an apprentice, per the crew hierarchy — and
+     * `supervisors` (`job_tasks.supervisor_id`) is who is over it, which is
+     * a foreman-role person only. The prop names stay as the FK columns they
+     * feed, not the role vocabulary, so this JSON shape doesn't have to move
+     * every time the role names do.
      *
      * @return array<string, mixed>
      */
@@ -117,12 +131,12 @@ class JobTaskSetupController extends Controller
 
         return [
             'foremen' => $team === null
-                ? Foreman::orderBy('name')->get(['id', 'name', 'initials'])
-                : $team->foremen()->get(['id', 'name', 'initials']),
+                ? Foreman::orderBy('name')->get(['id', 'name', 'initials', 'role'])
+                : $team->workers()->get(['id', 'name', 'initials', 'role']),
             'supervisors' => $team === null
-                ? Foreman::where('role', Foreman::ROLE_SUPERVISOR)
-                    ->orderBy('name')->get(['id', 'name', 'initials'])
-                : $team->supervisors()->get(['id', 'name', 'initials']),
+                ? Foreman::where('role', Foreman::ROLE_FOREMAN)
+                    ->orderBy('name')->get(['id', 'name', 'initials', 'role'])
+                : $team->foremen()->get(['id', 'name', 'initials', 'role']),
             /*
              * Said on the screen, because "why is this list so short" is the
              * first question a narrowed picker raises.
@@ -287,11 +301,23 @@ class JobTaskSetupController extends Controller
      * changing which lines it covers is the whole reason to open it. A narrower
      * editor would leave the plan and the estimate free to drift apart.
      */
-    public function edit(Request $request, JobTask $task): Response
+    public function edit(Request $request, JobTask $task): Response|RedirectResponse
     {
         $job = $this->jobBehind($task);
 
         $this->authorisePlanning($job, $request->user());
+
+        if ($job->isLocked()) {
+            return redirect()
+                ->route('jobs.show', $job)
+                ->with('warning', "“{$job->name}” is completed and its tasks can no longer be edited.");
+        }
+
+        if ($task->status === JobTask::STATUS_COMPLETED) {
+            return redirect()
+                ->route('jobs.show', $job)
+                ->with('warning', "“{$task->title}” is completed and can no longer be edited.");
+        }
 
         return Inertia::render('JobTaskEdit', [
             'returnUrl' => $this->returnUrl($request, $job) ?? route('tasks.index'),
@@ -369,6 +395,7 @@ class JobTaskSetupController extends Controller
 
         $this->authorisePlanning($job, $request->user());
         abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
+        abort_if($task->status === JobTask::STATUS_COMPLETED, 409, 'This task is already completed and can no longer be changed.');
 
         $hasLines = $this->estimateLineCount($job) > 0;
 
@@ -518,6 +545,7 @@ class JobTaskSetupController extends Controller
 
         $this->authorisePlanning($job, $request->user());
         abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
+        abort_if($task->status === JobTask::STATUS_COMPLETED, 409, 'This task is already completed and can no longer be removed.');
 
         $title = $task->title;
 

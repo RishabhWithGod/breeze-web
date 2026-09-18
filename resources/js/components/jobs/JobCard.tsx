@@ -76,6 +76,8 @@ export function JobCard({ job, index = 0, onView, onDelete, className }: JobCard
         <Button
           variant="white"
           size="sm"
+          disabled={job.isLocked}
+          title={job.isLocked ? 'Completed jobs cannot be deleted.' : undefined}
           className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
           onClick={() => onDelete(job)}
         >
