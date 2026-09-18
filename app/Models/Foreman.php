@@ -89,4 +89,18 @@ class Foreman extends Model
     {
         return $this->hasMany(JobTask::class);
     }
+
+    /**
+     * The apprentices on this journeyman's own team — the pool "Assign
+     * Apprentice" narrows to once a journeyman is picked. No team, no pool:
+     * an apprentice is never offered for a journeyman not on a crew.
+     *
+     * @return HasMany<Foreman, $this>
+     */
+    public function teamApprentices(): HasMany
+    {
+        return $this->hasMany(self::class, 'team_id', 'team_id')
+            ->where('role', self::ROLE_APPRENTICE)
+            ->orderBy('name');
+    }
 }

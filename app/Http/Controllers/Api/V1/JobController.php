@@ -54,6 +54,17 @@ class JobController extends Controller
 
         $job->load(['foreman:id,name,initials,role,user_id', 'activeAssignments']);
 
+        // An apprentice gets basic info only — no crew roster, task counts,
+        // crew time, or review state. They cannot reach the task/material
+        // endpoints that data describes anyway (see `BlockApprenticeAccess`),
+        // so the job-show response shouldn't describe it to them either.
+        if ($this->isApprentice($request)) {
+            return $this->ok([
+                ...$this->summarize($job, $request),
+                'description' => $job->description,
+            ]);
+        }
+
         return $this->ok([
             ...$this->summarize($job, $request),
             'description' => $job->description,
@@ -64,7 +75,57 @@ class JobController extends Controller
             'openTasksCount' => $job->tasks()->open()->count(),
             'crewTime' => $this->crewTime($job),
             'myTasksComplete' => $this->myTasksComplete($request, $job),
+            // Who is assigned as an apprentice on this job right now —
+            // meaningful to a journeyman wondering who they've got, and to
+            // a foreman deciding who still needs one.
+            'apprenticeAssignments' => $job->apprenticeAssignments()
+                ->with(['journeyman:id,name', 'apprentice:id,name'])
+                ->get()
+                ->map(fn ($a) => [
+                    'id' => $a->id,
+                    'journeymanId' => $a->journeyman_id,
+                    'journeymanName' => $a->journeyman->name,
+                    'apprenticeId' => $a->apprentice_id,
+                    'apprenticeName' => $a->apprentice->name,
+                ])->values(),
+            ...$this->apprenticeAssignmentOptions($request, $job),
         ]);
+    }
+
+    /**
+     * The "Assign Apprentice" picker's own two lists — only for a foreman,
+     * the one role that can actually make the assignment
+     * (`Api\V1\JobApprenticeAssignmentController`).
+     *
+     * @return array<string, mixed>
+     */
+    private function apprenticeAssignmentOptions(Request $request, Job $job): array
+    {
+        if ($request->user()->foreman?->role !== Foreman::ROLE_FOREMAN) {
+            return ['canAssignApprentice' => false];
+        }
+
+        $journeymen = $job->assignedJourneymen();
+
+        return [
+            'canAssignApprentice' => true,
+            'assignableJourneymen' => $journeymen->map(fn (Foreman $j) => [
+                'id' => $j->id,
+                'name' => $j->name,
+            ])->values(),
+            'apprenticesByJourneyman' => $journeymen->mapWithKeys(
+                fn (Foreman $j) => [$j->id => $j->teamApprentices()->get(['id', 'name'])->map(fn (Foreman $a) => [
+                    'id' => $a->id,
+                    'name' => $a->name,
+                ])->values()],
+            ),
+        ];
+    }
+
+    /** Whether the requesting account is the crew register's junior tier — gates how much of a job's data it sees. */
+    private function isApprentice(Request $request): bool
+    {
+        return $request->user()->foreman?->role === Foreman::ROLE_APPRENTICE;
     }
 
     /**
@@ -490,7 +551,7 @@ class JobController extends Controller
     /** @return array<string, mixed> */
     private function summarize(Job $job, Request $request): array
     {
-        return [
+        $basics = [
             'id' => $job->id,
             'name' => $job->name,
             'client' => $job->client,
@@ -512,6 +573,26 @@ class JobController extends Controller
             'priority' => $job->priority,
             'startDate' => $job->start_date?->toDateString(),
             'endDate' => $job->end_date?->toDateString(),
+            'foreman' => $job->foreman ? [
+                'name' => $job->foreman->name,
+                'initials' => $job->foreman->initials,
+                // "Foreman", "Journeyman" or "Apprentice" — the register row
+                // this points to isn't always a foreman despite the
+                // relation's name (see `Foreman`'s own doc comment), so the
+                // app must not hardcode the label either.
+                'role' => $job->foreman->roleLabel(),
+            ] : null,
+        ];
+
+        // An apprentice sees the job exists and where/what it is — nothing
+        // about hours, cost, or the task-review workflow, none of which they
+        // can act on (see `BlockApprenticeAccess`).
+        if ($this->isApprentice($request)) {
+            return $basics;
+        }
+
+        return [
+            ...$basics,
             // The crew's clock reads against these: `estimatedHours` is the
             // budget from the task setup wizard; `workedHoursSoFar` is
             // everything already logged (timer-stopped or manual) excluding
@@ -537,22 +618,13 @@ class JobController extends Controller
             'readyForReviewAt' => $job->ready_for_review_at?->toISOString(),
             ...$this->myForemanCompletion($request, $job),
             // Who the job is still waiting on before it can actually close —
-            // meaningful to a journeyman/apprentice wondering why the job
-            // isn't done once their own part is approved, and to a foreman
-            // picking whom to approve next from the task list.
+            // meaningful to a journeyman wondering why the job isn't done
+            // once their own part is approved, and to a foreman picking whom
+            // to approve next from the task list.
             'pendingForemen' => $job->pendingForemen(),
             // Whose own portion is submitted and waiting on a foreman's
             // targeted approve tap (`approveForeman()`) right now.
             'foremenReadyForReview' => $job->readyForemen(),
-            'foreman' => $job->foreman ? [
-                'name' => $job->foreman->name,
-                'initials' => $job->foreman->initials,
-                // "Foreman", "Journeyman" or "Apprentice" — the register row
-                // this points to isn't always a foreman despite the
-                // relation's name (see `Foreman`'s own doc comment), so the
-                // app must not hardcode the label either.
-                'role' => $job->foreman->roleLabel(),
-            ] : null,
         ];
     }
 }

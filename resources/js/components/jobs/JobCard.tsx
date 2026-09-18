@@ -14,14 +14,26 @@ export interface JobCardProps {
   index?: number
   onView: (job: Job) => void
   onDelete: (job: Job) => void
+  /** Navigates to "Create Invoice" (or "View Invoice", once `job.hasInvoice`) — only rendered once the job is completed. */
+  onCreateInvoice: (job: Job) => void
+  /** Role-only — whether this user may raise an invoice at all. */
+  canCreateInvoice: boolean
   className?: string
 }
 
 /**
- * Small-screen equivalent of a jobs table row — same seven fields and the same
- * two actions, so nothing hides behind a sideways scroll on a phone.
+ * Small-screen equivalent of a jobs table row — same fields and actions as
+ * the table row, so nothing hides behind a sideways scroll on a phone.
  */
-export function JobCard({ job, index = 0, onView, onDelete, className }: JobCardProps) {
+export function JobCard({
+  job,
+  index = 0,
+  onView,
+  onDelete,
+  onCreateInvoice,
+  canCreateInvoice,
+  className,
+}: JobCardProps) {
   const tone = JOB_STATUS_TONE[job.status]
 
   return (
@@ -83,6 +95,11 @@ export function JobCard({ job, index = 0, onView, onDelete, className }: JobCard
         >
           Delete
         </Button>
+        {job.isLocked && canCreateInvoice && (
+          <Button variant="white" size="sm" onClick={() => onCreateInvoice(job)}>
+            {job.hasInvoice ? 'View Invoice' : 'Create Invoice'}
+          </Button>
+        )}
       </div>
     </motion.li>
   )

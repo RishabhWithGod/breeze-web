@@ -40,6 +40,10 @@ export interface Job {
   readonly isArchived: boolean
   readonly teamCount: number
   readonly estimateCount: number
+  /** Whether an invoice has already been raised for this job — see `invoiceId`. */
+  readonly hasInvoice: boolean
+  /** The existing invoice's id, when `hasInvoice` — for "View Invoice" instead of raising a second one. */
+  readonly invoiceId: number | null
   /** Who's currently staffed, and in what role — same shape as the detail screen. */
   readonly assignments: readonly JobAssignmentRow[]
   readonly options: {

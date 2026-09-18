@@ -38,6 +38,8 @@ class EstimateItem extends Model
         'estimate_id',
         'job_task_id',
         'final_symbol_id',
+        /** The line this one was cloned from, on a `merged` estimate. See `sourceItem()`. */
+        'source_estimate_item_id',
         'category',
         'description',
         'unit',
@@ -126,5 +128,11 @@ class EstimateItem extends Model
     public function finalSymbol(): BelongsTo
     {
         return $this->belongsTo(FinalSymbol::class);
+    }
+
+    /** The line on the original/addendum estimate this one was cloned from, when this line lives on a `merged` estimate. */
+    public function sourceItem(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'source_estimate_item_id');
     }
 }

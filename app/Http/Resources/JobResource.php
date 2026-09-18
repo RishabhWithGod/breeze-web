@@ -42,6 +42,10 @@ class JobResource extends JsonResource
             'isArchived' => $this->archived_at !== null,
             'teamCount' => $this->team_members_count ?? 0,
             'estimateCount' => $this->estimates_count ?? 0,
+            // Whether this job already has an invoice — "Create Invoice"
+            // becomes "View Invoice" instead of raising a second one.
+            'hasInvoice' => $this->whenLoaded('invoices', fn () => $this->invoices->isNotEmpty(), false),
+            'invoiceId' => $this->whenLoaded('invoices', fn () => $this->invoices->first()?->id, null),
             // Who's currently staffed, and in what role — the same assignments
             // made on the job's own detail screen, surfaced here so the list
             // doesn't require opening every job to see who's on it.

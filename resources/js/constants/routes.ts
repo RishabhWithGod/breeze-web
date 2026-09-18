@@ -45,6 +45,8 @@ export const ROUTES = {
   priceBook: '/price-book',
   estimates: '/estimates',
   estimateCreate: '/estimates/create',
+  /** Where a project's addenda are managed, and a job raised from a selection of them. */
+  addenda: '/estimates/addenda',
   jobs: '/jobs',
   /** Under Jobs in the rail: work and the people who run it, across every job. */
   clients: '/clients',
@@ -242,10 +244,19 @@ export const routeTo = {
     `/estimates/${estimateId}/items/${itemId}`,
   estimatePdf: (estimateId: number) => `/estimates/${estimateId}/pdf`,
   estimateCsv: (estimateId: number) => `/estimates/${estimateId}/export/csv`,
+  /** Upload Addendum, opened for a specific standalone estimate. */
+  uploadAddendumFor: (estimateId: number) => `/ai-takeoff/upload?addendum_for=${estimateId}`,
+  /** The Addendum screen, opened to a specific project. */
+  addendaForProject: (projectId: number) => `/estimates/addenda?project=${projectId}`,
+  jobsFromEstimates: '/jobs/from-estimates',
 
   jobAssignments: (jobId: number) => `/jobs/${jobId}/assignments`,
   jobAssignment: (jobId: number, assignmentId: number) =>
     `/jobs/${jobId}/assignments/${assignmentId}`,
+
+  /** Removing an apprentice assignment — a manager's action. Making one is mobile-only, no web route for it. */
+  jobApprentice: (jobId: number, assignmentId: number) =>
+    `/jobs/${jobId}/apprentices/${assignmentId}`,
 
   /** Live state of a run, polled by the processing screen. */
   processingStatus: (projectId: number) => `/processing/${projectId}/status`,
@@ -332,6 +343,8 @@ export const routeTo = {
   invoiceMarkPaid: (invoiceId: number) => `/invoices/${invoiceId}/mark-paid`,
   invoicePdf: (invoiceId: number) => `/invoices/${invoiceId}/pdf`,
   invoicePay: (invoiceId: number) => `/invoices/${invoiceId}/pay`,
+  /** "Create Invoice" from a completed job — pre-fills the client, job and its own estimate. */
+  invoiceCreateForJob: (jobId: number) => `/invoices/create?job=${jobId}`,
 
   // Job Costing
   jobCostingExport: (format: 'csv' | 'xlsx') => `/job-costing/export/${format}`,

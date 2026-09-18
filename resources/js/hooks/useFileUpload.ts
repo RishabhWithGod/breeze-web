@@ -44,11 +44,17 @@ export function useFileUpload(): {
     setSubmitting(true)
     targets.forEach((file) => setFileStatus(file.id, 'uploading', 0))
 
+    // Carried from the URL rather than component state: this screen was
+    // opened via `?addendum_for=<estimateId>` from "Upload Addendum", and
+    // that is the only place the id needs to travel from.
+    const addendumForEstimateId = new URLSearchParams(window.location.search).get('addendum_for')
+
     router.post(
       ROUTES.upload,
       {
         project_id: projectId,
         files: targets.map((file) => file.source),
+        ...(addendumForEstimateId ? { addendum_for_estimate_id: addendumForEstimateId } : {}),
       },
       {
         forceFormData: true,

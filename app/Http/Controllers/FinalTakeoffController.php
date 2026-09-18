@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\ApprovalHistoryResource;
 use App\Http\Resources\FinalSymbolResource;
 use App\Models\AiResult;
+use App\Models\Estimate;
 use App\Models\FinalSymbol;
 use App\Models\Job;
 use App\Models\Project;
@@ -409,6 +410,17 @@ class FinalTakeoffController extends Controller
             $estimate = $builder->fromFinalJson($result, $request->user());
         } catch (RuntimeException $e) {
             return back()->with('warning', $e->getMessage());
+        }
+
+        // An addendum's own page is not where it is worked from — its
+        // upload was started from the original estimate's screen, and that
+        // is where selecting it into a job happens too. Landing there
+        // instead is the literal "back to this same Estimate screen" the
+        // Upload Addendum flow promises.
+        if ($estimate->kind === Estimate::KIND_ADDENDUM) {
+            return redirect()
+                ->route('estimates.show', ['estimate' => $estimate->parent_estimate_id, 'flow' => 1])
+                ->with('success', "Addendum {$estimate->addendum_number} was generated from the reviewed takeoff.");
         }
 
         return redirect()

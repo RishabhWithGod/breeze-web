@@ -8,6 +8,7 @@ use App\Jobs\RenderDrawingPreviews;
 use App\Models\AiJob;
 use App\Models\AiResult;
 use App\Models\Project;
+use App\Models\Upload;
 use App\Models\User;
 use App\Services\Ai\ArtefactStore;
 use App\Support\UploadLimits;
@@ -481,13 +482,20 @@ class TakeoffFlowTest extends TestCase
             ]);
     }
 
-    public function test_a_run_can_be_cancelled_and_resubmitted(): void
+    /**
+     * Cancelling removes the drawing it was raised against — row and file
+     * both — so there is nothing left to resubmit against afterwards.
+     */
+    public function test_a_cancelled_run_removes_its_drawing_and_cannot_be_resubmitted(): void
     {
         $this->skipUnlessEngineIsUp();
         Queue::fake();
 
         $this->actingAs($this->user)->post('/ai-takeoff/upload', ['files' => [$this->fixtureUpload()]]);
         $project = Project::latest('id')->firstOrFail();
+        $upload = Upload::where('project_id', $project->id)->sole();
+        $disk = Storage::disk((string) config('takeoff.uploads.disk'));
+        $this->assertTrue($disk->exists($upload->path));
 
         $this->actingAs($this->user)
             ->from("/processing/{$project->id}")
@@ -497,13 +505,18 @@ class TakeoffFlowTest extends TestCase
         $this->assertSame('failed', $project->fresh()->status);
         $this->assertSame(AiJob::STATUS_CANCELLED, AiJob::latest('id')->firstOrFail()->status);
 
+        // Gone — the row and the file it pointed at.
+        $this->assertDatabaseMissing('uploads', ['id' => $upload->id]);
+        $this->assertFalse($disk->exists($upload->path));
+
         $this->actingAs($this->user)
             ->from("/processing/{$project->id}")
-            ->post("/processing/{$project->id}/restart");
+            ->post("/processing/{$project->id}/restart")
+            ->assertSessionHas('warning');
 
-        $this->assertSame(2, AiJob::where('project_id', $project->id)->count());
-        $this->assertSame('processing', $project->fresh()->status);
-        Queue::assertPushed(ProcessTakeoffRun::class, 2);
+        // Nothing was queued a second time — there was no drawing left to run against.
+        $this->assertSame(1, AiJob::where('project_id', $project->id)->count());
+        Queue::assertPushed(ProcessTakeoffRun::class, 1);
     }
 
     public function test_opening_results_hands_over_to_the_review_workflow(): void

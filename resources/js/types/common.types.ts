@@ -21,6 +21,8 @@ export interface NavItem {
   readonly icon: LucideIcon
   /** Optional counter rendered as a pill on the right of the item. */
   readonly badge?: number
+  /** Sub-items shown nested under this one — see Estimates → Addendum. Every other entry leaves this unset and renders exactly as before. */
+  readonly children?: readonly NavItem[]
 }
 
 export interface BreadcrumbItem {

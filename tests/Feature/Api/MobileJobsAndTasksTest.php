@@ -225,15 +225,20 @@ class MobileJobsAndTasksTest extends TestCase
 
     public function test_the_jobs_foreman_field_reports_the_register_rows_real_role_not_a_hardcoded_foreman_label(): void
     {
+        // Not an apprentice: an apprentice's own mobile access no longer
+        // runs through `job.foreman_id` at all (see
+        // `ElectricianJobAccess::assignedJobsQuery()`) — this test is about
+        // the label on the response, so the elevated role just needs to
+        // differ from the default `journeyman` to prove it isn't hardcoded.
         [$technician, $foreman] = $this->makeMobileJourneyman();
-        $foreman->update(['role' => Foreman::ROLE_APPRENTICE]);
+        $foreman->update(['role' => Foreman::ROLE_FOREMAN]);
         $job = $this->makeJob(['foreman_id' => $foreman->id]);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($technician))
             ->getJson("/api/v1/jobs/{$job->id}")
             ->assertOk();
 
-        $response->assertJsonPath('data.foreman.role', 'Apprentice');
+        $response->assertJsonPath('data.foreman.role', 'Foreman');
     }
 
     public function test_a_technician_named_as_a_tasks_foreman_or_supervisor_can_access_the_job_and_see_the_task(): void
@@ -1094,7 +1099,12 @@ class MobileJobsAndTasksTest extends TestCase
      * An apprentice alone cannot start a job — but with a journeyman or
      * foreman also on the crew, they can.
      */
-    public function test_an_apprentice_cannot_start_a_job_without_a_senior_crew_member(): void
+    /**
+     * An apprentice can never change a job's status — not even with a
+     * journeyman/foreman also on the crew. `BlockApprenticeAccess` refuses
+     * the request before `JobController::changeStatus()` is ever reached.
+     */
+    public function test_an_apprentice_cannot_start_a_job(): void
     {
         $apprenticeUser = User::factory()->create([
             'name' => 'Robin',
@@ -1106,23 +1116,21 @@ class MobileJobsAndTasksTest extends TestCase
         $apprentice->user_id = $apprenticeUser->id;
         $apprentice->save();
 
-        $job = $this->makeJob(['foreman_id' => $apprentice->id, 'status' => 'scheduled', 'start_date' => now()->toDateString()]);
+        $journeyman = new Foreman(['name' => 'Priya', 'initials' => 'PR', 'role' => 'journeyman']);
+        $journeyman->save();
+
+        $job = $this->makeJob(['foreman_id' => $journeyman->id, 'status' => 'scheduled', 'start_date' => now()->toDateString()]);
+        \App\Models\JobApprenticeAssignment::create([
+            'job_id' => $job->id,
+            'journeyman_id' => $journeyman->id,
+            'apprentice_id' => $apprentice->id,
+        ]);
 
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($apprenticeUser))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
             ->assertStatus(403);
 
         $this->assertSame('scheduled', $job->fresh()->status);
-
-        $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
-        [$journeymanUser, $journeyman] = $this->makeMobileJourneyman('Priya');
-        $schedule->tasks()->first()->update(['foreman_id' => $journeyman->id]);
-
-        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($apprenticeUser))
-            ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
-            ->assertOk();
-
-        $this->assertSame('in-progress', $job->fresh()->status);
     }
 
     /** Stamps `$foreman` as the foreman on every task `ScheduleBuilder` seeded for this job. */

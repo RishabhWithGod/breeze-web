@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AddendumController;
 use App\Http\Controllers\AddressLookupController;
 use App\Http\Controllers\AiReviewController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
@@ -22,11 +23,13 @@ use App\Http\Controllers\HealthController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceDetailController;
 use App\Http\Controllers\InvoicePaymentController;
+use App\Http\Controllers\JobApprenticeAssignmentController;
 use App\Http\Controllers\JobAssignmentController;
 use App\Http\Controllers\JobAttachmentController;
 use App\Http\Controllers\JobController;
 use App\Http\Controllers\JobCostingController;
 use App\Http\Controllers\JobEstimateController;
+use App\Http\Controllers\JobFromEstimatesController;
 use App\Http\Controllers\JobNoteController;
 use App\Http\Controllers\JobScheduleController;
 use App\Http\Controllers\JobTaskController;
@@ -273,6 +276,8 @@ Route::middleware('auth')->group(function () {
     Route::get('estimates', [EstimateController::class, 'index'])->name('estimates.index');
     Route::get('estimates/create', [EstimateController::class, 'create'])->name('estimates.create');
     Route::post('estimates', [EstimateController::class, 'store'])->name('estimates.store');
+    // Registered ahead of the `{estimate}` wildcard below, same as `create`.
+    Route::get('estimates/addenda', [AddendumController::class, 'index'])->name('addenda.index');
     Route::delete('estimates/{estimate}', [EstimateController::class, 'destroy'])->name('estimates.destroy');
     Route::post('estimates/{estimate}/restore', [EstimateController::class, 'restore'])->name('estimates.restore');
 
@@ -362,6 +367,7 @@ Route::middleware('auth')->group(function () {
     Route::get('jobs/create', [JobController::class, 'create'])->name('jobs.create');
     Route::post('jobs', [JobController::class, 'store'])->name('jobs.store');
     Route::post('jobs/bulk', [JobController::class, 'bulk'])->name('jobs.bulk');
+    Route::post('jobs/from-estimates', [JobFromEstimatesController::class, 'store'])->name('jobs.from-estimates');
 
     Route::get('jobs/{job}', [JobController::class, 'show'])->name('jobs.show');
     Route::get('jobs/{job}/edit', [JobController::class, 'edit'])->name('jobs.edit');
@@ -452,6 +458,12 @@ Route::middleware('auth')->group(function () {
     Route::post('jobs/{job}/assignments', [JobAssignmentController::class, 'store'])->name('jobs.assignments.store');
     Route::delete('jobs/{job}/assignments/{assignment}', [JobAssignmentController::class, 'destroy'])
         ->name('jobs.assignments.destroy');
+
+    // Who is assigned as an apprentice on this job — a foreman's call, made
+    // from the mobile app (`Api\V1\JobApprenticeAssignmentController`), not
+    // here. A manager can still remove one gone wrong.
+    Route::delete('jobs/{job}/apprentices/{assignment}', [JobApprenticeAssignmentController::class, 'destroy'])
+        ->name('jobs.apprentices.destroy');
 
     // Estimates raised from a job, and the estimate → project conversion
     Route::post('jobs/{job}/estimates', [JobEstimateController::class, 'store'])->name('jobs.estimates.store');

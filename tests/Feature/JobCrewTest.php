@@ -111,7 +111,9 @@ class JobCrewTest extends TestCase
             ->get(route('jobs.tasks.setup', $this->job))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('team', null)
-                ->has('foremen', 3)
+                // Journeymen only: priya and stranger, not torres (a
+                // foreman oversees, they don't run a task themselves).
+                ->has('foremen', 2)
                 ->has('supervisors', 1));
     }
 

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mysql -u root ai_takeoff_test -e \"DROP TABLE IF EXISTS estimate_merge_sources; DELETE FROM migrations WHERE migration LIKE '2026_09_18_1502%' OR migration LIKE '2026_09_18_1501%';\")",
+      "Bash(DB_DATABASE=ai_takeoff_test php artisan migrate --database=mysql)"
+    ]
+  }
+}

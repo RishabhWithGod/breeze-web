@@ -9,6 +9,7 @@ import {
   MapPin,
   PencilLine,
   Plus,
+  Receipt,
   Trash2,
   Wallet,
 } from 'lucide-react'
@@ -19,6 +20,7 @@ import {
   ButtonLink,
   Card,
   ConfirmDialog,
+  IconButton,
   SectionHeading,
   SelectField,
   StatusChip,
@@ -56,6 +58,21 @@ export interface JobShowProps {
   /** False for anyone who cannot plan work — the tasks are still readable. */
   canPlanWork: boolean
   /**
+   * False for anyone who cannot manage apprentice assignments — read/manage
+   * only here. Making an assignment is a foreman's call from the mobile
+   * app's Job Detail screen, not exposed on the web.
+   */
+  canManageApprentices: boolean
+  /** Role-only — whether this user may raise an invoice at all. Already-invoiced is `job.hasInvoice`. */
+  canCreateInvoice: boolean
+  apprenticeAssignments: readonly {
+    readonly id: number
+    readonly journeymanId: number
+    readonly journeymanName: string
+    readonly apprenticeId: number
+    readonly apprenticeName: string
+  }[]
+  /**
    * Where Back returns to, resolved by the server from the link that got here.
    * A job is opened from the jobs list, from Scheduling and from the task list,
    * and Back has to undo the step that was actually taken.
@@ -71,7 +88,15 @@ export interface JobShowProps {
  * Every panel writes through its own controller and the page reloads with the
  * updated relationships, so what is on screen always matches the database.
  */
-export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) {
+export default function JobShow({
+  job,
+  canPlanWork,
+  canManageApprentices,
+  canCreateInvoice,
+  apprenticeAssignments,
+  back,
+  from,
+}: JobShowProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
@@ -87,6 +112,10 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
 
   const changeStatus = (status: JobStatus) => {
     router.post(routeTo.jobStatus(job.id), { status }, { preserveScroll: true })
+  }
+
+  const removeApprentice = (assignmentId: number) => {
+    router.delete(routeTo.jobApprentice(job.id, assignmentId), { preserveScroll: true })
   }
 
   // Status, staffing and cost activity all live inside the `job` and
@@ -132,6 +161,24 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
                 leftIcon={PencilLine}
               >
                 Edit
+              </ButtonLink>
+            )}
+            {/*
+              Only once completed — an in-progress job has nothing final to
+              bill yet. Already invoiced opens that invoice instead of
+              starting a second one; enforced again server-side, not only here.
+            */}
+            {isLocked && canCreateInvoice && (
+              <ButtonLink
+                href={
+                  job.hasInvoice && job.invoiceId
+                    ? routeTo.invoice(job.invoiceId)
+                    : routeTo.invoiceCreateForJob(job.id)
+                }
+                variant="dark"
+                leftIcon={Receipt}
+              >
+                {job.hasInvoice ? 'View Invoice' : 'Create Invoice'}
               </ButtonLink>
             )}
           </>
@@ -272,6 +319,46 @@ export default function JobShow({ job, canPlanWork, back, from }: JobShowProps) 
           }
         />
         <JobTasksPanel tasks={job.tasks} canPlan={canPlanWork && !isLocked} jobOrigin={from} />
+      </Card>
+
+      {/*
+        ================================================= Apprentices =======
+        Read/manage only: a foreman makes the actual assignment from the
+        mobile app's Job Detail screen, not from here.
+      */}
+      <Card accent="info" padding="lg" className="mt-6">
+        <SectionHeading
+          title="Apprentices"
+          subtitle={`${apprenticeAssignments.length} assigned to this job`}
+        />
+        {apprenticeAssignments.length === 0 ? (
+          <p className="text-md text-white/75">No apprentice assigned yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {apprenticeAssignments.map((assignment) => (
+              <li
+                key={assignment.id}
+                className="flex items-center justify-between gap-3 rounded-panel border border-hairline bg-white/4 px-4 py-3"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold text-white">
+                    {assignment.apprenticeName}
+                  </span>
+                  <span className="block truncate text-sm text-white/65">
+                    under {assignment.journeymanName}
+                  </span>
+                </span>
+                {canManageApprentices && !isLocked && (
+                  <IconButton
+                    icon={Trash2}
+                    label={`Remove ${assignment.apprenticeName}`}
+                    onClick={() => removeApprentice(assignment.id)}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       {/* ============================================ Field notes & photos ======= */}

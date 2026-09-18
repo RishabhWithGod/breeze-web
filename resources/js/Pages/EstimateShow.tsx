@@ -6,12 +6,13 @@ import {
   Cable,
   ChevronsDownUp,
   ChevronsUpDown,
+  FileStack,
   LayoutGrid,
   FileText,
   ListChecks,
   PencilLine,
-  Plus,
   Sparkles,
+  UploadCloud,
   Wallet,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -20,11 +21,14 @@ import {
   Badge,
   Button,
   ButtonLink,
+  Card,
+  CardHeader,
   CollapsibleCard,
   StatusChip,
   WorkflowProgress,
 } from '@/components/common'
-import { AddEstimateLineCard, EstimateItemsTable } from '@/components/estimates'
+import { AddendumSelectionList, EstimateItemsTable } from '@/components/estimates'
+import type { AddendumSummary } from '@/components/estimates'
 import {
   EquipmentPanel,
   PanelSchedulesPanel,
@@ -72,6 +76,7 @@ interface EstimateSummary {
   readonly jobId: number | null
   readonly jobName: string | null
   readonly projectId: number | null
+  readonly clientId: number | null
   readonly aiResultId: number | null
   readonly fromTakeoff: boolean
   readonly createdAt: string
@@ -82,11 +87,26 @@ interface EstimateSummary {
   /** False while the AI lines carry the engine's quantities, pre-review. */
   readonly reviewed: boolean
   readonly reviewUrl: string | null
+  /** `standalone` (the ordinary case), `addendum`, or `merged` — see `Estimate::KINDS`. */
+  readonly kind: string
+  readonly addendumNumber: number | null
+  readonly addendumName: string | null
+  /** Set only when `kind` is `addendum` — the estimate this one adds scope to. */
+  readonly parentEstimate: { readonly id: number; readonly number: string } | null
 }
 
 export interface EstimateShowProps {
   estimate: EstimateSummary
   items: readonly EstimateItemRow[]
+  /** This estimate's own addenda — only populated when `estimate.kind` is `standalone`. */
+  addenda: readonly AddendumSummary[]
+  /**
+   * True only for a `standalone` estimate with no job yet — the one state the
+   * merge-selection workspace (line items broken out by source, "Create Job
+   * from Estimates") applies to. Once a job exists, this screen behaves
+   * exactly as it always has.
+   */
+  beforeJob: boolean
   sections: Record<string, { label: string; lines: number; total: number }>
   /**
    * True only when the takeoff flow itself handed over to this screen. Opened
@@ -118,6 +138,8 @@ export interface EstimateShowProps {
 export default function EstimateShow({
   estimate,
   items,
+  addenda,
+  beforeJob,
   inFlow,
   backUrl,
   totals,
@@ -126,6 +148,27 @@ export default function EstimateShow({
   drawingData,
 }: EstimateShowProps) {
   const { flash } = usePage<SharedPageProps>().props
+
+  /*
+   * Before a job exists, this selection is the real thing "Continue to Job"
+   * merges — see the "Select Estimates & Addendums" card. Once a job exists,
+   * the same state only drives the read-only preview on the Addendum
+   * overview card further down. The original starts checked but is not
+   * forced to stay that way — it can be unchecked exactly like an addendum.
+   */
+  const [selectedAddenda, setSelectedAddenda] = useState<ReadonlySet<number>>(
+    () => new Set([estimate.id, ...addenda.map((addendum) => addendum.id)]),
+  )
+  const toggleAddendum = (id: number) =>
+    setSelectedAddenda((current) => {
+      const next = new Set(current)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
 
   /**
    * Only the drawing panels that actually have rows. Each is its own section:
@@ -169,7 +212,20 @@ export default function EstimateShow({
    */
   const [open, setOpen] = useState<Readonly<Record<string, boolean>>>({})
 
-  const sectionKeys = ['lines', 'details', ...drawingPanels.map((p) => p.key), 'totals', 'addLine']
+  /*
+   * The original's own lines, plus one card per addendum — shown whenever
+   * there are any, whether or not a job has been raised yet.
+   */
+  const showAddendumBreakdown = estimate.kind === 'standalone' && (beforeJob || addenda.length > 0)
+
+  const sectionKeys = [
+    ...(showAddendumBreakdown ? ['original', ...addenda.map((a) => `addendum-${a.id}`)] : ['lines']),
+    'details',
+    ...drawingPanels.map((p) => p.key),
+    'totals',
+    // "Select Estimates & Addendums" is never collapsed, so it has no key here.
+    ...(beforeJob ? [] : (estimate.kind === 'standalone' ? ['addendum'] : [])),
+  ]
   const allOpen = sectionKeys.every((key) => open[key])
 
   const toggle = (key: string) =>
@@ -219,6 +275,26 @@ export default function EstimateShow({
                 ESTIMATE_STATUS_LABEL[estimate.status as EstimateStatus] ?? estimate.status
               }
             />
+            {/*
+              Always available here, never nested in a card — this is the one
+              addendum action the screen offers, for as long as a job has not
+              been raised yet.
+            */}
+            {beforeJob && (
+              <ButtonLink href={routeTo.uploadAddendumFor(estimate.id)} size="sm" leftIcon={UploadCloud}>
+                Upload Addendum
+              </ButtonLink>
+            )}
+            {estimate.kind === 'addendum' && estimate.parentEstimate && (
+              <ButtonLink
+                href={routeTo.estimate(estimate.parentEstimate.id)}
+                variant="secondary"
+                size="sm"
+                leftIcon={FileStack}
+              >
+                Addendum {estimate.addendumNumber} of {estimate.parentEstimate.number}
+              </ButtonLink>
+            )}
             {/*
               Back is top-right on every screen, and goes to the one this was
               reached from — the job whose list it was opened from, the review
@@ -291,37 +367,92 @@ export default function EstimateShow({
       {/* Roomier than the usual stack: each of these is a whole section, and
           at gap-4 the closed headers ran together as one striped list. */}
       <div className="flex min-w-0 flex-col gap-6">
-        <CollapsibleCard
-          title="Line items"
-          subtitle="What is being priced, and at what rate"
-          icon={ListChecks}
-          tone="brand"
-          summary={
-            <span className="flex items-center gap-3">
-              <span className="tabular-nums">
-                {items.length} {items.length === 1 ? 'line' : 'lines'}
+        {showAddendumBreakdown ? (
+          <>
+            {/*
+              Whenever there are addenda, the original and each one are their
+              own section — each one's own saved lines, its own total, never
+              blended into one table. Applies whether or not a job has been
+              raised yet, not only in the pre-job workspace.
+            */}
+            <CollapsibleCard
+              title={`Original Estimate — ${estimate.number}`}
+              subtitle="What is being priced, and at what rate"
+              icon={ListChecks}
+              tone="brand"
+              summary={
+                <span className="tabular-nums font-semibold text-white">
+                  {formatCurrency(totals.grandTotal, 2)}
+                </span>
+              }
+              isOpen={Boolean(open['original'])}
+              onToggle={() => toggle('original')}
+            >
+              <EstimateItemsTable
+                estimateId={estimate.id}
+                items={items}
+                categories={categories}
+                laborRate={laborRate}
+              />
+            </CollapsibleCard>
+
+            {addenda.map((addendum) => (
+              <CollapsibleCard
+                key={addendum.id}
+                title={addendum.addendumName || `Addendum ${addendum.addendumNumber ?? ''}`.trim()}
+                subtitle={addendum.number}
+                icon={FileStack}
+                tone="neutral"
+                summary={
+                  <span className="tabular-nums font-semibold text-white">
+                    {formatCurrency(addendum.amount, 2)}
+                  </span>
+                }
+                isOpen={Boolean(open[`addendum-${addendum.id}`])}
+                onToggle={() => toggle(`addendum-${addendum.id}`)}
+              >
+                <EstimateItemsTable
+                  estimateId={addendum.id}
+                  items={addendum.items ?? []}
+                  categories={categories}
+                  laborRate={laborRate}
+                />
+              </CollapsibleCard>
+            ))}
+          </>
+        ) : (
+          <CollapsibleCard
+            title="Line items"
+            subtitle="What is being priced, and at what rate"
+            icon={ListChecks}
+            tone="brand"
+            summary={
+              <span className="flex items-center gap-3">
+                <span className="tabular-nums">
+                  {items.length} {items.length === 1 ? 'line' : 'lines'}
+                </span>
+                {estimate.fromTakeoff ? (
+                  <Badge tone="brand" size="sm">
+                    From AI takeoff
+                  </Badge>
+                ) : (
+                  <Badge tone="neutral" size="sm">
+                    Manual
+                  </Badge>
+                )}
               </span>
-              {estimate.fromTakeoff ? (
-                <Badge tone="brand" size="sm">
-                  From AI takeoff
-                </Badge>
-              ) : (
-                <Badge tone="neutral" size="sm">
-                  Manual
-                </Badge>
-              )}
-            </span>
-          }
-          isOpen={Boolean(open['lines'])}
-          onToggle={() => toggle('lines')}
-        >
-          <EstimateItemsTable
-            estimateId={estimate.id}
-            items={items}
-            categories={categories}
-            laborRate={laborRate}
-          />
-        </CollapsibleCard>
+            }
+            isOpen={Boolean(open['lines'])}
+            onToggle={() => toggle('lines')}
+          >
+            <EstimateItemsTable
+              estimateId={estimate.id}
+              items={items}
+              categories={categories}
+              laborRate={laborRate}
+            />
+          </CollapsibleCard>
+        )}
 
         <CollapsibleCard
           title="Estimate details"
@@ -474,26 +605,76 @@ export default function EstimateShow({
           </div>
         </CollapsibleCard>
 
-        <CollapsibleCard
-          title="Addendum"
-          subtitle="Add new addendum"
-          icon={Plus}
-          tone="neutral"
-          summary={
-            <span className="tabular-nums text-white/80">
-              {items.length} {items.length === 1 ? 'line' : 'lines'} so far
-            </span>
-          }
-          isOpen={Boolean(open['addLine'])}
-          onToggle={() => toggle('addLine')}
-        >
-          <AddEstimateLineCard
-            estimateId={estimate.id}
-            items={items}
-            categories={categories}
-            laborRate={laborRate}
-          />
-        </CollapsibleCard>
+        {beforeJob ? (
+          /*
+            The merge workspace — only before a job exists (see `beforeJob`).
+            "Add a Line" is not offered here: a manual line belongs on one
+            estimate, and which one it should land on (the original, or a
+            particular addendum) is exactly the ambiguity this workspace
+            exists to avoid.
+            Always open, never a `CollapsibleCard` — this is the one decision
+            the whole screen exists to let someone make, not something to
+            tuck away behind a toggle.
+          */
+          <Card padding="lg">
+            <CardHeader
+              title="Select Estimates & Addendums"
+              subtitle="Pick which of these to combine into one job"
+            />
+            <AddendumSelectionList
+              original={{ id: estimate.id, number: estimate.number, amount: totals.grandTotal, status: estimate.status }}
+              addenda={addenda}
+              selected={selectedAddenda}
+              onToggle={toggleAddendum}
+            />
+          </Card>
+        ) : (
+          <>
+            {estimate.kind === 'standalone' && (
+              <CollapsibleCard
+                title="Addendum"
+                subtitle="Extra scope found after this estimate, from its own takeoff"
+                icon={FileStack}
+                tone="neutral"
+                summary={
+                  <span className="tabular-nums text-white/80">
+                    {addenda.length} {addenda.length === 1 ? 'addendum' : 'addenda'}
+                  </span>
+                }
+                isOpen={Boolean(open['addendum'])}
+                onToggle={() => toggle('addendum')}
+                actions={
+                  <ButtonLink
+                    href={routeTo.uploadAddendumFor(estimate.id)}
+                    size="sm"
+                    leftIcon={UploadCloud}
+                  >
+                    Upload Addendum
+                  </ButtonLink>
+                }
+              >
+                <AddendumSelectionList
+                  original={{ id: estimate.id, number: estimate.number, amount: totals.grandTotal, status: estimate.status }}
+                  addenda={addenda}
+                  selected={selectedAddenda}
+                  onToggle={toggleAddendum}
+                />
+
+                {estimate.projectId && (
+                  <ButtonLink
+                    href={routeTo.addendaForProject(estimate.projectId)}
+                    variant="secondary"
+                    size="sm"
+                    className="mt-4"
+                    leftIcon={FileStack}
+                  >
+                    Manage addenda &amp; create a job from a selection
+                  </ButtonLink>
+                )}
+              </CollapsibleCard>
+            )}
+          </>
+        )}
       </div>
 
       {/*
@@ -503,11 +684,21 @@ export default function EstimateShow({
         linked to one, which skipped the step and dropped out of the flow. An
         estimate's `job_id` is not the same question either: the takeoff's
         estimate is linked to whichever job was raised first.
+
+        Unchanged by the pre-job merge workspace above: "Continue to Job" is
+        this same roadmap step (with its own workflow-progress bar) whether or
+        not there are addenda to pick from — picking them is what the
+        Addendum screen's own "Create Job" is for. In the pre-job workspace,
+        though, at least one of the original/addenda checkboxes above has to
+        be on — an empty selection is not something to raise a job from.
       */}
       {inFlow && estimate.aiResultId && (
         <StepFooter
           current="estimate"
           href={routeTo.finalSymbols(estimate.aiResultId)}
+          {...(beforeJob && selectedAddenda.size === 0
+            ? { blockedReason: 'Select at least one estimate or addendum above to continue.' }
+            : {})}
         />
       )}
     </PageTransition>

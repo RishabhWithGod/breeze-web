@@ -10,12 +10,14 @@ use App\Http\Resources\JobResource;
 use App\Models\Estimate;
 use App\Models\FeedItem;
 use App\Models\Job;
+use App\Models\JobApprenticeAssignment;
 use App\Models\JobSchedule;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
 use App\Models\Upload;
 use App\Models\User;
+use App\Policies\InvoicePolicy;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
@@ -70,7 +72,7 @@ class JobController extends Controller
 
         $jobs = Job::query()
             ->ownedBy($request->user())
-            ->with(['foreman', 'team:id,name', 'activeAssignments.assigner'])
+            ->with(['foreman', 'team:id,name', 'activeAssignments.assigner', 'invoices:id,job_id'])
             ->withCount(['teamMembers', 'estimates'])
             ->search($filters['search'] ?? null)
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
@@ -101,6 +103,9 @@ class JobController extends Controller
             'activity' => FeedItemResource::collection(
                 FeedItem::scope(FeedItem::HISTORY_ACTIVITY)->visibleTo($request->user())->get()
             )->resolve(),
+            // Role-only, same for every row — the per-job "already invoiced"
+            // state is `hasInvoice`/`invoiceId` on `JobResource` instead.
+            'canCreateInvoice' => app(InvoicePolicy::class)->create($request->user()),
         ]);
     }
 
@@ -238,10 +243,12 @@ class JobController extends Controller
             'statusChanges.actor',
             'assignments.assigner',
             'aiResult',
+            'invoices:id,job_id',
         ]);
 
         $canViewTimeCosts = (bool) $request->user()->can('viewJobCosts', TimeEntry::class);
         $jobCosting = $this->costSummary->for($job);
+        $schedulePolicy = app(JobSchedulePolicy::class);
 
         return Inertia::render('JobShow', [
             // `resolve()` strips the resource's `data` wrapper — Inertia props are
@@ -257,8 +264,24 @@ class JobController extends Controller
             'canViewTimeCosts' => $canViewTimeCosts,
             'jobCosting' => $canViewTimeCosts ? $jobCosting : JobCostSummary::redact($jobCosting),
             // Whoever plans the work may add to it; everyone else still reads.
-            'canPlanWork' => app(JobSchedulePolicy::class)
+            'canPlanWork' => $schedulePolicy
                 ->createTask($request->user(), $job->schedule ?? new JobSchedule(['job_id' => $job->id])),
+            // Read/manage only — a foreman makes the actual assignment from
+            // the mobile app's Job Detail screen
+            // (`Api\V1\JobApprenticeAssignmentController`), not here. This
+            // just gates the manager's "remove" action on the list below.
+            'canManageApprentices' => $schedulePolicy->assignApprentice($request->user(), $job),
+            'canCreateInvoice' => app(InvoicePolicy::class)->create($request->user()),
+            'apprenticeAssignments' => $job->apprenticeAssignments()
+                ->with(['journeyman:id,name', 'apprentice:id,name'])
+                ->get()
+                ->map(fn (JobApprenticeAssignment $a) => [
+                    'id' => $a->id,
+                    'journeymanId' => $a->journeyman_id,
+                    'journeymanName' => $a->journeyman->name,
+                    'apprenticeId' => $a->apprentice_id,
+                    'apprenticeName' => $a->apprentice->name,
+                ])->values(),
             /** Where Back goes — see App\Support\JobOrigin. */
             'back' => JobOrigin::back($request->query('from')),
             // The same trail as a bare name, so the Edit link can carry it on

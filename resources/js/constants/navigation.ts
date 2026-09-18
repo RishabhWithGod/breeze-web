@@ -2,10 +2,11 @@ import {
   BookOpen,
   Briefcase,
   CalendarCheck,
-  ChartColumn,
+  // ChartColumn,
   ClipboardList,
   Clock,
   Contact,
+  FileStack,
   FileText,
   FolderKanban,
   Gauge,
@@ -33,7 +34,14 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   { label: 'Projects', href: ROUTES.projects, icon: FolderKanban },
   // Lands on the takeoff history, matching the reference product.
   { label: 'AI Takeoff', href: ROUTES.aiTakeoff, icon: Sparkles },
-  { label: 'Estimates', href: ROUTES.estimates, icon: FileText },
+  {
+    label: 'Estimates',
+    href: ROUTES.estimates,
+    icon: FileText,
+    // Extra scope raised against an existing estimate — its own screen,
+    // nested here rather than as a separate top-level module.
+    children: [{ label: 'Addendum', href: ROUTES.addenda, icon: FileStack }],
+  },
   // Beside Estimates, because it is what an estimate is priced from.
   { label: 'Price Book', href: ROUTES.priceBook, icon: BookOpen },
   { label: 'Jobs', href: ROUTES.jobs, icon: Briefcase },
@@ -49,7 +57,7 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   { label: 'Calendar', href: ROUTES.scheduling, icon: CalendarCheck },
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock },
   { label: 'Billing', href: ROUTES.billing, icon: ReceiptText },
-  { label: 'Analytics', href: ROUTES.jobCosting, icon: ChartColumn },
+  // { label: 'Analytics', href: ROUTES.jobCosting, icon: ChartColumn },
 ]
 
 export const FOOTER_LINKS: readonly { label: string; href: string }[] = [

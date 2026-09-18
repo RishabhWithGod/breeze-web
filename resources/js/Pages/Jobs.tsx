@@ -5,6 +5,7 @@ import {
   Eye,
   PencilLine,
   Plus,
+  Receipt,
   SearchX,
   SlidersHorizontal,
   Trash2,
@@ -84,6 +85,8 @@ interface JobFilters {
 export interface JobsProps {
   jobs: Paginated<Job>
   filters: JobFilters
+  /** Role-only — whether this user may raise an invoice at all. Per-job "already invoiced" is `job.hasInvoice`. */
+  canCreateInvoice: boolean
 }
 
 /**
@@ -92,7 +95,7 @@ export interface JobsProps {
  * Search, filters, sorting and pagination all run in the database against
  * query-string state. Row actions and bulk actions go through JobController.
  */
-export default function Jobs({ jobs, filters }: JobsProps) {
+export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   const [query, setQuery] = useState(filters.search)
@@ -344,6 +347,26 @@ export default function Jobs({ jobs, filters }: JobsProps) {
             className="text-white/85 hover:text-status-danger disabled:pointer-events-none disabled:opacity-40"
             onClick={() => requestDelete(job)}
           />
+          {/*
+            Only once a job is completed — an in-progress job has nothing
+            final to bill yet. Already invoiced opens that invoice instead of
+            starting a second one; enforced again server-side, not only here.
+          */}
+          {job.isLocked && canCreateInvoice && (
+            <IconButton
+              icon={Receipt}
+              label={job.hasInvoice ? `View invoice for ${job.name}` : `Create invoice for ${job.name}`}
+              size="sm"
+              className="text-white/85 hover:text-brand"
+              onClick={() =>
+                router.visit(
+                  job.hasInvoice && job.invoiceId
+                    ? routeTo.invoice(job.invoiceId)
+                    : routeTo.invoiceCreateForJob(job.id),
+                )
+              }
+            />
+          )}
         </div>
       ),
     },
@@ -552,6 +575,14 @@ export default function Jobs({ jobs, filters }: JobsProps) {
                     index={index}
                     onView={() => router.visit(routeTo.job(job.id))}
                     onDelete={requestDelete}
+                    onCreateInvoice={(row) =>
+                      router.visit(
+                        row.hasInvoice && row.invoiceId
+                          ? routeTo.invoice(row.invoiceId)
+                          : routeTo.invoiceCreateForJob(row.id),
+                      )
+                    }
+                    canCreateInvoice={canCreateInvoice}
                   />
                 ))}
               </ul>

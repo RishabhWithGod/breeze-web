@@ -100,6 +100,12 @@ class JobSchedulePolicy
         return $this->holds($user, self::STAFFERS) && $this->owns($user, $task->job);
     }
 
+    /** Putting an apprentice under a journeyman on this job — the same staffing authority as {@see assign()}. */
+    public function assignApprentice(User $user, Job $job): bool
+    {
+        return $this->holds($user, self::STAFFERS) && $this->owns($user, $job);
+    }
+
     public function deleteTask(User $user, JobTask $task): bool
     {
         return $this->holds($user, self::DELETERS) && $this->owns($user, $task->job);

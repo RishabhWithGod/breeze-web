@@ -265,6 +265,10 @@ class EstimateBuilder
     {
         $project = $result->project;
         $engineEstimate = $result->ai_estimate ?? [];
+        // Set when this run came from "Upload Addendum" for an existing
+        // estimate, rather than a fresh, standalone takeoff — see
+        // `Upload::addendum_for_estimate_id`.
+        $parentEstimateId = $result->addendum_for_estimate_id;
 
         return Estimate::create([
             'job_id' => $job?->id,
@@ -279,6 +283,9 @@ class EstimateBuilder
             'issued_on' => now()->toDateString(),
             // Draft only while no job has been raised against it yet.
             'status' => Estimate::statusFor($job),
+            'kind' => $parentEstimateId ? Estimate::KIND_ADDENDUM : Estimate::KIND_STANDALONE,
+            'parent_estimate_id' => $parentEstimateId,
+            'addendum_number' => $parentEstimateId ? Estimate::nextAddendumNumber($parentEstimateId) : null,
             /*
              * The rates these jobs are actually bid at, read off this
              * project's own imported workbook first — overheads and profit
@@ -687,10 +694,13 @@ class EstimateBuilder
      * Keeps a job's budget the figure its own estimate came to.
      *
      * A job's budget is never typed on the create-job form — it is this,
-     * always, kept in step every time the estimate behind it is priced or
-     * repriced, whether that happens before or after the job itself exists.
+     * always, kept in step every time the estimate behind it is priced,
+     * repriced, or edited by hand, whether that happens before or after the
+     * job itself exists. Public so `EstimateDetailController` can call it
+     * after a manual line edit too, not only from this class's own takeoff-time
+     * pricing.
      */
-    private function syncJobBudget(Estimate $estimate): void
+    public function syncJobBudget(Estimate $estimate): void
     {
         $estimate->job?->update(['budget' => $estimate->amount]);
     }

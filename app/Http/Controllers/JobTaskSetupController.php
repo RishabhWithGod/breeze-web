@@ -117,11 +117,13 @@ class JobTaskSetupController extends Controller
      * then: oversight is a role, not a team membership question.
      *
      * `foremen` (the `job_tasks.foreman_id` slot) is who actually runs the
-     * task — a journeyman or an apprentice, per the crew hierarchy — and
-     * `supervisors` (`job_tasks.supervisor_id`) is who is over it, which is
-     * a foreman-role person only. The prop names stay as the FK columns they
-     * feed, not the role vocabulary, so this JSON shape doesn't have to move
-     * every time the role names do.
+     * task — a journeyman, per the crew hierarchy — and `supervisors`
+     * (`job_tasks.supervisor_id`) is who is over it, a foreman-role person.
+     * An apprentice is never offered either slot: they don't run or oversee
+     * a task, they're put on a *job* under a journeyman from the Job Detail
+     * screen instead (`JobApprenticeAssignmentController`). The prop names
+     * stay as the FK columns they feed, not the role vocabulary, so this
+     * JSON shape doesn't have to move every time the role names do.
      *
      * @return array<string, mixed>
      */
@@ -131,8 +133,8 @@ class JobTaskSetupController extends Controller
 
         return [
             'foremen' => $team === null
-                ? Foreman::orderBy('name')->get(['id', 'name', 'initials', 'role'])
-                : $team->workers()->get(['id', 'name', 'initials', 'role']),
+                ? Foreman::where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name')->get(['id', 'name', 'initials', 'role'])
+                : $team->journeymen()->get(['id', 'name', 'initials', 'role']),
             'supervisors' => $team === null
                 ? Foreman::where('role', Foreman::ROLE_FOREMAN)
                     ->orderBy('name')->get(['id', 'name', 'initials', 'role'])

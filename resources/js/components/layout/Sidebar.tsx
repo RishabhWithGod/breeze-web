@@ -70,6 +70,9 @@ function matchStrength(item: NavItem, pathname: string): number {
   )
 }
 
+/** Every row in the rail, parents and their children alike — flattened once for matching. */
+const ALL_ITEMS: readonly NavItem[] = SIDEBAR_ITEMS.flatMap((item) => [item, ...(item.children ?? [])])
+
 /** The one entry to light up: whichever claims this path most specifically. */
 function activeHref(pathname: string): string | null {
   const override = PATH_OVERRIDES.find(({ pattern }) => pattern.test(pathname))
@@ -78,7 +81,7 @@ function activeHref(pathname: string): string | null {
 
   let best: { href: string; strength: number } | null = null
 
-  for (const item of SIDEBAR_ITEMS) {
+  for (const item of ALL_ITEMS) {
     const strength = matchStrength(item, pathname)
 
     if (strength >= 0 && (best === null || strength > best.strength)) {
@@ -99,10 +102,12 @@ interface SidebarLinkProps {
   item: NavItem
   isActive: boolean
   onNavigate?: () => void
+  /** A child row, shown smaller and indented under its parent — see Estimates → Addendum. */
+  nested?: boolean
 }
 
-/** One row of the rail. Every entry is the same row — no nesting, no variants. */
-function SidebarLink({ item, isActive, onNavigate }: SidebarLinkProps) {
+/** One row of the rail — a plain link, or (when `nested`) a smaller, indented one under its parent. */
+function SidebarLink({ item, isActive, onNavigate, nested = false }: SidebarLinkProps) {
   return (
     <Link
       href={item.href}
@@ -111,11 +116,12 @@ function SidebarLink({ item, isActive, onNavigate }: SidebarLinkProps) {
       className={cn(
         ITEM_BASE,
         'text-white',
+        nested && 'py-2.5 pl-11 text-sm',
         isActive ? 'grad-midnight text-white' : 'hover:bg-white/8 hover:text-brand',
       )}
     >
       {isActive && <span className="absolute inset-y-0 left-0 w-1 bg-brand" aria-hidden />}
-      <item.icon size={20} aria-hidden className={cn('shrink-0', isActive && 'text-brand')} />
+      <item.icon size={nested ? 16 : 20} aria-hidden className={cn('shrink-0', isActive && 'text-brand')} />
       <span className="truncate">{item.label}</span>
       {item.badge ? (
         <span className="ml-auto grid min-w-6 place-items-center rounded-full bg-status-danger px-1.5 py-0.5 text-2xs font-bold text-white">
@@ -146,6 +152,20 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
               isActive={item.href === active}
               onNavigate={onNavigate}
             />
+            {item.children && item.children.length > 0 && (
+              <ul>
+                {item.children.map((child) => (
+                  <li key={child.label}>
+                    <SidebarLink
+                      item={child}
+                      isActive={child.href === active}
+                      onNavigate={onNavigate}
+                      nested
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
         ))}
       </ul>

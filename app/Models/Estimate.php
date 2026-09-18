@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -16,6 +17,17 @@ class Estimate extends Model
 
     /** Sort keys accepted by `scopeSorted`, mirrored by ESTIMATE_SORT_OPTIONS. */
     public const SORTS = ['date-desc', 'date-asc', 'amount-desc', 'amount-asc', 'number-asc'];
+
+    /** An ordinary estimate — from a takeoff or raised by hand. Every row before addenda existed is this. */
+    public const KIND_STANDALONE = 'standalone';
+
+    /** Extra scope found after the original takeoff, for the same project — see `parentEstimate()`. */
+    public const KIND_ADDENDUM = 'addendum';
+
+    /** The roll-up `JobFromEstimatesController` builds from a selected standalone estimate plus addenda. */
+    public const KIND_MERGED = 'merged';
+
+    public const KINDS = [self::KIND_STANDALONE, self::KIND_ADDENDUM, self::KIND_MERGED];
 
     protected $fillable = [
         'user_id',
@@ -34,6 +46,10 @@ class Estimate extends Model
         'issued_on',
         'amount',
         'status',
+        'kind',
+        'parent_estimate_id',
+        'addendum_number',
+        'addendum_name',
         'converted_project_id',
         'converted_at',
         'material_total',
@@ -187,6 +203,36 @@ class Estimate extends Model
         return $this->belongsTo(AiResult::class);
     }
 
+    /** The standalone estimate this one is an addendum to. Null unless `kind` is `addendum`. */
+    public function parentEstimate(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_estimate_id');
+    }
+
+    /** This estimate's own addenda, oldest first. */
+    public function addenda(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_estimate_id')->orderBy('addendum_number');
+    }
+
+    /**
+     * The estimates a `merged` estimate was built from — the standalone
+     * estimate plus whichever addenda were selected. Recorded once at merge
+     * time and never changed after: the sources it names may still be edited
+     * on their own, but this estimate's own lines are a clone, not a live view.
+     *
+     * @return BelongsToMany<self, $this>
+     */
+    public function mergeSources(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            self::class,
+            'estimate_merge_sources',
+            'merged_estimate_id',
+            'source_estimate_id',
+        );
+    }
+
     /**
      * Re-sums the line items and re-applies markup and tax.
      *
@@ -290,5 +336,15 @@ class Estimate extends Model
             ->value('seq');
 
         return 'EST-'.max($highest + 1, 1001);
+    }
+
+    /** The next `addendum_number` for a given parent — "Addendum 1", "Addendum 2", and so on. */
+    public static function nextAddendumNumber(int $parentEstimateId): int
+    {
+        $highest = (int) static::withTrashed()
+            ->where('parent_estimate_id', $parentEstimateId)
+            ->max('addendum_number');
+
+        return $highest + 1;
     }
 }

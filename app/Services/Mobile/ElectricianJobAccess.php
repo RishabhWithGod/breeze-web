@@ -2,6 +2,7 @@
 
 namespace App\Services\Mobile;
 
+use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\User;
 use App\Services\TimeTracking\TeamMemberResolver;
@@ -52,6 +53,21 @@ class ElectricianJobAccess
     {
         if ($this->isUnrestricted($user)) {
             return Job::query();
+        }
+
+        // An apprentice's access is entirely the explicit Foreman→
+        // Journeyman→Apprentice assignment a foreman sets from the Job
+        // Detail screen — never the broader staffing mechanics
+        // (`job_assignments`, task membership, a task's own `foreman_id`)
+        // every other crew role is scoped through below. "Only their
+        // assigned job" means only this, on purpose.
+        if ($user->foreman?->role === Foreman::ROLE_APPRENTICE) {
+            $foremanId = $user->foreman->id;
+
+            return Job::query()->whereHas(
+                'apprenticeAssignments',
+                fn (Builder $q) => $q->where('apprentice_id', $foremanId),
+            );
         }
 
         $teamMemberId = $this->resolver->resolveFor($user)->id;
