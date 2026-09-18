@@ -338,15 +338,15 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
               onClick={() => router.visit(routeTo.jobEdit(job.id))}
             />
           )}
-          <IconButton
-            icon={Trash2}
-            label={`Delete ${job.name}`}
-            size="sm"
-            disabled={job.isLocked}
-            title={job.isLocked ? 'Completed jobs cannot be deleted.' : undefined}
-            className="text-white/85 hover:text-status-danger disabled:pointer-events-none disabled:opacity-40"
-            onClick={() => requestDelete(job)}
-          />
+          {!job.isLocked && (
+            <IconButton
+              icon={Trash2}
+              label={`Delete ${job.name}`}
+              size="sm"
+              className="text-white/85 hover:text-status-danger"
+              onClick={() => requestDelete(job)}
+            />
+          )}
           {/*
             Only once a job is completed — an in-progress job has nothing
             final to bill yet. Already invoiced opens that invoice instead of

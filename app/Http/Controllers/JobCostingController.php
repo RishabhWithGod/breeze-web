@@ -6,7 +6,9 @@ use App\Models\Job;
 use App\Models\JobCostEntry;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
+use App\Models\User;
 use App\Policies\JobCostingPolicy;
+use App\Services\Billing\ActualCostInvoiceSync;
 use App\Services\Export\JobCostingExporter;
 use App\Services\JobCosting\JobCostOverrunNotifier;
 use App\Services\JobCosting\JobCostSummary;
@@ -206,7 +208,7 @@ class JobCostingController extends Controller
         ]);
     }
 
-    public function storeCostEntry(Request $request, Job $job, JobCostOverrunNotifier $notifier): RedirectResponse
+    public function storeCostEntry(Request $request, Job $job, JobCostOverrunNotifier $notifier, ActualCostInvoiceSync $invoiceSync): RedirectResponse
     {
         abort_unless(app(JobCostingPolicy::class)->manage($request->user()), 403);
         $job->assertNotLocked();
@@ -227,11 +229,12 @@ class JobCostingController extends Controller
         ]);
 
         $notifier->checkAndNotify($job);
+        $invoiceSync->sync($job);
 
         return back()->with('success', "\"{$validated['description']}\" recorded.");
     }
 
-    public function destroyCostEntry(Request $request, Job $job, JobCostEntry $entry): RedirectResponse
+    public function destroyCostEntry(Request $request, Job $job, JobCostEntry $entry, ActualCostInvoiceSync $invoiceSync): RedirectResponse
     {
         abort_unless(app(JobCostingPolicy::class)->manage($request->user()), 403);
         abort_unless($entry->job_id === $job->id, 404);
@@ -239,8 +242,37 @@ class JobCostingController extends Controller
 
         $description = $entry->description;
         $entry->delete();
+        $invoiceSync->sync($job);
 
         return back()->with('warning', "\"{$description}\" removed.");
+    }
+
+    /**
+     * A manager's own direct total for one person on this job — the Billing
+     * screen's "Journeyman Labor Hours" card. Saved outright, no approval
+     * step: once this row exists it is what `JobCostSummary` reports for
+     * that person, in place of whatever their raw time entries add up to.
+     *
+     * Not gated by `assertNotLocked()`: billing is normally raised *after*
+     * a job is completed, so refusing this once the job is done would make
+     * the one time this card matters most the one time it can't be used.
+     */
+    public function updateJourneymanHours(Request $request, Job $job, User $user, ActualCostInvoiceSync $invoiceSync): RedirectResponse
+    {
+        abort_unless(app(JobCostingPolicy::class)->manage($request->user()), 403);
+
+        $validated = $request->validate([
+            'hours' => ['required', 'numeric', 'min:0', 'max:100000'],
+        ]);
+
+        $job->journeymanHours()->updateOrCreate(
+            ['user_id' => $user->id],
+            ['hours' => $validated['hours'], 'updated_by' => $request->user()->id],
+        );
+
+        $invoiceSync->sync($job);
+
+        return back()->with('success', "{$user->name}'s hours were updated.");
     }
 
     /** @return array{date_from: ?string, date_to: ?string, job: ?int, client: string, status: string, cost_type: string, team_member: ?int} */

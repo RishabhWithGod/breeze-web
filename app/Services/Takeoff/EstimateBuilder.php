@@ -653,6 +653,22 @@ class EstimateBuilder
         return $rateBook->isPopulated() ? $rateBook->laborRate() : $priceBook->laborRate();
     }
 
+    /**
+     * The rate an hour of labor actually bills at on this project — the same
+     * client-override-then-project-rate-book-then-price-book resolution every
+     * AI-priced labor line on this project already uses, exposed so
+     * `JobCostSummary` can price a job's *actual* logged hours at it too,
+     * instead of a second, guessed rate.
+     */
+    public function laborRateFor(Project $project): float
+    {
+        return $this->effectiveLaborRate(
+            $this->rateBook->forProject($project->id),
+            $this->priceBook->forUser($project->user_id),
+            $this->clientLaborRate($project),
+        );
+    }
+
     /** The client's own labor rate override for this project, if they have set one. */
     private function clientLaborRate(Project $project): ?float
     {

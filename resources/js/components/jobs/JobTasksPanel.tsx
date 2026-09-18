@@ -86,16 +86,16 @@ export function JobTasksPanel({ tasks, canPlan, jobOrigin = null }: JobTasksPane
                   Edit
                 </Button>
               )}
-              <IconButton
-                icon={Trash2}
-                label={`Remove ${task.title}`}
-                variant="white"
-                size="sm"
-                disabled={task.status === 'completed'}
-                title={task.status === 'completed' ? 'Completed tasks cannot be removed.' : undefined}
-                onClick={() => setRemoving(task)}
-                className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white disabled:pointer-events-none disabled:opacity-40"
-              />
+              {task.status !== 'completed' && (
+                <IconButton
+                  icon={Trash2}
+                  label={`Remove ${task.title}`}
+                  variant="white"
+                  size="sm"
+                  onClick={() => setRemoving(task)}
+                  className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                />
+              )}
             </div>
           )}
         </motion.li>

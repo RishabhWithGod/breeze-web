@@ -13,6 +13,7 @@ use App\Models\PaymentTransaction;
 use App\Models\TimeEntry;
 use App\Notifications\InvoiceStatusChanged;
 use App\Policies\InvoicePolicy;
+use App\Policies\JobCostingPolicy;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Export\InvoicePdfWriter;
@@ -51,11 +52,15 @@ class InvoiceDetailController extends Controller
         $abilities = app(InvoicePolicy::class);
 
         $jobCostSummary = null;
+        $journeymanHours = [];
 
         if ($invoice->job !== null) {
             $canViewJobCosts = (bool) $request->user()->can('viewJobCosts', TimeEntry::class);
             $summary = $this->costSummary->for($invoice->job);
             $jobCostSummary = $canViewJobCosts ? $summary : JobCostSummary::redact($summary);
+            $journeymanHours = $canViewJobCosts
+                ? $this->costSummary->journeymanHours($invoice->job)->values()->all()
+                : [];
         }
 
         return Inertia::render('InvoiceShow', [
@@ -65,11 +70,16 @@ class InvoiceDetailController extends Controller
             // manager can see what was billed against what was estimated and
             // what actually happened — without leaving the invoice screen.
             'jobCostSummary' => $jobCostSummary,
+            // Every person with time on the job and their total hours — no
+            // approval wait, and directly editable here; `actualLaborHours`
+            // above is this same breakdown summed, so the two can never disagree.
+            'journeymanHours' => $journeymanHours,
             'can' => [
                 'update' => $abilities->update($request->user(), $invoice),
                 'delete' => $abilities->delete($request->user(), $invoice),
                 'send' => $abilities->send($request->user(), $invoice),
                 'markPaid' => $abilities->markPaid($request->user(), $invoice),
+                'manageJobCosts' => $invoice->job !== null && app(JobCostingPolicy::class)->manage($request->user()),
             ],
             'stripeConnected' => PaymentProcessor::query()
                 ->where('key', PaymentProcessor::STRIPE)

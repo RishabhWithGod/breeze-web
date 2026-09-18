@@ -30,15 +30,12 @@ return [
     ],
 
     /*
-    | This app formats every amount as USD today (see resources/js/utils/format.ts).
-    | The other currencies are real, selectable settings values — they are not
-    | yet wired into invoice/estimate number formatting elsewhere in the app.
+    | This app formats every amount as USD (see resources/js/utils/format.ts)
+    | and the Stripe connector charges in USD only, so USD is the only
+    | selectable currency.
     */
     'currencies' => [
         'USD' => 'USD - US Dollar',
-        'CAD' => 'CAD - Canadian Dollar',
-        'EUR' => 'EUR - Euro',
-        'GBP' => 'GBP - British Pound',
     ],
 
     'per_page' => 10,

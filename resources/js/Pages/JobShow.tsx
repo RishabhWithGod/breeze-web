@@ -276,15 +276,11 @@ export default function JobShow({
               onChange={(event) => changeStatus(event.target.value as JobStatus)}
             />
 
-            <Button
-              variant="danger"
-              leftIcon={Trash2}
-              disabled={isLocked}
-              title={isLocked ? 'Completed jobs cannot be deleted.' : undefined}
-              onClick={deleteDialog.open}
-            >
-              Delete
-            </Button>
+            {!isLocked && (
+              <Button variant="danger" leftIcon={Trash2} onClick={deleteDialog.open}>
+                Delete
+              </Button>
+            )}
           </div>
         </div>
       </Card>

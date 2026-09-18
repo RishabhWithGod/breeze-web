@@ -11,6 +11,7 @@ import {
   Pencil,
   Send,
   Trash2,
+  X,
 } from 'lucide-react'
 import {
   Alert,
@@ -20,6 +21,7 @@ import {
   ConfirmDialog,
   SectionHeading,
   StatusChip,
+  TextInput,
 } from '@/components/common'
 import { InvoiceItemsTable } from '@/components/billing'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
@@ -30,6 +32,7 @@ import type {
   InvoiceDetail,
   InvoiceItemRow,
   JobCostRow,
+  JourneymanHoursRow,
   SharedPageProps,
 } from '@/types'
 import { INVOICE_STATUS_LABEL, INVOICE_STATUS_TONE, formatCurrency, formatDate, formatHours } from '@/utils'
@@ -41,6 +44,9 @@ export interface InvoiceShowProps {
    *  `null` when the invoice has no job, or the field it prices is redacted
    *  for a role without cost visibility. */
   jobCostSummary: JobCostRow | null
+  /** Every person with time on that same job and their total hours — the
+   *  source `jobCostSummary.actualLaborHours` below is summed from. */
+  journeymanHours: readonly JourneymanHoursRow[]
   can: InvoiceActionAbilities
   /** Whether a connected Stripe processor exists to actually take an online payment against. */
   stripeConnected: boolean
@@ -51,7 +57,14 @@ export interface InvoiceShowProps {
  * workflow. Status only ever changes through the dedicated actions below;
  * nothing here lets it be typed in freely.
  */
-export default function InvoiceShow({ invoice, items, jobCostSummary, can, stripeConnected }: InvoiceShowProps) {
+export default function InvoiceShow({
+  invoice,
+  items,
+  jobCostSummary,
+  journeymanHours,
+  can,
+  stripeConnected,
+}: InvoiceShowProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
@@ -195,6 +208,30 @@ export default function InvoiceShow({ invoice, items, jobCostSummary, can, strip
         <InvoiceItemsTable invoiceId={invoice.id} items={items} editable={can.update} />
       </Card>
 
+      {invoice.jobId !== null && (
+        <Card accent="info" padding="lg" className="mt-6">
+          <SectionHeading
+            as="h3"
+            title="Journeyman Labor Hours"
+            subtitle="Every person's total hours on this job — counted the moment they're logged, no approval wait"
+          />
+          <div className="mt-4 flex flex-col gap-2">
+            {journeymanHours.length === 0 ? (
+              <p className="text-md text-white/70">No time logged on this job yet.</p>
+            ) : (
+              journeymanHours.map((row) => (
+                <JourneymanHourRow
+                  key={row.userId}
+                  jobId={invoice.jobId as number}
+                  row={row}
+                  canEdit={can.manageJobCosts}
+                />
+              ))
+            )}
+          </div>
+        </Card>
+      )}
+
       {jobCostSummary && (
         <Card accent="brand" padding="lg" className="mt-6">
           <button
@@ -275,6 +312,120 @@ function Field({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 truncate text-md text-white" title={value}>
         {value}
       </dd>
+    </div>
+  )
+}
+
+/**
+ * One person's total hours on the job — a saved figure a manager typed
+ * directly (`isOverridden`), or just the raw sum of their time entries
+ * otherwise. Editing writes the same "saved figure" a manager can always see
+ * and correct here, in place of the approval workflow this used to wait on.
+ */
+/** Splits a decimal hours total into whole hours + minutes, for the edit fields. */
+function toHrsAndMin(hours: number): { hrs: string; min: string } {
+  const totalMinutes = Math.round(hours * 60)
+
+  return {
+    hrs: String(Math.floor(totalMinutes / 60)),
+    min: String(totalMinutes % 60),
+  }
+}
+
+function JourneymanHourRow({
+  jobId,
+  row,
+  canEdit,
+}: {
+  jobId: number
+  row: JourneymanHoursRow
+  canEdit: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [{ hrs, min }, setFields] = useState(() => toHrsAndMin(row.hours))
+  const [processing, setProcessing] = useState(false)
+
+  const save = () => {
+    const hours = (Number(hrs) || 0) + (Number(min) || 0) / 60
+
+    router.put(
+      routeTo.journeymanHours(jobId, row.userId),
+      { hours },
+      {
+        preserveScroll: true,
+        onStart: () => setProcessing(true),
+        onFinish: () => setProcessing(false),
+        onSuccess: () => setEditing(false),
+      },
+    )
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-panel border border-hairline bg-white/4 px-4 py-3">
+      <div className="min-w-0">
+        <p className="truncate text-md font-medium text-white">{row.name}</p>
+        {row.role && <p className="text-2xs text-white/60">{row.role}</p>}
+      </div>
+
+      {editing ? (
+        <div className="flex items-center gap-2">
+          <TextInput
+            id={`journeyman-hrs-${row.userId}`}
+            type="number"
+            min={0}
+            value={hrs}
+            onChange={(event) => setFields((current) => ({ ...current, hrs: event.target.value }))}
+            className="w-20"
+            rightSlot={<span className="pr-3 text-2xs text-white/60">hrs</span>}
+          />
+          <TextInput
+            id={`journeyman-min-${row.userId}`}
+            type="number"
+            min={0}
+            max={59}
+            value={min}
+            onChange={(event) => setFields((current) => ({ ...current, min: event.target.value }))}
+            className="w-20"
+            rightSlot={<span className="pr-3 text-2xs text-white/60">min</span>}
+          />
+          <Button size="sm" isLoading={processing} onClick={save}>
+            Save
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            leftIcon={X}
+            onClick={() => {
+              setFields(toHrsAndMin(row.hours))
+              setEditing(false)
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          <span className="tabular-nums text-md font-semibold text-white">
+            {formatHours(row.hours)}
+            {row.isOverridden && <span className="ml-1 text-2xs font-normal text-white/60">(edited)</span>}
+          </span>
+          {canEdit && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              leftIcon={Pencil}
+              onClick={() => {
+                setFields(toHrsAndMin(row.hours))
+                setEditing(true)
+              }}
+            >
+              Edit
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

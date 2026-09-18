@@ -351,6 +351,7 @@ export const routeTo = {
   jobCosting: (jobId: number) => `/jobs/${jobId}/costing`,
   jobCostEntries: (jobId: number) => `/jobs/${jobId}/costing/entries`,
   jobCostEntry: (jobId: number, entryId: number) => `/jobs/${jobId}/costing/entries/${entryId}`,
+  journeymanHours: (jobId: number, userId: number) => `/jobs/${jobId}/journeyman-hours/${userId}`,
 
   // Documents
   document: (documentId: number) => `/documents/${documentId}`,

@@ -99,4 +99,20 @@ export interface InvoiceActionAbilities {
   readonly delete: boolean
   readonly send: boolean
   readonly markPaid: boolean
+  /** Whether this signed-in user may edit the Journeyman Labor Hours card. */
+  readonly manageJobCosts: boolean
+}
+
+/**
+ * One person's total hours on a job, and whether that total is a manager's
+ * own saved figure or just the raw sum of their time entries — see
+ * `JobCostSummary::journeymanHours()`. No approval wait either way.
+ */
+export interface JourneymanHoursRow {
+  readonly userId: number
+  readonly name: string
+  readonly role: string | null
+  readonly rawHours: number
+  readonly hours: number
+  readonly isOverridden: boolean
 }

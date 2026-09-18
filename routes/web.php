@@ -400,6 +400,7 @@ Route::middleware('auth')->group(function () {
     Route::get('jobs/{job}/costing', [JobCostingController::class, 'show'])->name('job-costing.show');
     Route::post('jobs/{job}/costing/entries', [JobCostingController::class, 'storeCostEntry'])->name('job-costing.entries.store');
     Route::delete('jobs/{job}/costing/entries/{entry}', [JobCostingController::class, 'destroyCostEntry'])->name('job-costing.entries.destroy');
+    Route::put('jobs/{job}/journeyman-hours/{user}', [JobCostingController::class, 'updateJourneymanHours'])->name('job-costing.journeyman-hours.update');
 
     // Documents: drawings, specs and other files, filed against jobs/estimates/folders.
     Route::get('documents', [DocumentController::class, 'index'])->name('documents.index');

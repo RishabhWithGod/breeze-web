@@ -314,6 +314,12 @@ class Job extends Model
         return $this->hasMany(JobCostEntry::class)->latest('incurred_on');
     }
 
+    /** A manager's own saved total hours per person on this job — see `JobCostSummary::journeymanHours()`. */
+    public function journeymanHours(): HasMany
+    {
+        return $this->hasMany(JobJourneymanHours::class);
+    }
+
     /** Crew shifts on the scheduling calendar, earliest first. */
     public function crewShifts(): HasMany
     {

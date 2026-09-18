@@ -171,16 +171,16 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
                     Edit
                   </Button>
                 )}
-                <IconButton
-                  icon={Trash2}
-                  label={`Remove ${row.title}`}
-                  variant="white"
-                  size="sm"
-                  disabled={row.status === 'completed'}
-                  title={row.status === 'completed' ? 'Completed tasks cannot be removed.' : undefined}
-                  onClick={() => setRemoving(row)}
-                  className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white disabled:pointer-events-none disabled:opacity-40"
-                />
+                {row.status !== 'completed' && (
+                  <IconButton
+                    icon={Trash2}
+                    label={`Remove ${row.title}`}
+                    variant="white"
+                    size="sm"
+                    onClick={() => setRemoving(row)}
+                    className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                  />
+                )}
               </span>
             ),
           },
