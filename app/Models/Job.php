@@ -314,6 +314,12 @@ class Job extends Model
         return $this->hasMany(JobCostEntry::class)->latest('incurred_on');
     }
 
+    /** A manager's own saved total hours per person on this job — see `JobCostSummary::journeymanHours()`. */
+    public function journeymanHours(): HasMany
+    {
+        return $this->hasMany(JobJourneymanHours::class);
+    }
+
     /** Crew shifts on the scheduling calendar, earliest first. */
     public function crewShifts(): HasMany
     {
@@ -537,6 +543,16 @@ class Job extends Model
         return $this->status === self::STATUS_COMPLETED;
     }
 
+    /**
+     * Refuses with the same 409 everywhere a completed job is written to —
+     * one place for the rule instead of a copy of `abort_if($job->isLocked(), …)`
+     * at every controller that touches a job.
+     */
+    public function assertNotLocked(): void
+    {
+        abort_if($this->isLocked(), 409, 'This job is already completed and can no longer be changed.');
+    }
+
     /** The crew says every task is done and it's ready for a supervisor's sign-off. */
     public function isReadyForReview(): bool
     {
@@ -608,6 +624,58 @@ class Job extends Model
         return $fromTasks->isNotEmpty()
             ? $fromTasks
             : collect($this->foreman_id === null ? [] : [$this->foreman_id]);
+    }
+
+    /**
+     * The journeymen actually staffed on this job — who an apprentice can be
+     * put under from the "Assign Apprentice" screen. A subset of
+     * {@see assignedForemanIds()}, narrowed to the journeyman role. Not a
+     * real relation — `foremen` has no FK back to `work_jobs`, this is
+     * derived from the same task-staffing lookup `assignedForemanIds()` uses.
+     *
+     * @return Collection<int, Foreman>
+     */
+    public function assignedJourneymen(): Collection
+    {
+        return Foreman::whereKey($this->assignedForemanIds())
+            ->where('role', Foreman::ROLE_JOURNEYMAN)
+            ->orderBy('name')
+            ->get();
+    }
+
+    /** @return HasMany<JobApprenticeAssignment, $this> */
+    public function apprenticeAssignments(): HasMany
+    {
+        return $this->hasMany(JobApprenticeAssignment::class);
+    }
+
+    /** The `foremen` ids of every apprentice currently assigned to this job. */
+    public function assignedApprenticeIds(): Collection
+    {
+        return $this->apprenticeAssignments()->pluck('apprentice_id');
+    }
+
+    /**
+     * Whether a foreman or journeyman is on this job's crew at all — either
+     * running a task themselves (`foreman_id`) or overseeing one
+     * (`supervisor_id`). What gates an apprentice starting a job alone: they
+     * need someone more senior actually staffed on it, not just present on
+     * the team register in general.
+     */
+    public function hasSeniorCrewAssigned(): bool
+    {
+        $crewIds = $this->tasks()
+            ->pluck('foreman_id')
+            ->merge($this->tasks()->pluck('supervisor_id'))
+            ->filter()
+            ->unique();
+
+        if ($crewIds->isEmpty() && $this->foreman_id !== null) {
+            $crewIds = collect([$this->foreman_id]);
+        }
+
+        return $crewIds->isNotEmpty()
+            && Foreman::whereKey($crewIds)->whereIn('role', [Foreman::ROLE_FOREMAN, Foreman::ROLE_JOURNEYMAN])->exists();
     }
 
     /**

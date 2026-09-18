@@ -28,6 +28,8 @@ class AiResult extends Model
         'ai_job_id',
         'project_id',
         'upload_id',
+        /** Copied from the upload — see `Upload::addendum_for_estimate_id`. */
+        'addendum_for_estimate_id',
         'run_id',
         'project_name',
         'original_payload',
@@ -89,6 +91,12 @@ class AiResult extends Model
     public function upload(): BelongsTo
     {
         return $this->belongsTo(Upload::class);
+    }
+
+    /** The estimate this run is an addendum for, when it was raised through that flow. */
+    public function addendumForEstimate(): BelongsTo
+    {
+        return $this->belongsTo(Estimate::class, 'addendum_for_estimate_id');
     }
 
     /** @return HasMany<SymbolReview, $this> */

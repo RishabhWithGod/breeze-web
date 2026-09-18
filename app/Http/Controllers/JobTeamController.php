@@ -12,6 +12,8 @@ class JobTeamController extends Controller
     /** Assigns a crew member to the job. */
     public function store(Request $request, Job $job): RedirectResponse
     {
+        $job->assertNotLocked();
+
         $validated = $request->validate([
             'team_member_id' => ['required', 'integer', 'exists:team_members,id'],
             'role_on_job' => ['nullable', 'string', 'max:120'],
@@ -37,6 +39,8 @@ class JobTeamController extends Controller
     /** Removes a crew member from the job. */
     public function destroy(Job $job, TeamMember $member): RedirectResponse
     {
+        $job->assertNotLocked();
+
         $job->teamMembers()->detach($member->id);
 
         $job->recordActivity('team_removed', "{$member->name} removed from the job", [

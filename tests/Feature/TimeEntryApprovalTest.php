@@ -180,6 +180,14 @@ class TimeEntryApprovalTest extends TestCase
     private function makeJob(array $attributes = []): Job
     {
         return Job::create([
+            // `TimeEntryPolicy::approve/reject/reopen` all require the acting
+            // manager to own the job an entry is on — unset, as this fixture
+            // left it, the manager can never actually approve anything here,
+            // which is what made every post-approval assertion below fail
+            // silently (an unauthorized approve() 403s, and 403 has no
+            // session "errors" key, so `assertSessionHasNoErrors()` still
+            // passes even though nothing happened).
+            'user_id' => $this->manager->id,
             'foreman_id' => Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW'])->id,
             'name' => 'Riverside Office Renovation',
             'client' => 'Riverside Properties LLC',

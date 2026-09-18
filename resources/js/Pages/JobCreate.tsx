@@ -358,7 +358,7 @@ export default function JobCreate({
             {/*
               Who does the work. Searchable, because a register of crews is
               something you find by typing a name rather than by scrolling —
-              and picking one here is what narrows the foreman and supervisor
+              and picking one here is what narrows the crew and foreman
               pickers on every task of this job.
             */}
             <TeamPicker
@@ -368,6 +368,7 @@ export default function JobCreate({
               hint="Tasks on this job are handed to this crew."
               disabled={processing}
               required
+              allowInlineAdd={false}
               {...(errors.team_id ? { error: errors.team_id } : {})}
             />
 

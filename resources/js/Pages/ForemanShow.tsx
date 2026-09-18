@@ -31,7 +31,7 @@ interface ForemanDetail {
   readonly id: number
   readonly name: string
   readonly initials: string
-  /** What they do on the crew: `supervisor` or `foreman`. */
+  /** What they do on the crew: `foreman`, `journeyman` or `apprentice`. */
   readonly role: string
   readonly roleLabel: string
   /** The crew they are on, or null for someone not on one yet. */
@@ -55,8 +55,8 @@ interface ForemanTask {
   readonly jobId: number
   readonly jobName: string | null
   readonly client: string | null
-  /** Whether they run this task or oversee it — both are work they carry. */
-  readonly heldAs: 'foreman' | 'supervisor'
+  /** Their crew-register role — a foreman oversees a task, a journeyman/apprentice runs it. Both are work they carry. */
+  readonly heldAs: 'foreman' | 'journeyman' | 'apprentice'
 }
 
 export interface ForemanShowProps {
@@ -280,9 +280,9 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
                         {task.title}
                         {/* The list mixes work they run with work they are
                             over, so each row says which. */}
-                        {task.heldAs === 'supervisor' && (
+                        {task.heldAs === 'foreman' && (
                           <Badge tone="info" size="sm" className="ml-2">
-                            Supervising
+                            Overseeing
                           </Badge>
                         )}
                       </p>

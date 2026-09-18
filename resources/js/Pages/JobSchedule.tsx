@@ -90,6 +90,10 @@ export default function JobSchedule({
   const [dismissed, setDismissed] = useState<string | null>(null)
   const [tab, setTab] = useState<ScheduleTab>('overview')
 
+  // Once the job is completed, its schedule and tasks are frozen too — the
+  // same lock `JobScheduleController`/`JobTaskController` enforce server-side.
+  const isLocked = job.isLocked
+
   // Every task/dependency/assignment/settings mutation ends at the same
   // `ScheduleChanged` broadcast — one partial reload of the schedule's own
   // props covers all of them, whichever tab is open, without disturbing the
@@ -164,7 +168,7 @@ export default function JobSchedule({
         breadcrumbs={[{ label: 'Jobs', href: ROUTES.jobs }, { label: job.name, href: routeTo.job(job.id) }, { label: 'Schedule' }]}
         actions={
           <div className="flex flex-wrap gap-3">
-            {can.updateSchedule && (
+            {can.updateSchedule && !isLocked && (
               <Button variant="secondary" leftIcon={Settings} onClick={settingsModal.open}>
                 Schedule Settings
               </Button>
@@ -312,7 +316,7 @@ export default function JobSchedule({
           <CardHeader
             title="Tasks"
             subtitle={`${tasks.length} task${tasks.length === 1 ? '' : 's'}`}
-            actions={can.createTask ? <Button leftIcon={Plus} onClick={() => { setSelectedTask(null); taskForm.open() }}>Add Task</Button> : undefined}
+            actions={can.createTask && !isLocked ? <Button leftIcon={Plus} onClick={() => { setSelectedTask(null); taskForm.open() }}>Add Task</Button> : undefined}
           />
           {tasks.length === 0 ? (
             <EmptyState icon={Clock} title="No tasks on this schedule yet" />
@@ -345,7 +349,7 @@ export default function JobSchedule({
                           {task.assignments.map((a) => (
                             <span key={a.id} className="inline-flex items-center gap-1 rounded-pill bg-white/10 px-2.5 py-1 text-xs text-white/85">
                               {a.member?.name ?? 'Unknown'} · {a.role}
-                              {can.assign && (
+                              {can.assign && !isLocked && (
                                 <button type="button" aria-label={`Remove ${a.member?.name}`} onClick={() => unassign(task, a.id)} className="ml-1 text-white/50 hover:text-status-danger">
                                   <UserX size={12} aria-hidden />
                                 </button>
@@ -359,9 +363,11 @@ export default function JobSchedule({
                           {task.dependencies.map((d) => (
                             <span key={d.id} className="inline-flex items-center gap-1 rounded-pill bg-white/10 px-2.5 py-1 text-xs text-white/70">
                               <GitBranch size={11} aria-hidden /> waits on {d.dependsOnTitle ?? 'Unknown'} ({d.typeLabel})
-                              <button type="button" aria-label="Remove dependency" onClick={() => removeDependency(task, d.id)} className="ml-1 text-white/50 hover:text-status-danger">
-                                <UserX size={12} aria-hidden />
-                              </button>
+                              {!isLocked && (
+                                <button type="button" aria-label="Remove dependency" onClick={() => removeDependency(task, d.id)} className="ml-1 text-white/50 hover:text-status-danger">
+                                  <UserX size={12} aria-hidden />
+                                </button>
+                              )}
                             </span>
                           ))}
                         </div>
@@ -369,7 +375,7 @@ export default function JobSchedule({
                     </div>
 
                     <div className="flex items-center gap-1">
-                      {can.reorder && (
+                      {can.reorder && !isLocked && (
                         <>
                           <button type="button" aria-label="Move up" disabled={index === 0} onClick={() => move(task, -1)} className="rounded-full p-1.5 text-white/60 hover:bg-white/10 hover:text-white disabled:opacity-30">
                             <ChevronUp size={16} aria-hidden />
@@ -381,6 +387,7 @@ export default function JobSchedule({
                       )}
                       <MoreMenu
                         ariaLabel={`Actions for ${task.title}`}
+                        disabled={isLocked}
                         items={[
                           { label: 'Edit', onSelect: () => openEdit(task) },
                           ...(task.status !== 'completed' && task.status !== 'cancelled' ? [{ label: 'Complete', icon: CheckCircle2, onSelect: () => { setSelectedTask(task); completeModal.open() } }] : []),
@@ -388,7 +395,7 @@ export default function JobSchedule({
                           { label: 'Reschedule', icon: CalendarClock, onSelect: () => { setSelectedTask(task); moveModal.open() } },
                           ...(can.assign ? [{ label: 'Assign', icon: UserPlus, onSelect: () => { setSelectedTask(task); assignModal.open() } }] : []),
                           { label: 'Add Dependency', icon: GitBranch, onSelect: () => { setSelectedTask(task); dependencyModal.open() } },
-                          ...(can.deleteTask ? [{ label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setPendingDelete(task) }] : []),
+                          ...(can.deleteTask && task.status !== 'completed' ? [{ label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setPendingDelete(task) }] : []),
                         ]}
                       />
                     </div>

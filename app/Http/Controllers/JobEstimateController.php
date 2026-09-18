@@ -23,6 +23,7 @@ class JobEstimateController extends Controller
     public function store(Job $job, EstimateBuilder $builder): RedirectResponse
     {
         $this->authorize('view', $job);
+        $job->assertNotLocked();
 
         $result = $job->aiResult;
 
@@ -71,6 +72,7 @@ class JobEstimateController extends Controller
     {
         $this->authorize('view', $job);
         abort_unless($estimate->job_id === $job->id, 404);
+        $job->assertNotLocked();
 
         if ($estimate->isConverted()) {
             return back()->with('warning', "{$estimate->number} has already been converted.");

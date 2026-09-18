@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AppNotification;
+use App\Models\Client;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\Foreman;
@@ -11,6 +12,7 @@ use App\Models\Job;
 use App\Models\JobCostEntry;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
+use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\JobCosting\JobCostSummary;
@@ -42,19 +44,111 @@ class JobCostingTest extends TestCase
         $this->electrician = User::factory()->create(['role' => 'Electrician']);
     }
 
-    public function test_labor_cost_only_counts_approved_time_entries(): void
+    /**
+     * Actual labor hours no longer wait on the Time Tracking approval
+     * workflow — every entry counts the moment it exists, whatever its
+     * status, so a manager sees the real total on Billing straight away
+     * instead of chasing approvals first.
+     */
+    public function test_labor_hours_count_every_status_except_a_locked_entry_superseded_by_its_correction(): void
     {
         $job = $this->makeJob();
         $this->makeTask($job, estimatedHours: 10);
 
         $this->makeTimeEntry($job, $this->electrician, 5, TimeEntry::STATUS_APPROVED, 500);
         $this->makeTimeEntry($job, $this->electrician, 3, TimeEntry::STATUS_SUBMITTED, 300);
-        $this->makeTimeEntry($job, $this->electrician, 2, TimeEntry::STATUS_REJECTED, 200);
+        $this->makeTimeEntry($job, $this->electrician, 2, TimeEntry::STATUS_DRAFT, 200);
+        $this->makeTimeEntry($job, $this->electrician, 1, TimeEntry::STATUS_REJECTED, 100);
+        // Superseded by a correction — would double the same physical hours if counted.
+        $this->makeTimeEntry($job, $this->electrician, 4, TimeEntry::STATUS_LOCKED, 400);
 
         $summary = app(JobCostSummary::class)->for($job);
 
-        $this->assertSame(5.0, $summary['actualLaborHours']);
-        $this->assertSame(500.0, $summary['actualLaborCost']);
+        $this->assertSame(11.0, $summary['actualLaborHours']);
+    }
+
+    /**
+     * Actual labor cost is the total hours priced at the project's own
+     * effective labor rate — never `time_entries.labor_cost`, which is only
+     * ever filled in when a rate happened to be on hand at the moment the
+     * entry was logged (often blank in real data).
+     */
+    public function test_labor_cost_is_hours_priced_at_the_projects_effective_labor_rate(): void
+    {
+        $job = $this->makeJob();
+        // No `labor_cost` on the entry at all — the column this used to sum.
+        $this->makeTimeEntry($job, $this->electrician, 6, TimeEntry::STATUS_SUBMITTED, 0);
+
+        $summary = app(JobCostSummary::class)->for($job);
+
+        // No client override on this job's project, so the config default rate applies.
+        $this->assertSame(6.0, $summary['actualLaborHours']);
+        $this->assertSame(6 * (float) config('ai.estimating.labor_rate'), $summary['actualLaborCost']);
+    }
+
+    /** A client's own labor rate override prices actual hours too, not just AI-estimated lines. */
+    public function test_labor_cost_uses_the_clients_own_rate_override_when_one_is_set(): void
+    {
+        $job = $this->makeJob(clientLaborRate: 90.0);
+        $this->makeTimeEntry($job, $this->electrician, 4, TimeEntry::STATUS_APPROVED, 0);
+
+        $summary = app(JobCostSummary::class)->for($job);
+
+        $this->assertSame(360.0, $summary['actualLaborCost']);
+    }
+
+    public function test_a_managers_saved_hours_override_a_persons_raw_time_entry_total(): void
+    {
+        $job = $this->makeJob();
+        $this->makeTimeEntry($job, $this->electrician, 5, TimeEntry::STATUS_APPROVED, 500);
+
+        $this->actingAs($this->manager)
+            ->put("/jobs/{$job->id}/journeyman-hours/{$this->electrician->id}", ['hours' => 8])
+            ->assertSessionHasNoErrors();
+
+        $summary = app(JobCostSummary::class)->for($job);
+        $this->assertSame(8.0, $summary['actualLaborHours']);
+
+        $rows = app(JobCostSummary::class)->journeymanHours($job);
+        $row = $rows->firstWhere('userId', $this->electrician->id);
+        $this->assertSame(8.0, $row['hours']);
+        $this->assertSame(5.0, $row['rawHours']);
+        $this->assertTrue($row['isOverridden']);
+    }
+
+    /**
+     * Billing is normally raised *after* a job is completed — refusing an
+     * edit here once the job is done would make the one time this card
+     * matters most the one time it couldn't be used.
+     */
+    public function test_a_completed_jobs_journeyman_hours_can_still_be_edited(): void
+    {
+        $job = $this->makeJob(['status' => Job::STATUS_COMPLETED]);
+        $this->makeTimeEntry($job, $this->electrician, 5, TimeEntry::STATUS_APPROVED, 500);
+
+        $this->actingAs($this->manager)
+            ->put("/jobs/{$job->id}/journeyman-hours/{$this->electrician->id}", ['hours' => 7.5])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('7.50', $job->journeymanHours()->sole()->hours);
+    }
+
+    public function test_journeyman_hours_sum_every_persons_total_with_no_override_needed(): void
+    {
+        $job = $this->makeJob();
+        $journeymanB = User::factory()->create(['role' => 'Journeyman']);
+        $journeymanC = User::factory()->create(['role' => 'Journeyman']);
+
+        $this->makeTimeEntry($job, $this->electrician, 8, TimeEntry::STATUS_SUBMITTED, 800);
+        $this->makeTimeEntry($job, $journeymanB, 6, TimeEntry::STATUS_DRAFT, 600);
+        $this->makeTimeEntry($job, $journeymanC, 5, TimeEntry::STATUS_APPROVED, 500);
+
+        $summary = app(JobCostSummary::class)->for($job);
+        $this->assertSame(19.0, $summary['actualLaborHours']);
+
+        $rows = app(JobCostSummary::class)->journeymanHours($job);
+        $this->assertSame(3, $rows->count());
+        $this->assertSame(19.0, round($rows->sum('hours'), 2));
     }
 
     public function test_material_cost_comes_from_real_cost_entries_never_invented(): void
@@ -76,6 +170,50 @@ class JobCostingTest extends TestCase
 
         $summary = app(JobCostSummary::class)->for($job);
         $this->assertSame(250.0, $summary['actualMaterialCost']);
+    }
+
+    /**
+     * There is no purchasing/inventory system in this app, so a material or
+     * equipment line's one real, priced total is the estimate the job was
+     * actually priced from — the same line items shown on the invoice raised
+     * from it. Actual starts there, same as Estimated does, rather than at
+     * zero just because nobody separately logged a `job_cost_entries` row.
+     */
+    public function test_material_and_equipment_actual_cost_reflects_the_jobs_own_estimate(): void
+    {
+        $job = $this->makeJob();
+        $estimate = Estimate::create([
+            'job_id' => $job->id,
+            'number' => 'EST-2001',
+            'client' => $job->client,
+            'project' => 'Panel upgrade',
+            'issued_on' => now()->toDateString(),
+            'amount' => 3500,
+            'status' => 'approved',
+            'material_total' => 2000,
+            'equipment_total' => 500,
+            'labor_total' => 1000,
+            'subtotal' => 3500,
+            'grand_total' => 3500,
+        ]);
+
+        $summary = app(JobCostSummary::class)->for($job);
+        $this->assertSame(2000.0, $summary['estimatedMaterialCost']);
+        $this->assertSame(2000.0, $summary['actualMaterialCost']);
+        $this->assertSame(500.0, $summary['estimatedEquipmentCost']);
+        $this->assertSame(500.0, $summary['actualEquipmentCost']);
+
+        // A real overage on top, still additive rather than replacing the estimate's own total.
+        JobCostEntry::create([
+            'job_id' => $job->id,
+            'category' => JobCostEntry::CATEGORY_MATERIAL,
+            'description' => 'Extra conduit run',
+            'amount' => 150,
+            'incurred_on' => now()->toDateString(),
+        ]);
+
+        $summary = app(JobCostSummary::class)->for($job);
+        $this->assertSame(2150.0, $summary['actualMaterialCost']);
     }
 
     public function test_date_range_narrows_actual_figures_but_not_the_estimated_plan(): void
@@ -249,11 +387,14 @@ class JobCostingTest extends TestCase
         $job = $this->makeJob();
         $this->makeTimeEntry($job, $this->electrician, 5, TimeEntry::STATUS_APPROVED, 500);
 
+        // 5 hours at the project's own effective rate (no client override here).
+        $expectedCost = 5 * (int) config('ai.estimating.labor_rate');
+
         $this->actingAs($this->manager)
             ->get('/job-costing')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('canViewCosts', true)
-                ->where('laborTotals.actualCost', 500));
+                ->where('laborTotals.actualCost', $expectedCost));
     }
 
     /** The same rule applies to the per-job detail screen, not just the dashboard. */
@@ -371,9 +512,27 @@ class JobCostingTest extends TestCase
                 ->where('laborRows.0.hours', 5));
     }
 
-    private function makeJob(array $attributes = []): Job
+    private function makeJob(array $attributes = [], ?float $clientLaborRate = null): Job
     {
+        $client = Client::create([
+            'user_id' => $this->manager->id,
+            'name' => 'Riverside Properties LLC',
+            'labor_rate' => $clientLaborRate,
+        ]);
+        $project = Project::create([
+            'user_id' => $this->manager->id,
+            'client_id' => $client->id,
+            'name' => 'Riverside Office Renovation',
+            'client' => $client->name,
+            'status' => 'in-progress',
+        ]);
+
         return Job::create([
+            // `TimeEntryPolicy::approve()` requires the acting manager to own
+            // the job an entry is on — needed by the approve-triggered
+            // overrun-notification test below.
+            'user_id' => $this->manager->id,
+            'project_id' => $project->id,
             'foreman_id' => Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW'])->id,
             'name' => 'Riverside Office Renovation',
             'client' => 'Riverside Properties LLC',

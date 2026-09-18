@@ -14,7 +14,7 @@ use Tests\TestCase;
  *
  * A flat list of names answered "who is free" but never "who is free on the
  * crew already on this site". Teams are the grouping; a person's role on one —
- * supervisor or foreman — is what they do there.
+ * foreman, journeyman or apprentice — is what they do there.
  */
 class TeamRegisterTest extends TestCase
 {
@@ -34,9 +34,10 @@ class TeamRegisterTest extends TestCase
         $north = Team::create(['name' => 'North Crew']);
         $south = Team::create(['name' => 'South Crew']);
 
-        Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW', 'team_id' => $north->id, 'role' => 'supervisor']);
-        Foreman::create(['name' => 'Luis Ortega', 'initials' => 'LO', 'team_id' => $north->id, 'role' => 'foreman']);
-        Foreman::create(['name' => 'Sam Okafor', 'initials' => 'SO', 'team_id' => $south->id, 'role' => 'foreman']);
+        Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW', 'team_id' => $north->id, 'role' => 'foreman']);
+        Foreman::create(['name' => 'Luis Ortega', 'initials' => 'LO', 'team_id' => $north->id, 'role' => 'journeyman']);
+        Foreman::create(['name' => 'Robin Ashby', 'initials' => 'RA', 'team_id' => $north->id, 'role' => 'apprentice']);
+        Foreman::create(['name' => 'Sam Okafor', 'initials' => 'SO', 'team_id' => $south->id, 'role' => 'journeyman']);
 
         $this->actingAs($this->planner)
             ->get(route('teams.index'))
@@ -44,12 +45,15 @@ class TeamRegisterTest extends TestCase
                 ->component('Teams')
                 ->has('teams.data', 2)
                 ->where('teams.data.0.name', 'North Crew')
-                ->has('teams.data.0.members', 2)
-                // Supervisors first: it is the order the crew is read in.
+                ->has('teams.data.0.members', 3)
+                // Foremen first, then journeymen, then apprentices: the order
+                // the crew is read in.
                 ->where('teams.data.0.members.0.name', 'Dana Wu')
-                ->where('teams.data.0.members.0.roleLabel', 'Supervisor')
+                ->where('teams.data.0.members.0.roleLabel', 'Foreman')
                 ->where('teams.data.0.members.1.name', 'Luis Ortega')
-                ->where('teams.data.0.members.1.roleLabel', 'Foreman')
+                ->where('teams.data.0.members.1.roleLabel', 'Journeyman')
+                ->where('teams.data.0.members.2.name', 'Robin Ashby')
+                ->where('teams.data.0.members.2.roleLabel', 'Apprentice')
                 ->where('teams.data.1.name', 'South Crew')
                 ->has('teams.data.1.members', 1));
     }
@@ -72,7 +76,7 @@ class TeamRegisterTest extends TestCase
                 ->has('unassigned', 1)
                 ->where('unassigned.0.name', 'Dana Wu')
                 // No role was given, so the column reads the default.
-                ->where('unassigned.0.roleLabel', 'Foreman'));
+                ->where('unassigned.0.roleLabel', 'Journeyman'));
     }
 
     /** A team is its name, and nothing else is asked for. */
@@ -114,15 +118,20 @@ class TeamRegisterTest extends TestCase
         $this->actingAs($this->planner)
             ->post(route('foremen.store'), [
                 'name' => 'Dana Wu',
-                'role' => 'supervisor',
+                'role' => 'apprentice',
                 'team_id' => $north->id,
+                // Every member added gets a mobile account — see
+                // AddMemberMobileAccountTest for that behaviour itself.
+                'email' => 'dana@example.com',
+                'password' => 'correct-horse-battery',
+                'password_confirmation' => 'correct-horse-battery',
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('teams.index'));
 
         $member = Foreman::sole();
 
-        $this->assertSame('supervisor', $member->role);
+        $this->assertSame('apprentice', $member->role);
         $this->assertSame($north->id, $member->team_id);
     }
 
@@ -150,7 +159,7 @@ class TeamRegisterTest extends TestCase
         $this->actingAs($this->planner)
             ->put(route('foremen.update', $dana), [
                 'name' => 'Dana Wu',
-                'role' => 'supervisor',
+                'role' => 'foreman',
                 'team_id' => $south->id,
             ])
             ->assertSessionHasNoErrors();
@@ -158,7 +167,7 @@ class TeamRegisterTest extends TestCase
         $dana->refresh();
 
         $this->assertSame($south->id, $dana->team_id);
-        $this->assertSame('supervisor', $dana->role);
+        $this->assertSame('foreman', $dana->role);
     }
 
     /**
@@ -193,9 +202,10 @@ class TeamRegisterTest extends TestCase
                 ->component('ForemanCreate')
                 ->has('teams', 1)
                 ->where('teams.0.name', 'North Crew')
-                ->has('roles', 2)
-                ->where('roles.0.value', 'supervisor')
-                ->where('roles.1.value', 'foreman'));
+                ->has('roles', 3)
+                ->where('roles.0.value', 'foreman')
+                ->where('roles.1.value', 'journeyman')
+                ->where('roles.2.value', 'apprentice'));
     }
 
     /** The old address still lands somewhere: a bookmark is not a dead end. */

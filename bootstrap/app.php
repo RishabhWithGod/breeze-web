@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\BlockApprenticeAccess;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -30,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->alias([
             'account.active' => EnsureAccountIsActive::class,
+            'block.apprentice' => BlockApprenticeAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -158,8 +158,8 @@ function AssignCrewForm({ job, onClose, defaultDate }: AssignCrewFormProps) {
           </p>
         ) : (
           <div className="space-y-3">
-            <People label="Supervisor" icon={ShieldCheck} people={job.supervisors} />
-            <People label="Foreman" icon={HardHat} people={job.foremen} />
+            <People label="Foreman" icon={ShieldCheck} people={job.supervisors} />
+            <People label="Crew" icon={HardHat} people={job.foremen} />
           </div>
         )}
       </div>

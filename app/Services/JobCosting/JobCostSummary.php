@@ -6,7 +6,9 @@ use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\JobCostEntry;
 use App\Models\TimeEntry;
+use App\Models\User;
 use App\Services\Takeoff\EstimateBuilder;
+use Illuminate\Support\Collection;
 
 /**
  * The Job Costing read model: estimated vs actual across labor, materials,
@@ -19,17 +21,30 @@ use App\Services\Takeoff\EstimateBuilder;
  * dashboard's date range genuinely narrows what counts as having happened,
  * not just which jobs are listed.
  *
- * Labor's actual cost has a real source already — approved `time_entries`
- * rows, the same ones `JobLaborSummary` reads — so it is queried directly
- * here rather than duplicated through that service, whose own contract is
- * deliberately all-time (`Job Detail`'s time-tracking widget wants "this
- * job's whole history", not whatever window the costing dashboard has
- * selected). Materials/equipment/other have no comparable source anywhere in
- * the schema, so they come from `job_cost_entries` — a person's real record
- * of a real cost, never a guess.
+ * Labor's actual hours no longer wait on the Time Tracking approval workflow —
+ * every one of a person's time entries on the job counts the moment it is
+ * logged (see `journeymanHours()`), and a manager can also set the real total
+ * directly on the Billing screen; that saved override, once it exists, wins
+ * outright over whatever the raw entries add up to. `locked` entries are the
+ * one status left out everywhere: a `locked` row has been superseded by the
+ * correction that replaced it, so counting both would double the same
+ * physical hours. Actual labor cost is that same total priced at the
+ * project's own effective labor rate (`EstimateBuilder::laborRateFor()`) —
+ * not `time_entries.labor_cost`, which is only ever filled in when a rate
+ * happened to be on hand at the moment the entry was logged.
+ *
+ * There is no purchasing/inventory system anywhere in this app, so a
+ * material/equipment line's real, priced total already lives in exactly one
+ * place: the estimate the job was actually priced from — the same one
+ * `estimatedMaterialCost`/`estimatedEquipmentCost` below read. Actual starts
+ * there too, plus whatever a manager has separately logged in
+ * `job_cost_entries` on top of it — a real overage, never invented. "Other"
+ * has no comparable estimate bucket, so it stays `job_cost_entries`-only.
  */
 class JobCostSummary
 {
+    public function __construct(private readonly EstimateBuilder $estimateBuilder) {}
+
     /**
      * @return array{
      *     jobId: int, jobName: string, jobStatus: string, client: ?string,
@@ -58,16 +73,16 @@ class JobCostSummary
         $estimatedOtherCost = 0.0;
         $estimatedTotalCost = round($estimatedLaborCost + $estimatedMaterialCost + $estimatedEquipmentCost + $estimatedOtherCost, 2);
 
-        $timeQuery = $job->timeEntries()
-            ->where('status', TimeEntry::STATUS_APPROVED)
-            ->when($from, fn ($q) => $q->whereDate('date', '>=', $from))
-            ->when($to, fn ($q) => $q->whereDate('date', '<=', $to));
-        $actualLaborHours = round((float) $timeQuery->clone()->sum('hours'), 2);
-        $actualLaborCost = round((float) $timeQuery->clone()->sum('labor_cost'), 2);
+        $journeymanHours = $this->journeymanHours($job, $from, $to);
+        $actualLaborHours = round($journeymanHours->sum('hours'), 2);
+
+        $project = $job->project;
+        $laborRate = $project !== null ? $this->estimateBuilder->laborRateFor($project) : 0.0;
+        $actualLaborCost = round($actualLaborHours * $laborRate, 2);
 
         $costEntries = $job->costEntries()->incurredBetween($from, $to);
-        $actualMaterialCost = round((float) $costEntries->clone()->where('category', JobCostEntry::CATEGORY_MATERIAL)->sum('amount'), 2);
-        $actualEquipmentCost = round((float) $costEntries->clone()->where('category', JobCostEntry::CATEGORY_EQUIPMENT)->sum('amount'), 2);
+        $actualMaterialCost = round($estimatedMaterialCost + (float) $costEntries->clone()->where('category', JobCostEntry::CATEGORY_MATERIAL)->sum('amount'), 2);
+        $actualEquipmentCost = round($estimatedEquipmentCost + (float) $costEntries->clone()->where('category', JobCostEntry::CATEGORY_EQUIPMENT)->sum('amount'), 2);
         $actualOtherCost = round((float) $costEntries->clone()->where('category', JobCostEntry::CATEGORY_OTHER)->sum('amount'), 2);
         $actualTotalCost = round($actualLaborCost + $actualMaterialCost + $actualEquipmentCost + $actualOtherCost, 2);
 
@@ -141,6 +156,53 @@ class JobCostSummary
             'overrunAmount' => $overrunAmount,
             'overrunPct' => $overrunPct,
         ];
+    }
+
+    /**
+     * Every person with logged time on this job, their effective total
+     * hours, and whether that total is a manager's own saved figure or just
+     * the raw sum of their time entries — the Billing screen's "Journeyman
+     * Hours" card, and also what `actualLaborHours` above is built from, so
+     * the card and the Actual total can never disagree.
+     *
+     * No approval wait: every entry counts the moment it exists (`locked`
+     * excluded — its correction is what should count instead, not both). A
+     * saved `job_journeyman_hours` row, once one exists for that person,
+     * replaces their raw total outright.
+     *
+     * @return Collection<int, array{userId: int, name: string, role: ?string, rawHours: float, hours: float, isOverridden: bool}>
+     */
+    public function journeymanHours(Job $job, ?string $from = null, ?string $to = null): Collection
+    {
+        $rawByUser = $job->timeEntries()
+            ->where('status', '!=', TimeEntry::STATUS_LOCKED)
+            ->when($from, fn ($q) => $q->whereDate('date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('date', '<=', $to))
+            ->with(['teamMember', 'user'])
+            ->get()
+            ->groupBy('user_id');
+
+        $overrides = $job->journeymanHours()->get()->keyBy('user_id');
+
+        $userIds = $rawByUser->keys()->merge($overrides->keys())->unique()->filter();
+        $users = User::whereKey($userIds)->get(['id', 'name', 'role'])->keyBy('id');
+
+        return $userIds->map(function (int $userId) use ($rawByUser, $overrides, $users) {
+            $entries = $rawByUser->get($userId);
+            $rawHours = round((float) $entries?->sum('hours'), 2);
+            $override = $overrides->get($userId);
+            $user = $users->get($userId);
+            $teamMember = $entries?->first()?->teamMember;
+
+            return [
+                'userId' => $userId,
+                'name' => $teamMember?->name ?? $user?->name ?? 'Unknown',
+                'role' => $teamMember?->role ?? $user?->role,
+                'rawHours' => $rawHours,
+                'hours' => $override !== null ? round((float) $override->hours, 2) : $rawHours,
+                'isOverridden' => $override !== null,
+            ];
+        })->sortByDesc('hours')->values();
     }
 
     /**

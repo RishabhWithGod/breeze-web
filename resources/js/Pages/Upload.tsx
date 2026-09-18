@@ -43,6 +43,8 @@ export interface UploadProps {
    * a render would let a slow or missing engine hold the page up.
    */
   engineStatusUrl: string
+  /** Set when this screen was opened from "Upload Addendum" on a standalone estimate. */
+  addendumFor: { readonly estimateId: number; readonly estimateNumber: string } | null
 }
 
 /**
@@ -60,6 +62,7 @@ export default function Upload({
   aiConfigured,
   unfinishedTakeoff,
   engineStatusUrl,
+  addendumFor,
 }: UploadProps) {
   /** `null` while unknown, so the screen never claims the engine is down too early. */
   const [engineOnline, setEngineOnline] = useState<boolean | null>(null)
@@ -175,6 +178,13 @@ export default function Upload({
         starting="another takeoff"
         className="mb-6"
       />
+
+      {addendumFor && (
+        <Alert tone="info" className="mb-6" title="Uploading an Addendum">
+          This takeoff is raised as an addendum for Estimate {addendumFor.estimateNumber} —
+          its own estimate, kept separate from the original.
+        </Alert>
+      )}
 
       <ProjectPickerCard
         projects={projects}

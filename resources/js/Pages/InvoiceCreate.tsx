@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { ArrowLeft, Briefcase, Building2, CalendarDays, FileText, Save } from 'lucide-react'
@@ -24,6 +25,10 @@ export interface InvoiceCreateProps {
   jobs: readonly InvoiceJobOption[]
   /** Sent/approved estimates not yet converted into an invoice. */
   estimates: readonly InvoiceEstimateOption[]
+  /** Set when opened from a completed job's "Create Invoice" button. */
+  preselectedJobId: number | null
+  /** That job's own not-yet-invoiced estimate, when it has one. */
+  preselectedEstimateId: number | null
 }
 
 interface InvoiceDraft {
@@ -42,7 +47,14 @@ interface InvoiceDraft {
  * from the invoice's own detail screen once it exists, the same two-step
  * flow Estimates already use for theirs.
  */
-export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: InvoiceCreateProps) {
+export default function InvoiceCreate({
+  nextNumber,
+  clients,
+  jobs,
+  estimates,
+  preselectedJobId,
+  preselectedEstimateId,
+}: InvoiceCreateProps) {
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<InvoiceDraft>({
       client_id: '',
@@ -82,6 +94,21 @@ export default function InvoiceCreate({ nextNumber, clients, jobs, estimates }: 
         job?.client_id && !data.client_id ? String(job.client_id) : data.client_id,
     })
   }
+
+  /*
+   * Opened from a completed job's "Create Invoice" button — the same
+   * cross-fill a manual pick would do, applied once on arrival rather than
+   * asked for twice. Preferring the estimate when both are present: it
+   * already cross-fills the job (and the client) on its own.
+   */
+  useEffect(() => {
+    if (preselectedEstimateId) {
+      applyEstimate(String(preselectedEstimateId))
+    } else if (preselectedJobId) {
+      applyJob(String(preselectedJobId))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const submit = (event?: React.FormEvent) => {
     event?.preventDefault()

@@ -40,6 +40,9 @@ class EstimateController extends Controller
 
         $estimates = Estimate::query()
             ->ownedBy($request->user())
+            // An addendum is never its own row here — it belongs to, and is
+            // only ever shown from, the original estimate it adds scope to.
+            ->where('kind', '!=', Estimate::KIND_ADDENDUM)
             ->search($filters['search'] ?? null)
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when($client !== 'all', fn ($query) => $query->where('client', $client))
@@ -61,6 +64,7 @@ class EstimateController extends Controller
             // Drives the Client dropdown; kept in sync with whatever is stored.
             'clients' => Estimate::query()
                 ->ownedBy($request->user())
+                ->where('kind', '!=', Estimate::KIND_ADDENDUM)
                 ->distinct()
                 ->orderBy('client')
                 ->pluck('client'),

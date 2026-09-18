@@ -20,6 +20,10 @@ class JobResource extends JsonResource
             'description' => $this->description,
             'jobType' => $this->job_type,
             'status' => $this->status,
+            // Once completed, nothing about the job can change again — see
+            // `Job::isLocked()`. Sent so the list/card views can disable
+            // Edit/Delete without re-deriving the rule from `status`.
+            'isLocked' => $this->isLocked(),
             // Assigned after intake, so absent on a freshly created job.
             'foreman' => $this->foreman ? [
                 'name' => $this->foreman->name,
@@ -38,6 +42,10 @@ class JobResource extends JsonResource
             'isArchived' => $this->archived_at !== null,
             'teamCount' => $this->team_members_count ?? 0,
             'estimateCount' => $this->estimates_count ?? 0,
+            // Whether this job already has an invoice — "Create Invoice"
+            // becomes "View Invoice" instead of raising a second one.
+            'hasInvoice' => $this->whenLoaded('invoices', fn () => $this->invoices->isNotEmpty(), false),
+            'invoiceId' => $this->whenLoaded('invoices', fn () => $this->invoices->first()?->id, null),
             // Who's currently staffed, and in what role — the same assignments
             // made on the job's own detail screen, surfaced here so the list
             // doesn't require opening every job to see who's on it.

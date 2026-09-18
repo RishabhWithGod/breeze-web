@@ -14,6 +14,7 @@ use App\Models\Upload;
 use App\Models\User;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\JobFactory;
+use App\Services\Takeoff\ProjectDocumentStore;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,7 @@ class TakeoffOrchestrator
         private readonly JobFactory $jobs,
         private readonly EstimateBuilder $estimates,
         private readonly RunProfiler $profiler,
+        private readonly ProjectDocumentStore $documents,
     ) {}
 
     public function configured(): bool
@@ -74,8 +76,11 @@ class TakeoffOrchestrator
 
     /**
      * Posts the drawing to the engine and ingests the analysis it returns.
+     *
+     * Null when the run was cancelled while the engine call was in flight —
+     * see `ingest()`.
      */
-    public function analyse(AiJob $aiJob): AiResult
+    public function analyse(AiJob $aiJob): ?AiResult
     {
         $this->profiler->start();
 
@@ -121,6 +126,13 @@ class TakeoffOrchestrator
             $upload->name,
         ));
 
+        // Cancelled while that call was in flight — `ingest()` would refuse
+        // this response anyway, but there is no reason to keep moving the
+        // stage/progress of a run the user already stopped.
+        if ($aiJob->fresh()->status === AiJob::STATUS_CANCELLED) {
+            return null;
+        }
+
         $aiJob->update([
             'progress' => 85,
             'stage' => 'ingesting',
@@ -143,8 +155,17 @@ class TakeoffOrchestrator
      *
      * @param  array<string, mixed>  $payload
      */
-    public function ingest(AiJob $aiJob, array $payload): AiResult
+    public function ingest(AiJob $aiJob, array $payload): ?AiResult
     {
+        // The one place every response lands, and so the one place a
+        // cancellation raised while the engine call was in flight has to be
+        // caught — otherwise a response arriving after cancel() silently
+        // resurrects the run and writes against a drawing cancel() already
+        // removed.
+        if ($aiJob->fresh()->status === AiJob::STATUS_CANCELLED) {
+            return null;
+        }
+
         if (! $this->profiler->started()) {
             $this->profiler->start();
         }
@@ -167,6 +188,7 @@ class TakeoffOrchestrator
                 'ai_job_id' => $aiJob->id,
                 'project_id' => $project->id,
                 'upload_id' => $aiJob->upload_id,
+                'addendum_for_estimate_id' => $aiJob->upload?->addendum_for_estimate_id,
                 'project_name' => $normalised['project_name'],
                 'run_id' => $normalised['run_id'],
                 'original_payload' => $payload,
@@ -299,23 +321,47 @@ class TakeoffOrchestrator
         }
     }
 
+    /**
+     * Abandons the run and removes the drawing it was raised against.
+     *
+     * The engine exposes no cancel for a synchronous analysis, so a run
+     * already inside the engine call keeps running — `ingest()` re-checks
+     * this status before writing anything, so a response that arrives after
+     * this can never resurrect the run or attach itself to a drawing that no
+     * longer exists.
+     */
     public function cancel(AiJob $aiJob): void
     {
-        // The engine exposes no cancel for a synchronous analysis; the run is
-        // abandoned locally and the in-flight request simply finishes unused.
-        $aiJob->update([
-            'status' => AiJob::STATUS_CANCELLED,
-            'stage' => 'cancelled',
-            'stage_label' => 'Cancelled',
-            'completed_at' => now(),
-        ]);
+        DB::transaction(function () use ($aiJob) {
+            $aiJob->update([
+                'status' => AiJob::STATUS_CANCELLED,
+                'stage' => 'cancelled',
+                'stage_label' => 'Cancelled',
+                'completed_at' => now(),
+            ]);
 
-        $aiJob->project->update(['status' => 'failed']);
-        $aiJob->project->uploads()->update(['status' => 'failed']);
+            $project = $aiJob->project;
+
+            foreach ($project->uploads as $upload) {
+                $this->documents->remove($upload);
+            }
+
+            $project->update([
+                'status' => 'failed',
+                'selected_upload_id' => null,
+                'drawing_name' => null,
+            ]);
+        });
     }
 
     public function fail(AiJob $aiJob, string $message): void
     {
+        // A cancellation that landed first already removed the drawing this
+        // failure would otherwise be recorded against — the cancel stands.
+        if ($aiJob->fresh()->status === AiJob::STATUS_CANCELLED) {
+            return;
+        }
+
         $aiJob->markFailed($message);
         $aiJob->project->update(['status' => 'failed']);
         $aiJob->project->uploads()->update(['status' => 'failed']);

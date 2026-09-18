@@ -80,9 +80,45 @@ class InvoiceController extends Controller
         ]);
     }
 
-    /** Full-page create form. */
-    public function create(Request $request): Response
+    /**
+     * Full-page create form — also the destination of a completed job's
+     * "Create Invoice" button (`?job=`), which arrives pre-filled with that
+     * job and, when it has one, its own not-yet-invoiced estimate.
+     */
+    public function create(Request $request): Response|RedirectResponse
     {
+        $preselectedJobId = null;
+        $preselectedEstimateId = null;
+
+        $jobId = $request->integer('job') ?: null;
+
+        if ($jobId !== null) {
+            // Scoped to this manager's own jobs — a hand-made `?job=` cannot
+            // pre-fill an invoice from someone else's.
+            $job = Job::where('user_id', $request->user()->id)->find($jobId);
+
+            // Not completed, or not this manager's job: the button that sends
+            // people here never offers either case, so silently falling back
+            // to a blank form (rather than erroring) is enough — this only
+            // happens from a stale link or a hand-edited URL.
+            if ($job !== null && $job->isLocked()) {
+                $existing = $job->invoices()->first();
+
+                // Already invoiced — open that invoice rather than starting a
+                // second one. Enforced again in `store()`, not just here.
+                if ($existing !== null) {
+                    return redirect()->route('invoices.show', $existing);
+                }
+
+                $preselectedJobId = $job->id;
+                $preselectedEstimateId = $job->estimates()
+                    ->whereIn('status', ['sent', 'approved'])
+                    ->whereDoesntHave('invoices')
+                    ->orderByDesc('issued_on')
+                    ->value('id');
+            }
+        }
+
         return Inertia::render('InvoiceCreate', [
             'nextNumber' => Invoice::nextNumber($request->user()),
             'clients' => $this->clients->options($request->user()),
@@ -95,6 +131,8 @@ class InvoiceController extends Controller
                 ->whereDoesntHave('invoices')
                 ->orderByDesc('issued_on')
                 ->get(['id', 'number', 'client', 'client_id', 'job_id', 'grand_total']),
+            'preselectedJobId' => $preselectedJobId,
+            'preselectedEstimateId' => $preselectedEstimateId,
         ]);
     }
 
@@ -110,6 +148,30 @@ class InvoiceController extends Controller
         $estimate = ! empty($data['estimate_id'])
             ? Estimate::where('user_id', $request->user()->id)->find($data['estimate_id'])
             : null;
+
+        // A job is only billed once it is actually done, and only once —
+        // both refused here, not only by hiding the button, so a hand-made
+        // request naming a job id (real status/ownership notwithstanding)
+        // can't raise an invoice against work that isn't finished, or a
+        // second one against work already billed.
+        if (! empty($data['job_id'])) {
+            // Re-checked rather than trusted from the already-validated id:
+            // the request rule only confirms ownership, not status.
+            $job = Job::where('user_id', $request->user()->id)->find($data['job_id']);
+            abort_unless($job !== null, 404);
+
+            if (! $job->isLocked()) {
+                return back()->withErrors([
+                    'job_id' => 'Only a completed job can be invoiced.',
+                ]);
+            }
+
+            if ($job->invoices()->exists()) {
+                return back()->withErrors([
+                    'job_id' => 'This job is already invoiced.',
+                ]);
+            }
+        }
 
         // `client` is a snapshot of the picked client's name, never typed.
         $data = $this->clients->withClientSnapshot($data, $request->user());

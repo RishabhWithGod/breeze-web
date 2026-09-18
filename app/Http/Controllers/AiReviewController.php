@@ -7,6 +7,7 @@ use App\Http\Resources\SymbolOverlayResource;
 use App\Http\Resources\SymbolReviewResource;
 use App\Jobs\BackfillTakeoffCrops;
 use App\Models\AiResult;
+use App\Models\Estimate;
 use App\Models\SymbolReview;
 use App\Models\Upload;
 use App\Services\Ai\ArtefactStore;
@@ -172,6 +173,16 @@ class AiReviewController extends Controller
 
         try {
             $estimate = $estimateBuilder->fromFinalJson($result, $request->user());
+
+            // An addendum's own page is not where it is worked from — its
+            // upload was started from the original estimate's screen, and
+            // that is where the new addendum should appear, not on a second,
+            // separate page nobody asked to open.
+            if ($estimate->kind === Estimate::KIND_ADDENDUM) {
+                return redirect()
+                    ->route('estimates.show', ['estimate' => $estimate->parent_estimate_id, 'flow' => 1])
+                    ->with('success', "Review signed off. Addendum {$estimate->addendum_number} was generated from it.");
+            }
 
             return redirect()
                 ->route('estimates.show', ['estimate' => $estimate, 'flow' => 1])

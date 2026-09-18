@@ -294,7 +294,7 @@ export default function Processing({
               : isFailed
                 ? run.error ?? 'The AI service did not return a usable response.'
                 : isCancelled
-                  ? 'The run was cancelled. Resubmit the drawing when you are ready.'
+                  ? 'The run was cancelled and the uploaded drawing was removed. Upload it again when you are ready.'
                   : 'The drawing is with the AI service. Progress updates as it reports back — you may navigate away.'}
           </p>
 
@@ -319,9 +319,14 @@ export default function Processing({
               </>
             ) : isFailed || isCancelled ? (
               <>
-                <Button variant="white" leftIcon={RotateCcw} onClick={handleRestart}>
-                  Resubmit drawing
-                </Button>
+                {/* Cancelling removes the drawing (see ProcessingController::cancel)
+                    — there is nothing left to resubmit, only a genuine failure
+                    leaves the file in place to retry against. */}
+                {isFailed && (
+                  <Button variant="white" leftIcon={RotateCcw} onClick={handleRestart}>
+                    Resubmit drawing
+                  </Button>
+                )}
                 <Button variant="dark" onClick={handleStartOver}>
                   Back to upload
                 </Button>
@@ -363,8 +368,8 @@ export default function Processing({
           {isRunning && !run.awaitingWorker && (
             <Alert tone="info" className="mt-8 text-left">
               We're identifying symbols, circuits and connections in your drawing.
-              Cancelling stops the analysis — the drawing stays uploaded so it can be
-              resubmitted.
+              Cancelling stops the analysis and removes the uploaded drawing — you'll
+              upload it again to retry.
             </Alert>
           )}
         </Card>
@@ -379,7 +384,7 @@ export default function Processing({
         isOpen={cancelDialog.isOpen}
         tone="danger"
         title="Cancel this takeoff?"
-        description="The AI service is told to stop. Your drawing stays uploaded so you can resubmit it."
+        description="The AI service is told to stop, and the uploaded drawing is removed. You'll need to upload it again."
         confirmLabel="Cancel run"
         cancelLabel="Keep processing"
         confirmVariant="danger"

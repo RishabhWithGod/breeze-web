@@ -265,10 +265,28 @@ class EstimateBuilder
     {
         $project = $result->project;
         $engineEstimate = $result->ai_estimate ?? [];
+        // Set when this run came from "Upload Addendum" for an existing
+        // estimate, rather than a fresh, standalone takeoff — see
+        // `Upload::addendum_for_estimate_id`.
+        $parentEstimateId = $result->addendum_for_estimate_id;
+
+        /*
+         * An addendum belongs to its parent estimate's project, full stop —
+         * whatever project its own upload form happened to have selected
+         * (it only preselects the parent's, it does not lock it) is not a
+         * second answer to "which project is this addendum on". Left as
+         * `$result->project`'s own id, a mismatched pick there quietly
+         * produces an addendum nothing can ever merge with the estimate it
+         * was raised for (`EstimateMergeJobBuilder` refuses to combine
+         * estimates across two different projects).
+         */
+        $projectId = $parentEstimateId
+            ? (Estimate::find($parentEstimateId)?->project_id ?? $project->id)
+            : $project->id;
 
         return Estimate::create([
             'job_id' => $job?->id,
-            'project_id' => $project->id,
+            'project_id' => $projectId,
             'ai_result_id' => $result->id,
             // The estimate's own owner, not necessarily whoever is signed in
             // when this runs — this can fire from a queued takeoff with no
@@ -279,6 +297,9 @@ class EstimateBuilder
             'issued_on' => now()->toDateString(),
             // Draft only while no job has been raised against it yet.
             'status' => Estimate::statusFor($job),
+            'kind' => $parentEstimateId ? Estimate::KIND_ADDENDUM : Estimate::KIND_STANDALONE,
+            'parent_estimate_id' => $parentEstimateId,
+            'addendum_number' => $parentEstimateId ? Estimate::nextAddendumNumber($parentEstimateId) : null,
             /*
              * The rates these jobs are actually bid at, read off this
              * project's own imported workbook first — overheads and profit
@@ -632,6 +653,22 @@ class EstimateBuilder
         return $rateBook->isPopulated() ? $rateBook->laborRate() : $priceBook->laborRate();
     }
 
+    /**
+     * The rate an hour of labor actually bills at on this project — the same
+     * client-override-then-project-rate-book-then-price-book resolution every
+     * AI-priced labor line on this project already uses, exposed so
+     * `JobCostSummary` can price a job's *actual* logged hours at it too,
+     * instead of a second, guessed rate.
+     */
+    public function laborRateFor(Project $project): float
+    {
+        return $this->effectiveLaborRate(
+            $this->rateBook->forProject($project->id),
+            $this->priceBook->forUser($project->user_id),
+            $this->clientLaborRate($project),
+        );
+    }
+
     /** The client's own labor rate override for this project, if they have set one. */
     private function clientLaborRate(Project $project): ?float
     {
@@ -687,10 +724,13 @@ class EstimateBuilder
      * Keeps a job's budget the figure its own estimate came to.
      *
      * A job's budget is never typed on the create-job form — it is this,
-     * always, kept in step every time the estimate behind it is priced or
-     * repriced, whether that happens before or after the job itself exists.
+     * always, kept in step every time the estimate behind it is priced,
+     * repriced, or edited by hand, whether that happens before or after the
+     * job itself exists. Public so `EstimateDetailController` can call it
+     * after a manual line edit too, not only from this class's own takeoff-time
+     * pricing.
      */
-    private function syncJobBudget(Estimate $estimate): void
+    public function syncJobBudget(Estimate $estimate): void
     {
         $estimate->job?->update(['budget' => $estimate->amount]);
     }

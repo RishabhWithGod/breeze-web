@@ -11,9 +11,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class InvoiceItem extends Model
 {
+    /** The four categories `ActualCostInvoiceSync` keeps a job-linked invoice's own lines mirroring. */
+    public const CATEGORY_LABOR = 'labor';
+
+    public const CATEGORY_MATERIAL = 'material';
+
+    public const CATEGORY_EQUIPMENT = 'equipment';
+
+    public const CATEGORY_OTHER = 'other';
+
     protected $fillable = [
         'invoice_id',
         'description',
+        'source_category',
         'quantity',
         'unit_price',
         'total',

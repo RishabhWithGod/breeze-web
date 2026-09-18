@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreUploadRequest;
 use App\Jobs\ProcessTakeoffRun;
 use App\Jobs\RenderDrawingPreviews;
+use App\Models\Estimate;
 use App\Models\Upload;
 use App\Services\Ai\TakeoffOrchestrator;
 use App\Services\Takeoff\TakeoffFlow;
@@ -21,8 +22,11 @@ class UploadController extends Controller
 {
     public function create(Request $request, TakeoffOrchestrator $orchestrator): Response
     {
-        // Opened for a particular client, this is that client's next step.
-        $preselected = $this->preselectedClient($request);
+        // Opened for a particular estimate's addendum — that estimate's own
+        // project is the one this upload runs against, taking priority over
+        // any other preselection.
+        $addendumFor = $this->addendumForEstimate($request);
+        $preselected = $addendumFor?->project_id ?? $this->preselectedClient($request);
 
         if ($preselected !== null) {
             $client = $request->user()->projects()->find($preselected);
@@ -48,6 +52,16 @@ class UploadController extends Controller
                     'clientName' => $project->clientRecord?->name,
                 ]),
             'selectedProjectId' => $preselected,
+            /*
+             * Present only when this screen was opened from "Upload Addendum"
+             * on that estimate — the form carries its id along so the run this
+             * produces is raised as an addendum rather than a new standalone
+             * estimate. Absent, everything below behaves exactly as before.
+             */
+            'addendumFor' => $addendumFor === null ? null : [
+                'estimateId' => $addendumFor->id,
+                'estimateNumber' => $addendumFor->number,
+            ],
             /*
              * A takeoff already running, unless it is the very one this screen
              * opened for — that is the resume, not a second start.
@@ -97,6 +111,22 @@ class UploadController extends Controller
         }
 
         return $request->user()->projects()->whereKey($candidate)->value('id');
+    }
+
+    /**
+     * The estimate this upload is an addendum for, when the screen was opened
+     * that way (`?addendum_for=<estimateId>`) — checked against the signed-in
+     * user's own estimates, so this can never be pointed at someone else's.
+     */
+    private function addendumForEstimate(Request $request): ?Estimate
+    {
+        $id = $request->integer('addendum_for') ?: null;
+
+        if ($id === null) {
+            return null;
+        }
+
+        return Estimate::where('user_id', $request->user()->id)->find($id);
     }
 
     /**
@@ -164,6 +194,7 @@ class UploadController extends Controller
 
                 $uploads[] = $project->uploads()->create([
                     'user_id' => $request->user()->id,
+                    'addendum_for_estimate_id' => $request->integer('addendum_for_estimate_id') ?: null,
                     'name' => $originalName,
                     'format' => Upload::formatFor($originalName),
                     'size_bytes' => $file->getSize(),

@@ -43,9 +43,22 @@ class EstimateDetailController extends Controller
         }
 
         $estimate->load([
-            'job', 'takeoffProject', 'items', 'clientRecord',
+            'job', 'takeoffProject', 'items', 'clientRecord', 'parentEstimate',
             'aiResult.wireSizes', 'aiResult.equipment', 'aiResult.panelSchedules',
         ]);
+
+        $addenda = $estimate->kind === Estimate::KIND_STANDALONE
+            ? $estimate->addenda()->with('items')->get()
+            : collect();
+
+        /*
+         * The merge-selection workspace (line items broken out by source,
+         * "Create Job from Estimates") only makes sense before a job exists —
+         * once one does, an addendum still saves independently (see
+         * `EstimateBuilder::open()`), but merging estimates into a job is the
+         * existing, unchanged Job/Addendum flow from there on.
+         */
+        $beforeJob = $estimate->kind === Estimate::KIND_STANDALONE && $estimate->job_id === null;
 
         return Inertia::render('EstimateShow', [
             'estimate' => [
@@ -57,6 +70,7 @@ class EstimateDetailController extends Controller
                 'notes' => $estimate->notes,
                 'jobId' => $estimate->job_id,
                 'jobName' => $estimate->job?->name,
+                'projectId' => $estimate->project_id,
                 'clientId' => $estimate->client_id,
                 'aiResultId' => $estimate->ai_result_id,
                 'fromTakeoff' => $estimate->ai_result_id !== null,
@@ -82,7 +96,36 @@ class EstimateDetailController extends Controller
                 'reviewUrl' => $estimate->ai_result_id
                     ? route('reviews.show', $estimate->ai_result_id)
                     : null,
+                'kind' => $estimate->kind,
+                'addendumNumber' => $estimate->addendum_number,
+                'addendumName' => $estimate->addendum_name,
+                'parentEstimate' => $estimate->parentEstimate === null ? null : [
+                    'id' => $estimate->parentEstimate->id,
+                    'number' => $estimate->parentEstimate->number,
+                ],
             ],
+            /*
+             * This estimate's own addenda, when it is the standalone one they
+             * belong to — the "Upload Addendum" section reads this to list and
+             * select them. Empty for an addendum or merged estimate: only a
+             * standalone estimate is something else can be an addendum for.
+             */
+            'addenda' => $addenda->map(fn (Estimate $addendum) => [
+                'id' => $addendum->id,
+                'number' => $addendum->number,
+                'addendumNumber' => $addendum->addendum_number,
+                'addendumName' => $addendum->addendum_name,
+                'amount' => (float) $addendum->amount,
+                'status' => $addendum->status,
+                // Only needed for the pre-job workspace's per-addendum line
+                // item cards — sent regardless since it's cheap (already
+                // eager-loaded above) and keeps this payload shape uniform.
+                'items' => EstimateItemResource::collection($addendum->items)->resolve(),
+            ])->values(),
+            // The one-time "merge these into a job" workspace — see `$beforeJob` above.
+            // "Continue to Job" from there is a real page (`jobs.from-estimates.create`),
+            // which fetches its own clients/teams — nothing more to send here.
+            'beforeJob' => $beforeJob,
             /*
              * The roadmap belongs to the takeoff flow, and this screen is
              * reached from outside it too — from a job's estimates list, from
@@ -299,6 +342,7 @@ class EstimateDetailController extends Controller
         $previousStatus = $estimate->status;
         $estimate->update($validated);
         $estimate->recalculateTotals();
+        app(EstimateBuilder::class)->syncJobBudget($estimate);
 
         $estimate->aiResult?->recordHistory(
             'estimate_updated',
@@ -361,6 +405,7 @@ class EstimateDetailController extends Controller
         ]);
 
         $estimate->recalculateTotals();
+        app(EstimateBuilder::class)->syncJobBudget($estimate);
 
         $estimate->aiResult?->recordHistory(
             'estimate_line_added',
@@ -387,6 +432,7 @@ class EstimateDetailController extends Controller
         $before = (float) $item->total;
         $item->update($validated);
         $estimate->recalculateTotals();
+        app(EstimateBuilder::class)->syncJobBudget($estimate);
 
         $estimate->aiResult?->recordHistory(
             'estimate_line_updated',
@@ -406,6 +452,7 @@ class EstimateDetailController extends Controller
         $description = $item->description;
         $item->delete();
         $estimate->recalculateTotals();
+        app(EstimateBuilder::class)->syncJobBudget($estimate);
 
         $estimate->aiResult?->recordHistory(
             'estimate_line_removed',

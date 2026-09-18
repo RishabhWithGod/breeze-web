@@ -19,6 +19,17 @@ class StoreUploadRequest extends FormRequest
                 'integer',
                 Rule::exists('projects', 'id')->where('user_id', $this->user()->id),
             ],
+            /*
+             * Set only when this drawing was sent through "Upload Addendum"
+             * for an existing estimate — must be one of this manager's own,
+             * so a hand-made request cannot attach an addendum to someone
+             * else's estimate.
+             */
+            'addendum_for_estimate_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('estimates', 'id')->where('user_id', $this->user()->id),
+            ],
             'files' => ['required', 'array', 'min:1', 'max:'.$limits['max_files']],
             'files.*' => [
                 'required',

@@ -37,12 +37,12 @@ class EstimateItemController extends Controller
         abort_if($task->job?->isLocked(), 409, 'This job is completed and locked.');
         // Once the crew has submitted for review, only whoever can act on
         // that review (the same `updateTask()` authority a reopen already
-        // requires below) may keep checking things off — the supervisor
+        // requires below) may keep checking things off — the foreman
         // doing the review needs this endpoint to stay open to THEM
         // specifically, to send a line back.
         if ($task->job?->isReadyForReview() && ! $this->policy->reopenTask($request->user(), $task)) {
             return $this->fail(
-                'This job has been submitted for review — wait for your supervisor to act on it.',
+                'This job has been submitted for review — wait for your foreman to act on it.',
                 409,
             );
         }
@@ -52,15 +52,15 @@ class EstimateItemController extends Controller
         ]);
 
         // The task is only ever completed by every line being checked, so
-        // once it is, unchecking one is un-declaring it done — a foreman
-        // who checked it off cannot walk that back alone. A supervisor
-        // watching this task can, any time, the one exception being a job
-        // that is already completed and locked — caught above, before this
-        // point, for everyone including them.
+        // once it is, unchecking one is un-declaring it done — a journeyman
+        // or apprentice who checked it off cannot walk that back alone. A
+        // foreman watching this task can, any time, the one exception being
+        // a job that is already completed and locked — caught above, before
+        // this point, for everyone including them.
         if (! $data['completed']
             && $task->status === JobTask::STATUS_COMPLETED
             && ! $this->policy->reopenTask($request->user(), $task)) {
-            return $this->fail('Only a supervisor can reopen a completed task’s checklist.', 403);
+            return $this->fail('Only a foreman can reopen a completed task’s checklist.', 403);
         }
 
         $item->completed_at = $data['completed'] ? ($item->completed_at ?? now()) : null;

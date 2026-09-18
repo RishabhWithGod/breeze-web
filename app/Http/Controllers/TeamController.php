@@ -21,7 +21,7 @@ use Inertia\Response;
  *
  * A flat list of names answered "who is free" but never "who is free on the
  * crew that is already on this site". Teams are the grouping; a person's role
- * on one — supervisor or foreman — is what they do there.
+ * on one — foreman, journeyman or apprentice — is what they do there.
  *
  * People with no team are not hidden. Everyone on the register before teams
  * existed has none, and so does anyone hired before their crew is decided.
@@ -217,7 +217,7 @@ class TeamController extends Controller
      */
     private function load(bool $closed): Collection
     {
-        // Foreman or supervisor: both are carrying the task — see
+        // Foreman, journeyman or apprentice: all are carrying the task — see
         // JobTask::workload().
         return JobTask::workload($closed);
     }

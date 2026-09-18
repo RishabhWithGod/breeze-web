@@ -76,11 +76,11 @@ class AuthController extends Controller
             'email' => Str::lower($data['email']),
             'phone' => $data['phone'] ?? null,
             'password' => Hash::make($data['password']),
-            // A manager corrects this to 'Site Supervisor' from the Teams
-            // page if that's what the person actually is — 'Foreman' is the
-            // default every mobile signup starts as, not a claim about the
-            // real crew hierarchy.
-            'role' => 'Foreman',
+            // A manager corrects this to 'Foreman' or 'Apprentice' from the
+            // Teams page if that's what the person actually is —
+            // 'Journeyman' is the default every mobile signup starts as, not
+            // a claim about the real crew hierarchy.
+            'role' => 'Journeyman',
         ]);
 
         // `status`/`registration_source` are deliberately not in `$fillable`

@@ -13,6 +13,8 @@ class Upload extends Model
     protected $fillable = [
         'user_id',
         'project_id',
+        /** Set when this drawing was sent through "Upload Addendum" for an existing estimate, not a fresh takeoff. */
+        'addendum_for_estimate_id',
         'name',
         'title',
         'format',
@@ -63,6 +65,12 @@ class Upload extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /** The estimate this drawing is an addendum for, when it was uploaded from that flow. */
+    public function addendumForEstimate(): BelongsTo
+    {
+        return $this->belongsTo(Estimate::class, 'addendum_for_estimate_id');
     }
 
     /** @return HasMany<AiJob, $this> */

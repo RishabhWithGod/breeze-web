@@ -13,6 +13,8 @@ export interface TeamPickerProps {
   disabled?: boolean
   /** Marks the field with the same asterisk every other required field on the form uses. */
   required?: boolean
+  /** Hides the inline "Add a team" option — the register is the only way to add one from this form. */
+  allowInlineAdd?: boolean
 }
 
 /**
@@ -32,6 +34,7 @@ export function TeamPicker({
   error,
   disabled = false,
   required = false,
+  allowInlineAdd = true,
 }: TeamPickerProps) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
@@ -113,57 +116,58 @@ export function TeamPicker({
         {...(error ? { error } : {})}
       />
 
-      {adding ? (
-        <div className="mt-3 rounded-panel border border-hairline bg-white/4 p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-white">New team</p>
+      {allowInlineAdd &&
+        (adding ? (
+          <div className="mt-3 rounded-panel border border-hairline bg-white/4 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-white">New team</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                leftIcon={X}
+                disabled={saving}
+                onClick={reset}
+              >
+                Cancel
+              </Button>
+            </div>
+
+            <TextInput
+              id="new-team-name"
+              label="Team Name*"
+              placeholder="e.g. North Crew"
+              autoComplete="off"
+              value={name}
+              disabled={saving}
+              onChange={(event) => setName(event.target.value)}
+              {...(addError ? { error: addError } : {})}
+            />
+
             <Button
               type="button"
-              variant="ghost"
               size="sm"
-              leftIcon={X}
-              disabled={saving}
-              onClick={reset}
+              className="mt-4"
+              leftIcon={Plus}
+              isLoading={saving}
+              onClick={save}
             >
-              Cancel
+              Add team
             </Button>
           </div>
-
-          <TextInput
-            id="new-team-name"
-            label="Team Name*"
-            placeholder="e.g. North Crew"
-            autoComplete="off"
-            value={name}
-            disabled={saving}
-            onChange={(event) => setName(event.target.value)}
-            {...(addError ? { error: addError } : {})}
-          />
-
+        ) : (
           <Button
             type="button"
+            variant="white"
             size="sm"
-            className="mt-4"
-            leftIcon={Plus}
-            isLoading={saving}
-            onClick={save}
+            className="mt-3"
+            leftIcon={Users}
+            disabled={disabled}
+            onClick={() => setAdding(true)}
           >
-            Add team
+            Add a team
           </Button>
-        </div>
-      ) : (
-        <Button
-          type="button"
-          variant="white"
-          size="sm"
-          className="mt-3"
-          leftIcon={Users}
-          disabled={disabled}
-          onClick={() => setAdding(true)}
-        >
-          Add a team
-        </Button>
-      )}
+        ))}
     </div>
   )
 }

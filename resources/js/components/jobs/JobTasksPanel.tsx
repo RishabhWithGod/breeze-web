@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { router } from '@inertiajs/react'
 import { PencilLine, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { ButtonLink, ConfirmDialog, IconButton, StatusChip } from '@/components/common'
+import { Button, ConfirmDialog, IconButton, StatusChip } from '@/components/common'
 import { TASK_STATUS_LABEL, TASK_STATUS_TONE, routeTo } from '@/constants'
 import type { JobOrigin } from '@/constants'
 import type { JobTaskSummary } from '@/types'
@@ -53,7 +53,7 @@ export function JobTasksPanel({ tasks, canPlan, jobOrigin = null }: JobTasksPane
               <p className="truncate font-semibold text-white">{task.title}</p>
               <p className="mt-0.5 text-sm text-white/75">
                 {task.foreman ?? 'Unassigned'}
-                {/* Named only when there is one: "no supervisor" is a normal
+                {/* Named only when there is one: "no foreman" is a normal
                     state and does not need saying on every row. */}
                 {task.supervisor && ` · under ${task.supervisor}`}
                 {task.lineCount > 0 &&
@@ -76,22 +76,26 @@ export function JobTasksPanel({ tasks, canPlan, jobOrigin = null }: JobTasksPane
 
           {canPlan && (
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
-              <ButtonLink
-                href={routeTo.taskEditFromJob(task.id, jobOrigin)}
-                variant="ghost"
-                size="sm"
-                leftIcon={PencilLine}
-              >
-                Edit
-              </ButtonLink>
-              <IconButton
-                icon={Trash2}
-                label={`Remove ${task.title}`}
-                variant="white"
-                size="sm"
-                onClick={() => setRemoving(task)}
-                className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
-              />
+              {task.status !== 'completed' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={PencilLine}
+                  onClick={() => router.visit(routeTo.taskEditFromJob(task.id, jobOrigin))}
+                >
+                  Edit
+                </Button>
+              )}
+              {task.status !== 'completed' && (
+                <IconButton
+                  icon={Trash2}
+                  label={`Remove ${task.title}`}
+                  variant="white"
+                  size="sm"
+                  onClick={() => setRemoving(task)}
+                  className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                />
+              )}
             </div>
           )}
         </motion.li>

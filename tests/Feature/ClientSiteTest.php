@@ -120,6 +120,66 @@ class ClientSiteTest extends TestCase
         $this->assertSame('Main building', $site->refresh()->label);
     }
 
+    /**
+     * The full path this test pins: Edit Client screen → edit a site → save →
+     * the same record is what changed, and the client screen and every job
+     * standing on it show the correction.
+     */
+    public function test_the_edit_client_screen_lists_a_sites_location_and_updates_it_in_place(): void
+    {
+        $site = $this->client->addresses()->create([
+            'label' => 'Main', 'address' => '41 Harbour Way', 'is_primary' => true,
+        ]);
+
+        $job = Job::create([
+            'name' => 'Harborview Fit-out', 'client' => 'Harborview',
+            'location' => '41 Harbour Way', 'status' => 'planning',
+        ]);
+        $job->addresses()->attach($site->id, ['position' => 0]);
+
+        // The Edit Client screen lists the client's existing locations.
+        $this->actingAs($this->user)
+            ->get(route('clients.edit', $this->client))
+            ->assertInertia(fn ($page) => $page
+                ->component('ClientEdit')
+                ->has('client.addresses', 1)
+                ->where('client.addresses.0.id', $site->id)
+                ->where('client.addresses.0.address', '41 Harbour Way')
+                ->where('client.addresses.0.jobCount', 1));
+
+        // Saving a correction goes through the same address record.
+        $this->actingAs($this->user)
+            ->put(route('clients.addresses.update', [$this->client, $site]), [
+                'label' => 'Main building',
+                'address' => '41 Harbor Way',
+                'latitude' => 47.6062,
+                'longitude' => -122.3421,
+                'place_id' => 'ChIJcorrected',
+            ])
+            ->assertSessionHas('success');
+
+        // No duplicate location was created.
+        $this->assertSame(1, $this->client->addresses()->count());
+        $this->assertSame($site->id, $this->client->addresses()->sole()->id);
+
+        // The assigned job reflects the update automatically.
+        $this->assertSame('41 Harbor Way', $job->refresh()->location);
+
+        // So does the Edit Client screen, on a fresh visit.
+        $this->actingAs($this->user)
+            ->get(route('clients.edit', $this->client))
+            ->assertInertia(fn ($page) => $page
+                ->has('client.addresses', 1)
+                ->where('client.addresses.0.id', $site->id)
+                ->where('client.addresses.0.address', '41 Harbor Way'));
+
+        // And the client's own screen.
+        $this->actingAs($this->user)
+            ->get(route('clients.show', $this->client))
+            ->assertInertia(fn ($page) => $page
+                ->where('client.addresses.0.address', '41 Harbor Way'));
+    }
+
     public function test_a_correction_leaves_other_clients_work_alone(): void
     {
         $mine = $this->client->addresses()->create([

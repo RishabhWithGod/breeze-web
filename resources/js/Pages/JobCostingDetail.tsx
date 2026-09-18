@@ -30,7 +30,7 @@ import type {
 import { JOB_STATUS_LABEL, JOB_STATUS_TONE, formatCurrency, formatDate, formatHours } from '@/utils'
 
 export interface JobCostingDetailProps {
-  job: { id: number; name: string; client: string | null; status: string }
+  job: { id: number; name: string; client: string | null; status: string; isLocked: boolean }
   range: { from: string | null; to: string | null }
   canViewCosts: boolean
   summary: JobCostRow
@@ -113,7 +113,7 @@ export default function JobCostingDetail({
     { key: 'quantity', header: 'Qty', align: 'right', render: (row) => row.quantity ?? '—' },
     ...(canViewCosts ? [{ key: 'amount', header: 'Amount', align: 'right' as const, render: (row: JobCostEntryRow) => formatCurrency(row.amount ?? 0, 2) }] : []),
     { key: 'recordedBy', header: 'Recorded By', render: (row) => row.recordedBy ?? '—' },
-    ...(can.manage ? [{
+    ...(can.manage && !job.isLocked ? [{
       key: 'actions', header: '', render: (row: JobCostEntryRow) => (
         <IconButton icon={Trash2} label={`Remove ${row.description}`} size="sm" variant="danger" onClick={() => deleteEntry(row)} />
       ),
@@ -223,7 +223,7 @@ export default function JobCostingDetail({
           as="h3"
           title="Material, Equipment & Other Costs"
           subtitle="Actual costs recorded against this job — there is no purchasing system to pull these from automatically"
-          actions={can.manage ? (
+          actions={can.manage && !job.isLocked ? (
             <Button size="sm" leftIcon={Plus} onClick={addEntry.open}>Log Actual Cost</Button>
           ) : undefined}
         />

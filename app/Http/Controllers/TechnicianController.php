@@ -22,15 +22,16 @@ class TechnicianController extends Controller
     private const MANAGER_ROLES = ['project manager', 'admin', 'owner'];
 
     /**
-     * Every mobile signup starts as 'Foreman' — a manager corrects it here
-     * to whichever of these two it actually is.
+     * Every mobile signup starts as 'Journeyman' — a manager corrects it here
+     * to whichever of these three it actually is.
      */
-    public const ROLES = ['Foreman', 'Site Supervisor'];
+    public const ROLES = ['Foreman', 'Journeyman', 'Apprentice'];
 
     /** What this page calls a technician's role, mapped to what the crew register calls it. */
     private const FOREMAN_ROLE_MAP = [
         'Foreman' => Foreman::ROLE_FOREMAN,
-        'Site Supervisor' => Foreman::ROLE_SUPERVISOR,
+        'Journeyman' => Foreman::ROLE_JOURNEYMAN,
+        'Apprentice' => Foreman::ROLE_APPRENTICE,
     ];
 
     public function __construct(private readonly TeamMemberResolver $resolver) {}

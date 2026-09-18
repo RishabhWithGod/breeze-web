@@ -12,15 +12,16 @@ use App\Models\User;
  * Built on `users.role`, the same free-text column `JobSchedulePolicy` already
  * matches case-insensitively — and, for anyone reading time that is not their
  * own, on whether the entry's job is theirs to manage at all. Anyone can log
- * and submit their own time; a Foreman/Site Supervisor can see their crew's
- * time on their own jobs but not approve it; only a Project Manager/Admin/
- * Owner can approve, reject, see job costs, or run reports, and only for jobs
- * they manage; only an Admin/Owner can change the module's overtime settings.
+ * and submit their own time; a Foreman/Journeyman/Apprentice can see their
+ * crew's time on their own jobs but not approve it; only a Project Manager/
+ * Admin/Owner can approve, reject, see job costs, or run reports, and only for
+ * jobs they manage; only an Admin/Owner can change the module's overtime
+ * settings.
  */
 class TimeEntryPolicy
 {
     /** Roles that may see a crew's time without owning it. */
-    private const FOREMEN = ['foreman', 'site supervisor'];
+    private const FOREMEN = ['foreman', 'journeyman', 'apprentice'];
 
     /** Roles that may approve, reject, see costs and run reports. */
     private const MANAGERS = ['project manager', 'admin', 'owner'];

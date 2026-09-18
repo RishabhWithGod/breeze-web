@@ -152,6 +152,11 @@ class ClientController extends Controller
     {
         $this->authoriseOwner($request, $client);
 
+        // The count is what lets the screen grey out a site it cannot
+        // remove, instead of offering the button and refusing afterwards —
+        // same as the client's own screen (`show()`, below).
+        $client->load(['addresses' => fn ($query) => $query->withCount('jobs')]);
+
         return Inertia::render('ClientEdit', [
             'client' => [
                 'id' => $client->id,
@@ -160,6 +165,20 @@ class ClientController extends Controller
                 // Resolved, not raw: a client that has never set its own
                 // rate shows the configured default rather than a blank box.
                 'laborRate' => $client->effectiveLaborRate(),
+                'addresses' => $client->addresses->map(fn ($address) => [
+                    'id' => $address->id,
+                    'label' => $address->label,
+                    'address' => $address->address,
+                    'display' => $address->display(),
+                    'siteType' => $address->site_type,
+                    'isPrimary' => $address->is_primary,
+                    'latitude' => $address->latitude === null ? null : (float) $address->latitude,
+                    'longitude' => $address->longitude === null ? null : (float) $address->longitude,
+                    'placeId' => $address->place_id,
+                    // `job_addresses` cascades, so a site with work on it
+                    // cannot go — see ClientAddressController::destroy.
+                    'jobCount' => $address->jobs_count,
+                ])->values(),
             ],
         ]);
     }
