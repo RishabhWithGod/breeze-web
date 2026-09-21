@@ -8,6 +8,7 @@ use App\Models\Estimate;
 use App\Models\Invoice;
 use App\Models\Job;
 use App\Policies\InvoicePolicy;
+use App\Services\Billing\EstimateInvoiceSync;
 use App\Services\Billing\InvoiceSummaryCalculator;
 use App\Services\Clients\ClientDirectory;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +26,7 @@ class InvoiceController extends Controller
     public function __construct(
         private readonly InvoiceSummaryCalculator $summary,
         private readonly ClientDirectory $clients,
+        private readonly EstimateInvoiceSync $estimateSync,
     ) {}
 
     public function index(Request $request): Response
@@ -185,22 +187,10 @@ class InvoiceController extends Controller
 
         // Converting from an estimate copies its real lines rather than
         // asking anyone to retype them — the estimate's own data stays the
-        // single source, this is just a starting point the invoice owns from
-        // here on.
+        // single source, and this invoice keeps mirroring it live (see
+        // `EstimateInvoiceSync`) for as long as it stays a draft.
         if ($estimate !== null) {
-            $estimate->loadMissing('items');
-
-            foreach ($estimate->items as $position => $item) {
-                $invoice->items()->create([
-                    'description' => $item->description,
-                    'quantity' => $item->quantity,
-                    'unit_price' => $item->unit_cost,
-                    'total' => $item->total,
-                    'position' => $position,
-                ]);
-            }
-
-            $invoice->recalculateTotals();
+            $this->estimateSync->sync($invoice);
         }
 
         return redirect()

@@ -54,6 +54,11 @@ export interface InvoiceDetail {
 export interface InvoiceItemRow {
   readonly id: number
   readonly description: string
+  /**
+   * 'material'/'equipment'/'labor' when this line came from an estimate's
+   * own line item (see `EstimateInvoiceSync`); null for a hand-typed line.
+   */
+  readonly sourceCategory: string | null
   readonly quantity: number
   readonly unitPrice: number
   readonly total: number
