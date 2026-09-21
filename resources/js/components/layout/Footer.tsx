@@ -15,23 +15,23 @@ export function Footer({ className }: { className?: string }) {
   return (
     <footer
       className={cn(
-        'mt-12 rounded-card border border-hairline glass px-6 py-8 sm:px-8',
+        'mt-12 rounded-card border border-hairline glass px-6 py-6 sm:px-8',
         className,
       )}
     >
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-md font-semibold text-white">
-            {APP_NAME}
-          </p>
-          <p className="mt-1 text-sm text-white/75">
-            © {year} {APP_NAME}. Every takeoff is reviewed by a person before it
-            reaches a job or an estimate.
-          </p>
-        </div>
+      <div>
+        <p className="text-md font-semibold text-white">
+          {APP_NAME}
+        </p>
+        <p className="mt-1 text-sm text-white/75">
+          © {year} {APP_NAME}. Every takeoff is reviewed by a person before it
+          reaches a job or an estimate.
+        </p>
+      </div>
 
+      <div className="mt-6 flex items-center justify-between gap-6 border-t border-hairline pt-5 overflow-x-auto">
         <nav aria-label="Footer">
-          <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <ul className="flex flex-nowrap items-center gap-x-6 whitespace-nowrap">
             {FOOTER_LINKS.map((link) => (
               <li key={link.label}>
                 <a
@@ -45,7 +45,7 @@ export function Footer({ className }: { className?: string }) {
           </ul>
         </nav>
 
-        <ul className="flex items-center gap-2">
+        <ul className="flex shrink-0 items-center gap-2">
           {SOCIALS.map(({ label, icon: Icon }) => (
             <li key={label}>
               <a
