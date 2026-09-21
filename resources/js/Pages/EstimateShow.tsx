@@ -685,28 +685,29 @@ export default function EstimateShow({
         estimate's `job_id` is not the same question either: the takeoff's
         estimate is linked to whichever job was raised first.
 
-        Unchanged by the pre-job merge workspace above: before a job exists,
-        "Continue to Job" is this same roadmap step (with its own
-        workflow-progress bar) — at least one of the original/addenda
+        Whenever there are addenda — before a job exists (the merge workspace
+        above is exactly the picker for this) or after — the checked selection
+        is sent along as `?merge_estimates=`: the backend renders this same
+        screen/form completely fresh (no old job data) and, on submit, raises
+        a brand-new job from exactly those sources, flipping each selected
+        Draft source to Approved, rather than resaving the takeoff's existing
+        job — see `EstimateMergeJobBuilder`. Dropping this before a job
+        exists used to leave every checked addendum Draft and unmerged: the
+        picker let you select them, but nothing downstream ever saw the
+        selection.
+
+        With no addenda at all, this is simply that roadmap step's own form
+        (`FinalTakeoffController::show` seeds it from `result.workJob`, so
+        returning to it edits the job already raised — by design, for the
+        plain one-takeoff flow) — at least one of the original/addenda
         checkboxes above has to be on first, an empty selection is not
         something to raise a job from.
-
-        Once a job already exists, that roadmap step is normally *that job's*
-        own form (`FinalTakeoffController::show` seeds it from
-        `result.workJob`, so returning to it edits the job already raised —
-        by design, for the plain one-takeoff flow). Once there are addenda to
-        fold in, though, the checked selection above is sent along as
-        `?merge_estimates=` instead: the same screen and form, but the
-        backend renders it completely fresh (no old job data) and, on
-        submit, raises a brand-new job from exactly those sources rather
-        than resaving the takeoff's existing one — see
-        `EstimateMergeJobBuilder`.
       */}
       {inFlow && estimate.aiResultId && (
         <StepFooter
           current="estimate"
           href={
-            !beforeJob && addenda.length > 0
+            addenda.length > 0
               ? `${routeTo.finalSymbols(estimate.aiResultId)}?merge_estimates=${Array.from(selectedAddenda).join(',')}`
               : routeTo.finalSymbols(estimate.aiResultId)
           }

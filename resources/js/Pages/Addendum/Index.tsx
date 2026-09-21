@@ -1,11 +1,11 @@
 import { Head, router, usePage } from '@inertiajs/react'
 import { UploadCloud } from 'lucide-react'
 import { Alert, ButtonLink, Card, CardHeader, SelectField } from '@/components/common'
-import { CreateJobFromEstimatesCard } from '@/components/estimates'
+import { AddendumSelectionList } from '@/components/estimates'
 import type { AddendumSummary } from '@/components/estimates'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import type { ClientOption, SharedPageProps } from '@/types'
+import type { SharedPageProps } from '@/types'
 
 interface AddendumProject {
   readonly id: number
@@ -22,42 +22,26 @@ export interface AddendumIndexProps {
   projects: readonly AddendumProject[]
   selectedProjectId: number | null
   originals: readonly OriginalEstimate[]
-  clients: readonly ClientOption[]
-  teams: readonly { readonly id: number; readonly name: string }[]
 }
 
 /**
- * Addendum management: pick a project, see its original estimate and every
- * addendum raised against it, choose which ones belong in a job, and raise
- * one from exactly that selection.
+ * Addendum management: pick a project, and see its original estimate and
+ * every addendum raised against it, each with its own total and status.
  *
- * Selecting here never changes an estimate's own total — it only decides
- * what a job built from this screen combines. Addenda are added elsewhere
- * (the "Upload Addendum" button, which is the same PDF → AI takeoff → review
- * flow every estimate goes through), not on this screen.
+ * Addenda are added elsewhere (the "Upload Addendum" button, which is the
+ * same PDF → AI takeoff → review flow every estimate goes through), not on
+ * this screen.
  */
 export default function AddendumIndex({
   projects,
   selectedProjectId,
   originals,
-  clients,
-  teams,
 }: AddendumIndexProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   const changeProject = (projectId: string) => {
     router.get(projectId ? routeTo.addendaForProject(Number(projectId)) : ROUTES.addenda)
   }
-
-  /*
-   * "Continue to Job" on the estimate screen sends the original's id here
-   * (`?original=`) once it has addenda, so the create-job form for that one
-   * original opens straight away instead of landing on a list to click
-   * through again.
-   */
-  const autoOpenOriginalId = typeof window === 'undefined'
-    ? null
-    : Number(new URLSearchParams(window.location.search).get('original')) || null
 
   return (
     <PageTransition>
@@ -105,14 +89,7 @@ export default function AddendumIndex({
 
       <div className="flex flex-col gap-6">
         {originals.map((original) => (
-          <OriginalCard
-            key={original.id}
-            original={original}
-            project={projects.find((p) => p.id === selectedProjectId) ?? null}
-            clients={clients}
-            teams={teams}
-            autoOpen={original.id === autoOpenOriginalId}
-          />
+          <OriginalCard key={original.id} original={original} />
         ))}
       </div>
     </PageTransition>
@@ -121,19 +98,7 @@ export default function AddendumIndex({
 
 AddendumIndex.layout = appLayout
 
-function OriginalCard({
-  original,
-  project,
-  clients,
-  teams,
-  autoOpen,
-}: {
-  original: OriginalEstimate
-  project: AddendumProject | null
-  clients: readonly ClientOption[]
-  teams: readonly { readonly id: number; readonly name: string }[]
-  autoOpen: boolean
-}) {
+function OriginalCard({ original }: { original: OriginalEstimate }) {
   return (
     <Card padding="lg">
       <CardHeader
@@ -146,13 +111,12 @@ function OriginalCard({
         }
       />
 
-      <CreateJobFromEstimatesCard
+      <AddendumSelectionList
         original={{ id: original.id, number: original.number, amount: original.amount, status: original.status }}
         addenda={original.addenda}
-        clientId={project?.clientId ?? null}
-        clients={clients}
-        teams={teams}
-        autoOpen={autoOpen}
+        selected={new Set()}
+        onToggle={() => {}}
+        selectable={false}
       />
     </Card>
   )

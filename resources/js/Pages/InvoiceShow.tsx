@@ -73,6 +73,13 @@ export default function InvoiceShow({
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
 
+  // What Job Cost Details' "Actual" column shows for Materials — the real
+  // sum of this invoice's own current material-tagged lines, so it can never
+  // disagree with what a client is actually being billed for materials.
+  const materialLineItemsTotal = items
+    .filter((item) => item.sourceCategory === 'material')
+    .reduce((sum, item) => sum + item.total, 0)
+
   const send = () => router.post(routeTo.invoiceSend(invoice.id), {}, { preserveScroll: true })
   const markPaid = () => router.post(routeTo.invoiceMarkPaid(invoice.id), {}, { preserveScroll: true })
   // The server responds with `Inertia::location(...)` for this one — Stripe's
@@ -264,7 +271,6 @@ export default function InvoiceShow({
                     hours={jobCostSummary.estimatedLaborHours}
                     laborCost={jobCostSummary.estimatedLaborCost}
                     materialCost={jobCostSummary.estimatedMaterialCost}
-                    equipmentCost={jobCostSummary.estimatedEquipmentCost}
                     otherCost={jobCostSummary.estimatedOtherCost}
                     totalCost={jobCostSummary.estimatedTotalCost}
                   />
@@ -272,8 +278,7 @@ export default function InvoiceShow({
                     title="Actual"
                     hours={jobCostSummary.actualLaborHours}
                     laborCost={jobCostSummary.actualLaborCost}
-                    materialCost={jobCostSummary.actualMaterialCost}
-                    equipmentCost={jobCostSummary.actualEquipmentCost}
+                    materialCost={materialLineItemsTotal}
                     otherCost={jobCostSummary.actualOtherCost}
                     totalCost={jobCostSummary.actualTotalCost}
                   />
@@ -375,7 +380,8 @@ function JourneymanHourRow({
             min={0}
             value={hrs}
             onChange={(event) => setFields((current) => ({ ...current, hrs: event.target.value }))}
-            className="w-20"
+            className="w-24"
+            controlClassName="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             rightSlot={<span className="pr-3 text-2xs text-white/60">hrs</span>}
           />
           <TextInput
@@ -385,7 +391,8 @@ function JourneymanHourRow({
             max={59}
             value={min}
             onChange={(event) => setFields((current) => ({ ...current, min: event.target.value }))}
-            className="w-20"
+            className="w-24"
+            controlClassName="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             rightSlot={<span className="pr-3 text-2xs text-white/60">min</span>}
           />
           <Button size="sm" isLoading={processing} onClick={save}>
@@ -437,7 +444,6 @@ function CostColumn({
   hours,
   laborCost,
   materialCost,
-  equipmentCost,
   otherCost,
   totalCost,
 }: {
@@ -445,7 +451,6 @@ function CostColumn({
   hours: number
   laborCost: number | null
   materialCost: number | null
-  equipmentCost: number | null
   otherCost: number | null
   totalCost: number | null
 }) {
@@ -458,7 +463,6 @@ function CostColumn({
         <TotalRow label="Labor Hours" value={formatHours(hours)} />
         <TotalRow label="Labor" value={money(laborCost)} />
         <TotalRow label="Materials" value={money(materialCost)} />
-        <TotalRow label="Equipment" value={money(equipmentCost)} />
         <TotalRow label="Other" value={money(otherCost)} />
         <TotalRow label="Total" value={money(totalCost)} strong />
       </dl>
