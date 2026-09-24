@@ -137,6 +137,18 @@ class Project extends Model
         return $this->hasMany(Upload::class);
     }
 
+    /** @return HasMany<Job, $this> */
+    public function jobs(): HasMany
+    {
+        return $this->hasMany(Job::class)->latest('start_date');
+    }
+
+    /** @return HasMany<Estimate, $this> */
+    public function estimates(): HasMany
+    {
+        return $this->hasMany(Estimate::class, 'project_id')->latest('issued_on');
+    }
+
     /** This project's own uploaded vendor rate lists — see `ProjectRateImport`. */
     public function rateImports(): HasMany
     {
@@ -196,6 +208,12 @@ class Project extends Model
     public function hasResults(): bool
     {
         return $this->symbols()->exists();
+    }
+
+    /** Only this user's own projects — same shape as `Estimate::scopeOwnedBy`/`Job::scopeOwnedBy`. */
+    public function scopeOwnedBy(Builder $query, User $user): Builder
+    {
+        return $query->where('user_id', $user->id);
     }
 
     /** Matches a project name, its drawing's filename, its client, its number or its site. */

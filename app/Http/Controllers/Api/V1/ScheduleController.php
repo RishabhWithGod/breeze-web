@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\JobTaskResource;
+use App\Models\CrewShift;
 use App\Models\Job;
 use App\Models\JobTask;
 use App\Services\Mobile\ElectricianJobAccess;
@@ -34,6 +35,50 @@ class ScheduleController extends Controller
         private readonly TeamMemberResolver $resolver,
         private readonly JobTaskWorkflowService $workflow,
     ) {}
+
+    /**
+     * "My Schedule" — every upcoming crew shift across every job this user
+     * can access (`ElectricianJobAccess::assignedJobsQuery`), the same
+     * `CrewShift` rows and `scheduled_date`/`start_time` ordering the web
+     * Scheduling calendar (`SchedulingController::calendar`) uses, just
+     * flattened into a paginated list instead of a bounded week/month grid.
+     *
+     * Soonest-first (ascending), not newest-first: this is a forward
+     * calendar of what's coming up, not a log of what changed — reversing
+     * it would show the most distant future shift first, which is exactly
+     * the wrong order for a schedule. Matches web's own ordering exactly.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $shifts = CrewShift::query()
+            ->whereIn('job_id', $this->access->assignedJobsQuery($request->user())->select('id'))
+            ->with(['job:id,name,client,location', 'teamMember:id,name,initials,role'])
+            ->where('scheduled_date', '>=', now()->toDateString())
+            ->orderBy('scheduled_date')
+            ->orderBy('start_time')
+            ->orderBy('id')
+            ->paginate(min((int) $request->integer('per_page', 20), 50));
+
+        return $this->ok([
+            'shifts' => $shifts->getCollection()->map(fn (CrewShift $shift) => [
+                'id' => $shift->id,
+                'jobId' => $shift->job_id,
+                'jobName' => $shift->job?->name ?? '',
+                'address' => $shift->job?->location ?? '',
+                'crewName' => $shift->crew ?: ($shift->teamMember?->name ?? ''),
+                'scheduledDate' => $shift->scheduled_date->toDateString(),
+                'startTime' => $shift->start_time,
+                'durationHours' => (float) $shift->duration_hours,
+                'status' => $shift->status,
+            ])->all(),
+            'meta' => [
+                'currentPage' => $shifts->currentPage(),
+                'lastPage' => $shifts->lastPage(),
+                'perPage' => $shifts->perPage(),
+                'total' => $shifts->total(),
+            ],
+        ]);
+    }
 
     public function show(Request $request, Job $job): JsonResponse
     {

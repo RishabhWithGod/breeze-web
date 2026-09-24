@@ -1165,6 +1165,48 @@ class MobileJobsAndTasksTest extends TestCase
         $this->assertGreaterThanOrEqual(1795, $response->json('data.crewTime.0.liveElapsedSeconds'));
     }
 
+    public function test_a_jobs_show_response_carries_its_real_budget(): void
+    {
+        [$user, $member] = $this->makeElectrician();
+        $job = $this->makeJob(['budget' => 4500]);
+        $this->staffOnTask($job, $member);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->getJson("/api/v1/jobs/{$job->id}")
+            ->assertOk();
+
+        $this->assertEquals(4500.0, $response->json('data.budget'));
+    }
+
+    public function test_an_apprentice_never_sees_a_jobs_budget(): void
+    {
+        $apprenticeUser = User::factory()->create([
+            'name' => 'Alex Apprentice',
+            'role' => 'Apprentice',
+            'registration_source' => User::SOURCE_MOBILE,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        $apprentice = new Foreman(['name' => 'Alex Apprentice', 'initials' => 'AA', 'role' => Foreman::ROLE_APPRENTICE]);
+        $apprentice->user_id = $apprenticeUser->id;
+        $apprentice->save();
+
+        $journeyman = new Foreman(['name' => 'Priya', 'initials' => 'PR', 'role' => 'journeyman']);
+        $journeyman->save();
+
+        $job = $this->makeJob(['foreman_id' => $journeyman->id, 'budget' => 4500]);
+        \App\Models\JobApprenticeAssignment::create([
+            'job_id' => $job->id,
+            'journeyman_id' => $journeyman->id,
+            'apprentice_id' => $apprentice->id,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($apprenticeUser))
+            ->getJson("/api/v1/jobs/{$job->id}")
+            ->assertOk();
+
+        $this->assertArrayNotHasKey('budget', $response->json('data'));
+    }
+
     public function test_crew_time_is_empty_with_no_foreman_assigned_to_any_task(): void
     {
         [$user, $member] = $this->makeElectrician();

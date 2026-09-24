@@ -17,8 +17,10 @@ use Illuminate\Validation\Rule;
  * Jobs, as the mobile app sees them: only the ones the signed-in electrician
  * is actually staffed on (see `ElectricianJobAccess`) — a stricter scope
  * than the web app's own Job Detail page, which has no per-job restriction
- * at all. Never a budget/cost figure — those stay exclusively in the
- * manager-facing, `viewJobCosts`-gated web screens.
+ * at all. `show()` sends the raw `budget` figure (same as web's
+ * `JobDetailResource`) to a non-apprentice viewer; only the cost
+ * *breakdown* stays behind `viewJobCosts` on web, and this endpoint never
+ * builds one at all.
  */
 class JobController extends Controller
 {
@@ -34,7 +36,10 @@ class JobController extends Controller
         $jobs = $this->access->assignedJobsQuery($request->user())
             ->with('foreman:id,name,initials,role')
             ->withSum('timeEntries', 'hours')
-            ->orderBy('start_date')
+            // Newest first — the mobile list is a feed of what's current,
+            // not a schedule to work through chronologically.
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
             ->paginate(min((int) $request->integer('per_page', 20), 50));
 
         return $this->ok([
@@ -68,6 +73,12 @@ class JobController extends Controller
         return $this->ok([
             ...$this->summarize($job, $request),
             'description' => $job->description,
+            // Unlike the list/apprentice view, a foreman/journeyman's own Job
+            // Detail screen shows the raw budget figure — the same number
+            // web's `JobDetailResource` sends to anyone who can view the job
+            // at all (only the cost *breakdown*, `jobCosting`, is gated
+            // behind `viewJobCosts` on web; the budget itself isn't).
+            'budget' => $job->budget === null ? null : (float) $job->budget,
             'assignments' => $job->activeAssignments->map(fn ($a) => [
                 'role' => $a->role,
                 'name' => $a->name,

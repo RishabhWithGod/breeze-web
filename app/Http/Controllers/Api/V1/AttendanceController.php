@@ -6,10 +6,14 @@ use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Models\Job;
 use App\Models\JobAttendance;
+use App\Models\TimeEntry;
 use App\Models\TimeTrackingSetting;
 use App\Services\Mobile\ElectricianJobAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Response as ResponseFactory;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * The server side of Breeze-Electric's GPS check-in/check-out feature —
@@ -44,6 +48,71 @@ class AttendanceController extends Controller
             ->first();
 
         return $this->ok($attendance ? $this->present($attendance) : null);
+    }
+
+    /**
+     * One GPS check-in/out record, in full — mobile's counterpart to web's
+     * `TimeEntryController::showAttendance()`, for the Time Log Viewer's
+     * day-detail screen to drill into. Same crew-visibility rule (own
+     * record, or `viewCrew`), and a different, richer camelCase shape than
+     * {@see present()} above — that one is the offline-sync check-in/out
+     * contract (`docs/mobile-attendance-api-contract.md`); this is a
+     * read-only display shape, matching web's own `AttendanceShow.tsx`.
+     */
+    public function show(Request $request, JobAttendance $attendance): JsonResponse
+    {
+        $canViewCrew = (bool) $request->user()->can('viewCrew', TimeEntry::class);
+        abort_unless($canViewCrew || $attendance->user_id === $request->user()->id, 403);
+
+        $attendance->load(['job', 'user']);
+        $job = $attendance->job;
+
+        return $this->ok([
+            'id' => $attendance->id,
+            'date' => $attendance->date->toDateString(),
+            'status' => $attendance->status,
+            'employee' => ['name' => $attendance->user?->name ?? 'Unknown'],
+            'job' => $job ? [
+                'id' => $job->id,
+                'name' => $job->name,
+                'client' => $job->client,
+                'status' => $job->status,
+            ] : null,
+            'hours' => round($attendance->workingSeconds() / 3600, 2),
+            'bankedSeconds' => $attendance->banked_seconds,
+            'checkIn' => [
+                'at' => $attendance->check_in_at?->toISOString(),
+                'method' => $attendance->check_in_method,
+                'accuracyMeters' => $attendance->check_in_accuracy !== null ? (float) $attendance->check_in_accuracy : null,
+                'distanceMeters' => $attendance->check_in_distance_meters !== null ? (float) $attendance->check_in_distance_meters : null,
+                'lat' => $attendance->check_in_lat !== null ? (float) $attendance->check_in_lat : null,
+                'lng' => $attendance->check_in_lng !== null ? (float) $attendance->check_in_lng : null,
+                'hasPhoto' => $attendance->check_in_photo_path !== null,
+            ],
+            'checkOut' => [
+                'at' => $attendance->check_out_at?->toISOString(),
+                'method' => $attendance->check_out_method,
+                'accuracyMeters' => $attendance->check_out_accuracy !== null ? (float) $attendance->check_out_accuracy : null,
+                'distanceMeters' => $attendance->check_out_distance_meters !== null ? (float) $attendance->check_out_distance_meters : null,
+                'lat' => $attendance->check_out_lat !== null ? (float) $attendance->check_out_lat : null,
+                'lng' => $attendance->check_out_lng !== null ? (float) $attendance->check_out_lng : null,
+            ],
+        ]);
+    }
+
+    /** The check-in selfie, when one exists — same crew-visibility rule as {@see show()}. */
+    public function photo(Request $request, JobAttendance $attendance): StreamedResponse
+    {
+        $canViewCrew = (bool) $request->user()->can('viewCrew', TimeEntry::class);
+        abort_unless($canViewCrew || $attendance->user_id === $request->user()->id, 403);
+        abort_if($attendance->check_in_photo_path === null, 404);
+
+        return ResponseFactory::streamDownload(
+            fn () => print Storage::disk('local')->get($attendance->check_in_photo_path),
+            "attendance-{$attendance->id}.jpg",
+            ['Content-Type' => 'image/jpeg'],
+            'inline',
+        );
     }
 
     /** Every record for the signed-in technician today, across all jobs. */
