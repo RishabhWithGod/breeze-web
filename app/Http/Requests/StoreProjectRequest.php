@@ -53,9 +53,9 @@ class StoreProjectRequest extends FormRequest
              * pooled into this project's one rate book.
              */
             'vendor_rate_list' => ['nullable', 'array', 'max:20'],
-            // TEMPORARY: was a flat 10MB; raised to match the same ceiling
-            // every other upload in the app already uses, at the requester's
-            // ask, while the real per-feature limits get revisited.
+            // TEMPORARY: was a flat 10MB; raised to the app-wide upload
+            // ceiling at the requester's ask, while the real per-feature
+            // limits get revisited.
             'vendor_rate_list.*' => ['file', 'mimes:xlsx,pdf,doc,docx,rtf,odt', 'max:'.(UploadLimits::effectiveMb() * 1024)],
         ];
     }

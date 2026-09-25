@@ -46,6 +46,7 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   // inside one, so they follow Jobs as entries of their own. Only the lists are
   // here — adding one is a button on its list, the way every other module does
   // it, rather than a second drawer entry per screen.
+  //
   // Technicians who signed up from the mobile app are on this same screen —
   // a pending-approval section at the top, not a separate drawer entry.
   { label: 'Teams', href: ROUTES.teams, icon: Users },

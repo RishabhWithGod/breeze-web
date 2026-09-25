@@ -31,10 +31,15 @@ class SymbolCatalog
     /**
      * A copy of this catalog reading this project's own rate list first, then
      * `$userId`'s price book (their own, or the universal one) as a fallback.
+     *
+     * `static`, not `self`: the isolated static-takeoff module subclasses this
+     * catalog (`StaticAwareSymbolCatalog`) to price a static dataset's own
+     * rates ahead of the rate book/price book — late static binding is what
+     * lets that subclass survive this call unmodified here.
      */
     public function forProject(int $projectId, ?int $userId = null): self
     {
-        return new self(
+        return new static(
             $this->rateBook->forProject($projectId),
             $this->priceBook->forUser($userId),
         );

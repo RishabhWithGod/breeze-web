@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\Review\SymbolIconMatcher;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -15,7 +16,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // One request-lifetime instance: it loads the (small, unchanging)
+        // icon library once and reuses it across every review row in a
+        // resource collection, rather than requerying per row.
+        $this->app->singleton(SymbolIconMatcher::class);
     }
 
     /**

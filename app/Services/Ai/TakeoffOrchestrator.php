@@ -12,6 +12,7 @@ use App\Models\Project;
 use App\Models\SymbolReview;
 use App\Models\Upload;
 use App\Models\User;
+use App\Services\Ai\Contracts\TakeoffEngine;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\JobFactory;
 use App\Services\Takeoff\ProjectDocumentStore;
@@ -34,7 +35,7 @@ use Throwable;
 class TakeoffOrchestrator
 {
     public function __construct(
-        private readonly AiTakeoffClient $client,
+        private readonly TakeoffEngine $client,
         private readonly AiResponseNormaliser $normaliser,
         private readonly ArtefactStore $store,
         private readonly LifecycleReader $lifecycle,

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { router } from '@inertiajs/react'
 import {
   Check,
@@ -21,7 +21,7 @@ import {
 } from '@/components/common'
 import { REVIEW_STATUS_LABEL, REVIEW_STATUS_TONE, routeTo } from '@/constants'
 import type { SymbolReviewRow } from '@/types'
-import { cn, formatRelative, symbolLabel } from '@/utils'
+import { cn, formatRelative, genericSymbolIcon, symbolLabel } from '@/utils'
 import type { SymbolColor } from '@/utils'
 
 /** Which inline editor the card currently shows. */
@@ -85,6 +85,15 @@ export function SymbolCard({
     setLastCropUrl(row.cropUrl)
     setImageFailed(false)
   }
+
+  // Only ever shown when there is neither a real crop nor a matched
+  // reference icon — a plain, category-shaped stand-in either way. Memoized
+  // for a stable reference across renders where `row.name` is unchanged.
+  // `genericSymbolIcon` only ever returns one of a handful of module-level
+  // icon constants (never a freshly-defined component), so this data-driven
+  // choice of icon isn't the render-created-component bug this lint rule
+  // otherwise catches.
+  const GenericIcon = useMemo(() => genericSymbolIcon(row.name), [row.name])
 
   const post = useCallback(
     (url: string, data: Record<string, string | number | null> = {}, onDone?: () => void) => {
@@ -177,10 +186,21 @@ export function SymbolCard({
               setImageFailed(true)
             }}
           />
+        ) : !row.cropUrl && row.fallbackIconUrl ? (
+          <div className="flex size-full items-center justify-center p-3">
+            <img src={row.fallbackIconUrl} alt="" aria-hidden className="max-h-16 max-w-full object-contain opacity-80" />
+          </div>
+        ) : !row.cropUrl ? (
+          <div className="flex size-full flex-col items-center justify-center gap-1 p-3">
+            {/* eslint-disable-next-line react-hooks/static-components --
+                data-driven choice among a handful of module-level icon
+                constants, not a component defined inline; see the comment
+                above `GenericIcon`. */}
+            <GenericIcon size={36} strokeWidth={1.5} style={{ color: color.solid }} aria-hidden />
+            <span className="text-2xs text-navy-900/50">No image on file</span>
+          </div>
         ) : (
-          <span className="px-4 text-center text-2xs text-navy-900/60">
-            {row.cropUrl ? 'Image failed to load' : 'No image for this symbol'}
-          </span>
+          <span className="px-4 text-center text-2xs text-navy-900/60">Image failed to load</span>
         )}
 
         {/* On its own dark plate: the checkbox is drawn for this app's dark

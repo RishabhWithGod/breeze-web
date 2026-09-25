@@ -24,6 +24,17 @@ class AiApiException extends RuntimeException
         );
     }
 
+    /**
+     * Static takeoff mode is on and no stored dataset matches the uploaded
+     * drawing. Worded for the reviewer, not the mechanism: this reads
+     * standalone on the processing screen (see `Processing.tsx`), so it must
+     * never mention how the match is made internally.
+     */
+    public static function staticDatasetNotFound(): self
+    {
+        return new self("This drawing hasn't been synced yet. Please upload a drawing that has already been synced, or contact your administrator to sync it.");
+    }
+
     public static function badStatus(string $action, int $status, ?string $body): self
     {
         return new self(

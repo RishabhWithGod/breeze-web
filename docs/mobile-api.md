@@ -168,6 +168,32 @@ schedule-affecting thing mobile does — completing a task — already goes
 through `POST /tasks/{task}/complete` above, which broadcasts
 `schedule.changed` itself.
 
+## Invoices
+
+Full parity with web's `InvoiceController`/`InvoiceDetailController`/
+`InvoicePaymentController` — same `Invoice` model, same `InvoicePolicy`
+(manager-only; `view` requires owning the invoice), same
+`EstimateInvoiceSync`/`ClientDirectory`/`StripeConnector`. No job-cost/
+journeyman-hours breakdown and no activity-feed/notification side-effects
+on send/mark-paid — trimmed the same way this API already trims web-only
+content elsewhere.
+
+| Method | URL | Notes |
+| --- | --- | --- |
+| GET | `/api/v1/invoices` | Same filters as web (`search`, `status`, `client`, `job_id`, `date_from`, `date_to`, `amount_min`, `amount_max`, `sort`); paginated (`page`/`per_page`, capped 50), newest-first by default. Also returns `clients`/`jobs` (filter pickers), `summary` (`InvoiceSummaryCalculator`), `can` (`create`/`manage`) |
+| GET | `/api/v1/invoices/create-options` | `nextNumber`, `clients`, `jobs` (unfiltered — same as web, eligibility is only enforced on submit), `estimates` (sent/approved, not yet invoiced) |
+| POST | `/api/v1/invoices` | Creates a draft; 422 with a `job_id` field error if the job isn't completed or is already invoiced; copies an estimate's lines via `EstimateInvoiceSync` if `estimate_id` given |
+| GET | `/api/v1/invoices/{invoice}` | Full detail: header fields, `items`, `can` (`update`/`delete`/`send`/`markPaid`), `stripeConnected` |
+| PUT | `/api/v1/invoices/{invoice}` | Header only (client/job/estimate/dates/tax/notes) — status never changes here |
+| DELETE | `/api/v1/invoices/{invoice}` | Soft delete; draft/sent only, never paid |
+| POST | `/api/v1/invoices/{invoice}/restore` | Undo — plain int id (a trashed row never route-binds) |
+| POST/PUT/DELETE | `/api/v1/invoices/{invoice}/items[/{item}]` | Line-item CRUD; every write recalculates `subtotal`/`taxTotal`/`total` server-side and returns the full updated invoice |
+| POST | `/api/v1/invoices/{invoice}/send` | Draft → sent; 422 if there are no line items yet |
+| POST | `/api/v1/invoices/{invoice}/mark-paid` | Sent → paid; records the entire balance, writes a manual `PaymentTransaction` |
+| GET | `/api/v1/invoices/{invoice}/pdf` | Same `InvoicePdfWriter` as web, streamed as `application/pdf` |
+| POST | `/api/v1/invoices/{invoice}/pay` | Starts a Stripe Checkout session for the outstanding balance; returns `{checkoutUrl, sessionId}` — the app opens `checkoutUrl` in an in-app browser tab. No Stripe SDK, no key, ever, on the client |
+| GET | `/api/v1/invoices/{invoice}/pay/confirm?session_id=...` | Verifies the session directly against Stripe (never trusts a redirect alone) and, if paid, updates the invoice and records the transaction — same dedup-by-`external_reference` logic as web, subtleties included |
+
 ## Notifications
 
 Reuses `app_notifications` and `NotificationResource` exactly as the web

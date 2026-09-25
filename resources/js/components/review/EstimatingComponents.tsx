@@ -10,33 +10,25 @@ export interface EstimatingComponentsProps {
 }
 
 /**
- * What the estimate needs from this takeoff, and how much of it the run
- * actually returned.
+ * What the estimate already has from this takeoff.
  *
- * Components the engine has not produced yet are listed too, marked as still to
- * come — a reviewer signing off should know what the estimate will and will not
- * carry, rather than finding out at the estimate. Nothing here is invented: a
- * figure shown is one the engine returned, and everything else says it is
- * pending instead of showing a zero.
+ * Only components the run actually returned data for are shown — a component
+ * with nothing behind it yet (still on the roadmap, or simply not produced by
+ * this run) is left off entirely rather than shown as a "coming soon"
+ * placeholder. Nothing here is invented: a figure shown is always one the
+ * engine actually returned.
  */
 export function EstimatingComponents({ components, className }: EstimatingComponentsProps) {
-  if (components.length === 0) return null
+  const available = components.filter((component) => component.status === 'available')
 
-  const pending = components.filter((component) => component.status === 'pending')
+  if (available.length === 0) return null
 
   return (
     <Card accent="success" padding="lg" className={cn('mt-6', className)}>
-      <CardHeader
-        title="Estimating components"
-        subtitle={
-          pending.length > 0
-            ? 'Labor, wire length, wire size, conduit and conduit sizing, 90° and 45° conduit bends/fittings, along with the other required estimating components, are being added to the estimates.'
-            : 'Everything the estimate needs came back with this run.'
-        }
-      />
+      <CardHeader title="Estimating components" subtitle="What this takeoff already has for the estimate." />
 
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {components.map((component, index) => (
+        {available.map((component, index) => (
           <motion.li
             key={component.key}
             initial={{ opacity: 0, y: 8 }}

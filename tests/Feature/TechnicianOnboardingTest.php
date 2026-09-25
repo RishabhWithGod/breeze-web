@@ -74,6 +74,8 @@ class TechnicianOnboardingTest extends TestCase
         $this->assertTrue($user->isFromMobile());
         $this->assertTrue(Hash::check('correct-password', $user->password));
         $this->assertDatabaseHas('personal_access_tokens', ['tokenable_id' => $user->id]);
+        // Stored formatted, same as every other phone column — see `UsPhone`.
+        $this->assertSame('(212) 555-1234', $user->phone);
     }
 
     public function test_a_web_created_user_is_not_treated_as_a_mobile_signup(): void

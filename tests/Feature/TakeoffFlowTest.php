@@ -181,6 +181,12 @@ class TakeoffFlowTest extends TestCase
      */
     public function test_only_one_analysis_may_hold_the_engine_at_a_time(): void
     {
+        // This lock exists to serialise turns on the real engine — it has
+        // nothing to protect when static takeoff mode answers from a DB
+        // lookup instead (see `ProcessTakeoffRun::middleware()`), so this
+        // test pins the flag it actually means to exercise.
+        config(['static_takeoff.enabled' => false]);
+
         $middleware = collect((new ProcessTakeoffRun(1))->middleware());
 
         $this->assertCount(1, $middleware);

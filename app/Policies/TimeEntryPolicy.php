@@ -34,10 +34,16 @@ class TimeEntryPolicy
         return true;
     }
 
+    /**
+     * Matches {@see viewCrew()} exactly (no job-ownership check) — the Time
+     * Log Viewer and the day-detail screen already list any crew member's
+     * entries under {@see viewCrew()}'s blanket grant, so requiring job
+     * ownership here as well only broke opening an entry that was already
+     * visible in that list, with a 403 on tap.
+     */
     public function view(User $user, TimeEntry $entry): bool
     {
-        return $entry->user_id === $user->id
-            || (($this->holds($user, self::FOREMEN) || $this->holds($user, self::MANAGERS)) && $entry->job?->user_id === $user->id);
+        return $entry->user_id === $user->id || $this->viewCrew($user);
     }
 
     /** Anyone signed in can log time — for themselves, against a job they can see. */

@@ -15,7 +15,7 @@ export function Footer({ className }: { className?: string }) {
   return (
     <footer
       className={cn(
-        'mt-12 rounded-card border border-hairline glass px-6 py-6 sm:px-8',
+        'mt-12 rounded-card border border-hairline glass px-6 py-8 sm:px-8',
         className,
       )}
     >
@@ -29,7 +29,7 @@ export function Footer({ className }: { className?: string }) {
         </p>
       </div>
 
-      <div className="mt-6 flex items-center justify-between gap-6 border-t border-hairline pt-5 overflow-x-auto">
+      <div className="mt-6 flex flex-col gap-4 border-t border-hairline pt-6 lg:flex-row lg:items-center lg:justify-between">
         <nav aria-label="Footer">
           <ul className="flex flex-nowrap items-center gap-x-6 whitespace-nowrap">
             {FOOTER_LINKS.map((link) => (

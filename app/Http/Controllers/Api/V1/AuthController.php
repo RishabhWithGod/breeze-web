@@ -13,6 +13,7 @@ use App\Models\UserSecuritySetting;
 use App\Services\Security\DeviceRecognizer;
 use App\Services\Security\OtpChallengeService;
 use App\Services\Security\SecurityEventLogger;
+use App\Support\UsPhone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -74,7 +75,11 @@ class AuthController extends Controller
         $user = User::create([
             'name' => $data['name'],
             'email' => Str::lower($data['email']),
-            'phone' => $data['phone'] ?? null,
+            // Stored formatted, not raw — same rule every other phone
+            // column in this app holds to (see `UsPhone`), so a
+            // self-registered technician's number reads the same as one a
+            // manager typed in on web.
+            'phone' => UsPhone::format($data['phone'] ?? null),
             'password' => Hash::make($data['password']),
             // A manager corrects this to 'Foreman' or 'Apprentice' from the
             // Teams page if that's what the person actually is —

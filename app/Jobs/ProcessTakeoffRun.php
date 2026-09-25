@@ -63,7 +63,10 @@ class ProcessTakeoffRun implements ShouldQueue
      */
     public function middleware(): array
     {
-        if (! config('ai.one_run_at_a_time', true)) {
+        // Nothing external to take turns on when answering from a static
+        // dataset — and on the `sync` connection a job that can't acquire
+        // the lock has nowhere to be released back to.
+        if (! config('ai.one_run_at_a_time', true) || config('static_takeoff.enabled')) {
             return [];
         }
 

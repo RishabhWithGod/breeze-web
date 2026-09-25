@@ -35,7 +35,9 @@ class UpdateProjectRequest extends FormRequest
              * see StoreProjectRequest for why these formats and this limit.
              */
             'vendor_rate_list' => ['nullable', 'array', 'max:20'],
-            // TEMPORARY: raised to match StoreProjectRequest -- see there.
+            // TEMPORARY: was a flat 10MB; raised to the app-wide upload
+            // ceiling at the requester's ask, while the real per-feature
+            // limits get revisited.
             'vendor_rate_list.*' => ['file', 'mimes:xlsx,pdf,doc,docx,rtf,odt', 'max:'.(UploadLimits::effectiveMb() * 1024)],
         ];
     }
