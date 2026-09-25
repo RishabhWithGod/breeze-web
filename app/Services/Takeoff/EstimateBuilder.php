@@ -106,7 +106,11 @@ class EstimateBuilder
             'description' => 'Install labor — '.$description,
             'unit' => 'hr',
             'quantity' => round($rates['labor_hours'] * $quantity, 4),
-            'unit_cost' => $this->effectiveLaborRate($rateBook, $priceBook, $clientLaborRate),
+            // A rate the catalog itself supplied (e.g. a synced dataset's own
+            // composite manhour rate) wins outright — only once nothing
+            // supplied one does this fall back to the project's own rate
+            // book, then the client override, then the price book.
+            'unit_cost' => $rates['labor_rate'] ?? $this->effectiveLaborRate($rateBook, $priceBook, $clientLaborRate),
             'source' => 'ai',
             // The hours are the same book's rates came from, so the line is
             // labelled by where the hours came from.
@@ -482,7 +486,7 @@ class EstimateBuilder
                 'description' => 'Install labor — '.($rates['description'] ?? Str::of($line->item)->headline()->value()),
                 'unit' => 'hr',
                 'quantity' => $hours,
-                'unit_cost' => $this->effectiveLaborRate($rateBook, $priceBook, $clientLaborRate),
+                'unit_cost' => $rates['labor_rate'] ?? $this->effectiveLaborRate($rateBook, $priceBook, $clientLaborRate),
                 'source' => 'ai',
                 'pricing_source' => $rates['source'],
                 'price_book_item_id' => $rates['price_book_item_id'] ?? null,

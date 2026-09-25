@@ -2,6 +2,7 @@
 
 namespace App\Services\Ai;
 
+use App\Services\Ai\Contracts\TakeoffEngine;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Pool;
@@ -27,7 +28,7 @@ use Illuminate\Support\Facades\Log;
  * inside one call, because repeating it is expensive and the queued job owns that
  * decision.
  */
-class AiTakeoffClient
+class AiTakeoffClient implements TakeoffEngine
 {
     /**
      * Analyses a drawing. Returns the engine's AnalysisResult verbatim.

@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\SymbolReview;
+use App\Services\Review\SymbolIconMatcher;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -53,9 +54,13 @@ class SymbolReviewResource extends JsonResource
              * Crops are served through the app: the filed copy when we have one,
              * otherwise fetched from the engine on first request.
              */
-            'cropUrl' => ($this->crop_path || $this->image_path)
+            'cropUrl' => $cropUrl = ($this->crop_path || $this->image_path)
                 ? route('reviews.crop', ['result' => $this->ai_result_id, 'review' => $this->id])
                 : $this->crop_url,
+            // A generic reference icon, only when there is no real crop to
+            // show — never a substitute for one that exists, and never
+            // claimed as a detection.
+            'fallbackIconUrl' => $cropUrl ? null : app(SymbolIconMatcher::class)->urlFor($this->name ?: $this->ai_name),
             'reviewedBy' => $this->whenLoaded('reviewer', fn () => $this->reviewer?->name),
             'reviewedAt' => $this->reviewed_at?->toISOString(),
         ];

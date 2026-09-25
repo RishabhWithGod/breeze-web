@@ -35,6 +35,15 @@ class LifecycleReader
 
     public function enabled(): bool
     {
+        // Static takeoff mode answers from a stored dataset, never the real
+        // engine — the lifecycle/debug endpoint is read straight off
+        // `AiTakeoffClient`, not through the `TakeoffEngine` contract, so this
+        // is the one place that has to know about it to guarantee no dynamic
+        // engine call happens while static mode is on.
+        if (config('static_takeoff.enabled')) {
+            return false;
+        }
+
         return (bool) config('ai.lifecycle.enabled');
     }
 

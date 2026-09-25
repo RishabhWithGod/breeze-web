@@ -803,4 +803,100 @@ class MobileTakeoffFlowTest extends TestCase
             ->getJson("/api/v1/jobs/{$job->id}/task-setup")
             ->assertForbidden();
     }
+
+    public function test_a_task_can_be_edited_including_status_foreman_supervisor_and_lines(): void
+    {
+        $owner = $this->owner();
+        $project = $this->makeProject($owner);
+        $team = Team::create(['name' => 'Crew A']);
+        $journeyman = Foreman::create(['name' => 'Jamie Lin', 'initials' => 'JL', 'team_id' => $team->id, 'role' => Foreman::ROLE_JOURNEYMAN]);
+        $foreman = Foreman::create(['name' => 'Sam Ortiz', 'initials' => 'SO', 'team_id' => $team->id, 'role' => Foreman::ROLE_FOREMAN]);
+        $secondJourneyman = Foreman::create(['name' => 'Robin Cole', 'initials' => 'RC', 'team_id' => $team->id, 'role' => Foreman::ROLE_JOURNEYMAN]);
+        [$job] = $this->makeJobWithEstimate($owner, $project, $team);
+
+        $lineIds = EstimateItem::whereIn('estimate_id', $job->estimates()->pluck('id'))
+            ->where('category', EstimateItem::CATEGORY_LABOR)
+            ->pluck('id')
+            ->all();
+
+        $created = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->postJson("/api/v1/jobs/{$job->id}/task-setup", [
+                'tasks' => [[
+                    'title' => 'Install receptacles',
+                    'foreman_id' => $journeyman->id,
+                    'supervisor_id' => $foreman->id,
+                    'estimate_item_ids' => $lineIds,
+                ]],
+            ])
+            ->assertCreated();
+        $taskId = $created->json('data.taskIds.0');
+
+        $editOptions = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->getJson("/api/v1/tasks/{$taskId}/edit")
+            ->assertOk();
+        $this->assertSame('Install receptacles', $editOptions->json('data.task.title'));
+        $this->assertSame($journeyman->id, $editOptions->json('data.task.foremanId'));
+        $this->assertNotEmpty($editOptions->json('data.task.lineIds'));
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->putJson("/api/v1/tasks/{$taskId}", [
+                'title' => 'Install receptacles — updated',
+                'status' => 'in-progress',
+                'foreman_id' => $secondJourneyman->id,
+                'supervisor_id' => $foreman->id,
+                'estimate_item_ids' => $lineIds,
+            ])
+            ->assertOk();
+
+        $response->assertJsonPath('data.title', 'Install receptacles — updated');
+        $response->assertJsonPath('data.status', 'in-progress');
+        $response->assertJsonPath('data.foremanId', $secondJourneyman->id);
+
+        $this->assertDatabaseHas('job_tasks', [
+            'id' => $taskId,
+            'title' => 'Install receptacles — updated',
+            'status' => 'in-progress',
+            'foreman_id' => $secondJourneyman->id,
+        ]);
+    }
+
+    public function test_a_task_cannot_be_edited_by_someone_else(): void
+    {
+        $owner = $this->owner();
+        $other = $this->owner();
+        $project = $this->makeProject($owner);
+        $team = Team::create(['name' => 'Crew A']);
+        $journeyman = Foreman::create(['name' => 'Jamie Lin', 'initials' => 'JL', 'team_id' => $team->id, 'role' => Foreman::ROLE_JOURNEYMAN]);
+        $foreman = Foreman::create(['name' => 'Sam Ortiz', 'initials' => 'SO', 'team_id' => $team->id, 'role' => Foreman::ROLE_FOREMAN]);
+        [$job] = $this->makeJobWithEstimate($owner, $project, $team);
+
+        $lineIds = EstimateItem::whereIn('estimate_id', $job->estimates()->pluck('id'))
+            ->where('category', EstimateItem::CATEGORY_LABOR)
+            ->pluck('id')
+            ->all();
+
+        $created = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->postJson("/api/v1/jobs/{$job->id}/task-setup", [
+                'tasks' => [[
+                    'title' => 'Install receptacles',
+                    'foreman_id' => $journeyman->id,
+                    'supervisor_id' => $foreman->id,
+                    'estimate_item_ids' => $lineIds,
+                ]],
+            ])
+            ->assertCreated();
+        $taskId = $created->json('data.taskIds.0');
+
+        auth()->forgetGuards();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($other))
+            ->putJson("/api/v1/tasks/{$taskId}", [
+                'title' => 'Hijacked',
+                'status' => 'in-progress',
+                'foreman_id' => $journeyman->id,
+                'supervisor_id' => $foreman->id,
+                'estimate_item_ids' => [],
+            ])
+            ->assertForbidden();
+    }
 }

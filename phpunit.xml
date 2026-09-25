@@ -36,6 +36,10 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
+        <!-- A matched static dataset otherwise sleeps for real, to keep the
+             processing screen visible in normal use — pointless wall-clock
+             time in a test run. -->
+        <env name="STATIC_TAKEOFF_SIMULATED_SECONDS" value="0"/>
         <!-- Tests run against the real engine. Nothing is faked; engine-dependent
              tests skip when it is not reachable. -->
         <env name="AI_API_BASE_URL" value="http://127.0.0.1:8000"/>

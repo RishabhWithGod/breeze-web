@@ -84,6 +84,8 @@ export interface SymbolReviewRow {
   readonly mergedIntoId: number | null
   readonly splitFromId: number | null
   readonly cropUrl: string | null
+  /** A generic reference icon, only ever present when `cropUrl` is null — never a substitute for a real crop, never a claimed detection. */
+  readonly fallbackIconUrl: string | null
   readonly reviewedAt: string | null
 }
 

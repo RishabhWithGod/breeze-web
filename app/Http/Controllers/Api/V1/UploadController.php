@@ -72,10 +72,14 @@ class UploadController extends Controller
         RenderDrawingPreviews::dispatch($primaryUpload->id);
         ProcessTakeoffRun::dispatch($aiJob->id);
 
+        // A static-mode match runs the job inline above (see
+        // `ProcessTakeoffRun::__construct()`) — refreshed so a run that
+        // already finished is reported as such immediately, not as the
+        // `queued` status this object was created with.
         return $this->created([
             'projectId' => $project->id,
             'aiJobId' => $aiJob->id,
-            'status' => $aiJob->status,
+            'status' => $aiJob->refresh()->status,
         ], 'Drawing submitted for analysis.');
     }
 }

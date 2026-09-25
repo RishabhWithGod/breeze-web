@@ -83,6 +83,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // data in another shape) — an apprentice reaches none of it.
             Route::get('jobs', [JobController::class, 'index'])->name('jobs.index');
             Route::get('jobs/{job}', [JobController::class, 'show'])->name('jobs.show');
+            Route::put('jobs/{job}', [JobController::class, 'update'])->name('jobs.update');
 
             // Manager-owned data (`Estimate::scopeOwnedBy`) — self-limiting
             // for a field crew account with no estimates of their own, so
@@ -165,6 +166,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // the takeoff flow or from any other job the manager owns.
             Route::get('jobs/{job}/task-setup', [JobTaskSetupController::class, 'options'])->name('jobs.task-setup.options');
             Route::post('jobs/{job}/task-setup', [JobTaskSetupController::class, 'store'])->name('jobs.task-setup.store');
+            Route::get('tasks/{task}/edit', [JobTaskSetupController::class, 'editOptions'])->name('tasks.edit-options');
+            Route::put('tasks/{task}', [JobTaskSetupController::class, 'update'])->name('tasks.update');
 
             // Roster + pending mobile signups. Reading the list/detail is
             // open to any signed-in, active account (same as web); adding,

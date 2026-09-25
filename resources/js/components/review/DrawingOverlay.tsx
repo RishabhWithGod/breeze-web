@@ -264,10 +264,29 @@ export function DrawingOverlay({
 
   const filterActive = activeCategory !== null || activeStatus !== 'all'
 
-  const symbolsOnPage = useMemo(
+  const symbolsOnPageFiltered = useMemo(
     () => overlaySymbols.filter((symbol) => boxes.some((box) => box.reviewId === symbol.id)),
     [overlaySymbols, boxes],
   )
+
+  /*
+   * A run with no real per-occurrence boxes (every symbol's `page` and
+   * `occurrences` are both null — the shape a DB-backed/synced takeoff
+   * dataset produces, since it only has aggregate counts, not detected
+   * positions) never has anything to place on any page, so the per-page
+   * filter above always comes back empty — not because a page genuinely
+   * has nothing on it, but because there is no page data anywhere in this
+   * result to filter by. The legend falls back to the drawing's full
+   * symbol list in that case, same names the review grid below already
+   * lists; a run with real page data is never affected, since some symbol
+   * somewhere will have a real page/occurrence and this stays false.
+   */
+  const hasAnyPageData = useMemo(
+    () => overlaySymbols.some((symbol) => symbol.page !== null || (symbol.occurrences?.length ?? 0) > 0),
+    [overlaySymbols],
+  )
+
+  const symbolsOnPage = hasAnyPageData ? symbolsOnPageFiltered : overlaySymbols
 
   // Rejected occurrences are excluded — the legend's count is what's actually
   // kept, so rejecting or reinstating a marker updates its category's number
@@ -275,15 +294,28 @@ export function DrawingOverlay({
   const countsByName = useMemo(() => {
     const counts = new Map<string, number>()
 
-    for (const box of boxes) {
-      if (box.status === 'rejected') continue
+    if (hasAnyPageData) {
+      for (const box of boxes) {
+        if (box.status === 'rejected') continue
 
-      const key = box.name.trim().toLowerCase()
-      counts.set(key, (counts.get(key) ?? 0) + 1)
+        const key = box.name.trim().toLowerCase()
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+
+      return counts
+    }
+
+    // No per-occurrence boxes to count — the reviewed count per symbol
+    // stands in, the same figure the card grid shows for each row.
+    for (const symbol of overlaySymbols) {
+      if (symbol.status === 'rejected') continue
+
+      const key = symbol.name.trim().toLowerCase()
+      counts.set(key, (counts.get(key) ?? 0) + symbol.finalCount)
     }
 
     return counts
-  }, [boxes])
+  }, [boxes, hasAnyPageData, overlaySymbols])
 
   /* --------------------------------------------------------------- zoom/pan */
 

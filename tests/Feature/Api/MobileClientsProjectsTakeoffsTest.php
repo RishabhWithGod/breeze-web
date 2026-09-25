@@ -3,7 +3,9 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Client;
+use App\Models\Job;
 use App\Models\Project;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -288,5 +290,77 @@ class MobileClientsProjectsTakeoffsTest extends TestCase
 
         $ids = collect($response->json('data.takeoffs'))->pluck('id');
         $this->assertSame([$newer->id, $older->id], $ids->all());
+    }
+
+    // --- Jobs (Edit) ---------------------------------------------------------
+
+    public function test_a_job_can_be_updated_including_its_site(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $client = Client::create(['user_id' => $owner->id, 'name' => 'Apex Builders']);
+        $address = $client->addresses()->create(['label' => 'HQ', 'address' => '1 Apex Way', 'is_primary' => true, 'position' => 0]);
+        $team = Team::create(['name' => 'Crew A']);
+        $job = Job::create([
+            'user_id' => $owner->id, 'client_id' => $client->id, 'name' => 'Rewire Floor 2',
+            'client' => 'Apex Builders', 'status' => 'draft', 'start_date' => '2026-10-01', 'end_date' => '2026-10-10',
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->putJson("/api/v1/jobs/{$job->id}", [
+                'name' => 'Rewire Floor 2 — Updated',
+                'description' => 'Panel swap included',
+                'job_type' => 'commercial',
+                'team_id' => $team->id,
+                'start_date' => '2026-10-02',
+                'end_date' => '2026-10-12',
+                'address_id' => $address->id,
+            ])
+            ->assertOk();
+
+        $response->assertJsonPath('data.name', 'Rewire Floor 2 — Updated');
+        $response->assertJsonPath('data.teamId', $team->id);
+        $response->assertJsonPath('data.addressId', $address->id);
+
+        $fresh = $job->fresh();
+        $this->assertSame('Rewire Floor 2 — Updated', $fresh->name);
+        $this->assertSame('1 Apex Way', $fresh->location);
+        $this->assertSame($team->id, $fresh->team_id);
+    }
+
+    public function test_a_job_cannot_be_updated_by_someone_else(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $other = User::factory()->create(['role' => 'Project Manager']);
+        $client = Client::create(['user_id' => $owner->id, 'name' => 'Apex Builders']);
+        $team = Team::create(['name' => 'Crew A']);
+        $job = Job::create([
+            'user_id' => $owner->id, 'client_id' => $client->id, 'name' => 'Rewire Floor 2',
+            'client' => 'Apex Builders', 'status' => 'draft',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($other))
+            ->putJson("/api/v1/jobs/{$job->id}", [
+                'name' => 'Hijacked', 'team_id' => $team->id,
+                'start_date' => '2026-10-01', 'end_date' => '2026-10-02',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_a_completed_job_cannot_be_updated(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $client = Client::create(['user_id' => $owner->id, 'name' => 'Apex Builders']);
+        $team = Team::create(['name' => 'Crew A']);
+        $job = Job::create([
+            'user_id' => $owner->id, 'client_id' => $client->id, 'name' => 'Rewire Floor 2',
+            'client' => 'Apex Builders', 'status' => 'completed',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->putJson("/api/v1/jobs/{$job->id}", [
+                'name' => 'Rewire Floor 2', 'team_id' => $team->id,
+                'start_date' => '2026-10-01', 'end_date' => '2026-10-02',
+            ])
+            ->assertStatus(409);
     }
 }

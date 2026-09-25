@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\TimerSession;
+use App\Services\Clients\JobSites;
 use App\Services\Mobile\ElectricianJobAccess;
 use App\Services\TimeTracking\TimerService;
 use Illuminate\Http\JsonResponse;
@@ -29,12 +30,13 @@ class JobController extends Controller
     public function __construct(
         private readonly ElectricianJobAccess $access,
         private readonly TimerService $timer,
+        private readonly JobSites $sites,
     ) {}
 
     public function index(Request $request): JsonResponse
     {
         $jobs = $this->access->assignedJobsQuery($request->user())
-            ->with('foreman:id,name,initials,role')
+            ->with(['foreman:id,name,initials,role', 'addresses:id'])
             ->withSum('timeEntries', 'hours')
             // Newest first — the mobile list is a feed of what's current,
             // not a schedule to work through chronologically.
@@ -57,7 +59,7 @@ class JobController extends Controller
     {
         abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
 
-        $job->load(['foreman:id,name,initials,role,user_id', 'activeAssignments']);
+        $job->load(['foreman:id,name,initials,role,user_id', 'activeAssignments', 'addresses:id']);
 
         // An apprentice gets basic info only — no crew roster, task counts,
         // crew time, or review state. They cannot reach the task/material
@@ -101,6 +103,61 @@ class JobController extends Controller
                 ])->values(),
             ...$this->apprenticeAssignmentOptions($request, $job),
         ]);
+    }
+
+    /**
+     * `Api\V1\JobController::update()` — mobile's own Edit Job. Deliberately
+     * matches what mobile's own "Continue to Job" create flow already
+     * collects (name, a site from the client's own book, description, job
+     * type, crew, dates) rather than web's fuller `JobEdit.tsx` (which also
+     * lets a manager reassign the client/project/drawing/status/budget) —
+     * same fields on the way in as on the way out. Scoped to the job's own
+     * owner (`user_id`, exactly `JobPolicy::update()`'s own rule), not
+     * `ElectricianJobAccess` — a manager correcting a job they raised is a
+     * different question from a crew member's job-visibility scope, which
+     * already lets any "unrestricted" role (PM included) see every job.
+     */
+    public function update(Request $request, Job $job): JsonResponse
+    {
+        abort_unless($job->user_id === $request->user()->id, 403);
+        $job->assertNotLocked();
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'min:3', 'max:160'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'job_type' => ['nullable', Rule::in(Job::TYPES)],
+            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            // Optional, same as the create flow: a job can be on the books
+            // before anyone has picked exactly which of the client's sites
+            // it's at.
+            'address_id' => [
+                'nullable', 'integer',
+                Rule::exists('client_addresses', 'id')->where('client_id', $job->client_id),
+            ],
+        ], [
+            'name.required' => 'Job name is required',
+            'team_id.required' => 'Pick the crew this job is handed to',
+            'end_date.after_or_equal' => 'End date must be on or after the start date',
+        ]);
+
+        $addressId = $data['address_id'] ?? null;
+        unset($data['address_id']);
+
+        $job->update($data);
+
+        if ($addressId !== null) {
+            $addresses = $this->sites->resolve((int) $job->client_id, [$addressId]);
+            $this->sites->attach($job, $addresses);
+        }
+
+        $job->recordActivity('updated', 'Job details updated');
+
+        return $this->ok([
+            ...$this->summarize($job, $request),
+            'description' => $job->description,
+        ], "\"{$job->name}\" was updated.");
     }
 
     /**
@@ -474,7 +531,7 @@ class JobController extends Controller
         if ($openTasks > 0) {
             return $this->fail(
                 "This job isn't done yet — {$openTasks} open ".
-                str('task')->plural($openTasks)." across the crew still need to be completed.",
+                str('task')->plural($openTasks).' across the crew still need to be completed.',
                 422,
                 ['code' => 'tasks_incomplete', 'openTasksCount' => $openTasks],
             );
@@ -508,7 +565,7 @@ class JobController extends Controller
         if ($openTasks > 0) {
             return $this->fail(
                 "You still have {$openTasks} open ".
-                str('task')->plural($openTasks)." on this job.",
+                str('task')->plural($openTasks).' on this job.',
                 422,
                 ['code' => 'tasks_incomplete', 'openTasksCount' => $openTasks],
             );
@@ -566,6 +623,14 @@ class JobController extends Controller
             'id' => $job->id,
             'name' => $job->name,
             'client' => $job->client,
+            // Not shown anywhere on the read-only crew view — carried so
+            // Edit Job (a manager-only action, see `update()` above) can
+            // preselect this job's own crew and pull its client's address
+            // book to offer as sites, without a second round trip inventing
+            // a shape `show()` doesn't already have.
+            'clientId' => $job->client_id,
+            'teamId' => $job->team_id,
+            'addressId' => $job->addresses->first()?->id,
             'location' => $job->location,
             /*
              * The site's point, for the crew app: GPS check-in, geofencing and

@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -141,6 +142,158 @@ class JobTaskSetupController extends Controller
             'jobId' => $job->id,
             'taskIds' => collect($createdTasks)->pluck('id')->all(),
         ], $count.' '.str('task')->plural($count)." added to \"{$job->name}\".");
+    }
+
+    /**
+     * One task's own edit form — mobile's counterpart to web's own
+     * `JobTaskSetupController::edit()`. Kept on this PM-owned controller
+     * rather than reusing `Api\V1\JobTaskController::show()`, which is
+     * scoped to the job's own crew (`ElectricianJobAccess`) — a manager
+     * editing a task they planned is not necessarily staffed on the job
+     * themselves.
+     */
+    public function editOptions(Request $request, JobTask $task): JsonResponse
+    {
+        $job = $task->job;
+        $this->authorise($request, $job);
+
+        return $this->ok([
+            'job' => [
+                'id' => $job->id,
+                'name' => $job->name,
+                'client' => $job->client,
+                'isLocked' => $job->isLocked(),
+            ],
+            'task' => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'status' => $task->status,
+                'foremanId' => $task->foreman_id,
+                'supervisorId' => $task->supervisor_id,
+                'isCompleted' => $task->status === JobTask::STATUS_COMPLETED,
+                'lineIds' => $task->estimateItems()
+                    ->where('category', EstimateItem::CATEGORY_LABOR)
+                    ->pluck('id')
+                    ->values(),
+            ],
+            'estimateLines' => $this->lines($job, $task),
+            'statuses' => JobTask::STATUSES,
+            ...$this->staffing($job),
+        ]);
+    }
+
+    /**
+     * One existing task, corrected — mobile's counterpart to web's own
+     * `JobTaskSetupController::update()`. Deliberately the full admin
+     * shape (title/status/foreman/supervisor/estimate lines), reusing the
+     * exact same helpers `store()` already leans on, rather than the
+     * narrower status-only/progress-only actions `Api\V1\JobTaskController`
+     * otherwise scopes mobile to.
+     */
+    public function update(Request $request, JobTask $task): JsonResponse
+    {
+        $job = $task->job;
+        $this->authorise($request, $job);
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
+        abort_if($task->status === JobTask::STATUS_COMPLETED, 409, 'This task is already completed and can no longer be changed.');
+
+        $hasLines = $this->estimateLineCount($job) > 0;
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:200'],
+            'status' => ['required', Rule::in(JobTask::STATUSES)],
+            'foreman_id' => ['required', 'integer', 'exists:foremen,id'],
+            'supervisor_id' => ['required', 'integer', 'exists:foremen,id'],
+            'estimate_item_ids' => $hasLines
+                ? ['required', 'array', 'min:1', 'max:200']
+                : ['nullable', 'array', 'max:200'],
+            'estimate_item_ids.*' => ['integer'],
+        ], [
+            'title.required' => 'Give the task a name.',
+            'foreman_id.required' => 'Pick the foreman running this task.',
+            'supervisor_id.required' => 'Pick the supervisor overseeing this task.',
+            'estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
+            'estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
+        ]);
+
+        $this->refuseOffCrew($job, [$data['foreman_id'], $data['supervisor_id']]);
+
+        $title = trim($data['title']);
+
+        $clash = JobTask::query()
+            ->where('job_id', $job->id)
+            ->whereKeyNot($task->id)
+            ->whereRaw('lower(title) = ?', [mb_strtolower($title)])
+            ->exists();
+
+        if ($clash) {
+            throw ValidationException::withMessages(['title' => 'This job already has a task with that name.']);
+        }
+
+        $laborIds = array_values(array_unique(array_map(intval(...), $data['estimate_item_ids'] ?? [])));
+
+        // Free, or already this task's own — anything else belongs elsewhere.
+        $allowed = EstimateItem::query()
+            ->whereIn('estimate_id', $this->estimateIds($job))
+            ->where('category', EstimateItem::CATEGORY_LABOR)
+            ->where(fn ($query) => $query->whereNull('job_task_id')->orWhere('job_task_id', $task->id))
+            ->pluck('id')
+            ->all();
+
+        if (array_diff($laborIds, $allowed) !== []) {
+            throw ValidationException::withMessages([
+                'estimate_item_ids' => 'One of those lines is already planned into another task. Reload and try again.',
+            ]);
+        }
+
+        $ids = array_values(array_unique(array_merge(
+            $laborIds,
+            $this->pairedMaterialLines($job, $laborIds, $task->id),
+        )));
+
+        DB::transaction(function () use ($task, $job, $title, $data, $ids) {
+            $task->update([
+                'title' => $title,
+                'status' => $data['status'],
+                'foreman_id' => $data['foreman_id'],
+                'supervisor_id' => $data['supervisor_id'],
+                'estimated_hours' => $this->hoursOn($ids),
+            ]);
+
+            // Dropped lines go back into the picker for another task to take.
+            EstimateItem::query()
+                ->where('job_task_id', $task->id)
+                ->when($ids !== [], fn ($query) => $query->whereNotIn('id', $ids))
+                ->update(['job_task_id' => null]);
+
+            if ($ids !== []) {
+                EstimateItem::whereIn('id', $ids)->update(['job_task_id' => $task->id]);
+            }
+
+            $job->refreshEstimatedHours();
+        });
+
+        return $this->ok(
+            $this->present($task->fresh(['foreman', 'supervisor', 'estimateItems'])),
+            "\"{$task->title}\" was updated.",
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function present(JobTask $task): array
+    {
+        return [
+            'id' => $task->id,
+            'jobId' => $task->job_id,
+            'title' => $task->title,
+            'status' => $task->status,
+            'foremanId' => $task->foreman_id,
+            'foremanName' => $task->foreman?->name,
+            'supervisorId' => $task->supervisor_id,
+            'supervisorName' => $task->supervisor?->name,
+            'estimatedHours' => $task->estimated_hours === null ? null : (float) $task->estimated_hours,
+            'estimateItemIds' => $task->estimateItems->pluck('id')->values(),
+        ];
     }
 
     /** @return array<string, mixed> */
