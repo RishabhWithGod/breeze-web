@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import { useEffect, type FormEvent } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm, usePage } from '@inertiajs/react'
 import { ArrowLeft, ArrowRight, ExternalLink, Save } from 'lucide-react'
@@ -15,6 +15,7 @@ import {
 } from '@/components/common'
 import { JobSitePicker, TeamPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition, StepFooter } from '@/components/layout'
+import { useDebouncedValue } from '@/hooks'
 import { JOB_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type {
   ApprovalHistoryEntry,
@@ -54,6 +55,38 @@ interface CreateJobForm {
    * of saving this takeoff's own. Empty otherwise, the ordinary case.
    */
   estimate_ids: number[]
+}
+
+type CreateJobDraft = Omit<CreateJobForm, 'estimate_ids'>
+
+const jobDraftKey = (resultId: number) => `takeoff-job-draft:${resultId}`
+
+/**
+ * What was typed into "Create the job" but never saved, if anything.
+ *
+ * The estimate step and this one are a back-and-forth, not a one-way form —
+ * leaving for the estimate and coming back must not throw away what was
+ * already filled in here. `result.job` only seeds the form once the job is
+ * actually raised, so before that this is the only place the typing survives
+ * a navigation away.
+ */
+const readJobDraft = (resultId: number): Partial<CreateJobDraft> | null => {
+  try {
+    const raw = window.localStorage.getItem(jobDraftKey(resultId))
+
+    return raw ? (JSON.parse(raw) as Partial<CreateJobDraft>) : null
+  } catch {
+    return null
+  }
+}
+
+/** The job is saved now, so the row itself is the source of truth from here. */
+const clearJobDraft = (resultId: number): void => {
+  try {
+    window.localStorage.removeItem(jobDraftKey(resultId))
+  } catch {
+    // Storage unavailable — nothing to clear.
+  }
 }
 
 interface FinalResultSummary {
@@ -147,36 +180,40 @@ export default function FinalSymbols({
   const { flash } = usePage<SharedPageProps>().props
 
   /*
-   * Seeded from the job once it exists, so coming back to this step shows what
-   * was filled in rather than a card describing it. Before that, from the
-   * takeoff and its client.
+   * Seeded from a draft first — typing here and stepping away to the estimate
+   * is normal, not an abandon — then from the job once it exists, then from
+   * the takeoff and its client for a form nobody has touched yet.
    */
+  const draft = readJobDraft(result.id)
+
   const jobForm = useForm<CreateJobForm>({
-    name: result.job?.name ?? result.projectName,
-    project_id: String(result.job?.projectId ?? defaultProjectId),
+    name: draft?.name ?? result.job?.name ?? result.projectName,
+    project_id: draft?.project_id ?? String(result.job?.projectId ?? defaultProjectId),
     // That client's primary site, exactly as Create Job starts.
     address_ids:
+      draft?.address_ids ??
       result.job?.addressIds.slice() ??
       projects
         .find((option) => option.id === defaultProjectId)
         ?.addresses.filter((site) => site.isPrimary)
         .map((site) => site.id) ??
       [],
-    description: result.job?.description ?? '',
+    description: draft?.description ?? result.job?.description ?? '',
     /*
      * Recorded against the site, so it does not have to be answered twice — it
      * is the building that decides the type, and a client can own a house and a
      * warehouse. Still a field: this site's usual type is not every job's.
      */
-    team_id: result.job?.teamId ? String(result.job.teamId) : '',
+    team_id: draft?.team_id ?? (result.job?.teamId ? String(result.job.teamId) : ''),
     job_type:
+      draft?.job_type ??
       result.job?.jobType ??
       projects
         .find((option) => option.id === defaultProjectId)
         ?.addresses.find((site) => site.isPrimary)?.siteType ??
       '',
-    start_date: result.job?.startDate ?? '',
-    end_date: result.job?.endDate ?? '',
+    start_date: draft?.start_date ?? result.job?.startDate ?? '',
+    end_date: draft?.end_date ?? result.job?.endDate ?? '',
     estimate_ids: result.mergeEstimateIds.slice(),
   })
 
@@ -188,13 +225,40 @@ export default function FinalSymbols({
     if (jobForm.errors[field]) jobForm.clearErrors(field)
   }
 
+  // Written a short pause after the last keystroke, not on every one of them.
+  const draftedFields = useDebouncedValue(jobForm.data, 400)
+
+  useEffect(() => {
+    // `estimate_ids` is left out: it comes from the merge selection on the
+    // URL, not from typing, and re-arrives from there on the next visit.
+    const toSave: CreateJobDraft = {
+      name: draftedFields.name,
+      project_id: draftedFields.project_id,
+      address_ids: draftedFields.address_ids,
+      description: draftedFields.description,
+      job_type: draftedFields.job_type,
+      team_id: draftedFields.team_id,
+      start_date: draftedFields.start_date,
+      end_date: draftedFields.end_date,
+    }
+
+    try {
+      window.localStorage.setItem(jobDraftKey(result.id), JSON.stringify(toSave))
+    } catch {
+      // Storage full or unavailable — the draft is a convenience, not a
+      // requirement, so typing still works without it.
+    }
+  }, [draftedFields, result.id])
+
   const selectedProject = projects.find(
     (option) => String(option.id) === jobForm.data.project_id,
   )
 
   const submitJob = (event: FormEvent) => {
     event.preventDefault()
-    jobForm.post(routeTo.finalCreateJob(result.id))
+    jobForm.post(routeTo.finalCreateJob(result.id), {
+      onSuccess: () => clearJobDraft(result.id),
+    })
   }
 
   return (

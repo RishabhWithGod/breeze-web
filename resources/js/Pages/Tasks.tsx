@@ -106,7 +106,7 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
     },
     {
       key: 'foreman',
-      header: 'Assigned to',
+      header: 'Journeyman',
       render: (row) => (
         <span className={row.foreman ? 'text-white/90' : 'text-white/60'}>
           {row.foreman ?? 'Unassigned'}
@@ -272,7 +272,7 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
                 />
                 <SelectField
                   id="task-foreman-filter"
-                  label="Assigned to"
+                  label="Journeyman"
                   options={[
                     { label: 'Everyone', value: 'all' },
                     { label: 'Unassigned', value: 'unassigned' },

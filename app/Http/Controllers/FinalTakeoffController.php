@@ -387,7 +387,7 @@ class FinalTakeoffController extends Controller
         if ($existed && $typed !== []) {
             // The client's name is a snapshot on the job, so changing the client
             // has to rewrite it — every list reads that column, not the join.
-            $job->update(app(ClientDirectory::class)->withClientSnapshot($typed));
+            $job->update(app(ClientDirectory::class)->withClientSnapshot($typed, $request->user()));
         }
 
         if ($addresses->isNotEmpty()) {
