@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
-import { ArrowLeft, ArrowRight, ListChecks, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ListChecks, Plus, Trash2, UserPlus } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -14,6 +14,7 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { CrewMemberPicker, TaskLinePicker, type EstimateLine } from '@/components/jobs'
+import { useDebouncedValue } from '@/hooks'
 import { ROUTES, routeTo } from '@/constants'
 import type { SharedPageProps } from '@/types'
 import { cn } from '@/utils'
@@ -80,6 +81,34 @@ const emptyRow = (): TaskRow => ({
   estimate_item_ids: [],
 })
 
+const taskDraftKey = (jobId: number) => `job-task-setup-draft:${jobId}`
+
+/**
+ * The rows typed here but never saved, if any.
+ *
+ * "Add member" sends the planner away to a real page and back rather than a
+ * dialog over this one, and every row they had typed would otherwise be gone
+ * on the way back. Read once, on the way in — see `taskDraftKey`.
+ */
+const readTaskDraft = (jobId: number): TaskRow[] | null => {
+  try {
+    const raw = window.localStorage.getItem(taskDraftKey(jobId))
+
+    return raw ? (JSON.parse(raw) as TaskRow[]) : null
+  } catch {
+    return null
+  }
+}
+
+/** The tasks are saved now, so there is nothing left to protect a draft of. */
+const clearTaskDraft = (jobId: number): void => {
+  try {
+    window.localStorage.removeItem(taskDraftKey(jobId))
+  } catch {
+    // Storage unavailable — nothing to clear.
+  }
+}
+
 /**
  * The step straight after a job is created: breaking it into the work it takes.
  *
@@ -101,8 +130,20 @@ export default function JobTaskSetup({
   supervisors,
   team,
 }: JobTaskSetupProps) {
-  const [rows, setRows] = useState<TaskRow[]>([emptyRow()])
+  const [rows, setRows] = useState<TaskRow[]>(() => readTaskDraft(job.id) ?? [emptyRow()])
   const [processing, setProcessing] = useState(false)
+
+  // Written a short pause after the last change, not on every keystroke.
+  const draftedRows = useDebouncedValue(rows, 400)
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(taskDraftKey(job.id), JSON.stringify(draftedRows))
+    } catch {
+      // Storage full or unavailable — the draft is a convenience, not a
+      // requirement, so typing still works without it.
+    }
+  }, [draftedRows, job.id])
 
   /*
    * Errors come off the page rather than a typed form, because they arrive
@@ -138,6 +179,7 @@ export default function JobTaskSetup({
       {
         onStart: () => setProcessing(true),
         onFinish: () => setProcessing(false),
+        onSuccess: () => clearTaskDraft(job.id),
       },
     )
   }
@@ -304,24 +346,43 @@ export default function JobTaskSetup({
                       own crew, which is why the lists are short.
                     */}
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <CrewMemberPicker
-                        id={`task-foreman-${index}`}
-                        label="Assigned to*"
-                        slot="worker"
-                        people={foremen}
-                        value={row.foreman_id}
-                        onChange={(next) => update(index, { foreman_id: next })}
-                        teamId={team?.id ?? null}
-                        teamName={team?.name ?? null}
-                        emptyLabel={
-                          foremen.length > 0 ? 'Select who runs it' : 'No one on this crew'
-                        }
-                        disabled={processing}
-                        allowInlineAdd={false}
-                        {...(errors[`tasks.${index}.foreman_id`]
-                          ? { error: errors[`tasks.${index}.foreman_id`] }
-                          : {})}
-                      />
+                      <div>
+                        <CrewMemberPicker
+                          id={`task-foreman-${index}`}
+                          label="Journeyman*"
+                          slot="worker"
+                          people={foremen}
+                          value={row.foreman_id}
+                          onChange={(next) => update(index, { foreman_id: next })}
+                          teamId={team?.id ?? null}
+                          teamName={team?.name ?? null}
+                          emptyLabel={
+                            foremen.length > 0 ? 'Select who runs it' : 'No one on this crew'
+                          }
+                          disabled={processing}
+                          allowInlineAdd={false}
+                          {...(errors[`tasks.${index}.foreman_id`]
+                            ? { error: errors[`tasks.${index}.foreman_id`] }
+                            : {})}
+                        />
+
+                        {/*
+                          The crew here is exactly who this picker offers — when
+                          that is short of who the work needs, this is where
+                          someone new joins it. A real page rather than a dialog
+                          over this one, so this same screen is where Back and a
+                          successful add land — see `readTaskDraft`.
+                        */}
+                        <ButtonLink
+                          href={`${ROUTES.foremanCreate}?job=${job.id}`}
+                          variant="white"
+                          size="sm"
+                          leftIcon={UserPlus}
+                          className="mt-3"
+                        >
+                          Add member
+                        </ButtonLink>
+                      </div>
 
                       <CrewMemberPicker
                         id={`task-supervisor-${index}`}

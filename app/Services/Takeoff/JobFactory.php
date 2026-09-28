@@ -122,6 +122,7 @@ class JobFactory
 
         $job = Job::create([
             'project_id' => $client->id,
+            'client_id' => $client->client_id,
             'ai_result_id' => $result->id,
             'name' => $attributes['name'] ?? $takeoffClient->name,
             // A snapshot of the client's name, never typed — see ClientDirectory.

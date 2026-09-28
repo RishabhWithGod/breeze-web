@@ -185,7 +185,7 @@ export default function JobTaskEdit({
                 {/* Who runs it. One per task — see JobTask::foreman(). */}
                 <CrewMemberPicker
                   id="task-foreman"
-                  label="Assigned to*"
+                  label="Journeyman*"
                   slot="worker"
                   people={foremen}
                   value={foremanId}

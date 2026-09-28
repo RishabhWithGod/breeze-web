@@ -70,7 +70,17 @@ class EstimateController extends Controller
         $estimate->load([
             'items' => fn ($query) => $query->orderBy('category')->orderBy('position'),
             'takeoffProject', 'aiResult.wireSizes', 'aiResult.equipment', 'aiResult.panelSchedules',
+            'job:id,name', 'parentEstimate:id,number',
         ]);
+
+        // This estimate's own addenda, when it is the standalone one they
+        // belong to — mobile's counterpart to web's own
+        // `EstimateDetailController::show()`. Empty for an addendum or
+        // merged estimate: only a standalone estimate is something else can
+        // be an addendum for.
+        $addenda = $estimate->kind === Estimate::KIND_STANDALONE
+            ? $estimate->addenda()->get()
+            : collect();
 
         $matchedCount = $estimate->items
             ->whereIn('pricing_source', ['vendor-rate-list', 'price-book'])
@@ -85,11 +95,38 @@ class EstimateController extends Controller
             'projectId' => $estimate->project_id,
             'aiResultId' => $estimate->ai_result_id,
             'fromTakeoff' => $estimate->ai_result_id !== null,
+            'jobId' => $estimate->job_id,
+            'jobName' => $estimate->job?->name,
             'issuedOn' => $estimate->issued_on->toDateString(),
             'createdAt' => $estimate->created_at?->toISOString(),
             'amount' => (float) $estimate->amount,
             'status' => $estimate->status,
             'notes' => $estimate->notes,
+            // `standalone` (the ordinary case), `addendum`, or `merged` —
+            // see `Estimate::KINDS`.
+            'kind' => $estimate->kind,
+            'addendumNumber' => $estimate->addendum_number,
+            'addendumName' => $estimate->addendum_name,
+            // Set only when `kind` is `addendum` — the estimate this one
+            // adds scope to.
+            'parentEstimate' => $estimate->parentEstimate === null ? null : [
+                'id' => $estimate->parentEstimate->id,
+                'number' => $estimate->parentEstimate->number,
+            ],
+            // This estimate's own addenda — only populated when `kind` is
+            // `standalone`. No line items here (unlike web's own pre-job
+            // merge workspace): mobile opens an addendum on its own detail
+            // screen for that, matching `Api\V1\AddendumController::index`'s
+            // own summary-only shape.
+            'addenda' => $addenda->map(fn (Estimate $addendum) => [
+                'id' => $addendum->id,
+                'number' => $addendum->number,
+                'addendumNumber' => $addendum->addendum_number,
+                'addendumName' => $addendum->addendum_name,
+                'amount' => (float) $addendum->amount,
+                'status' => $addendum->status,
+                'createdAt' => $addendum->created_at?->toISOString(),
+            ])->values(),
             'materialTotal' => (float) $estimate->material_total,
             'laborTotal' => (float) $estimate->labor_total,
             'equipmentTotal' => (float) $estimate->equipment_total,

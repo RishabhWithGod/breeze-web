@@ -165,7 +165,7 @@ class ProjectController extends Controller
             'estimate_target_total' => $data['estimate_target_total'] ?? null,
         ]);
 
-        app(TakeoffFlow::class)->remember($project);
+        app(TakeoffFlow::class)->remember($project, $request->user());
 
         $project->activities()->create([
             'title' => 'Project opened',

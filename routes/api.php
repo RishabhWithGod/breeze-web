@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AddendumController;
 use App\Http\Controllers\Api\V1\AddressLookupController;
 use App\Http\Controllers\Api\V1\AttendanceController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BillingController;
 use App\Http\Controllers\Api\V1\ClientAddressController;
 use App\Http\Controllers\Api\V1\ClientController;
+use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\EstimateController;
 use App\Http\Controllers\Api\V1\EstimateItemAttachmentController;
 use App\Http\Controllers\Api\V1\EstimateItemController;
@@ -23,8 +25,10 @@ use App\Http\Controllers\Api\V1\ProcessingController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ScheduleController;
+use App\Http\Controllers\Api\V1\SchedulingController;
 use App\Http\Controllers\Api\V1\SymbolReviewController;
 use App\Http\Controllers\Api\V1\TakeoffController;
+use App\Http\Controllers\Api\V1\TakeoffFlowController;
 use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\TeamController;
@@ -76,6 +80,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
 
         Route::middleware('account.active')->group(function () {
+            // The floating "Resume" button — read on every screen (mobile's
+            // own `ShellController`), same as web's own `takeoffFlow` prop
+            // shared on every Inertia response.
+            Route::get('takeoff-flow', [TakeoffFlowController::class, 'show'])->name('takeoff-flow.show');
+            Route::delete('takeoff-flow', [TakeoffFlowController::class, 'destroy'])->name('takeoff-flow.destroy');
+
             // `jobs.index`/`jobs.show` stay reachable for an apprentice —
             // `Api\V1\JobController` itself trims the response to basic
             // info for them. Everything below is either task/material data,
@@ -83,6 +93,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // data in another shape) — an apprentice reaches none of it.
             Route::get('jobs', [JobController::class, 'index'])->name('jobs.index');
             Route::get('jobs/{job}', [JobController::class, 'show'])->name('jobs.show');
+            Route::post('jobs', [JobController::class, 'store'])->name('jobs.store');
             Route::put('jobs/{job}', [JobController::class, 'update'])->name('jobs.update');
 
             // Manager-owned data (`Estimate::scopeOwnedBy`) — self-limiting
@@ -94,6 +105,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::post('estimates/{estimate}/items', [EstimateController::class, 'storeItem'])->name('estimates.items.store');
             Route::put('estimates/{estimate}/items/{item}', [EstimateController::class, 'updateItem'])->name('estimates.items.update');
             Route::delete('estimates/{estimate}/items/{item}', [EstimateController::class, 'destroyItem'])->name('estimates.items.destroy');
+
+            // Where a project's addenda are listed — read-only, an
+            // addendum is raised through the upload/takeoff flow, never
+            // here (see `Api\V1\UploadController::store`'s own
+            // `addendum_for_estimate_id` field).
+            Route::get('addenda', [AddendumController::class, 'index'])->name('addenda.index');
 
             // Same shape: `Client`/`Project` are single-owner (`user_id`),
             // no staffing/company concept at all — self-limiting the same
@@ -162,12 +179,20 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::post('takeoffs/{project}/reopen', [TakeoffController::class, 'reopen'])->name('takeoffs.reopen');
             Route::post('takeoffs/{project}/job', [TakeoffController::class, 'storeJob'])->name('takeoffs.job.store');
 
+            // A takeoff's own paperwork — Drawing Details' "Documents"
+            // entry. List/upload/delete only; mobile has no cross-project
+            // Documents module.
+            Route::get('takeoffs/{project}/documents', [DocumentController::class, 'index'])->name('takeoffs.documents.index');
+            Route::post('takeoffs/{project}/documents', [DocumentController::class, 'store'])->name('takeoffs.documents.store');
+            Route::delete('documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+
             // Breaking a job into tasks, straight after it is raised — from
             // the takeoff flow or from any other job the manager owns.
             Route::get('jobs/{job}/task-setup', [JobTaskSetupController::class, 'options'])->name('jobs.task-setup.options');
             Route::post('jobs/{job}/task-setup', [JobTaskSetupController::class, 'store'])->name('jobs.task-setup.store');
             Route::get('tasks/{task}/edit', [JobTaskSetupController::class, 'editOptions'])->name('tasks.edit-options');
             Route::put('tasks/{task}', [JobTaskSetupController::class, 'update'])->name('tasks.update');
+            Route::delete('tasks/{task}', [JobTaskSetupController::class, 'destroy'])->name('tasks.destroy');
 
             // Roster + pending mobile signups. Reading the list/detail is
             // open to any signed-in, active account (same as web); adding,
@@ -254,6 +279,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 // Cross-job "My Schedule" feed — upcoming crew shifts across
                 // every job this user can access.
                 Route::get('schedule', [ScheduleController::class, 'index'])->name('schedule.index');
+
+                // Unassigned Queue → "Book crew" — mobile's counterpart to
+                // web's own Scheduling calendar's booking action.
+                Route::get('scheduling/unassigned', [SchedulingController::class, 'unassigned'])->name('scheduling.unassigned');
+                Route::post('scheduling/schedules', [SchedulingController::class, 'store'])->name('scheduling.schedules.store');
 
                 // Time-on-the-clock, not attendance — an apprentice's only
                 // allowed action is the check-in/out pair below, not a timer

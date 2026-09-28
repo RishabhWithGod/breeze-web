@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Foreman;
+use App\Models\Job;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
 use App\Models\Team;
@@ -163,7 +164,21 @@ class ForemanController extends Controller
     {
         abort_unless($this->canManage($request->user()), 403);
 
-        return Inertia::render('ForemanCreate', $this->formProps());
+        /*
+         * Opened from a job that needs someone its crew does not have yet —
+         * Add Task and Edit Task both link here rather than offering their own
+         * cut-down form, so Back and a successful add land on the same task
+         * screen instead of the register, and the crew this member is joining
+         * is the one already picked there rather than asked for twice.
+         */
+        $job = $this->jobFor($request);
+
+        return Inertia::render('ForemanCreate', [
+            ...$this->formProps(),
+            'jobId' => $job?->id,
+            'defaultTeamId' => $job?->team_id,
+            'returnUrl' => $job === null ? null : route('jobs.tasks.setup', $job),
+        ]);
     }
 
     /**
@@ -180,6 +195,19 @@ class ForemanController extends Controller
                 Foreman::ROLES,
             ),
         ];
+    }
+
+    /**
+     * The job this member is being added for, from the `job` query/form
+     * value both `create` and `store` read it under — this manager's own, or
+     * null rather than a 404, since a stale or hand-edited value here should
+     * just fall back to the plain register flow instead of blocking the add.
+     */
+    private function jobFor(Request $request): ?Job
+    {
+        $jobId = $request->integer('job');
+
+        return $jobId === 0 ? null : Job::ownedBy($request->user())->find($jobId);
     }
 
     public function edit(Request $request, Foreman $foreman): Response
@@ -291,8 +319,13 @@ class ForemanController extends Controller
             return back()->with('success', "“{$foreman->name}” was added.");
         }
 
+        // The full Add Member form, opened from a job's task screen: back to
+        // that same screen, not the register, so the tasks being typed there
+        // are exactly where they were left.
+        $job = $this->jobFor($request);
+
         return redirect()
-            ->route('teams.index')
+            ->to($job === null ? route('teams.index') : route('jobs.tasks.setup', $job))
             ->with('success', "“{$foreman->name}” was added.");
     }
 

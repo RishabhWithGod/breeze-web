@@ -13,6 +13,7 @@ use App\Services\TimeTracking\TimerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Jobs, as the mobile app sees them: only the ones the signed-in electrician
@@ -103,6 +104,78 @@ class JobController extends Controller
                 ])->values(),
             ...$this->apprenticeAssignmentOptions($request, $job),
         ]);
+    }
+
+    /**
+     * `Api\V1\JobController::store()` — mobile's own New Job, raised
+     * straight against a client/project rather than through a takeoff. Same
+     * fields `update()` takes (name, a site from the client's own book,
+     * description, job type, crew, dates) plus the client/project it's
+     * created under — the one thing `update()` never lets move once a job
+     * exists. Deliberately narrower than web's own `JobCreate.tsx`: no
+     * `save_as_draft`, no drawing/estimate linking — the job starts straight
+     * into planning, its budget filled in later from an estimate raised
+     * against it, same as `Continue to Job` leaves it. Scoped to the
+     * requesting manager's own client/project register, same as
+     * `ProjectController::store()`.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        $data = $request->validate([
+            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->where('user_id', $userId)],
+            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->where('user_id', $userId)],
+            'name' => ['required', 'string', 'min:3', 'max:160'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'job_type' => ['nullable', Rule::in(Job::TYPES)],
+            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            // Optional, same as `update()`: a job can be on the books before
+            // anyone has picked exactly which of the client's sites it's at.
+            'address_id' => [
+                'nullable', 'integer',
+                Rule::exists('client_addresses', 'id')->where('client_id', $request->integer('client_id')),
+            ],
+        ], [
+            'name.required' => 'Job name is required',
+            'client_id.required' => 'Pick the client this job is for',
+            'project_id.required' => 'Pick the project this job is on',
+            'team_id.required' => 'Pick the crew this job is handed to',
+            'end_date.after_or_equal' => 'End date must be on or after the start date',
+        ]);
+
+        $client = $request->user()->clients()->findOrFail($data['client_id']);
+        $project = $request->user()->projects()->findOrFail($data['project_id']);
+
+        if ((int) $project->client_id !== $client->id) {
+            throw ValidationException::withMessages([
+                'project_id' => "That project is not one of this client's own.",
+            ]);
+        }
+
+        $addressId = $data['address_id'] ?? null;
+        unset($data['address_id']);
+
+        $job = $request->user()->jobs()->create([
+            ...$data,
+            'client' => $client->name,
+            'status' => 'planning',
+        ]);
+
+        if ($addressId !== null) {
+            $addresses = $this->sites->resolve($client->id, [$addressId]);
+            $this->sites->attach($job, $addresses);
+        }
+
+        $job->recordInitialStatus();
+        $job->recordActivity('created', 'Job created');
+
+        return $this->created([
+            ...$this->summarize($job, $request),
+            'description' => $job->description,
+        ], "\"{$job->name}\" was created.");
     }
 
     /**

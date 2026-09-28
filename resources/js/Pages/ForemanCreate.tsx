@@ -35,6 +35,16 @@ export interface ForemanCreateProps {
   /** The crews someone can be put on. Empty until the first team is added. */
   teams: readonly { readonly id: number; readonly name: string }[]
   roles: readonly { readonly value: string; readonly label: string }[]
+  /**
+   * Opened from a job's task screen rather than the register: carried back to
+   * `store()` so it can send the new member there instead, and back to `create()`
+   * on the next visit if the task screen sends this member back to add another.
+   */
+  jobId: number | null
+  /** That job's own crew, so it does not have to be picked again here. */
+  defaultTeamId: number | null
+  /** Where Back and a successful add go — that same task screen, or the register. */
+  returnUrl: string | null
 }
 
 /**
@@ -49,13 +59,21 @@ export interface ForemanCreateProps {
  * Initials are not asked for at all. "Dana Wu" gives "DW", and a field the app
  * can fill in itself is one more thing to type and one more thing to get wrong.
  */
-export default function ForemanCreate({ teams, roles }: ForemanCreateProps) {
+export default function ForemanCreate({
+  teams,
+  roles,
+  jobId,
+  defaultTeamId,
+  returnUrl,
+}: ForemanCreateProps) {
+  const backUrl = returnUrl ?? ROUTES.teams
+
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<ForemanDraft>({
       name: '',
       // Most of the register is journeymen; a foreman is the exception you pick.
       role: 'journeyman',
-      team_id: '',
+      team_id: defaultTeamId === null ? '' : String(defaultTeamId),
       phone: '',
       email: '',
       licence_number: '',
@@ -84,7 +102,9 @@ export default function ForemanCreate({ teams, roles }: ForemanCreateProps) {
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    post(ROUTES.foremen)
+    // Carries the job along so `store()` can send this member back to that
+    // job's task screen instead of the register.
+    post(jobId === null ? ROUTES.foremen : `${ROUTES.foremen}?job=${jobId}`)
   }
 
   return (
@@ -99,7 +119,7 @@ export default function ForemanCreate({ teams, roles }: ForemanCreateProps) {
           { label: 'New Member' },
         ]}
         actions={
-          <ButtonLink href={ROUTES.teams} variant="secondary" leftIcon={ArrowLeft}>
+          <ButtonLink href={backUrl} variant="secondary" leftIcon={ArrowLeft}>
             Back
           </ButtonLink>
         }
@@ -259,7 +279,7 @@ export default function ForemanCreate({ teams, roles }: ForemanCreateProps) {
         </Card>
 
         <div className="flex flex-wrap items-center justify-end gap-3">
-          <ButtonLink href={ROUTES.teams} variant="white">
+          <ButtonLink href={backUrl} variant="white">
             Cancel
           </ButtonLink>
           <Button type="submit" leftIcon={HardHat} isLoading={processing}>

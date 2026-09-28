@@ -10,6 +10,7 @@ use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\JobTask;
 use App\Services\Scheduling\ScheduleBuilder;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -29,11 +30,20 @@ class JobTaskSetupController extends Controller
 {
     use ApiResponses;
 
-    public function __construct(private readonly ScheduleBuilder $builder) {}
+    public function __construct(
+        private readonly ScheduleBuilder $builder,
+        private readonly TakeoffFlow $flow,
+    ) {}
 
     public function options(Request $request, Job $job): JsonResponse
     {
         $this->authorise($request, $job);
+
+        // The last step, and still a step: remembered so leaving it
+        // mid-way leaves a way back, same as web's own `create()` does.
+        if ($job->project !== null) {
+            $this->flow->remember($job->project, $request->user());
+        }
 
         $job->loadMissing(['schedule.tasks.foreman', 'schedule.tasks.estimateItems']);
 
@@ -137,6 +147,15 @@ class JobTaskSetupController extends Controller
         $count = count($data['tasks']);
 
         $job->recordActivity('tasks_added', $count.' '.str('task')->plural($count).' added to the schedule');
+
+        // The takeoff has become a job with its work laid out. Nothing
+        // left to resume, so the floating button goes — same as web's own
+        // `store()` calling `TakeoffFlow::forget()` here. Only clears this
+        // user's own pointer, and only if it was still pointing at this job.
+        if ($job->project_id !== null
+            && $request->user()->takeoff_flow_project_id === $job->project_id) {
+            $this->flow->forget($request->user());
+        }
 
         return $this->created([
             'jobId' => $job->id,
@@ -277,6 +296,31 @@ class JobTaskSetupController extends Controller
             $this->present($task->fresh(['foreman', 'supervisor', 'estimateItems'])),
             "\"{$task->title}\" was updated.",
         );
+    }
+
+    /**
+     * Removes one task from the plan — mobile's counterpart to web's own
+     * `JobTaskSetupController::destroy()`. Its estimate lines go back
+     * unclaimed for another task to take, same as web.
+     */
+    public function destroy(Request $request, JobTask $task): JsonResponse
+    {
+        $job = $task->job;
+        $this->authorise($request, $job);
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
+        abort_if($task->status === JobTask::STATUS_COMPLETED, 409, 'This task is already completed and can no longer be removed.');
+
+        $title = $task->title;
+
+        DB::transaction(function () use ($task, $job) {
+            EstimateItem::where('job_task_id', $task->id)->update(['job_task_id' => null]);
+            $task->delete();
+            $job->refreshEstimatedHours();
+        });
+
+        $job->recordActivity('task_deleted', "Task removed: {$title}");
+
+        return $this->ok(null, "\"{$title}\" was removed from \"{$job->name}\".");
     }
 
     /** @return array<string, mixed> */

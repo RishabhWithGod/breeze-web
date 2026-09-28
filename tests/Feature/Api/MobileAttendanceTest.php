@@ -240,4 +240,121 @@ class MobileAttendanceTest extends TestCase
 
         $this->assertCount(2, $response->json('data'));
     }
+
+    /**
+     * A fix a real distance away from {@see onSitePoint()} — used wherever a
+     * test needs "somewhere else, but still a plausible GPS reading" rather
+     * than the job's own coordinates.
+     */
+    private function nearbyPoint(float $accuracy = 8.0): array
+    {
+        return [
+            'point' => ['latitude' => 22.720500, 'longitude' => 75.858500, 'accuracy' => $accuracy],
+            'method' => 'manual',
+        ];
+    }
+
+    public function test_check_in_establishes_a_missing_job_location_from_an_accurate_fix(): void
+    {
+        $user = User::factory()->create(['role' => 'Electrician']);
+        $job = $this->makeJob(['latitude' => null, 'longitude' => null]);
+        $this->staffJob($job, $user);
+
+        $response = $this->withHeaders($this->headersFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", $this->nearbyPoint())
+            ->assertStatus(201)
+            ->json('data');
+
+        $job->refresh();
+        $this->assertEqualsWithDelta(22.720500, (float) $job->latitude, 0.0001);
+        $this->assertEqualsWithDelta(75.858500, (float) $job->longitude, 0.0001);
+        $this->assertEqualsWithDelta(22.720500, (float) $response['job_latitude'], 0.0001);
+        $this->assertEqualsWithDelta(75.858500, (float) $response['job_longitude'], 0.0001);
+        // Distance is now computed against the site this same check-in just
+        // established, so it reads ~0, not null.
+        $this->assertEqualsWithDelta(0.0, (float) $response['check_in_distance_meters'], 0.5);
+    }
+
+    public function test_check_in_does_not_establish_a_location_from_a_poor_accuracy_fix(): void
+    {
+        $user = User::factory()->create(['role' => 'Electrician']);
+        $job = $this->makeJob(['latitude' => null, 'longitude' => null]);
+        $this->staffJob($job, $user);
+
+        $response = $this->withHeaders($this->headersFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", $this->nearbyPoint(80.0))
+            ->assertStatus(201)
+            ->json('data');
+
+        $job->refresh();
+        $this->assertNull($job->latitude);
+        $this->assertNull($job->longitude);
+        $this->assertNull($response['job_latitude']);
+        $this->assertNull($response['job_longitude']);
+        $this->assertNull($response['check_in_distance_meters']);
+    }
+
+    public function test_check_in_does_not_establish_a_location_from_the_gps_failure_sentinel(): void
+    {
+        $user = User::factory()->create(['role' => 'Electrician']);
+        $job = $this->makeJob(['latitude' => null, 'longitude' => null]);
+        $this->staffJob($job, $user);
+
+        $this->withHeaders($this->headersFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", [
+                'point' => ['latitude' => 0, 'longitude' => 0, 'accuracy' => -1],
+                'method' => 'manual',
+            ])
+            ->assertStatus(201);
+
+        $job->refresh();
+        $this->assertNull($job->latitude);
+        $this->assertNull($job->longitude);
+    }
+
+    public function test_check_in_never_overwrites_an_existing_job_location(): void
+    {
+        $user = User::factory()->create(['role' => 'Electrician']);
+        $job = $this->makeJob(); // real coordinates already set
+        $originalLat = (float) $job->latitude;
+        $originalLng = (float) $job->longitude;
+        $this->staffJob($job, $user);
+
+        $this->withHeaders($this->headersFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", $this->nearbyPoint())
+            ->assertStatus(201);
+
+        $job->refresh();
+        $this->assertEqualsWithDelta($originalLat, (float) $job->latitude, 0.0000001);
+        $this->assertEqualsWithDelta($originalLng, (float) $job->longitude, 0.0000001);
+    }
+
+    public function test_the_first_check_in_wins_when_establishing_a_missing_job_location(): void
+    {
+        $first = User::factory()->create(['role' => 'Electrician']);
+        $second = User::factory()->create(['role' => 'Electrician']);
+        $job = $this->makeJob(['latitude' => null, 'longitude' => null]);
+        $this->staffJob($job, $first);
+        $this->staffJob($job, $second);
+
+        $this->withHeaders($this->headersFor($first))
+            ->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", $this->nearbyPoint())
+            ->assertStatus(201);
+        // `RequestGuard` caches whichever user it resolved for the rest of
+        // the test process (real per-request handling never hits this) —
+        // forget it before switching to the second technician's token, same
+        // as `MobileJobsAndTasksTest`'s own two-user assertions do.
+        auth()->forgetGuards();
+
+        // A second technician, checking in moments later against the same
+        // never-located job, must not overwrite what the first one just set
+        // — simulates the race the `whereNull` guard resolves.
+        $this->withHeaders($this->headersFor($second))
+            ->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", $this->onSitePoint())
+            ->assertStatus(201);
+
+        $job->refresh();
+        $this->assertEqualsWithDelta(22.720500, (float) $job->latitude, 0.0001);
+        $this->assertEqualsWithDelta(75.858500, (float) $job->longitude, 0.0001);
+    }
 }
