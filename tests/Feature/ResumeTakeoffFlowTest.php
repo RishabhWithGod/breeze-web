@@ -88,7 +88,7 @@ class ResumeTakeoffFlowTest extends TestCase
         // where that is said — and where it is resubmitted.
         $this->result->delete();
         $this->actingAs($this->user)->get(route('projects.show', $this->client));
-        session(['takeoff_flow_project_id' => $this->client->id]);
+        $this->user->update(['takeoff_flow_project_id' => $this->client->id]);
 
         $this->actingAs($this->user)
             ->get(route('jobs.index'))

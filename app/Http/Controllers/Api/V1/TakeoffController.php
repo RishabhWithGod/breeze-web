@@ -11,6 +11,7 @@ use App\Models\BoqLine;
 use App\Models\Circuit;
 use App\Models\DrawingSheet;
 use App\Models\EquipmentItem;
+use App\Models\Estimate;
 use App\Models\FinalSymbol;
 use App\Models\Job;
 use App\Models\PanelSchedule;
@@ -23,6 +24,7 @@ use App\Services\Clients\JobSites;
 use App\Services\Takeoff\CompleteReview;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\JobFactory;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -95,6 +97,13 @@ class TakeoffController extends Controller
     public function show(Request $request, Project $project): JsonResponse
     {
         abort_unless($project->user_id === $request->user()->id, 403);
+
+        // Remembered here too, same as web's own `ProcessingController::
+        // show()`/`AiReviewController::show()`/`FinalTakeoffController::
+        // show()` all do — mobile's Processing/Review/Results/Final
+        // screens all load through this same endpoint, so one write here
+        // covers all of them.
+        app(TakeoffFlow::class)->remember($project, $request->user());
 
         $project->load([
             'sheets',
@@ -512,7 +521,9 @@ class TakeoffController extends Controller
         $result = $this->resultFor($project);
 
         if ($result->isFinalised()) {
-            return $this->ok(['estimateId' => $result->estimate_id], 'This review was already signed off.');
+            $existing = $result->estimate;
+
+            return $this->ok($this->estimatePayload($existing), 'This review was already signed off.');
         }
 
         try {
@@ -527,12 +538,37 @@ class TakeoffController extends Controller
             $estimate = $estimateBuilder->fromFinalJson($result, $request->user());
 
             return $this->ok(
-                ['estimateId' => $estimate->id, 'estimateNumber' => $estimate->number],
+                $this->estimatePayload($estimate),
                 "Review signed off. Estimate {$estimate->number} was generated from it."
             );
         } catch (RuntimeException $e) {
             return $this->ok(['estimateId' => null], 'Review signed off. Create the job when you’re ready: '.$e->getMessage());
         }
+    }
+
+    /**
+     * `estimateId`/`estimateNumber` plus, when this estimate is an
+     * addendum, `kind`/`parentEstimateId`/`parentEstimateNumber` — so a
+     * mobile client can navigate to the parent estimate directly, same as
+     * web's own `AiReviewController::finalise()` redirect there.
+     *
+     * @return array<string, mixed>
+     */
+    private function estimatePayload(?Estimate $estimate): array
+    {
+        if ($estimate === null) {
+            return ['estimateId' => null];
+        }
+
+        $parent = $estimate->kind === Estimate::KIND_ADDENDUM ? $estimate->parentEstimate : null;
+
+        return [
+            'estimateId' => $estimate->id,
+            'estimateNumber' => $estimate->number,
+            'kind' => $estimate->kind,
+            'parentEstimateId' => $parent?->id,
+            'parentEstimateNumber' => $parent?->number,
+        ];
     }
 
     /** Re-opens a finalised takeoff for further review — mirrors web's `reopen()` exactly. */

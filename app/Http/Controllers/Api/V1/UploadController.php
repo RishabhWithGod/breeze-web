@@ -9,6 +9,7 @@ use App\Jobs\ProcessTakeoffRun;
 use App\Jobs\RenderDrawingPreviews;
 use App\Models\Upload;
 use App\Services\Ai\TakeoffOrchestrator;
+use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -66,6 +67,10 @@ class UploadController extends Controller
 
             return [$project, $primary];
         });
+
+        // Remembered so the flow can be left and picked up again — the
+        // same call web's own `UploadController::store()` makes.
+        app(TakeoffFlow::class)->remember($project, $request->user());
 
         $aiJob = $orchestrator->open($project, $primaryUpload, $request->user());
 

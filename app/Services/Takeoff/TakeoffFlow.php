@@ -4,35 +4,38 @@ namespace App\Services\Takeoff;
 
 use App\Models\JobTask;
 use App\Models\Project;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 /**
- * The takeoff a person is part-way through, so they can leave and come back.
+ * The takeoff a person is part-way through, so they can leave from one
+ * client — the browser, the phone — and pick it back up from the other.
  *
  * The whole run — open a client, upload their drawing, wait on the analysis,
  * review the symbols, price the estimate, raise the job, break it into tasks —
  * takes several screens and often several days, and in the middle of it someone
- * goes to look at an invoice. Without this, finding the way back means
- * remembering which client it was and which screen it had reached.
+ * goes to look at an invoice, or puts the laptop away and picks up the phone.
+ * Without this, finding the way back means remembering which client it was
+ * and which screen it had reached.
  *
- * Only the client's id is remembered. Where to resume is worked out from the
- * client's own records every time, so the link cannot go stale: sign the review
- * off from somewhere else and the button moves on with it.
+ * Only the client's id is remembered — one column on the account
+ * (`users.takeoff_flow_project_id`), not a session, so it reads the same
+ * from either device. Where to resume is worked out from the client's own
+ * records every time, so the link cannot go stale: sign the review off from
+ * one device and the button on the other moves on with it.
  */
 class TakeoffFlow
 {
-    private const KEY = 'takeoff_flow_project_id';
-
-    /** Called by every screen that is a step of the flow. */
-    public function remember(Project $client): void
+    /** Called by every screen that is a step of the flow, web or mobile. */
+    public function remember(Project $client, ?User $user = null): void
     {
-        session([self::KEY => $client->id]);
+        ($user ?? auth()->user())?->update(['takeoff_flow_project_id' => $client->id]);
     }
 
     /** The flow is over, or the person put the reminder away. */
-    public function forget(): void
+    public function forget(?User $user = null): void
     {
-        session()->forget(self::KEY);
+        ($user ?? auth()->user())?->update(['takeoff_flow_project_id' => null]);
     }
 
     /**
@@ -64,7 +67,7 @@ class TakeoffFlow
      */
     public function inProgress(Request $request, ?int $exceptClientId = null): ?array
     {
-        if ($exceptClientId !== null && session(self::KEY) === $exceptClientId) {
+        if ($exceptClientId !== null && $request->user()?->takeoff_flow_project_id === $exceptClientId) {
             return null;
         }
 
@@ -74,7 +77,8 @@ class TakeoffFlow
     /** @return array{resumeUrl: string, stage: string, projectName: string}|null */
     private function pending(Request $request, bool $ignoreCurrentScreen): ?array
     {
-        $id = session(self::KEY);
+        $user = $request->user();
+        $id = $user?->takeoff_flow_project_id;
 
         if ($id === null || (! $ignoreCurrentScreen && $this->isOnAFlowScreen($request))) {
             return null;
@@ -84,7 +88,7 @@ class TakeoffFlow
 
         // The client was deleted. Nothing to return to.
         if ($client === null) {
-            $this->forget();
+            $this->forget($user);
 
             return null;
         }
@@ -93,7 +97,7 @@ class TakeoffFlow
 
         if ($step === null) {
             // Finished: the job exists and its work is laid out.
-            $this->forget();
+            $this->forget($user);
 
             return null;
         }
@@ -157,6 +161,52 @@ class TakeoffFlow
         return $hasTasks ? null : [
             'resumeUrl' => route('jobs.tasks.setup', $result->work_job_id),
             'stage' => 'Tasks',
+        ];
+    }
+
+    /**
+     * The same step `stepFor()` computes, in the shape mobile needs instead
+     * of a route URL — `Api\V1\TakeoffFlowController` uses this so a
+     * Flutter client can navigate with the id its own screen for that
+     * stage already expects (a project id for Upload/Analysis/Review,
+     * since mobile's own takeoff screens are all keyed on the project;
+     * an estimate id once one exists; a job id once its tasks are the
+     * only thing left).
+     *
+     * @return array{stage: string, projectId: int, estimateId: int|null, jobId: int|null}|null
+     */
+    public function stepForMobile(Project $client): ?array
+    {
+        $result = $client->aiResults()->latest('id')->first();
+
+        if ($result === null) {
+            return [
+                'stage' => $client->uploads()->exists() ? 'Analysis' : 'Upload',
+                'projectId' => $client->id,
+                'estimateId' => null,
+                'jobId' => null,
+            ];
+        }
+
+        if (! $result->isFinalised()) {
+            return ['stage' => 'Review', 'projectId' => $client->id, 'estimateId' => null, 'jobId' => null];
+        }
+
+        if ($result->estimate_id === null) {
+            return ['stage' => 'Estimate', 'projectId' => $client->id, 'estimateId' => null, 'jobId' => null];
+        }
+
+        if ($result->work_job_id === null) {
+            return ['stage' => 'Job', 'projectId' => $client->id, 'estimateId' => $result->estimate_id, 'jobId' => null];
+        }
+
+        $hasTasks = JobTask::where('job_id', $result->work_job_id)->exists();
+
+        return $hasTasks ? null : [
+            'stage' => 'Tasks',
+            'projectId' => $client->id,
+            'estimateId' => $result->estimate_id,
+            'jobId' => $result->work_job_id,
         ];
     }
 

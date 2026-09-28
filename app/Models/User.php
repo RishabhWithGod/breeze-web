@@ -44,6 +44,7 @@ class User extends Authenticatable
         'password',
         'role',
         'phone',
+        'takeoff_flow_project_id',
     ];
 
     /**

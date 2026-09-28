@@ -32,6 +32,15 @@ class AttendanceController extends Controller
 {
     use ApiResponses;
 
+    /**
+     * Worst horizontal accuracy, in metres, still trusted enough to become a
+     * job's permanent site reference — same threshold the mobile app itself
+     * uses for "is this fix trustworthy" (`poorAccuracyThreshold` in
+     * `attendance_models.dart`). A fix too poor to verify a check-in against
+     * is too poor to anchor the site at, too.
+     */
+    private const MAX_ACCURACY_FOR_SITE_CAPTURE = 50.0;
+
     public function __construct(
         private readonly ElectricianJobAccess $access,
     ) {}
@@ -47,7 +56,7 @@ class AttendanceController extends Controller
             ->where('date', $this->businessToday())
             ->first();
 
-        return $this->ok($attendance ? $this->present($attendance) : null);
+        return $this->ok($attendance ? $this->present($attendance, $job) : null);
     }
 
     /**
@@ -119,11 +128,12 @@ class AttendanceController extends Controller
     public function today(Request $request): JsonResponse
     {
         $attendance = JobAttendance::query()
+            ->with('job')
             ->where('user_id', $request->user()->id)
             ->where('date', $this->businessToday())
             ->get();
 
-        return $this->ok($attendance->map(fn (JobAttendance $a) => $this->present($a))->values());
+        return $this->ok($attendance->map(fn (JobAttendance $a) => $this->present($a, $a->job))->values());
     }
 
     public function checkIn(Request $request, Job $job): JsonResponse
@@ -143,7 +153,7 @@ class AttendanceController extends Controller
         // Already checked in — 200 with the existing record, not a 422 or a
         // second row. A check-in queued offline may reach the server twice.
         if ($row->exists && $row->isCheckedIn()) {
-            return $this->ok($this->present($row));
+            return $this->ok($this->present($row, $job));
         }
 
         // A same-day re-check-in resumes the running total rather than
@@ -156,6 +166,10 @@ class AttendanceController extends Controller
         if ($request->hasFile('photo')) {
             $photoPath = $request->file('photo')->store("attendance-photos/{$job->id}", 'local');
         }
+
+        // A job with no site yet gets this check-in's own fix as its
+        // reference point, first-one-in — see `establishJobLocationIfMissing()`.
+        $job = $this->establishJobLocationIfMissing($job, $data);
 
         [$distance, $lat, $lng, $accuracy] = $this->resolvedFix($job, $data);
 
@@ -182,7 +196,7 @@ class AttendanceController extends Controller
         ]);
         $row->save();
 
-        return $this->created($this->present($row), 'Checked in.');
+        return $this->created($this->present($row, $job), 'Checked in.');
     }
 
     public function checkOut(Request $request, Job $job): JsonResponse
@@ -214,7 +228,7 @@ class AttendanceController extends Controller
         ]);
         $row->save();
 
-        return $this->ok($this->present($row), 'Checked out.');
+        return $this->ok($this->present($row, $job), 'Checked out.');
     }
 
     /** @return array{latitude: float, longitude: float, accuracy: float, method: string, client_id: string|null} */
@@ -238,6 +252,42 @@ class AttendanceController extends Controller
             'method' => $validated['method'],
             'client_id' => $validated['client_id'] ?? null,
         ];
+    }
+
+    /**
+     * A job with no site coordinates yet adopts the technician's own
+     * check-in fix as its permanent reference point — first check-in in
+     * wins. Never touches a job that already has a real location.
+     *
+     * Race-safe by construction: the `whereNull` guard means only the first
+     * of two near-simultaneous check-ins against the same never-located job
+     * actually updates a row (the second affects zero rows), so whichever
+     * request loses the race simply proceeds against what the winner wrote
+     * — no lost update, no overwrite.
+     */
+    private function establishJobLocationIfMissing(Job $job, array $data): Job
+    {
+        if ($job->latitude !== null && $job->longitude !== null) {
+            return $job;
+        }
+
+        $hasUsableFix = $data['accuracy'] >= 0
+            && $data['accuracy'] <= self::MAX_ACCURACY_FOR_SITE_CAPTURE
+            && ! ($data['latitude'] === 0.0 && $data['longitude'] === 0.0);
+        if (! $hasUsableFix) {
+            return $job;
+        }
+
+        Job::query()
+            ->whereKey($job->id)
+            ->whereNull('latitude')
+            ->whereNull('longitude')
+            ->update([
+                'latitude' => $data['latitude'],
+                'longitude' => $data['longitude'],
+            ]);
+
+        return $job->fresh() ?? $job;
     }
 
     /**
@@ -295,8 +345,17 @@ class AttendanceController extends Controller
         return now()->timezone(TimeTrackingSetting::current()->timezone)->toDateString();
     }
 
-    /** @return array<string, mixed> */
-    private function present(JobAttendance $attendance): array
+    /**
+     * @return array<string, mixed>
+     *
+     * `$job` is optional only because a couple of call sites historically
+     * had no cheap way to supply it; every current caller passes it. When
+     * present, the job's own (possibly just-established — see
+     * `establishJobLocationIfMissing()`) coordinates are echoed back so the
+     * app can adopt them into its in-memory site immediately, without
+     * waiting for the next job-list refetch.
+     */
+    private function present(JobAttendance $attendance, ?Job $job = null): array
     {
         return [
             'id' => (string) $attendance->id,
@@ -331,6 +390,9 @@ class AttendanceController extends Controller
             // already-summed `workingSeconds()` here would double-count it.
             'banked_duration_seconds' => $attendance->banked_seconds,
             'sync_state' => 'synced',
+            'job_latitude' => $job && $job->latitude !== null ? (float) $job->latitude : null,
+            'job_longitude' => $job && $job->longitude !== null ? (float) $job->longitude : null,
+            'job_geofence_radius' => $job?->geofence_radius,
         ];
     }
 }
