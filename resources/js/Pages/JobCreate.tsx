@@ -110,15 +110,23 @@ export default function JobCreate({
    * next question, and nothing of the old client's survives the change.
    */
   const selectClient = (clientId: string) => {
+    const client = clients.find((option) => String(option.id) === clientId)
+
     setData((current) => ({
       ...current,
       client_id: clientId,
       project_id: '',
       upload_id: '',
       address_ids: [],
+      /*
+       * Pre-selected from the client's own crew — asked once there rather
+       * than again here — but still free to change: not every job for this
+       * client goes to the same team.
+       */
+      team_id: client?.teamId ? String(client.teamId) : '',
     }))
 
-    clearErrors('client_id', 'project_id', 'address_ids', 'upload_id')
+    clearErrors('client_id', 'project_id', 'address_ids', 'upload_id', 'team_id')
   }
 
   /**

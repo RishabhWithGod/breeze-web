@@ -1,32 +1,46 @@
 import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  ArrowLeft,
+  CircleDollarSign,
+  ClipboardList,
+  Clock,
+  DollarSign,
   ExternalLink,
   FileText,
   FolderKanban,
+  Globe,
+  Mail,
   PencilLine,
+  Phone,
   Plus,
   Sparkles,
   Trash2,
+  User,
 } from 'lucide-react'
 import {
   Alert,
-  Button,
+  Badge,
   ButtonLink,
   Card,
-  cardAccent,
   CardHeader,
   ConfirmDialog,
   EmptyState,
+  IconButton,
   StatusChip,
+  Table,
 } from '@/components/common'
-import { ClientSitesCard, type ClientSite } from '@/components/clients'
+import { ClientContactsCard, ClientSitesCard, type ClientContact, type ClientSite } from '@/components/clients'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { useDisclosure } from '@/hooks'
 import { ROUTES, routeTo } from '@/constants'
-import type { SharedPageProps, TakeoffStatus } from '@/types'
-import { TAKEOFF_STATUS_LABEL, TAKEOFF_STATUS_TONE, formatDate } from '@/utils'
+import type { SharedPageProps, TableColumn, TakeoffStatus, Tone } from '@/types'
+import {
+  TAKEOFF_STATUS_LABEL,
+  TAKEOFF_STATUS_TONE,
+  formatCurrency,
+  formatDate,
+  formatRelative,
+} from '@/utils'
 
 interface ClientProject {
   readonly id: number
@@ -39,35 +53,107 @@ interface ClientProject {
   readonly createdAt: string | null
 }
 
+interface ProjectSummary {
+  readonly total: number
+  readonly active: number
+  readonly completed: number
+  readonly onHold: number
+}
+
+interface ActivityEntry {
+  readonly id: number
+  readonly title: string
+  readonly description: string | null
+  readonly tone: Tone
+  readonly occurredAt: string | null
+}
+
 export interface ClientShowProps {
   client: {
     readonly id: number
     readonly name: string
+    readonly website: string | null
+    /** This client's own line — read off their primary contact. */
+    readonly contactEmail: string | null
+    readonly contactPhone: string | null
     readonly notes: string | null
     readonly createdAt: string | null
+    readonly contacts: readonly ClientContact[]
     readonly addresses: readonly ClientSite[]
   }
   /** What this client has on. The reason the screen exists. */
   projects: readonly ClientProject[]
+  /** At-a-glance counts over the list above. */
+  projectSummary: ProjectSummary
+  /** Every invoice raised against this client, still owed. */
+  outstandingBalance: number
+  /** What has actually happened, read off this client's own projects. */
+  activity: readonly ActivityEntry[]
 }
 
 /**
  * One client, and the work they have on.
  *
- * A client is a short record — a name, a note, an address book. What is worth
- * reading here is their projects, the way a job's tasks are what is worth
- * reading on a job. Drawings, takeoffs and estimates all belong to one of those
- * projects rather than to the client, so none of them appear at this level.
+ * A client is a short record — a name, a note, an address book, the people
+ * to call. What is worth reading here is their projects, the way a job's
+ * tasks are what is worth reading on a job. Drawings, takeoffs and estimates
+ * all belong to one of those projects rather than to the client, so none of
+ * them appear at this level.
  */
-export default function ClientShow({ client, projects }: ClientShowProps) {
+export default function ClientShow({
+  client,
+  projects,
+  projectSummary,
+  outstandingBalance,
+  activity,
+}: ClientShowProps) {
   const { flash } = usePage<SharedPageProps>().props
+
+  const activityColumns: TableColumn<ActivityEntry>[] = [
+    {
+      key: 'activity',
+      header: 'Activity',
+      width: 'w-56',
+      render: (entry) => (
+        <span className="flex items-center gap-2">
+          <Clock size={14} aria-hidden className="shrink-0 text-white/50" />
+          {entry.title}
+        </span>
+      ),
+    },
+    {
+      key: 'details',
+      header: 'Details',
+      render: (entry) => (
+        <span className="text-white/80">{entry.description ?? '—'}</span>
+      ),
+    },
+    {
+      key: 'time',
+      header: 'Time',
+      align: 'right',
+      width: 'w-36',
+      render: (entry) => (
+        <span className="text-white/60">
+          {entry.occurredAt ? formatRelative(entry.occurredAt) : '—'}
+        </span>
+      ),
+    },
+  ]
 
   return (
     <PageTransition>
       <Head title={client.name} />
 
       <PageHeader
-        title={client.name}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {client.name}
+            <Badge tone="info" size="sm">
+              Client
+            </Badge>
+          </span>
+        }
         breadcrumbs={[
           { label: 'Clients', href: ROUTES.clients },
           { label: client.name },
@@ -79,10 +165,10 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
               variant="secondary"
               leftIcon={PencilLine}
             >
-              Edit
+              Edit Client
             </ButtonLink>
-            <ButtonLink href={ROUTES.clients} variant="secondary" leftIcon={ArrowLeft}>
-              Back
+            <ButtonLink href={routeTo.projectCreateForClient(client.id)} leftIcon={Plus}>
+              Add Project
             </ButtonLink>
           </>
         }
@@ -97,11 +183,136 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
         )}
       </AnimatePresence>
 
+      {/* ============================================ Information row ====== */}
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Card padding="md" className="min-w-0">
+          <CardHeader
+            title={
+              <span className="flex items-center gap-2">
+                <User size={18} aria-hidden className="text-white/70" />
+                Client Information
+              </span>
+            }
+            actions={<RemoveClient client={client} projectCount={projects.length} />}
+            className="border-b border-hairline pb-4"
+            titleClassName="text-lg font-semibold"
+          />
+
+          <dl className="flex flex-col gap-3">
+            <InfoRow label="Name" value={client.name} />
+            <InfoRow label="Phone" value={client.contactPhone} icon={Phone} />
+            <InfoRow label="Email" value={client.contactEmail} icon={Mail} />
+            <InfoRow
+              label="Website"
+              icon={Globe}
+              value={
+                client.website ? (
+                  <a
+                    href={client.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand hover:underline"
+                  >
+                    {client.website.replace(/^https?:\/\//, '')}
+                  </a>
+                ) : null
+              }
+            />
+          </dl>
+
+          <dl className="mt-6 flex flex-col gap-3 border-t border-hairline pt-6">
+            <InfoRow label="On the register since" value={client.createdAt ? formatDate(client.createdAt) : null} />
+          </dl>
+
+          <div className="mt-6 border-t border-hairline pt-6">
+            <p className="flex items-center gap-1.5 text-sm text-white/60">
+              <FileText size={13} aria-hidden className="shrink-0" />
+              Notes
+            </p>
+            <p
+              className={
+                client.notes
+                  ? 'mt-1 text-md whitespace-pre-line text-white/90'
+                  : 'mt-1 text-md text-white/45'
+              }
+            >
+              {client.notes ?? 'Nothing recorded.'}
+            </p>
+          </div>
+        </Card>
+
+        <ClientContactsCard clientId={client.id} contacts={client.contacts} />
+
+        <ClientSitesCard clientId={client.id} addresses={client.addresses} />
+      </div>
+
+      {/* ==================================== Summary + Balance row ====== */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <Card padding="md" className="min-w-0">
+          <CardHeader
+            title={
+              <span className="flex items-center gap-2">
+                <ClipboardList size={18} aria-hidden className="text-white/70" />
+                Project Summary
+              </span>
+            }
+            actions={
+              <a href="#projects" className="text-sm text-brand hover:underline">
+                View All Projects →
+              </a>
+            }
+            className="border-b border-hairline pb-4 sm:items-center"
+            titleClassName="text-lg font-semibold"
+          />
+
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <SummaryStat label="Total Projects" value={projectSummary.total} />
+            <SummaryStat label="Active Projects" value={projectSummary.active} tone="brand" />
+            <SummaryStat label="Completed Projects" value={projectSummary.completed} />
+            <SummaryStat label="On Hold" value={projectSummary.onHold} />
+          </div>
+        </Card>
+
+        <Card padding="md" className="min-w-0">
+          <CardHeader
+            title={
+              <span className="flex items-center gap-2">
+                <CircleDollarSign size={18} aria-hidden className="text-white/70" />
+                Outstanding Balance
+              </span>
+            }
+            className="border-b border-hairline pb-4"
+            titleClassName="text-lg font-semibold"
+          />
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-3xl font-semibold text-white">
+                {formatCurrency(outstandingBalance, 2)}
+              </p>
+              <p className="mt-1 text-sm text-white/60">Total Outstanding</p>
+            </div>
+
+            <ButtonLink
+              href={`${ROUTES.invoices}?client=${encodeURIComponent(client.name)}`}
+              size="sm"
+              leftIcon={DollarSign}
+            >
+              View Invoices
+            </ButtonLink>
+          </div>
+        </Card>
+      </div>
+
       {/* ===================================================== Projects ====== */}
-      <Card padding="lg" className={cardAccent('brand')}>
+      <Card id="projects" padding="md" className="mt-6 scroll-mt-6">
         <CardHeader
-          title="Projects"
-          subtitle={`${projects.length} on record`}
+          title={
+            <span className="flex items-center gap-2">
+              <FolderKanban size={18} aria-hidden className="text-white/70" />
+              Projects
+            </span>
+          }
           actions={
             <ButtonLink
               href={routeTo.projectCreateForClient(client.id)}
@@ -112,6 +323,8 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
               Add project
             </ButtonLink>
           }
+          className="border-b border-hairline pb-4 sm:items-center"
+          titleClassName="text-lg font-semibold"
         />
 
         {projects.length === 0 ? (
@@ -184,42 +397,82 @@ export default function ClientShow({ client, projects }: ClientShowProps) {
         )}
       </Card>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_1fr]">
-        {/* ================================================= Address book ==== */}
-        <ClientSitesCard clientId={client.id} addresses={client.addresses} />
+      {/* ================================================ Recent Activity ==== */}
+      <Card padding="md" className="mt-6">
+        <CardHeader
+          title={
+            <span className="flex items-center gap-2">
+              <Clock size={18} aria-hidden className="text-white/70" />
+              Recent Activity
+            </span>
+          }
+          actions={
+            activity.length > 0 ? (
+              <span className="text-sm text-brand">View All Activity →</span>
+            ) : undefined
+          }
+          className="border-b border-hairline pb-4 sm:items-center"
+          titleClassName="text-lg font-semibold"
+        />
 
-        {/* ======================================================= Record ==== */}
-        <Card padding="lg" className={cardAccent('neutral', 'min-w-0 self-start')}>
-          <CardHeader title="Details" />
-
-          <dl className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <dt className="text-sm text-white/60">On the register since</dt>
-              <dd className="text-md text-white">
-                {client.createdAt ? formatDate(client.createdAt) : '—'}
-              </dd>
-            </div>
-          </dl>
-
-          <div className="mt-6 border-t border-hairline pt-6">
-            <p className="text-sm text-white/60">Notes</p>
-            <p
-              className={
-                client.notes
-                  ? 'mt-1 text-md whitespace-pre-line text-white/90'
-                  : 'mt-1 text-md text-white/45'
-              }
-            >
-              {client.notes ?? 'Nothing recorded.'}
-            </p>
-          </div>
-
-          <div className="mt-6 border-t border-hairline pt-6">
-            <RemoveClient client={client} projectCount={projects.length} />
-          </div>
-        </Card>
-      </div>
+        {activity.length === 0 ? (
+          <p className="text-md text-white/70">
+            Nothing recorded yet — activity shows up here once there's a project to report on.
+          </p>
+        ) : (
+          <Table
+            columns={activityColumns}
+            rows={activity}
+            getRowId={(entry) => entry.id}
+            variant="lined"
+            dense
+            caption="Recent activity on this client"
+          />
+        )}
+      </Card>
     </PageTransition>
+  )
+}
+
+interface InfoRowProps {
+  label: string
+  value: React.ReactNode | null
+  icon?: React.ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
+}
+
+function InfoRow({ label, value, icon: Icon }: InfoRowProps) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-3">
+      <dt className="flex items-center gap-1.5 text-sm text-white/60">
+        {Icon && <Icon size={13} aria-hidden className="shrink-0" />}
+        {label}
+      </dt>
+      <dd className="text-md text-white">{value ?? <span className="text-white/45">—</span>}</dd>
+    </div>
+  )
+}
+
+interface SummaryStatProps {
+  label: string
+  value: number
+  tone?: Tone
+}
+
+function SummaryStat({ label, value, tone = 'neutral' }: SummaryStatProps) {
+  const TONE_TEXT: Record<Tone, string> = {
+    brand: 'text-brand',
+    success: 'text-status-success',
+    warning: 'text-status-warning',
+    danger: 'text-red-300',
+    info: 'text-status-info',
+    neutral: 'text-white',
+  }
+
+  return (
+    <div>
+      <p className={`text-2xl font-semibold tabular-nums ${TONE_TEXT[tone]}`}>{value}</p>
+      <p className="text-sm text-white/60">{label}</p>
+    </div>
   )
 }
 
@@ -239,19 +492,18 @@ function RemoveClient({ client, projectCount }: RemoveClientProps) {
 
   return (
     <>
-      <Button
+      <IconButton
+        icon={Trash2}
+        label={
+          hasWork
+            ? 'They have work on, so removing them would take it with them.'
+            : `Remove ${client.name}`
+        }
         variant="danger"
-        leftIcon={Trash2}
+        size="sm"
         disabled={hasWork}
         onClick={dialog.open}
-      >
-        Remove client
-      </Button>
-      {hasWork && (
-        <p className="mt-2 text-sm text-white/60">
-          They have work on, so removing them would take it with them.
-        </p>
-      )}
+      />
 
       <ConfirmDialog
         isOpen={dialog.isOpen}

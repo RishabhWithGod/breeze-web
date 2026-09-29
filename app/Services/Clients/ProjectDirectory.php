@@ -21,7 +21,7 @@ class ProjectDirectory
     /** This manager's projects, with what a form fills in once one is picked. */
     public function options(User $user): Collection
     {
-        return Project::with(['addresses', 'clientRecord:id,name', 'selectedUpload', 'primaryUpload'])
+        return Project::with(['addresses', 'clientRecord:id,name,team_id', 'clientRecord.team:id,name', 'selectedUpload', 'primaryUpload'])
             ->where('user_id', $user->id)
             ->orderBy('name')
             ->get(['id', 'client_id', 'name', 'project_type', 'selected_upload_id'])
@@ -59,6 +59,14 @@ class ProjectDirectory
                     'longitude' => $address->longitude === null ? null : (float) $address->longitude,
                     'placeId' => $address->place_id,
                 ])->all(),
+                /*
+                 * The crew this project's client is normally staffed from —
+                 * so a job raised straight off a takeoff (no separate client
+                 * picker on that screen) can default to it the same way
+                 * Add Job does once its client is chosen.
+                 */
+                'clientTeamId' => $project->clientRecord?->team_id,
+                'clientTeamName' => $project->clientRecord?->team?->name,
             ]);
     }
 }

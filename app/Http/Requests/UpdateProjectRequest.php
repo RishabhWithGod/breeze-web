@@ -28,6 +28,13 @@ class UpdateProjectRequest extends FormRequest
             'name' => ['required', 'string', 'min:3', 'max:160'],
             // A project is always for somebody.
             'client_id' => ['required', 'integer', 'exists:clients,id'],
+            /*
+             * Who from the client's crew is staffed to it. Optional, and
+             * narrowed server-side to that client's own team — see
+             * ProjectController::update().
+             */
+            'member_ids' => ['nullable', 'array'],
+            'member_ids.*' => ['integer', 'exists:foremen,id'],
             'estimate_target_total' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             /*
              * More rate lists, folded into the ones the project already has —

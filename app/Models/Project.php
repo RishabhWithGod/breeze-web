@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -110,6 +111,16 @@ class Project extends Model
     }
 
     /**
+     * Who from the client's crew is staffed to this project.
+     *
+     * @return BelongsToMany<Foreman, $this>
+     */
+    public function members(): BelongsToMany
+    {
+        return $this->belongsToMany(Foreman::class, 'project_members')->withTimestamps();
+    }
+
+    /**
      * The sites available to this project — its client's whole book.
      *
      * A project and the job on it are at the same place, so the project does
@@ -147,6 +158,18 @@ class Project extends Model
     public function estimates(): HasMany
     {
         return $this->hasMany(Estimate::class, 'project_id')->latest('issued_on');
+    }
+
+    /** @return HasMany<Document, $this> */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
+
+    /** @return HasMany<Invoice, $this> */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
     }
 
     /** This project's own uploaded vendor rate lists — see `ProjectRateImport`. */

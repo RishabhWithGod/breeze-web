@@ -32,6 +32,7 @@ export interface ProjectListRow {
   readonly name: string
   /** The client's own project number, when they use one. */
   readonly code: string | null
+  readonly clientId: number
   readonly client: string
   readonly location: string | null
   readonly discipline: string
@@ -56,6 +57,29 @@ export interface ProjectRecord extends ProjectListRow {
   readonly completedAt: string | null
   /** Set once the AI engine has returned a result for this project. */
   readonly takeoffUrl: string | null
+  /** Same counts the Projects list shows for this project. */
+  readonly drawingCount: number
+  readonly takeoffCount: number
+  readonly estimateCount: number
+  readonly jobCount: number
+  readonly teamCount: number
+  readonly documentCount: number
+  readonly invoiceCount: number
+  /** Who from the client's crew is staffed to it. */
+  readonly members: readonly ProjectMemberRow[]
+}
+
+/** One crew member staffed to a project, as the project's own screen shows them. */
+export interface ProjectMemberRow {
+  readonly id: number
+  readonly name: string
+  readonly initials: string
+  /** 'foreman' | 'journeyman' | 'apprentice'. */
+  readonly role: string
+  /** "Foreman" / "Journeyman" / "Apprentice", as a screen writes it. */
+  readonly roleLabel: string
+  readonly phone: string | null
+  readonly email: string | null
 }
 
 /** Project timeline entries share the takeoff activity shape. */
@@ -142,6 +166,16 @@ export interface PlaceSelection {
   readonly placeId: string | null
 }
 
+/** One person on a client's crew, offered on the Add Project form to staff onto it. */
+export interface ClientTeamMemberOption {
+  readonly id: number
+  readonly name: string
+  /** 'foreman' | 'journeyman' | 'apprentice'. */
+  readonly role: string
+  /** "Foreman" / "Journeyman" / "Apprentice", as a screen writes it. */
+  readonly roleLabel: string
+}
+
 /**
  * A client, offered in the Client select on every intake form.
  *
@@ -152,6 +186,11 @@ export interface ClientOption {
   readonly id: number
   readonly name: string
   readonly addresses: readonly ClientAddressOption[]
+  /** The crew this client's projects are normally staffed from, when one has been picked. */
+  readonly teamId: number | null
+  readonly teamName: string | null
+  /** That crew's roster — who a project raised for this client can be staffed with. */
+  readonly teamMembers: readonly ClientTeamMemberOption[]
 }
 
 /**
@@ -174,6 +213,9 @@ export interface ProjectOption {
   readonly defaultUploadId: number | null
   /** The sites this project stands on. A job is at one of these. */
   readonly addresses: readonly ClientAddressOption[]
+  /** The crew this project's client is normally staffed from, when one has been picked. */
+  readonly clientTeamId: number | null
+  readonly clientTeamName: string | null
 }
 
 /**

@@ -93,9 +93,11 @@ interface CardHeaderProps {
   /** Right-aligned actions — buttons, filters, menus. */
   actions?: ReactNode
   className?: string
+  /** Overrides the title's default `text-xl font-semibold`. */
+  titleClassName?: string
 }
 
-export function CardHeader({ title, subtitle, actions, className }: CardHeaderProps) {
+export function CardHeader({ title, subtitle, actions, className, titleClassName }: CardHeaderProps) {
   return (
     <div
       className={cn(
@@ -104,7 +106,7 @@ export function CardHeader({ title, subtitle, actions, className }: CardHeaderPr
       )}
     >
       <div className="min-w-0">
-        <h3 className="text-xl font-semibold text-white">{title}</h3>
+        <h3 className={cn('text-xl font-semibold text-white', titleClassName)}>{title}</h3>
         {subtitle && <p className="mt-1 text-md text-white/85">{subtitle}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-3">{actions}</div>}

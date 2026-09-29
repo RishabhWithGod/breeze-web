@@ -34,6 +34,13 @@ class StoreProjectRequest extends FormRequest
             // A project is always for somebody.
             'client_id' => ['required', 'integer', 'exists:clients,id'],
             /*
+             * Who from the client's crew is staffed to it. Optional, and
+             * narrowed server-side to that client's own team — see
+             * ProjectController::store().
+             */
+            'member_ids' => ['nullable', 'array'],
+            'member_ids.*' => ['integer', 'exists:foremen,id'],
+            /*
              * No address here. A project and the job on it are at the same
              * place, and that place is in the client's address book — asking
              * again on this form would be a second copy free to drift.

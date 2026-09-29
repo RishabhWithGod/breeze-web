@@ -186,6 +186,11 @@ export default function FinalSymbols({
    */
   const draft = readJobDraft(result.id)
 
+  // This screen has no client picker of its own — the project is stated,
+  // not chosen — so everything the project's client answers is read off it
+  // once, here, rather than re-found by id on every field below.
+  const defaultProject = projects.find((option) => option.id === defaultProjectId)
+
   const jobForm = useForm<CreateJobForm>({
     name: draft?.name ?? result.job?.name ?? result.projectName,
     project_id: draft?.project_id ?? String(result.job?.projectId ?? defaultProjectId),
@@ -193,10 +198,7 @@ export default function FinalSymbols({
     address_ids:
       draft?.address_ids ??
       result.job?.addressIds.slice() ??
-      projects
-        .find((option) => option.id === defaultProjectId)
-        ?.addresses.filter((site) => site.isPrimary)
-        .map((site) => site.id) ??
+      defaultProject?.addresses.filter((site) => site.isPrimary).map((site) => site.id) ??
       [],
     description: draft?.description ?? result.job?.description ?? '',
     /*
@@ -204,13 +206,17 @@ export default function FinalSymbols({
      * is the building that decides the type, and a client can own a house and a
      * warehouse. Still a field: this site's usual type is not every job's.
      */
-    team_id: draft?.team_id ?? (result.job?.teamId ? String(result.job.teamId) : ''),
+    team_id:
+      draft?.team_id ??
+      (result.job?.teamId
+        ? String(result.job.teamId)
+        : defaultProject?.clientTeamId
+          ? String(defaultProject.clientTeamId)
+          : ''),
     job_type:
       draft?.job_type ??
       result.job?.jobType ??
-      projects
-        .find((option) => option.id === defaultProjectId)
-        ?.addresses.find((site) => site.isPrimary)?.siteType ??
+      defaultProject?.addresses.find((site) => site.isPrimary)?.siteType ??
       '',
     start_date: draft?.start_date ?? result.job?.startDate ?? '',
     end_date: draft?.end_date ?? result.job?.endDate ?? '',

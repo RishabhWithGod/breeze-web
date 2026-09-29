@@ -82,7 +82,7 @@ export function Table<T>({
                 key={column.key}
                 scope="col"
                 className={cn(
-                  'px-4 py-3 font-semibold text-white',
+                  'px-4 py-3 font-semibold whitespace-nowrap text-white',
                   isLined
                     ? 'border-b border-hairline-strong bg-ocean-600/35'
                     : 'bg-ocean-600/45 first:rounded-l-panel last:rounded-r-panel',

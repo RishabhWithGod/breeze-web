@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Head, Link, router } from '@inertiajs/react'
-import { Eye, FolderKanban, MapPin, Plus } from 'lucide-react'
+import { Eye, FolderKanban, Mail, MapPin, Phone, Plus, User } from 'lucide-react'
 import {
+  Badge,
   ButtonLink,
   Card,
   EmptyState,
@@ -16,6 +17,10 @@ import type { Paginated, TableColumn } from '@/types'
 interface ClientRow {
   readonly id: number
   readonly name: string
+  /** The client's primary contact, when one's been added. Falls back to the client's own name. */
+  readonly contactName: string | null
+  readonly contactEmail: string | null
+  readonly contactPhone: string | null
   readonly projectCount: number
   readonly siteCount: number
   readonly primarySite: string | null
@@ -72,18 +77,60 @@ export default function Clients({ clients, filters }: ClientsProps) {
       ),
     },
     {
+      key: 'contact',
+      header: 'Primary Contact',
+      width: 'w-56',
+      render: (row) => (
+        <div className="space-y-0.5 text-xs text-white/60">
+          <span className="flex items-center gap-1.5 truncate">
+            <User size={12} aria-hidden className="shrink-0" />
+            <span className="truncate">{row.contactName ?? row.name}</span>
+          </span>
+          <span className="flex items-center gap-1.5 truncate">
+            <Mail size={12} aria-hidden className="shrink-0" />
+            <span className="truncate">{row.contactEmail ?? 'N/A'}</span>
+          </span>
+          <span className="flex items-center gap-1.5 truncate">
+            <Phone size={12} aria-hidden className="shrink-0" />
+            <span className="truncate">{row.contactPhone ?? 'N/A'}</span>
+          </span>
+        </div>
+      ),
+    },
+    {
       key: 'projects',
       header: 'Projects',
       align: 'right',
-      width: 'w-28',
-      render: (row) => <span className="tabular-nums text-white/90">{row.projectCount}</span>,
+      width: 'w-24',
+      render: (row) => (
+        <span className="text-sm tabular-nums text-white/90">{row.projectCount}</span>
+      ),
     },
     {
       key: 'sites',
       header: 'Locations',
       align: 'right',
       width: 'w-24',
-      render: (row) => <span className="tabular-nums text-white/90">{row.siteCount}</span>,
+      render: (row) => (
+        <span className="text-sm tabular-nums text-white/90">{row.siteCount}</span>
+      ),
+    },
+    {
+      /*
+       * Not a real feature yet — there is nothing behind this column to
+       * report. Shown anyway, but plainly marked so it reads as "coming
+       * later" rather than as data nobody trusts.
+       */
+      key: 'commodityLists',
+      header: 'Commodity Lists',
+      width: 'w-44',
+      render: () => (
+        <span title="Commodity lists aren't tracked yet — coming soon">
+          <Badge tone="neutral" size="sm">
+            Not available yet
+          </Badge>
+        </span>
+      ),
     },
     {
       key: 'actions',
@@ -110,7 +157,7 @@ export default function Clients({ clients, filters }: ClientsProps) {
 
       <PageHeader
         title="Clients"
-        subtitle="Who the work is for. Each client's projects are what the work is."
+        subtitle="Manage your clients and their associated projects, estimates, and activity — All in one place."
         breadcrumbs={[{ label: 'Clients' }]}
         actions={
           <ButtonLink href={ROUTES.clientCreate} leftIcon={Plus}>
@@ -156,6 +203,7 @@ export default function Clients({ clients, filters }: ClientsProps) {
             rows={rows}
             getRowId={(row) => row.id}
             variant="lined"
+            dense
             caption="Clients on the register"
           />
         )}

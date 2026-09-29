@@ -4,8 +4,8 @@ import type { BreadcrumbItem } from '@/types'
 import { cn } from '@/utils'
 
 export interface PageHeaderProps {
-  title: string
-  subtitle?: string
+  title: ReactNode
+  subtitle?: ReactNode
   breadcrumbs?: readonly BreadcrumbItem[]
   actions?: ReactNode
   className?: string

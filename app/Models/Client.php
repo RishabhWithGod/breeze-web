@@ -20,7 +20,9 @@ class Client extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['user_id', 'name', 'notes', 'labor_rate'];
+    protected $fillable = [
+        'user_id', 'team_id', 'name', 'website', 'notes', 'labor_rate',
+    ];
 
     protected function casts(): array
     {
@@ -44,6 +46,12 @@ class Client extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /** The crew this client's projects are normally staffed from, when one has been picked. */
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
     }
 
     /** @return HasMany<Project, $this> */
@@ -72,6 +80,28 @@ class Client extends Model
     public function primaryAddress(): HasOne
     {
         return $this->hasOne(ClientAddress::class)->ofMany([
+            'is_primary' => 'max',
+            'id' => 'min',
+        ]);
+    }
+
+    /**
+     * Everyone at this client worth calling, in the order they were added.
+     *
+     * @return HasMany<ClientContact, $this>
+     */
+    public function contacts(): HasMany
+    {
+        return $this->hasMany(ClientContact::class)
+            ->orderByDesc('is_primary')
+            ->orderBy('position')
+            ->orderBy('id');
+    }
+
+    /** The one a form defaults to, and the one shown in lists. */
+    public function primaryContact(): HasOne
+    {
+        return $this->hasOne(ClientContact::class)->ofMany([
             'is_primary' => 'max',
             'id' => 'min',
         ]);

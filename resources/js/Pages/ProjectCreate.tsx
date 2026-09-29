@@ -14,6 +14,7 @@ import {
   TextInput,
   UnfinishedTakeoffNotice,
 } from '@/components/common'
+import { ProjectMemberPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { ClientOption, ResumableTakeoff } from '@/types'
@@ -23,6 +24,7 @@ interface ProjectDraft {
   client_id: string
   name: string
   estimate_target_total: string
+  member_ids: string[]
   vendor_rate_list: File[]
 }
 
@@ -54,6 +56,7 @@ export default function ProjectCreate({
       client_id: defaultClientId === null ? '' : String(defaultClientId),
       name: '',
       estimate_target_total: '',
+      member_ids: [],
       vendor_rate_list: [],
     })
 
@@ -70,7 +73,10 @@ export default function ProjectCreate({
     if (errors[field]) clearErrors(field)
   }
 
-  const selectClient = (clientId: string) => update('client_id', clientId)
+  const selectClient = (clientId: string) => {
+    setData((current) => ({ ...current, client_id: clientId, member_ids: [] }))
+    if (errors.client_id) clearErrors('client_id')
+  }
 
   const selectedClient = clients.find((option) => String(option.id) === data.client_id)
   const primarySite = selectedClient?.addresses.find((site) => site.isPrimary)
@@ -292,6 +298,22 @@ export default function ProjectCreate({
                   )}
                 </span>
               </div>
+            )}
+
+            {/*
+              Who from the client's own crew works this project. Offered only
+              once a client is picked — the roster is theirs, not a blank
+              choice of everyone on the register.
+            */}
+            {selectedClient && (
+              <ProjectMemberPicker
+                teamId={selectedClient.teamId}
+                teamName={selectedClient.teamName}
+                members={selectedClient.teamMembers}
+                value={data.member_ids}
+                onChange={(ids) => update('member_ids', ids)}
+                disabled={processing}
+              />
             )}
 
           </div>

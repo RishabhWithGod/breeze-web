@@ -102,7 +102,15 @@ class JobTaskController extends Controller
                 'position' => (int) $schedule->tasks()->max('position') + 1,
             ]);
 
-            $this->builder->realignWindow($schedule);
+            // Dates only where none were typed — an explicit `starts_on`/
+            // `ends_on` above stands, this only fills what was left blank —
+            // plus the dependency chain and the schedule's own window.
+            $this->builder->scheduleTasks($schedule);
+
+            // And booked onto the crew calendar for those same days, so the
+            // job does not sit in the unassigned queue waiting for someone
+            // to come back and book it by hand.
+            $this->builder->bookCrew($job, $schedule);
 
             return $task;
         });

@@ -122,6 +122,10 @@ export const routeTo = {
   clientAddresses: (clientId: number) => `/clients/${clientId}/addresses`,
   clientAddress: (clientId: number, addressId: number) =>
     `/clients/${clientId}/addresses/${addressId}`,
+  /** Adds a person to a client's own book. */
+  clientContacts: (clientId: number) => `/clients/${clientId}/contacts`,
+  clientContact: (clientId: number, contactId: number) =>
+    `/clients/${clientId}/contacts/${contactId}`,
   /** The step after Create Job: laying the job out in tasks. */
   jobTaskSetup: (jobId: number) => `/jobs/${jobId}/tasks/setup`,
   /*

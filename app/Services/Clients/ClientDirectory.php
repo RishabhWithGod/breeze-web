@@ -28,10 +28,10 @@ class ClientDirectory
      */
     public function options(User $user): Collection
     {
-        return Client::with('addresses')
+        return Client::with(['addresses', 'team.members'])
             ->where('user_id', $user->id)
             ->orderBy('name')
-            ->get(['id', 'name'])
+            ->get(['id', 'name', 'team_id'])
             ->map(fn (Client $client) => [
                 'id' => $client->id,
                 'name' => $client->name,
@@ -50,6 +50,19 @@ class ClientDirectory
                     'latitude' => $address->latitude === null ? null : (float) $address->latitude,
                     'longitude' => $address->longitude === null ? null : (float) $address->longitude,
                     'placeId' => $address->place_id,
+                ])->all(),
+                'teamId' => $client->team_id,
+                'teamName' => $client->team?->name,
+                /*
+                 * This client's crew, roster-first — a project raised for them
+                 * is offered these people to staff, each with the role they
+                 * already carry on the register rather than asking again.
+                 */
+                'teamMembers' => ($client->team?->members ?? collect())->map(fn ($member) => [
+                    'id' => $member->id,
+                    'name' => $member->name,
+                    'role' => $member->role,
+                    'roleLabel' => $member->roleLabel(),
                 ])->all(),
             ]);
     }

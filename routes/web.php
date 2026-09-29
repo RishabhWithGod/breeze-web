@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\BreezeBucksController;
 use App\Http\Controllers\ClientAddressController;
+use App\Http\Controllers\ClientContactController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
@@ -244,6 +245,14 @@ Route::middleware('auth')->group(function () {
         ->name('clients.addresses.update');
     Route::delete('clients/{client}/addresses/{address}', [ClientAddressController::class, 'destroy'])
         ->name('clients.addresses.destroy');
+    // The client's own people — as many as they have, added from their own
+    // screen.
+    Route::post('clients/{client}/contacts', [ClientContactController::class, 'store'])
+        ->name('clients.contacts.store');
+    Route::put('clients/{client}/contacts/{contact}', [ClientContactController::class, 'update'])
+        ->name('clients.contacts.update');
+    Route::delete('clients/{client}/contacts/{contact}', [ClientContactController::class, 'destroy'])
+        ->name('clients.contacts.destroy');
     Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 
     // Starts the first AI takeoff run against the project's drawing already on

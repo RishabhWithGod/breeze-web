@@ -4,7 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\ClientAddress;
+use App\Models\Invoice;
+use App\Models\ProjectActivity;
+use App\Models\Team;
+use App\Rules\UsPhoneNumber;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\UsPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -32,7 +37,7 @@ class ClientController extends Controller
             ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%"))
             // What the list is for: who has work on, and where.
             ->withCount(['projects', 'addresses'])
-            ->with('primaryAddress')
+            ->with(['primaryAddress', 'primaryContact'])
             /*
              * Most recently touched first. `User::clients()` orders by name,
              * which is a fine way to look someone up and a poor way to find
@@ -46,6 +51,9 @@ class ClientController extends Controller
             ->through(fn (Client $client) => [
                 'id' => $client->id,
                 'name' => $client->name,
+                'contactName' => $client->primaryContact?->name,
+                'contactEmail' => $client->primaryContact?->email,
+                'contactPhone' => $client->primaryContact?->phone,
                 'projectCount' => $client->projects_count,
                 'siteCount' => $client->addresses_count,
                 'primarySite' => $client->primaryAddress?->display(),
@@ -72,6 +80,10 @@ class ClientController extends Controller
             // shown as a real number rather than an empty box, so leaving it
             // alone is a decision rather than an oversight.
             'defaultLaborRate' => (float) config('ai.estimating.labor_rate'),
+            // The crew register, for the "which team normally works this
+            // client's sites" picker — with a way to add one inline, the same
+            // as a job's own team picker.
+            'teams' => Team::query()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -81,11 +93,14 @@ class ClientController extends Controller
 
         $client = $request->user()->clients()->create([
             'name' => $data['name'],
+            'website' => $this->normalizeWebsite($data['website'] ?? null),
             'notes' => $this->orNull($data['notes'] ?? null),
             'labor_rate' => $data['labor_rate'] ?? null,
+            'team_id' => $data['team_id'] ?? null,
         ]);
 
         $this->writeAddresses($client, $data['addresses'] ?? []);
+        $this->writePrimaryContact($client, $data['contact_email'] ?? null, $data['contact_phone'] ?? null);
 
         /*
          * Straight on to the project form, with the client already filled in.
@@ -106,15 +121,36 @@ class ClientController extends Controller
             // The count is what lets the screen grey out a site it cannot
             // remove, instead of offering the button and refusing afterwards.
             'addresses' => fn ($query) => $query->withCount('jobs'),
+            'contacts',
             'projects' => fn ($query) => $query->withCount(['uploads', 'aiResults']),
         ]);
+
+        $projectCounts = $client->projects->countBy('status');
+        $completedProjects = $projectCounts->get('completed', 0) + $projectCounts->get('converted', 0);
+        $failedProjects = $projectCounts->get('failed', 0);
+        $primaryContact = $client->contacts->firstWhere('is_primary', true);
 
         return Inertia::render('ClientShow', [
             'client' => [
                 'id' => $client->id,
                 'name' => $client->name,
+                'website' => $client->website,
+                // The client's own line — its primary contact's, read here
+                // too so the Client Information card doesn't send the reader
+                // to the Contacts card just to see it.
+                'contactEmail' => $primaryContact?->email,
+                'contactPhone' => $primaryContact?->phone,
                 'notes' => $client->notes,
                 'createdAt' => $client->created_at?->toISOString(),
+                'contacts' => $client->contacts->map(fn ($contact) => [
+                    'id' => $contact->id,
+                    'name' => $contact->name,
+                    'initials' => $contact->initials(),
+                    'role' => $contact->role,
+                    'email' => $contact->email,
+                    'phone' => $contact->phone,
+                    'isPrimary' => $contact->is_primary,
+                ])->values(),
                 'addresses' => $client->addresses->map(fn ($address) => [
                     'id' => $address->id,
                     'label' => $address->label,
@@ -145,6 +181,45 @@ class ClientController extends Controller
                 'takeoffCount' => $project->ai_results_count,
                 'createdAt' => $project->created_at?->toISOString(),
             ])->values(),
+            /*
+             * At-a-glance counts, over and above the list above. "Active" is
+             * everything not finished and not failed — there is no "on hold"
+             * status on a project today, so that tile always reads zero
+             * rather than a guess.
+             */
+            'projectSummary' => [
+                'total' => $client->projects->count(),
+                'active' => $client->projects->count() - $completedProjects - $failedProjects,
+                'completed' => $completedProjects,
+                'onHold' => 0,
+            ],
+            /*
+             * Every invoice raised against this client, whatever project or
+             * job it came off — a sent-or-paid one's `total - paid_amount`.
+             * A draft has not been asked for yet, so it owes nothing.
+             */
+            'outstandingBalance' => (float) Invoice::where('client_id', $client->id)
+                ->where('status', '!=', Invoice::STATUS_DRAFT)
+                ->get()
+                ->sum(fn (Invoice $invoice) => $invoice->outstanding()),
+            /*
+             * What has actually happened, read off the client's own projects
+             * — the only place an event like this is recorded today. Other
+             * things worth knowing about a client (an invoice raised, an
+             * estimate sent) aren't logged anywhere yet, so they don't
+             * appear here rather than being guessed at.
+             */
+            'activity' => ProjectActivity::whereIn('project_id', $client->projects->pluck('id'))
+                ->latest('occurred_at')
+                ->take(10)
+                ->get()
+                ->map(fn (ProjectActivity $entry) => [
+                    'id' => $entry->id,
+                    'title' => $entry->title,
+                    'description' => $entry->description,
+                    'tone' => $entry->tone,
+                    'occurredAt' => $entry->occurred_at?->toISOString(),
+                ])->values(),
         ]);
     }
 
@@ -155,16 +230,30 @@ class ClientController extends Controller
         // The count is what lets the screen grey out a site it cannot
         // remove, instead of offering the button and refusing afterwards —
         // same as the client's own screen (`show()`, below).
-        $client->load(['addresses' => fn ($query) => $query->withCount('jobs')]);
+        $client->load(['addresses' => fn ($query) => $query->withCount('jobs'), 'contacts']);
+        $primaryContact = $client->contacts->firstWhere('is_primary', true);
 
         return Inertia::render('ClientEdit', [
             'client' => [
                 'id' => $client->id,
                 'name' => $client->name,
+                'website' => $client->website,
+                'contactEmail' => $primaryContact?->email,
+                'contactPhone' => $primaryContact?->phone,
                 'notes' => $client->notes,
                 // Resolved, not raw: a client that has never set its own
                 // rate shows the configured default rather than a blank box.
                 'laborRate' => $client->effectiveLaborRate(),
+                'teamId' => $client->team_id,
+                'contacts' => $client->contacts->map(fn ($contact) => [
+                    'id' => $contact->id,
+                    'name' => $contact->name,
+                    'initials' => $contact->initials(),
+                    'role' => $contact->role,
+                    'email' => $contact->email,
+                    'phone' => $contact->phone,
+                    'isPrimary' => $contact->is_primary,
+                ])->values(),
                 'addresses' => $client->addresses->map(fn ($address) => [
                     'id' => $address->id,
                     'label' => $address->label,
@@ -180,6 +269,9 @@ class ClientController extends Controller
                     'jobCount' => $address->jobs_count,
                 ])->values(),
             ],
+            // The crew register, for the same "which team works this
+            // client's sites" picker Add Client offers.
+            'teams' => Team::query()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -191,9 +283,13 @@ class ClientController extends Controller
 
         $client->update([
             'name' => $data['name'],
+            'website' => $this->normalizeWebsite($data['website'] ?? null),
             'notes' => $this->orNull($data['notes'] ?? null),
             'labor_rate' => $data['labor_rate'] ?? null,
+            'team_id' => $data['team_id'] ?? null,
         ]);
+
+        $this->writePrimaryContact($client, $data['contact_email'] ?? null, $data['contact_phone'] ?? null);
 
         return redirect()
             ->route('clients.show', $client)
@@ -249,6 +345,18 @@ class ClientController extends Controller
                     ->where('user_id', $request->user()->id)
                     ->ignore($client),
             ],
+            /*
+             * Where to look them up online. Optional — not every client has
+             * a site worth linking.
+             */
+            'website' => ['nullable', 'string', 'max:255'],
+            /*
+             * A quick way in to their primary contact — the one on the
+             * Contacts card that's flagged primary — without opening it.
+             * Both optional, same as everything else about a contact.
+             */
+            'contact_email' => ['nullable', 'email', 'max:255'],
+            'contact_phone' => ['nullable', 'string', 'max:40', new UsPhoneNumber],
             'notes' => ['nullable', 'string', 'max:2000'],
             /*
              * What an hour of this client's labor is billed at. Optional —
@@ -257,6 +365,12 @@ class ClientController extends Controller
              * labor line from here on.
              */
             'labor_rate' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
+            /*
+             * The crew this client's projects are normally staffed from.
+             * Optional — a client can be on the register before anyone
+             * decides who works their sites.
+             */
+            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
             /*
              * The address book, filled in as the client is opened. It can be
              * empty — a client can be on the register before anyone knows where
@@ -288,6 +402,7 @@ class ClientController extends Controller
         ], [
             'name.required' => 'Client name is required',
             'name.unique' => 'A client with that name is already on the register',
+            'contact_email.email' => 'That does not look like an email address',
             'labor_rate.numeric' => 'Enter a valid hourly rate',
             'labor_rate.min' => 'Rate cannot be negative',
             'addresses.*.label.required' => 'Name this site, or remove the row.',
@@ -313,12 +428,64 @@ class ClientController extends Controller
         }
     }
 
+    /**
+     * The quick email/phone fields on the client's own form, written onto
+     * their primary contact rather than the client itself — the Contacts
+     * card is the real record of who these belong to, this is just the fast
+     * way to set them without opening it.
+     *
+     * A client with no contact yet gets one, named after the client itself,
+     * the moment either field is filled in — the same way the first address
+     * given becomes the primary site.
+     */
+    private function writePrimaryContact(Client $client, ?string $email, ?string $phone): void
+    {
+        $email = $this->orNull($email);
+        $phone = UsPhone::format($this->orNull($phone));
+
+        $primary = $client->contacts()->where('is_primary', true)->first();
+
+        if ($primary !== null) {
+            $primary->update(['email' => $email, 'phone' => $phone]);
+
+            return;
+        }
+
+        if ($email === null && $phone === null) {
+            return;
+        }
+
+        $client->contacts()->create([
+            'name' => $client->name,
+            'email' => $email,
+            'phone' => $phone,
+            'is_primary' => true,
+            'position' => 0,
+        ]);
+    }
+
     /** An untyped optional field is nothing, not an empty string. */
     private function orNull(?string $value): ?string
     {
         $trimmed = trim((string) $value);
 
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    /**
+     * "coldbar.com" and "https://coldbar.com" are the same address typed two
+     * ways — stored with a scheme so the link on the client's own screen
+     * actually goes somewhere instead of resolving against this app's host.
+     */
+    private function normalizeWebsite(?string $value): ?string
+    {
+        $trimmed = $this->orNull($value);
+
+        if ($trimmed === null) {
+            return null;
+        }
+
+        return str_contains($trimmed, '://') ? $trimmed : "https://{$trimmed}";
     }
 
     private function authoriseOwner(Request $request, Client $client): void

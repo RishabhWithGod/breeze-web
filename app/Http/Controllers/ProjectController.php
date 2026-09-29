@@ -8,6 +8,7 @@ use App\Http\Resources\ProjectDocumentResource;
 use App\Http\Resources\ProjectListResource;
 use App\Models\Client;
 use App\Models\FeedItem;
+use App\Models\Foreman;
 use App\Models\Project;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
@@ -66,7 +67,7 @@ class ProjectController extends Controller
             ->with([
                 // Newest or most recently changed first, within each client.
                 'projects' => fn ($query) => $matching($query)
-                    ->withCount(['uploads', 'aiResults'])
+                    ->withCount(['uploads', 'aiResults', 'estimates', 'jobs', 'members', 'documents', 'invoices'])
                     ->reorder()
                     ->latest('updated_at')
                     ->latest('id'),
@@ -86,8 +87,14 @@ class ProjectController extends Controller
                     'code' => $project->code,
                     'status' => $project->status,
                     'projectType' => $project->project_type,
+                    'location' => $project->location,
                     'drawingCount' => $project->uploads_count,
                     'takeoffCount' => $project->ai_results_count,
+                    'estimateCount' => $project->estimates_count,
+                    'jobCount' => $project->jobs_count,
+                    'teamCount' => $project->members_count,
+                    'documentCount' => $project->documents_count,
+                    'invoiceCount' => $project->invoices_count,
                     'createdAt' => $project->created_at?->toISOString(),
                 ])->values(),
             ]);
@@ -98,6 +105,9 @@ class ProjectController extends Controller
             'clients' => JsonResource::collection($clients),
             'filters' => ['search' => $search, 'status' => $status],
             'statuses' => Project::STATUSES,
+            // Across every client, not just the page shown — the footer counts
+            // the whole (filtered) set, not what happened to render.
+            'totalProjects' => Project::ownedBy($request->user())->when($narrowed, $matching)->count(),
         ]);
     }
 
@@ -161,6 +171,20 @@ class ProjectController extends Controller
             'review_status' => 'none',
             'estimate_target_total' => $data['estimate_target_total'] ?? null,
         ]);
+
+        /*
+         * Staffed only from the client's own crew — never trusting whatever
+         * ids the form posted, in case the client was switched after the
+         * roster was drawn from a different one.
+         */
+        if ($client->team_id !== null) {
+            $project->members()->sync(
+                Foreman::query()
+                    ->where('team_id', $client->team_id)
+                    ->whereIn('id', $data['member_ids'] ?? [])
+                    ->pluck('id'),
+            );
+        }
 
         // The takeoff starts here: this project's drawing is the next step, and
         // the resume button follows it until its job has tasks.
@@ -240,12 +264,24 @@ class ProjectController extends Controller
     {
         $this->authorize('view', $project);
 
-        $project->loadCount('uploads');
+        $project->loadCount(['uploads', 'aiResults', 'estimates', 'jobs', 'members', 'documents', 'invoices']);
+        $project->load('members');
         $documents = $project->uploads()->oldest()->get();
 
         return Inertia::render('ProjectShow', [
             'project' => [
                 ...ProjectListResource::make($project)->resolve($request),
+                // Who from the client's crew is staffed to it — same roster
+                // Edit Project's picker staffs from.
+                'members' => $project->members->map(fn (Foreman $member) => [
+                    'id' => $member->id,
+                    'name' => $member->name,
+                    'initials' => $member->initials,
+                    'role' => $member->role,
+                    'roleLabel' => $member->roleLabel(),
+                    'phone' => $member->phone,
+                    'email' => $member->email,
+                ])->values(),
                 'notes' => $project->notes,
                 'drawingName' => $project->drawing_name,
                 // Which drawing the next takeoff runs against. Falls back to
@@ -259,6 +295,15 @@ class ProjectController extends Controller
                 'takeoffUrl' => $project->aiResults()->exists()
                     ? route('drawings.show', $project)
                     : null,
+                // Same counts the Projects list shows for this project, so
+                // nothing on record there goes missing here.
+                'drawingCount' => $project->uploads_count,
+                'takeoffCount' => $project->ai_results_count,
+                'estimateCount' => $project->estimates_count,
+                'jobCount' => $project->jobs_count,
+                'teamCount' => $project->members_count,
+                'documentCount' => $project->documents_count,
+                'invoiceCount' => $project->invoices_count,
             ],
             'documents' => ProjectDocumentResource::collection($documents)->resolve($request),
         ]);
@@ -278,6 +323,8 @@ class ProjectController extends Controller
                 'name' => $project->name,
                 'clientId' => $project->client_id,
                 'estimateTargetTotal' => $project->estimate_target_total,
+                // Who from the client's crew is already staffed to it.
+                'memberIds' => $project->members->pluck('id'),
             ],
             'clients' => $this->clients->options($request->user()),
         ]);
@@ -311,6 +358,20 @@ class ProjectController extends Controller
             'place_id' => $site?->place_id,
             'estimate_target_total' => $data['estimate_target_total'] ?? null,
         ]);
+
+        /*
+         * Re-scoped to whatever client this project now belongs to — a
+         * member kept from before an edit that switched clients would be
+         * someone off the new client's own crew.
+         */
+        $project->members()->sync(
+            $client->team_id === null
+                ? []
+                : Foreman::query()
+                    ->where('team_id', $client->team_id)
+                    ->whereIn('id', $data['member_ids'] ?? [])
+                    ->pluck('id'),
+        );
 
         $flash = ['success' => "“{$project->name}” was updated."];
 
