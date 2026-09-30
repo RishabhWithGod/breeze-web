@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Services\Takeoff\EstimateBuilder;
+use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -65,7 +66,7 @@ class EstimateController extends Controller
      */
     public function show(Request $request, Estimate $estimate): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $estimate->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $estimate->user_id), 403);
 
         $estimate->load([
             'items' => fn ($query) => $query->orderBy('category')->orderBy('position'),
@@ -199,7 +200,7 @@ class EstimateController extends Controller
      */
     public function update(Request $request, Estimate $estimate): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $estimate->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $estimate->user_id), 403);
 
         $validated = $request->validate([
             'status' => ['required', Rule::in(Estimate::STATUSES)],
@@ -225,7 +226,7 @@ class EstimateController extends Controller
     /** `POST /estimates/{estimate}/items` — a manual line, same fields web's form takes. */
     public function storeItem(Request $request, Estimate $estimate): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $estimate->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $estimate->user_id), 403);
 
         $validated = $this->validatedItem($request);
 
@@ -249,7 +250,7 @@ class EstimateController extends Controller
 
     public function updateItem(Request $request, Estimate $estimate, EstimateItem $item): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $estimate->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $estimate->user_id), 403);
         abort_unless($item->estimate_id === $estimate->id, 404);
 
         $validated = $this->validatedItem($request);
@@ -271,7 +272,7 @@ class EstimateController extends Controller
 
     public function destroyItem(Request $request, Estimate $estimate, EstimateItem $item): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $estimate->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $estimate->user_id), 403);
         abort_unless($item->estimate_id === $estimate->id, 404);
 
         $description = $item->description;

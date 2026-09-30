@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { usePage } from '@inertiajs/react'
+import { AccessNotice } from './AccessNotice'
 import { Footer } from './Footer'
 import { Navbar } from './Navbar'
 import { RealtimeUserSync } from './RealtimeUserSync'
@@ -19,6 +20,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh pt-navbar">
       <RealtimeUserSync />
+      <AccessNotice />
       <Navbar />
       <Sidebar />
 

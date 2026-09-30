@@ -11,6 +11,7 @@ use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\JobTask;
 use App\Models\Project;
+use App\Models\Team;
 use App\Models\Upload;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -1246,5 +1247,44 @@ class JobTaskSetupTest extends TestCase
         $this->assertNull($labour->refresh()->job_task_id);
         $this->assertNull($material->refresh()->job_task_id);
         $this->assertSame($task->id, $secondLabour->refresh()->job_task_id);
+    }
+
+    public function test_someone_added_from_the_task_screen_is_offered_in_its_dropdowns(): void
+    {
+        $team = Team::create(['name' => 'North Crew']);
+        $this->job->forceFill(['team_id' => $team->id])->save();
+        $existing = Foreman::create(['name' => 'Pat Lin', 'initials' => 'PL', 'role' => Foreman::ROLE_JOURNEYMAN, 'team_id' => $team->id]);
+        // The project has people staffed to it, so the dropdowns are narrowed to them.
+        $this->job->project->members()->attach($existing->id);
+
+        $this->actingAs($this->user)->get(route('jobs.tasks.setup', $this->job))
+            ->assertInertia(fn (Assert $page) => $page->has('foremen', 1));
+
+        foreach ([['Sam Ortiz', 'sam@mailinator.com', Foreman::ROLE_JOURNEYMAN], ['Lee Cho', 'lee@mailinator.com', Foreman::ROLE_FOREMAN]] as [$name, $email, $role]) {
+            $this->actingAs($this->user)->post("/foremen?job={$this->job->id}", [
+                'name' => $name, 'email' => $email, 'role' => $role, 'team_id' => $team->id,
+                'password' => 'Str0ng-pass!9', 'password_confirmation' => 'Str0ng-pass!9',
+            ])->assertRedirect(route('jobs.tasks.setup', $this->job));
+        }
+
+        $this->actingAs($this->user)->get(route('jobs.tasks.setup', $this->job))->assertInertia(fn (Assert $page) => $page
+            ->has('foremen', 2)->where('foremen.1.name', 'Sam Ortiz')
+            ->has('supervisors', 1)->where('supervisors.0.name', 'Lee Cho'));
+
+        // Someone who joined the crew after the job was raised is offered however they were added.
+        $this->travel(1)->minutes();
+        Foreman::create(['name' => 'Jo Late', 'initials' => 'JL', 'role' => Foreman::ROLE_FOREMAN, 'team_id' => $team->id]);
+        Foreman::create(['name' => 'Other Crew', 'initials' => 'OC', 'role' => Foreman::ROLE_FOREMAN, 'team_id' => Team::create(['name' => 'South Crew'])->id]);
+        $this->actingAs($this->user)->get(route('jobs.tasks.setup', $this->job))->assertInertia(fn (Assert $page) => $page
+            ->has('supervisors', 2)->where('supervisors.1.name', 'Lee Cho'));
+
+        // A project nobody was staffed to is left as it was: it offers the whole crew anyway.
+        $bare = $this->user->projects()->create(['name' => 'Bare', 'client' => 'Bare', 'status' => 'draft']);
+        $job = Job::create(['project_id' => $bare->id, 'team_id' => $team->id, 'name' => 'Bare job', 'client' => 'Bare', 'status' => 'planning']);
+        $this->actingAs($this->user)->post("/foremen?job={$job->id}", [
+            'name' => 'Kim Ray', 'email' => 'kim@mailinator.com', 'role' => Foreman::ROLE_JOURNEYMAN, 'team_id' => $team->id,
+            'password' => 'Str0ng-pass!9', 'password_confirmation' => 'Str0ng-pass!9',
+        ]);
+        $this->assertSame(0, $bare->members()->count());
     }
 }

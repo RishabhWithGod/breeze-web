@@ -63,7 +63,9 @@ export function Card({
     <motion.div
       initial={animated ? { opacity: 0, y: 18 } : false}
       whileInView={animated ? { opacity: 1, y: 0 } : undefined}
-      viewport={{ once: true, amount: 0.15 }}
+      // Any part of it in view: a card taller than the window (a long table) never has 15% of
+      // itself on screen, and stayed blank until the page was scrolled.
+      viewport={{ once: true, amount: 'some' }}
       transition={{
         duration: MOTION.slow,
         delay: index * MOTION.stagger,

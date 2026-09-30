@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Ownership;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -62,6 +63,9 @@ class Estimate extends Model
         'tax_total',
         'grand_total',
         'notes',
+        'scope_of_work',
+        'exclusions',
+        'review_notes',
         'builder_managed',
         'takeoff_source_estimate_id',
         'commodity_version',
@@ -83,6 +87,9 @@ class Estimate extends Model
             'tax_total' => 'decimal:2',
             'grand_total' => 'decimal:2',
             'converted_at' => 'datetime',
+            'exclusions' => 'array',
+            'approved_at' => 'datetime',
+            'reviewed_at' => 'datetime',
             'builder_managed' => 'boolean',
             'builder_labor_rate' => 'decimal:2',
         ];
@@ -200,7 +207,7 @@ class Estimate extends Model
     /** Only this manager's own estimates. */
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
-        return $query->whereIn($query->qualifyColumn('user_id'), \App\Support\Ownership::userIds($user));
+        return $query->whereIn($query->qualifyColumn('user_id'), Ownership::userIds($user));
     }
 
     /** @return BelongsTo<AiResult, $this> */
@@ -281,6 +288,24 @@ class Estimate extends Model
         ]);
     }
 
+    /** @return HasMany<EstimateRevision, $this> */
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(EstimateRevision::class)->orderByDesc('version');
+    }
+
+    /** Who approved it. */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /** Who made the last decision on it. */
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
     /** The takeoff this estimate's builder lines were copied from, when they were. */
     public function takeoffSource(): BelongsTo
     {
@@ -357,7 +382,7 @@ class Estimate extends Model
         // otherwise the number itself said how many estimates every other
         // manager in the system had ever written.
         $highest = (int) static::withTrashed()
-            ->whereIn('user_id', \App\Support\Ownership::userIds($user))
+            ->whereIn('user_id', Ownership::userIds($user))
             ->selectRaw("MAX(CAST(SUBSTR(number, 5) AS {$integerType})) AS seq")
             ->value('seq');
 

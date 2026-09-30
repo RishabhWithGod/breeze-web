@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Rules\UsPhoneNumber;
 use App\Services\BreezeBucks\BreezeBucksLedger;
 use App\Services\TimeTracking\TeamMemberResolver;
+use App\Support\CompanyRule;
 use App\Support\UsPhone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -255,7 +256,7 @@ class TeamController extends Controller
         abort_unless($this->canManage($request->user()), 403);
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'min:2', 'max:120', \App\Support\CompanyRule::unique('teams', 'name')],
+            'name' => ['required', 'string', 'min:2', 'max:120', CompanyRule::unique('teams', 'name')],
         ], [
             'name.required' => 'Name this team',
             'name.unique' => 'A team with that name already exists',
@@ -303,10 +304,10 @@ class TeamController extends Controller
         return $request->validate([
             'name' => [
                 'required', 'string', 'min:2', 'max:120',
-                \App\Support\CompanyRule::unique('foremen', 'name')->ignore($member),
+                CompanyRule::unique('foremen', 'name')->ignore($member),
             ],
             'role' => ['required', Rule::in(Foreman::ROLES)],
-            'team_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             'phone' => ['nullable', 'string', 'max:40', new UsPhoneNumber],
             'email' => $isCreate
                 ? ['required', 'email', 'max:255', Rule::unique('users', 'email')]

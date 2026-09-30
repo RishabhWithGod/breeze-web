@@ -124,10 +124,16 @@ class PriceBookImporter
                 'unit' => $group->unit,
             ]);
 
+            // A rate somebody set by hand keeps its wording and category too.
+            if (! $item->is_pinned) {
+                $item->fill([
+                    'description' => mb_substr((string) $group->description, 0, 255),
+                    'section' => $group->section,
+                    'subsection' => $group->subsection,
+                ]);
+            }
+
             $item->fill([
-                'description' => mb_substr((string) $group->description, 0, 255),
-                'section' => $group->section,
-                'subsection' => $group->subsection,
                 'sample_count' => (int) $group->samples,
                 'min_material_cost' => $costs->min(),
                 'max_material_cost' => $costs->max(),

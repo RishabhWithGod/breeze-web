@@ -148,7 +148,7 @@ class AttendanceController extends Controller
             ->where('job_id', $job->id)
             ->where('user_id', $request->user()->id)
             ->where('date', $today)
-            ->first() ?? new JobAttendance();
+            ->first() ?? new JobAttendance;
 
         // Already checked in — 200 with the existing record, not a 422 or a
         // second row. A check-in queued offline may reach the server twice.

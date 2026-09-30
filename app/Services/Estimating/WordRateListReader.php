@@ -50,6 +50,22 @@ class WordRateListReader
         return $this->workbook->fromGrids($rows, $rows);
     }
 
+    /**
+     * Every table in the document as rows of cells, for readers that want the cells rather than a rate list.
+     *
+     * @return array<int, array<int, mixed>>
+     */
+    public function grid(SplFileInfo $file, string $extension): array
+    {
+        $readerName = self::READERS[mb_strtolower($extension)] ?? null;
+
+        if ($readerName === null) {
+            throw new RuntimeException("Don't know how to read a \".{$extension}\" file.");
+        }
+
+        return $this->rows($file, $readerName);
+    }
+
     /** @return array<int, array<int, mixed>> */
     private function rows(SplFileInfo $file, string $readerName): array
     {

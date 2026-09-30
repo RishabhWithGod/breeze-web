@@ -40,7 +40,7 @@ import {
   type InvoiceSort,
   type InvoiceStatusFilter,
 } from '@/constants'
-import { useDisclosure } from '@/hooks'
+import { useDisclosure, usePermissions } from '@/hooks'
 import type {
   Invoice,
   InvoiceAbilities,
@@ -83,6 +83,7 @@ export interface InvoicesProps {
  * key figures (outstanding, overdue, paid, days to pay) above it from real payment data.
  */
 export default function Invoices({ invoices, filters, clients, jobs, summary, can }: InvoicesProps) {
+  const { can: permitted } = usePermissions()
   const { flash } = usePage<SharedPageProps>().props
 
   const [query, setQuery] = useState(filters.search)
@@ -305,7 +306,7 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
           >
             Filters
           </Button>
-          {can.create && (
+          {can.create && permitted('billing.create') && (
             <ButtonLink href={ROUTES.invoiceCreate} variant="secondary" leftIcon={Plus}>
               Create Invoice
             </ButtonLink>

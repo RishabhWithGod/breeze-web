@@ -17,6 +17,7 @@ use App\Models\Job;
 use App\Models\PanelSchedule;
 use App\Models\Project;
 use App\Models\SymbolReview;
+use App\Models\Upload;
 use App\Models\WireSize;
 use App\Services\Ai\ArtefactStore;
 use App\Services\Clients\ClientDirectory;
@@ -25,6 +26,8 @@ use App\Services\Takeoff\CompleteReview;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\JobFactory;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\CompanyRule;
+use App\Support\Ownership;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -96,7 +99,7 @@ class TakeoffController extends Controller
      */
     public function show(Request $request, Project $project): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         // Remembered here too, same as web's own `ProcessingController::
         // show()`/`AiReviewController::show()`/`FinalTakeoffController::
@@ -256,7 +259,7 @@ class TakeoffController extends Controller
      */
     public function pdf(Request $request, Project $project): StreamedResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $upload = $project->takeoffDrawing();
         abort_unless($this->store->exists($upload?->path), 404);
@@ -437,7 +440,7 @@ class TakeoffController extends Controller
      */
     public function overlay(Request $request, Project $project): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $result = $this->resultFor($project);
 
@@ -464,7 +467,7 @@ class TakeoffController extends Controller
      */
     public function page(Request $request, Project $project, int $page): StreamedResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $result = $this->resultFor($project);
         $upload = $result->upload ?? $project->takeoffDrawing();
@@ -482,7 +485,7 @@ class TakeoffController extends Controller
     }
 
     /** Same on-demand render + lock as `AiReviewController::renderOnDemand()`. */
-    private function renderOnDemand(\App\Models\Upload $upload, int $page): ?string
+    private function renderOnDemand(Upload $upload, int $page): ?string
     {
         $lock = Cache::lock("previews:upload:{$upload->id}", 120);
 
@@ -516,7 +519,7 @@ class TakeoffController extends Controller
      */
     public function finalise(Request $request, Project $project, CompleteReview $complete, EstimateBuilder $estimateBuilder): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $result = $this->resultFor($project);
 
@@ -574,7 +577,7 @@ class TakeoffController extends Controller
     /** Re-opens a finalised takeoff for further review — mirrors web's `reopen()` exactly. */
     public function reopen(Request $request, Project $project): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $result = $this->resultFor($project);
 
@@ -608,7 +611,7 @@ class TakeoffController extends Controller
         JobSites $sites,
         ClientDirectory $clients,
     ): JsonResponse {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $result = $this->resultFor($project);
 
@@ -623,7 +626,7 @@ class TakeoffController extends Controller
             'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['required', 'integer', CompanyRule::exists('teams')],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
         ], [

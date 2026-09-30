@@ -88,7 +88,7 @@ class JobTaskAttachmentController extends Controller
         abort_unless($this->access->canAccess($request->user(), $attachment->task->job), 403);
 
         return response()->streamDownload(
-            fn () => print(Storage::disk('local')->get($attachment->path)),
+            fn () => print (Storage::disk('local')->get($attachment->path)),
             $attachment->name,
             ['Content-Type' => $attachment->mime_type ?? 'application/octet-stream'],
             'inline',

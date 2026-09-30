@@ -10,6 +10,8 @@ use App\Models\TimerSession;
 use App\Services\Clients\JobSites;
 use App\Services\Mobile\ElectricianJobAccess;
 use App\Services\TimeTracking\TimerService;
+use App\Support\CompanyRule;
+use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -121,7 +123,7 @@ class JobController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $userId = \App\Support\Ownership::userIdList($request->user());
+        $userId = Ownership::userIdList($request->user());
 
         $data = $request->validate([
             'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userId)],
@@ -129,7 +131,7 @@ class JobController extends Controller
             'name' => ['required', 'string', 'min:3', 'max:160'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['required', 'integer', CompanyRule::exists('teams')],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             // Optional, same as `update()`: a job can be on the books before
@@ -192,14 +194,14 @@ class JobController extends Controller
      */
     public function update(Request $request, Job $job): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $job->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $job->user_id), 403);
         $job->assertNotLocked();
 
         $data = $request->validate([
             'name' => ['required', 'string', 'min:3', 'max:160'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['required', 'integer', CompanyRule::exists('teams')],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             // Optional, same as the create flow: a job can be on the books

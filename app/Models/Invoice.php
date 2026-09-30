@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Ownership;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -148,7 +149,7 @@ class Invoice extends Model
     /** Only this manager's own invoices. */
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
-        return $query->whereIn($query->qualifyColumn('user_id'), \App\Support\Ownership::userIds($user));
+        return $query->whereIn($query->qualifyColumn('user_id'), Ownership::userIds($user));
     }
 
     /** @return HasMany<InvoiceItem, $this> */
@@ -290,7 +291,7 @@ class Invoice extends Model
 
         // One series per manager — see `Estimate::nextNumber()`.
         $highest = (int) static::withTrashed()
-            ->whereIn('user_id', \App\Support\Ownership::userIds($user))
+            ->whereIn('user_id', Ownership::userIds($user))
             ->selectRaw("MAX(CAST(SUBSTR(invoice_number, 5) AS {$integerType})) AS seq")
             ->value('seq');
 

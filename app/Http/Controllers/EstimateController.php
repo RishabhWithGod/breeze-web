@@ -10,6 +10,7 @@ use App\Models\Upload;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\ProjectDirectory;
 use App\Services\Takeoff\TakeoffLinkOptions;
+use App\Support\Ownership;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -124,7 +125,7 @@ class EstimateController extends Controller
          * another one's project — and a project with no client record yet falls
          * back to the name it carries, because neither column may be empty.
          */
-        $project = Project::whereIn('user_id', \App\Support\Ownership::userIds($request->user()))->with('clientRecord:id,name')->find($data['project_id']);
+        $project = Project::whereIn('user_id', Ownership::userIds($request->user()))->with('clientRecord:id,name')->find($data['project_id']);
         $data['client_id'] = $project?->client_id;
         $data['client'] = $project?->clientRecord?->name ?? $project?->client ?? 'Unassigned';
         $data['project'] = $project?->name ?? $data['client'];

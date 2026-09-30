@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Database\Factories\UserFactory;
 use App\Models\Relations\CompanyHasMany;
+use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;

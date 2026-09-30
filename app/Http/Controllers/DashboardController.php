@@ -13,6 +13,7 @@ use App\Models\Project;
 use App\Models\User;
 use App\Services\Billing\InvoiceSummaryCalculator;
 use App\Services\Dashboard\JobPerformanceCalculator;
+use App\Services\Onboarding\SetupChecklist;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -27,6 +28,12 @@ class DashboardController extends Controller
 
     public function index(Request $request): Response
     {
+        // Until setup is done, the dashboard is the setup checklist — a company's
+        // managers see it first, and the dashboard proper once it is finished.
+        if (app(SetupChecklist::class)->holds($request->user())) {
+            return Inertia::render('GetStarted', app(SetupChecklist::class)->page($request->user()));
+        }
+
         return Inertia::render('Home', [
             'summary' => $this->summary($request->user()),
             // resolve() keeps these as plain arrays — only paginated props need

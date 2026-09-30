@@ -10,6 +10,7 @@ use App\Models\AiJob;
 use App\Models\Project;
 use App\Services\Ai\AiRunStatePresenter;
 use App\Services\Ai\TakeoffOrchestrator;
+use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -27,7 +28,7 @@ class ProcessingController extends Controller
 
     public function status(Request $request, Project $project): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $aiJob = $project->latestAiJob;
 
@@ -93,7 +94,7 @@ class ProcessingController extends Controller
     /** Queues the analysis again on request, for a run that never started. */
     public function retry(Request $request, Project $project): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $aiJob = $project->latestAiJob;
 
@@ -115,7 +116,7 @@ class ProcessingController extends Controller
      */
     public function restart(Request $request, Project $project, TakeoffOrchestrator $orchestrator): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         if (! $orchestrator->configured()) {
             return $this->fail('The AI takeoff service is not configured.', 503);
@@ -145,7 +146,7 @@ class ProcessingController extends Controller
     /** Abandons the run. */
     public function cancel(Request $request, Project $project, TakeoffOrchestrator $orchestrator): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $aiJob = $project->latestAiJob;
 

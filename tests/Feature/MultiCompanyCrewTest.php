@@ -443,6 +443,7 @@ class MultiCompanyCrewTest extends TestCase
         $second = $this->coManager($volt);
         [, $rivalOwner] = $this->company('Rival Co');
         $crew = User::factory()->create(['role' => 'Journeyman', 'company_id' => $volt->id]);
+        $this->grantPermissions($crew, ['crew.view']); // Crew do not open Teams by default; this one was given it.
 
         $this->actingAs($owner)->get(route('teams.index'))
             ->assertInertia(fn (Assert $page) => $page

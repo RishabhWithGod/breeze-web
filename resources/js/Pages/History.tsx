@@ -25,7 +25,7 @@ import {
   type HistoryFilter,
   type HistorySort,
 } from '@/constants'
-import { useDisclosure } from '@/hooks'
+import { useDisclosure, usePermissions } from '@/hooks'
 import type {
   Paginated,
   SelectOption,
@@ -63,6 +63,7 @@ export interface HistoryProps {
  * rather than a re-insert.
  */
 export default function History({ projects, filters, clients, projectOptions }: HistoryProps) {
+  const { can: permitted } = usePermissions()
   const { flash } = usePage<SharedPageProps>().props
 
   const [query, setQuery] = useState(filters.search)
@@ -249,9 +250,11 @@ export default function History({ projects, filters, clients, projectOptions }: 
               containerClassName="sm:w-72"
               aria-label="Search drawings or projects"
             />
-            <ButtonLink href={ROUTES.upload} variant="dark" leftIcon={Plus}>
-              Upload Drawings
-            </ButtonLink>
+            {permitted('takeoff.create') && (
+              <ButtonLink href={ROUTES.upload} variant="dark" leftIcon={Plus}>
+                Upload Drawings
+              </ButtonLink>
+            )}
           </div>
         </header>
 

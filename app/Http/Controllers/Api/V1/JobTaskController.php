@@ -196,6 +196,6 @@ class JobTaskController extends Controller
         }
 
         return "Check off every item in the checklist first — {$outstanding} "
-            .str('item')->plural($outstanding)." still unchecked.";
+            .str('item')->plural($outstanding).' still unchecked.';
     }
 }

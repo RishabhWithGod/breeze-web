@@ -345,7 +345,8 @@ class TimeLogTest extends TestCase
                 ->where('day.attendance.0.canCheckOut', true)
                 ->where('day.attendance.0.checkOutMin', Carbon::parse("$date 07:12")->format('Y-m-d\TH:i')));
 
-        // A technician looking at their own day cannot close it.
+        // A technician looking at their own day cannot close it — once their role has been given Time Tracking.
+        $this->grantPermissions($this->tech, ['time_tracking.view']);
         $this->actingAs($this->tech)
             ->get(route('time-entries.day', [$this->tech, $date]))
             ->assertInertia(fn ($page) => $page->where('day.attendance.0.canCheckOut', false));

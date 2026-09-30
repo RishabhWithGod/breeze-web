@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\ClientAddress;
 use App\Models\Project;
+use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -67,7 +68,7 @@ class ClientController extends Controller
      */
     public function show(Request $request, Client $client): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $client->user_id), 403);
 
         return $this->ok($this->present($client));
     }
@@ -103,7 +104,7 @@ class ClientController extends Controller
      */
     public function update(Request $request, Client $client): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $client->user_id), 403);
 
         $data = $this->validated($request, $client);
 
@@ -161,7 +162,7 @@ class ClientController extends Controller
                 'required', 'string', 'min:2', 'max:160',
                 // A client renaming themselves is not a clash with themselves.
                 Rule::unique('clients', 'name')
-                    ->whereIn('user_id', \App\Support\Ownership::userIdList($request->user()))
+                    ->whereIn('user_id', Ownership::userIdList($request->user()))
                     ->ignore($client),
             ],
             'notes' => ['nullable', 'string', 'max:2000'],

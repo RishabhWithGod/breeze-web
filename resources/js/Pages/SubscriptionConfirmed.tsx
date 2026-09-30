@@ -107,11 +107,11 @@ export default function SubscriptionConfirmed({
           </Row>
         </dl>
 
-        <ButtonLink href={ROUTES.home} variant="blue" size="lg" fullWidth rightIcon={ArrowRight} className="mt-6">
-          Continue to Dashboard
+        <ButtonLink href={ROUTES.getStarted} variant="blue" size="lg" fullWidth rightIcon={ArrowRight} className="mt-6">
+          Continue to Setup
         </ButtonLink>
         <p className="mt-3 text-center text-xs text-white/70">
-          Your company is set up. Add your team from Teams whenever you&apos;re ready.
+          A short checklist gets your workspace ready: your team, your price list, your first client and project.
         </p>
       </section>
     </PageTransition>

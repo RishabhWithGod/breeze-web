@@ -241,6 +241,8 @@ export default function ProjectCreate({
               <SelectField
                 id="project-type"
                 label="Project Type"
+                disabled
+                hint="Set by the client's address"
                 options={[{ label: 'Select project type', value: '' }, ...PROJECT_TYPE_OPTIONS]}
                 value={data.project_type}
                 onChange={(event) => update('project_type', event.target.value)}
@@ -293,14 +295,14 @@ export default function ProjectCreate({
                 htmlFor="project-vendor-rate-list"
                 className="mb-2 block text-md font-medium text-white"
               >
-                Upload Vendor Rate List — Excel, PDF or Word (Optional)
+                Upload Commodity — Excel, CSV, PDF or Word (Optional)
               </label>
 
               <input
                 ref={fileInputRef}
                 id="project-vendor-rate-list"
                 type="file"
-                accept=".xlsx,.pdf,.doc,.docx,.rtf,.odt"
+                accept=".xlsx,.ods,.csv,.txt,.pdf,.doc,.docx,.rtf,.odt"
                 multiple
                 onChange={(event) => chooseRateLists(event.target.files)}
                 className="sr-only"
@@ -360,10 +362,7 @@ export default function ProjectCreate({
                 </div>
               ) : (
                 <p className="mt-2 text-sm text-white/75">
-                  Excel, PDF, or Word — however the vendor sent it, upload as many
-                  as you have. A symbol this project's own rate list has priced
-                  uses that price; anything else falls back to your price book,
-                  or the shared one.
+                  Upload this project's own commodity list, in whatever form you have it. Estimates for this project are priced from it; anything it does not list is priced from your company's default commodity list.
                 </p>
               )}
             </div>

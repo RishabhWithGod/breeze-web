@@ -33,6 +33,12 @@ export interface NavItem {
   readonly badge?: number
   /** Sub-items shown nested under this one — see Estimates → Addendum. Every other entry leaves this unset and renders exactly as before. */
   readonly children?: readonly NavItem[]
+  /** Roles (lowercase) this entry is shown to; unset shows it to everyone. */
+  readonly roles?: readonly string[]
+  /** The permission the signed-in role needs to see this entry (Roles & Permissions); unset shows it to everyone. */
+  readonly permission?: string
+  /** A feature switch that has to be on for this entry to show — see `config/features.php`. */
+  readonly feature?: 'estimateBuilder'
 }
 
 export interface BreadcrumbItem {

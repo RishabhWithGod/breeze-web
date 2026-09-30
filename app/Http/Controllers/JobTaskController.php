@@ -18,6 +18,7 @@ use App\Services\Scheduling\ScheduleBuilder;
 use App\Services\Scheduling\ScheduleNotifier;
 use App\Services\Scheduling\ScheduleProgress;
 use App\Services\Scheduling\TaskDependencyGraph;
+use App\Support\CompanyRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -419,7 +420,7 @@ class JobTaskController extends Controller
         $this->assertNotLocked($task->job);
 
         $data = $request->validate([
-            'team_member_id' => ['required', 'integer', \App\Support\CompanyRule::exists('team_members')],
+            'team_member_id' => ['required', 'integer', CompanyRule::exists('team_members')],
             'role' => ['required', Rule::in(JobTask::ROLES)],
         ]);
 

@@ -39,7 +39,7 @@ import {
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ProjectDocumentList } from '@/components/projects'
 import { ROUTES, routeTo } from '@/constants'
-import { useDisclosure } from '@/hooks'
+import { useDisclosure, usePermissions } from '@/hooks'
 import type {
   ProjectDocument,
   ProjectDocumentRow,
@@ -119,6 +119,7 @@ export default function ProjectShow({
   project,
   documents,
 }: ProjectShowProps) {
+  const { can: permitted } = usePermissions()
   const { flash } = usePage<SharedPageProps>().props
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
 
@@ -356,17 +357,25 @@ export default function ProjectShow({
             <MoreMenu
               ariaLabel="Project actions"
               items={[
-                {
-                  label: 'Edit Project',
-                  icon: PencilLine,
-                  onSelect: () => router.visit(routeTo.projectEdit(project.id)),
-                },
-                {
-                  label: 'Delete Project',
-                  icon: Trash2,
-                  destructive: true,
-                  onSelect: deleteProjectDialog.open,
-                },
+                ...(permitted('projects.edit')
+                  ? [
+                      {
+                        label: 'Edit Project',
+                        icon: PencilLine,
+                        onSelect: () => router.visit(routeTo.projectEdit(project.id)),
+                      },
+                    ]
+                  : []),
+                ...(permitted('projects.delete')
+                  ? [
+                      {
+                        label: 'Delete Project',
+                        icon: Trash2,
+                        destructive: true,
+                        onSelect: deleteProjectDialog.open,
+                      },
+                    ]
+                  : []),
               ]}
             />
           </>

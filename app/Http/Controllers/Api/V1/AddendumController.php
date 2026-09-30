@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Models\Estimate;
+use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -27,7 +28,7 @@ class AddendumController extends Controller
         $data = $request->validate([
             'project_id' => [
                 'nullable', 'integer',
-                Rule::exists('projects', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($request->user())),
+                Rule::exists('projects', 'id')->whereIn('user_id', Ownership::userIdList($request->user())),
             ],
         ]);
 
@@ -38,10 +39,10 @@ class AddendumController extends Controller
         }
 
         $originals = Estimate::query()
-            ->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))
+            ->whereIn('user_id', Ownership::userIds($request->user()))
             ->where('project_id', $projectId)
             ->where('kind', Estimate::KIND_STANDALONE)
-            ->with(['addenda' => fn ($query) => $query->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))])
+            ->with(['addenda' => fn ($query) => $query->whereIn('user_id', Ownership::userIds($request->user()))])
             ->orderByDesc('issued_on')
             ->get()
             ->map(fn (Estimate $estimate) => $this->present($estimate, $estimate->addenda))

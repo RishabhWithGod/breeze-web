@@ -11,6 +11,7 @@ use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
 use App\Services\Scheduling\CrewBoard;
+use App\Support\CompanyRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -49,7 +50,7 @@ class SchedulingController extends Controller
             'view' => ['nullable', Rule::in(['month', 'week', 'day'])],
             'date' => ['nullable', 'date'],
             'crew' => ['nullable', 'string', 'max:60'],
-            'member' => ['nullable', 'integer', \App\Support\CompanyRule::exists('team_members')],
+            'member' => ['nullable', 'integer', CompanyRule::exists('team_members')],
         ]);
 
         $user = $request->user();
@@ -249,7 +250,7 @@ class SchedulingController extends Controller
     {
         $data = $request->validate([
             'job_id' => ['required', 'integer', 'exists:work_jobs,id'],
-            'team_member_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('team_members')],
+            'team_member_id' => ['nullable', 'integer', CompanyRule::exists('team_members')],
             /*
              * Who the shift is booked for. No longer asked at the modal: a job's
              * foremen are decided when its work is broken into tasks, and asking
@@ -336,7 +337,7 @@ class SchedulingController extends Controller
         $this->authorize('update', $schedule->job);
 
         $data = $request->validate([
-            'team_member_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('team_members')],
+            'team_member_id' => ['nullable', 'integer', CompanyRule::exists('team_members')],
             'crew' => ['nullable', 'string', 'max:60'],
             'scheduled_date' => ['nullable', 'date'],
             'start_time' => ['nullable', 'date_format:H:i'],

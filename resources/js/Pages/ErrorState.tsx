@@ -16,7 +16,38 @@ export interface ErrorStateProps {
 
 /** Failure screen for takeoff errors and unhandled server errors. */
 export default function ErrorState({ status }: ErrorStateProps) {
-  const details = status ? `HTTP ${status}\n${SAMPLE_DETAILS}` : SAMPLE_DETAILS
+  // A real failure (a request that could not be completed) says so plainly; the takeoff wording below
+  // is for a takeoff run that stopped.
+  if (status !== undefined) {
+    return (
+      <PageTransition>
+        <Head title="Something went wrong" />
+
+        <Card padding="lg" className="mx-auto mt-6 max-w-2xl">
+          <ErrorStateBlock
+            title="Something went wrong"
+            description={
+              status === 503
+                ? 'Breeze is briefly unavailable. Wait a moment and try again.'
+                : 'That did not go through, and nothing was lost. Try again — if it keeps happening, tell your manager.'
+            }
+            actions={
+              <>
+                <Button leftIcon={RotateCcw} onClick={() => router.reload()}>
+                  Try again
+                </Button>
+                <ButtonLink href={ROUTES.home} variant="secondary">
+                  Go to dashboard
+                </ButtonLink>
+              </>
+            }
+          />
+        </Card>
+      </PageTransition>
+    )
+  }
+
+  const details = SAMPLE_DETAILS
 
   return (
     <PageTransition>
@@ -30,7 +61,7 @@ export default function ErrorState({ status }: ErrorStateProps) {
 
       <Card padding="lg">
         <ErrorStateBlock
-          code={status ? `ERR_HTTP_${status}` : 'ERR_TAKEOFF_500'}
+          code="ERR_TAKEOFF_500"
           title="We couldn't finish this takeoff"
           description="The analysis stopped while detecting symbols. Your files are safe — nothing was lost. Try running the takeoff again, or contact support if it keeps happening."
           details={details}

@@ -31,7 +31,7 @@ import {
 } from '@/components/common'
 import { ClientContactsCard, ClientSitesCard, type ClientContact, type ClientSite } from '@/components/clients'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { useDisclosure } from '@/hooks'
+import { useDisclosure, usePermissions } from '@/hooks'
 import { ROUTES, routeTo } from '@/constants'
 import type { SharedPageProps, TableColumn, TakeoffStatus, Tone } from '@/types'
 import {
@@ -107,6 +107,7 @@ export default function ClientShow({
   outstandingBalance,
   activity,
 }: ClientShowProps) {
+  const { can: permitted } = usePermissions()
   const { flash } = usePage<SharedPageProps>().props
 
   const activityColumns: TableColumn<ActivityEntry>[] = [
@@ -160,16 +161,16 @@ export default function ClientShow({
         ]}
         actions={
           <>
-            <ButtonLink
-              href={routeTo.clientEdit(client.id)}
-              variant="secondary"
-              leftIcon={PencilLine}
-            >
-              Edit Client
-            </ButtonLink>
-            <ButtonLink href={routeTo.projectCreateForClient(client.id)} leftIcon={Plus}>
-              Add Project
-            </ButtonLink>
+            {permitted('clients.edit') && (
+              <ButtonLink href={routeTo.clientEdit(client.id)} variant="secondary" leftIcon={PencilLine}>
+                Edit Client
+              </ButtonLink>
+            )}
+            {permitted('projects.create') && (
+              <ButtonLink href={routeTo.projectCreateForClient(client.id)} leftIcon={Plus}>
+                Add Project
+              </ButtonLink>
+            )}
           </>
         }
       />

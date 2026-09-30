@@ -8,6 +8,7 @@ use App\Http\Controllers\TechnicianController as WebTechnicianController;
 use App\Models\User;
 use App\Services\Billing\SubscriptionSummary;
 use App\Services\Technicians\TechnicianApprovalService;
+use App\Support\CompanyRule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -38,7 +39,7 @@ class TechnicianController extends Controller
         abort_unless($user->isFromMobile() && $user->company_id === $request->user()->company_id, 404);
 
         $data = $request->validate([
-            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['required', 'integer', CompanyRule::exists('teams')],
             'role' => ['required', Rule::in(WebTechnicianController::ROLES)],
         ], [
             'team_id.required' => 'Pick a team before approving.',

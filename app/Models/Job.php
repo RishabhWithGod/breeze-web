@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Events\JobStatusChanged;
 use App\Notifications\JobReviewStatusChanged;
+use App\Support\Ownership;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -273,7 +274,7 @@ class Job extends Model
     /** Only this manager's own jobs. */
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
-        return $query->whereIn($query->qualifyColumn('user_id'), \App\Support\Ownership::userIds($user));
+        return $query->whereIn($query->qualifyColumn('user_id'), Ownership::userIds($user));
     }
 
     /** @return BelongsTo<AiResult, $this> */

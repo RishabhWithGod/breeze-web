@@ -20,6 +20,7 @@
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="REQUIRE_COMPANY_SETUP_FOR_EXISTING" value="false"/>
+        <env name="FEATURE_ESTIMATE_BUILDER" value="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

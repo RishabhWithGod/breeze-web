@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Estimate;
+use App\Support\Ownership;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -11,7 +12,7 @@ class StoreEstimateRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        $userId = \App\Support\Ownership::userIdList($this->user());
+        $userId = Ownership::userIdList($this->user());
 
         return [
             'issued_on' => ['required', 'date'],

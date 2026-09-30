@@ -68,7 +68,7 @@ export interface InvoiceItemRow {
    */
   readonly sourceCategory: string | null
   /** Copied off the estimate, or typed in. */
-  readonly source: 'estimate' | 'manual' | null
+  readonly source: 'estimate' | 'manual' | 'change_order' | null
   readonly quantity: number
   readonly unitPrice: number
   readonly total: number

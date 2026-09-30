@@ -12,8 +12,10 @@ use App\Models\TimeEntry;
 use App\Policies\InvoicePolicy;
 use App\Services\Billing\EstimateInvoiceSync;
 use App\Services\Billing\InvoiceSummaryCalculator;
+use App\Services\ChangeOrders\ChangeOrderBilling;
 use App\Services\Clients\ClientDirectory;
 use App\Services\JobCosting\JobCostSummary;
+use App\Support\Ownership;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -118,7 +120,7 @@ class InvoiceController extends Controller
         if ($jobId !== null) {
             // Scoped to this manager's own jobs — a hand-made `?job=` cannot
             // pre-fill an invoice from someone else's.
-            $job = Job::whereIn('user_id', \App\Support\Ownership::userIds($request->user()))->find($jobId);
+            $job = Job::whereIn('user_id', Ownership::userIds($request->user()))->find($jobId);
 
             // Not completed, or not this manager's job: the button that sends
             // people here never offers either case, so silently falling back
@@ -211,7 +213,7 @@ class InvoiceController extends Controller
         // manager's estimate, and this refuses to read one even if that rule
         // were ever loosened.
         $estimate = ! empty($data['estimate_id'])
-            ? Estimate::whereIn('user_id', \App\Support\Ownership::userIds($request->user()))->find($data['estimate_id'])
+            ? Estimate::whereIn('user_id', Ownership::userIds($request->user()))->find($data['estimate_id'])
             : null;
 
         // A job is only billed once it is actually done, and only once —
@@ -222,7 +224,7 @@ class InvoiceController extends Controller
         if (! empty($data['job_id'])) {
             // Re-checked rather than trusted from the already-validated id:
             // the request rule only confirms ownership, not status.
-            $job = Job::whereIn('user_id', \App\Support\Ownership::userIds($request->user()))->find($data['job_id']);
+            $job = Job::whereIn('user_id', Ownership::userIds($request->user()))->find($data['job_id']);
             abort_unless($job !== null, 404);
 
             if (! $job->isLocked()) {
@@ -243,7 +245,7 @@ class InvoiceController extends Controller
         // else, so a hand-made request cannot mix one project's client or estimate
         // into another's invoice.
         if (! empty($data['job_id'])) {
-            $job ??= Job::whereIn('user_id', \App\Support\Ownership::userIds($request->user()))->find($data['job_id']);
+            $job ??= Job::whereIn('user_id', Ownership::userIds($request->user()))->find($data['job_id']);
 
             if ($job?->client_id !== null && (int) $job->client_id !== (int) $data['client_id']) {
                 return back()->withErrors(['client_id' => "The client comes from the project — this one is for {$job->client}."]);
@@ -288,6 +290,9 @@ class InvoiceController extends Controller
             // line is the invoice's own (see `EstimateInvoiceSync`).
             $this->estimateSync->sync($invoice);
         }
+
+        // What has been approved as added work on this job is billed with it.
+        app(ChangeOrderBilling::class)->attachApprovedTo($invoice);
 
         // "Issue Invoice": sent straight away, by the same rules as Send.
         if ($request->boolean('issue')) {

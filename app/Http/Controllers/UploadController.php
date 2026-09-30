@@ -9,6 +9,7 @@ use App\Models\Estimate;
 use App\Models\Upload;
 use App\Services\Ai\TakeoffOrchestrator;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\Ownership;
 use App\Support\UploadLimits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -128,7 +129,7 @@ class UploadController extends Controller
             return null;
         }
 
-        return Estimate::whereIn('user_id', \App\Support\Ownership::userIds($request->user()))->find($id);
+        return Estimate::whereIn('user_id', Ownership::userIds($request->user()))->find($id);
     }
 
     /**

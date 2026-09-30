@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Models\Job;
+use App\Support\CompanyRule;
+use App\Support\Ownership;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -21,7 +23,7 @@ class StoreJobRequest extends FormRequest
      */
     public function rules(): array
     {
-        $userId = \App\Support\Ownership::userIdList($this->user());
+        $userId = Ownership::userIdList($this->user());
 
         return [
             'name' => ['required', 'string', 'min:3', 'max:160'],
@@ -48,7 +50,7 @@ class StoreJobRequest extends FormRequest
              * be planned into tasks against, and it narrows who a task on
              * this job can be given to.
              */
-            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['required', 'integer', CompanyRule::exists('teams')],
             /*
              * When the work runs. Required: a job with no dates cannot be
              * scheduled, cannot be crewed, and shows as a blank row on every

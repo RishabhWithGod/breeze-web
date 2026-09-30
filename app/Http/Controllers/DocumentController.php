@@ -15,6 +15,7 @@ use App\Notifications\DocumentVersionUploaded;
 use App\Policies\DocumentPolicy;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Documents\DocumentStore;
+use App\Support\Ownership;
 use App\Support\UploadLimits;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -49,7 +50,7 @@ class DocumentController extends Controller
              * anyone could name another manager's project id in the query
              * string and read their filing cabinet.
              */
-            'project' => ['nullable', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($user))],
+            'project' => ['nullable', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', Ownership::userIdList($user))],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
@@ -74,7 +75,7 @@ class DocumentController extends Controller
          * it would 403 on.
          */
         $base = fn () => Document::query()
-            ->whereHas('project', fn ($query) => $query->whereIn('user_id', \App\Support\Ownership::userIds($user)))
+            ->whereHas('project', fn ($query) => $query->whereIn('user_id', Ownership::userIds($user)))
             ->visibleTo($user, $canManageAll)
             ->forProject($projectId)
             ->versionStatus('latest');

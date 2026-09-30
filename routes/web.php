@@ -9,9 +9,11 @@ use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\BreezeBucksController;
+use App\Http\Controllers\ChangeOrderController;
 use App\Http\Controllers\ClientAddressController;
 use App\Http\Controllers\ClientContactController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CommodityListController;
 use App\Http\Controllers\CompanyManagerController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CompanySetupController;
@@ -22,9 +24,11 @@ use App\Http\Controllers\DrawingDetailsController;
 use App\Http\Controllers\EstimateBuilderController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\EstimateDetailController;
+use App\Http\Controllers\EstimateReviewController;
 use App\Http\Controllers\FinalTakeoffController;
 use App\Http\Controllers\ForemanController;
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\InvitationAcceptanceController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceDetailController;
 use App\Http\Controllers\InvoicePaymentController;
@@ -49,16 +53,19 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectDocumentController;
 use App\Http\Controllers\ResultsController;
+use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\SchedulingController;
 use App\Http\Controllers\SecuritySettingsController;
+use App\Http\Controllers\SetupChecklistController;
 use App\Http\Controllers\StatePageController;
 use App\Http\Controllers\SymbolReviewController;
 use App\Http\Controllers\TakeoffFlowController;
 use App\Http\Controllers\TakeoffHistoryController;
 use App\Http\Controllers\TaskListController;
-use App\Http\Controllers\TermsConsentController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\TeamSetupController;
 use App\Http\Controllers\TechnicianController;
+use App\Http\Controllers\TermsConsentController;
 use App\Http\Controllers\ThreeDViewController;
 use App\Http\Controllers\TimeEntryController;
 use App\Http\Controllers\TimerController;
@@ -118,7 +125,11 @@ Route::middleware('guest')->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth', 'company.setup'])->group(function () {
+// An emailed invitation: public, since the person has no account yet.
+Route::get('invitations/{token}', [InvitationAcceptanceController::class, 'show'])->name('invitations.show');
+Route::post('invitations/{token}', [InvitationAcceptanceController::class, 'accept'])->middleware('throttle:10,1')->name('invitations.accept');
+
+Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
     // First-run company setup: where a new account lands before the dashboard.
@@ -140,6 +151,17 @@ Route::middleware(['auth', 'company.setup'])->group(function () {
         Route::get('complete', [PaymentSetupController::class, 'complete'])->name('complete');
         Route::get('confirmed', [PaymentSetupController::class, 'confirmed'])->name('confirmed');
     });
+
+    // Team Setup: invite the crew and put them on teams, while the company is getting started.
+    Route::get('team-setup', [TeamSetupController::class, 'show'])->name('team-setup.show');
+    Route::post('team-setup/invitations', [TeamSetupController::class, 'store'])->name('team-setup.invitations.store');
+    Route::post('team-setup/invitations/{invitation}/resend', [TeamSetupController::class, 'resend'])->name('team-setup.invitations.resend');
+    Route::delete('team-setup/invitations/{invitation}', [TeamSetupController::class, 'cancel'])->name('team-setup.invitations.cancel');
+
+    // Get Started: the checklist after subscribing.
+    Route::get('get-started', [SetupChecklistController::class, 'show'])->name('get-started.show');
+    Route::post('get-started/skip/{step}', [SetupChecklistController::class, 'skip'])->name('get-started.skip');
+    Route::post('get-started/finish', [SetupChecklistController::class, 'finish'])->name('get-started.finish');
 
     // `/` and `/home` both open the dashboard.
     Route::get('/', [DashboardController::class, 'index']);
@@ -306,16 +328,50 @@ Route::middleware(['auth', 'company.setup'])->group(function () {
      * anyone can check one without opening the database.
      */
     Route::get('price-book', [PriceBookController::class, 'index'])->name('price-book.index');
+
+    // Roles & Permissions: what each role can open and do, per company.
+    Route::get('roles-permissions', [RolePermissionController::class, 'show'])->name('roles.show');
+    Route::put('roles-permissions', [RolePermissionController::class, 'update'])->name('roles.update');
+
+    // Change orders: added work documented after a job begins, approved by a manager.
+    Route::prefix('change-orders')->name('change-orders.')->whereNumber(['changeOrder', 'attachment'])->group(function () {
+        Route::get('/', [ChangeOrderController::class, 'index'])->name('index');
+        Route::get('create', [ChangeOrderController::class, 'create'])->name('create');
+        Route::post('/', [ChangeOrderController::class, 'store'])->name('store');
+        Route::get('{changeOrder}', [ChangeOrderController::class, 'show'])->name('show');
+        Route::get('{changeOrder}/edit', [ChangeOrderController::class, 'edit'])->name('edit');
+        Route::put('{changeOrder}', [ChangeOrderController::class, 'update'])->name('update');
+        Route::delete('{changeOrder}', [ChangeOrderController::class, 'destroy'])->name('destroy');
+        Route::post('{changeOrder}/submit', [ChangeOrderController::class, 'submit'])->name('submit');
+        Route::post('{changeOrder}/withdraw', [ChangeOrderController::class, 'withdraw'])->name('withdraw');
+        Route::post('{changeOrder}/approve', [ChangeOrderController::class, 'approve'])->name('approve');
+        Route::post('{changeOrder}/reject', [ChangeOrderController::class, 'reject'])->name('reject');
+        Route::post('{changeOrder}/attachments', [ChangeOrderController::class, 'attach'])->name('attach');
+        Route::get('{changeOrder}/attachments/{attachment}', [ChangeOrderController::class, 'download'])->name('download');
+        Route::delete('{changeOrder}/attachments/{attachment}', [ChangeOrderController::class, 'detach'])->name('detach');
+    });
+
+    // Commodity List Setup: the company's default materials and labor items.
+    Route::get('commodities', [CommodityListController::class, 'index'])->name('commodities.index');
+    Route::post('commodities', [CommodityListController::class, 'store'])->name('commodities.store');
+    Route::post('commodities/import', [CommodityListController::class, 'import'])->name('commodities.import');
+    Route::get('commodities/template', [CommodityListController::class, 'template'])->name('commodities.template');
+    Route::post('commodities/save', [CommodityListController::class, 'save'])->name('commodities.save');
+    Route::post('commodities/skip', [CommodityListController::class, 'skip'])->name('commodities.skip');
+    Route::put('commodities/{item}', [CommodityListController::class, 'update'])->name('commodities.update');
+    Route::post('commodities/{item}/archive', [CommodityListController::class, 'archive'])->name('commodities.archive');
     Route::get('price-book/{priceBookItem}', [PriceBookController::class, 'show'])->name('price-book.show');
 
     // The Estimate Builder: quantities into priced labor and material lines.
-    Route::get('estimate-builder', [EstimateBuilderController::class, 'index'])->name('estimate-builder.index');
-    Route::post('estimate-builder', [EstimateBuilderController::class, 'store'])->name('estimate-builder.store');
-    Route::get('estimate-builder/price-list', [EstimateBuilderController::class, 'priceList'])->name('estimate-builder.price-list');
-    Route::get('estimate-builder/{estimate}', [EstimateBuilderController::class, 'show'])->name('estimate-builder.show');
-    Route::put('estimate-builder/{estimate}', [EstimateBuilderController::class, 'save'])->name('estimate-builder.save');
-    Route::post('estimate-builder/{estimate}/request-approval', [EstimateBuilderController::class, 'requestApproval'])->name('estimate-builder.request-approval');
-    Route::post('estimate-builder/{estimate}/import', [EstimateBuilderController::class, 'import'])->name('estimate-builder.import');
+    Route::middleware('feature:estimate_builder')->group(function () {
+        Route::get('estimate-builder', [EstimateBuilderController::class, 'index'])->name('estimate-builder.index');
+        Route::post('estimate-builder', [EstimateBuilderController::class, 'store'])->name('estimate-builder.store');
+        Route::get('estimate-builder/price-list', [EstimateBuilderController::class, 'priceList'])->name('estimate-builder.price-list');
+        Route::get('estimate-builder/{estimate}', [EstimateBuilderController::class, 'show'])->name('estimate-builder.show');
+        Route::put('estimate-builder/{estimate}', [EstimateBuilderController::class, 'save'])->name('estimate-builder.save');
+        Route::post('estimate-builder/{estimate}/request-approval', [EstimateBuilderController::class, 'requestApproval'])->name('estimate-builder.request-approval');
+        Route::post('estimate-builder/{estimate}/import', [EstimateBuilderController::class, 'import'])->name('estimate-builder.import');
+    });
 
     Route::get('estimates', [EstimateController::class, 'index'])->name('estimates.index');
     Route::get('estimates/create', [EstimateController::class, 'create'])->name('estimates.create');
@@ -326,6 +382,12 @@ Route::middleware(['auth', 'company.setup'])->group(function () {
     Route::post('estimates/{estimate}/restore', [EstimateController::class, 'restore'])->name('estimates.restore');
 
     // Estimate detail: header fields, editable line items and exports.
+    // Estimate Review and Approval — the builder's next step, hidden with it.
+    Route::middleware('feature:estimate_builder')->group(function () {
+        Route::get('estimates/{estimate}/review', [EstimateReviewController::class, 'show'])->name('estimates.review');
+        Route::post('estimates/{estimate}/approve', [EstimateReviewController::class, 'approve'])->name('estimates.approve');
+        Route::post('estimates/{estimate}/return', [EstimateReviewController::class, 'returnForEdits'])->name('estimates.return');
+    });
     Route::get('estimates/{estimate}', [EstimateDetailController::class, 'show'])->name('estimates.show');
     Route::get('estimates/{estimate}/edit', [EstimateDetailController::class, 'edit'])->name('estimates.edit');
     Route::put('estimates/{estimate}', [EstimateDetailController::class, 'update'])->name('estimates.update');

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\ClientAddress;
 use App\Models\Job;
+use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +25,7 @@ class ClientAddressController extends Controller
 
     public function store(Request $request, Client $client): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $client->user_id), 403);
 
         $data = $this->validated($request);
         $isFirst = ! $client->addresses()->exists();
@@ -45,7 +46,7 @@ class ClientAddressController extends Controller
 
     public function update(Request $request, Client $client, ClientAddress $address): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $client->user_id), 403);
         abort_unless($address->client_id === $client->id, 404);
 
         $data = $this->validated($request);
@@ -87,7 +88,7 @@ class ClientAddressController extends Controller
 
     public function destroy(Request $request, Client $client, ClientAddress $address): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $client->user_id), 403);
         abort_unless($address->client_id === $client->id, 404);
 
         $jobs = $address->jobs()->count();

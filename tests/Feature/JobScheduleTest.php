@@ -517,7 +517,7 @@ class JobScheduleTest extends TestCase
 
     public function test_the_screen_reports_what_the_role_may_do(): void
     {
-        $apprentice = User::factory()->create(['role' => 'Apprentice']);
+        $apprentice = $this->grantPermissions(User::factory()->create(['role' => 'Apprentice']), ['schedule.view', 'jobs.view']);
         // Owning the job is what lets a lesser role still open the screen —
         // an unrelated apprentice is refused the page outright, see the
         // "requires signing in" test below for the equivalent on a job that

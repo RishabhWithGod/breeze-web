@@ -35,7 +35,7 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { MOTION, ROUTES, routeTo } from '@/constants'
-import { useDisclosure } from '@/hooks'
+import { useDisclosure, usePermissions } from '@/hooks'
 import type { Paginated, TakeoffStatus } from '@/types'
 import { TAKEOFF_STATUS_LABEL, TAKEOFF_STATUS_TONE } from '@/utils'
 
@@ -84,6 +84,7 @@ const humanise = (value: string) =>
  * client it is for, so that question is never asked twice.
  */
 export default function Projects({ clients, filters, statuses, totalProjects }: ProjectsProps) {
+  const { can: permitted } = usePermissions()
   const [search, setSearch] = useState(filters.search)
   const filterBar = useDisclosure()
   const [pendingDelete, setPendingDelete] = useState<{ id: number; name: string } | null>(null)
@@ -126,9 +127,11 @@ export default function Projects({ clients, filters, statuses, totalProjects }: 
             >
               Filter{activeFilters > 0 ? ` (${activeFilters})` : ''}
             </Button>
-            <ButtonLink href={ROUTES.projectCreate} leftIcon={Plus}>
-              Add Project
-            </ButtonLink>
+            {permitted('projects.create') && (
+              <ButtonLink href={ROUTES.projectCreate} leftIcon={Plus}>
+                Add Project
+              </ButtonLink>
+            )}
           </>
         }
       />
@@ -195,7 +198,7 @@ export default function Projects({ clients, filters, statuses, totalProjects }: 
                 ? 'Nothing on any client matches these filters.'
                 : 'Add the client the work is for, then open a project under them.'
             }
-            {...(activeFilters > 0
+            {...(activeFilters > 0 || !permitted('clients.create')
               ? {}
               : {
                   actions: (
@@ -292,17 +295,25 @@ export default function Projects({ clients, filters, statuses, totalProjects }: 
                             ariaLabel={`Actions for ${project.name}`}
                             variant="minimal"
                             items={[
-                              {
-                                label: 'Edit',
-                                icon: PencilLine,
-                                onSelect: () => router.visit(routeTo.projectEdit(project.id)),
-                              },
-                              {
-                                label: 'Delete',
-                                icon: Trash2,
-                                destructive: true,
-                                onSelect: () => setPendingDelete(project),
-                              },
+                              ...(permitted('projects.edit')
+                                ? [
+                                    {
+                                      label: 'Edit',
+                                      icon: PencilLine,
+                                      onSelect: () => router.visit(routeTo.projectEdit(project.id)),
+                                    },
+                                  ]
+                                : []),
+                              ...(permitted('projects.delete')
+                                ? [
+                                    {
+                                      label: 'Delete',
+                                      icon: Trash2,
+                                      destructive: true,
+                                      onSelect: () => setPendingDelete(project),
+                                    },
+                                  ]
+                                : []),
                             ]}
                           />
                         </div>

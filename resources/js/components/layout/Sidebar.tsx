@@ -4,7 +4,7 @@ import { Link, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ROUTES, SIDEBAR_ITEMS } from '@/constants'
 import { useUiStore } from '@/store'
-import type { NavItem } from '@/types'
+import type { NavItem, SharedPageProps } from '@/types'
 import { cn } from '@/utils'
 
 interface SidebarNavProps {
@@ -66,10 +66,7 @@ function matchStrength(item: NavItem, pathname: string): number {
   const owned = [item.href, ...(MODULE_PATHS[item.href] ?? [])]
 
   return owned.reduce(
-    (best, path) =>
-      pathname === path || pathname.startsWith(`${path}/`)
-        ? Math.max(best, path.length)
-        : best,
+    (best, path) => (pathname === path || pathname.startsWith(`${path}/`) ? Math.max(best, path.length) : best),
     -1,
   )
 }
@@ -95,6 +92,18 @@ function activeHref(pathname: string): string | null {
 
   return best?.href ?? null
 }
+
+/** Whether a rail entry is shown to this role. */
+const allowed = (
+  item: NavItem,
+  role: string,
+  features: SharedPageProps['features'],
+  permissions: SharedPageProps['permissions'],
+): boolean =>
+  (item.roles === undefined || item.roles.includes(role)) &&
+  (item.feature === undefined || features[item.feature]) &&
+  // What the role's permissions open (Roles & Permissions); null means the role is not governed by them.
+  (item.permission === undefined || permissions === null || permissions.includes(item.permission))
 
 /** Current path, without the query string. */
 function usePathname(): string {
@@ -142,6 +151,16 @@ function SidebarLink({ item, isActive, onNavigate, nested = false, padEnd = fals
 function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname()
   const active = activeHref(pathname)
+  const { auth, features, permissions } = usePage<SharedPageProps>().props
+  const role = (auth.user?.role ?? '').trim().toLowerCase()
+
+  // A group its role cannot open still shows the entries under it that it can — an apprentice has
+  // no Jobs, but has Tasks — as rows of their own.
+  const visibleItems = SIDEBAR_ITEMS.flatMap((item): readonly NavItem[] =>
+    allowed(item, role, features, permissions)
+      ? [item]
+      : (item.children ?? []).filter((child) => allowed(child, role, features, permissions)),
+  )
 
   // Groups start open, as the reference draws them. Two different clicks:
   // the row is the whole tab — it opens the group's own screen and its submenu —
@@ -174,13 +193,11 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
     // `overscroll-contain` keeps a flick at the end of the list from scrolling
     // the page behind it; the bottom padding stops the last entry sitting hard
     // against the window edge once the rail is long enough to scroll.
-    <nav
-      aria-label="Main navigation"
-      className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain py-2 pb-6"
-    >
+    <nav aria-label="Main navigation" className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain py-2 pb-6">
       <ul>
-        {SIDEBAR_ITEMS.map((item: NavItem) => {
-          const children = item.children ?? []
+        {visibleItems.map((item: NavItem) => {
+          // Some entries are for particular roles only.
+          const children = (item.children ?? []).filter((child) => allowed(child, role, features, permissions))
           const holdsActive = children.some((child) => child.href === active)
           const isOpen = holdsActive || !folded.has(item.label)
 
@@ -218,12 +235,7 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
                 <ul>
                   {children.map((child) => (
                     <li key={child.label}>
-                      <SidebarLink
-                        item={child}
-                        isActive={child.href === active}
-                        onNavigate={onNavigate}
-                        nested
-                      />
+                      <SidebarLink item={child} isActive={child.href === active} onNavigate={onNavigate} nested />
                     </li>
                   ))}
                 </ul>

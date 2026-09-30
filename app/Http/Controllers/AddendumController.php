@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Estimate;
 use App\Models\Team;
 use App\Services\Clients\ClientDirectory;
+use App\Support\Ownership;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,7 +26,7 @@ class AddendumController extends Controller
 
     public function index(Request $request): Response
     {
-        $userId = \App\Support\Ownership::userIdList($request->user());
+        $userId = Ownership::userIdList($request->user());
 
         $projects = $request->user()->projects()
             ->with('clientRecord:id,name')

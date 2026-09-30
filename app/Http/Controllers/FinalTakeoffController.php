@@ -20,6 +20,8 @@ use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\EstimateMergeJobBuilder;
 use App\Services\Takeoff\JobFactory;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\CompanyRule;
+use App\Support\Ownership;
 use App\Support\WireLengths;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -87,7 +89,7 @@ class FinalTakeoffController extends Controller
          */
         $mergeEstimateIds = Estimate::query()
             ->whereIn('id', $this->parseMergeEstimateIds($request, 'merge_estimates'))
-            ->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))
+            ->whereIn('user_id', Ownership::userIds($request->user()))
             ->where('kind', '!=', Estimate::KIND_MERGED)
             ->pluck('id')
             ->all();
@@ -342,7 +344,7 @@ class FinalTakeoffController extends Controller
             // The crew, as the Create Job screen asks for it — this is the same
             // step of the same flow, reached from the takeoff instead. Required:
             // a job needs a crew to be planned into tasks against.
-            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['required', 'integer', CompanyRule::exists('teams')],
             // The same two the Create Job screen requires — this is the same
             // step of the same flow, reached from the takeoff instead.
             'start_date' => ['required', 'date'],
@@ -432,7 +434,7 @@ class FinalTakeoffController extends Controller
      */
     private function storeMergedJob(Request $request, array $estimateIds, EstimateMergeJobBuilder $builder): RedirectResponse
     {
-        $userId = \App\Support\Ownership::userIdList($request->user());
+        $userId = Ownership::userIdList($request->user());
 
         $attributes = $request->validate([
             'name' => ['required', 'string', 'min:3', 'max:160'],
@@ -445,7 +447,7 @@ class FinalTakeoffController extends Controller
             ],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['required', 'integer', CompanyRule::exists('teams')],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
         ], [

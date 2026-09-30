@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\Ownership;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,7 +16,7 @@ class UpdateInvoiceRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        $userId = \App\Support\Ownership::userIdList($this->user());
+        $userId = Ownership::userIdList($this->user());
 
         return [
             /** The client, picked from the client register — see ClientDirectory. */

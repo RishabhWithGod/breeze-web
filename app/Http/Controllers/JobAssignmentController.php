@@ -7,6 +7,7 @@ use App\Models\Job;
 use App\Models\JobAssignment;
 use App\Models\TeamMember;
 use App\Notifications\JobAssigned;
+use App\Support\CompanyRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -26,7 +27,7 @@ class JobAssignmentController extends Controller
 
         $validated = $request->validate([
             'role' => ['required', Rule::in(JobAssignment::ROLES)],
-            'team_member_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('team_members')],
+            'team_member_id' => ['nullable', 'integer', CompanyRule::exists('team_members')],
             'name' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);

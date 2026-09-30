@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Support\CompanyRule;
+use App\Support\Ownership;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +19,7 @@ class StoreJobFromEstimatesRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        $userId = \App\Support\Ownership::userIdList($this->user());
+        $userId = Ownership::userIdList($this->user());
 
         return [
             /*
@@ -32,7 +34,7 @@ class StoreJobFromEstimatesRequest extends FormRequest
                 Rule::exists('estimates', 'id')->whereIn('user_id', $userId),
             ],
             'name' => ['required', 'string', 'min:3', 'max:160'],
-            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['required', 'integer', CompanyRule::exists('teams')],
             'address_ids' => ['required', 'array', 'size:1'],
             'address_ids.*' => [
                 'integer', 'distinct',

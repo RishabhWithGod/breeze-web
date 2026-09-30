@@ -51,20 +51,23 @@ class TakeoffHistoryTest extends TestCase
                 ->where('projects.data.0.name', 'Harborview Data Hall'));
     }
 
-    public function test_history_can_be_filtered_by_status(): void
+    public function test_history_leaves_out_projects_whose_takeoff_never_ran_or_failed(): void
     {
-        $this->user->projects()->create([
-            'name' => 'A draft', 'client' => 'X', 'status' => 'draft', 'items_count' => 1,
-        ]);
-        $this->user->projects()->create([
-            'name' => 'A completed', 'client' => 'X', 'status' => 'completed', 'items_count' => 2,
-        ]);
+        foreach (['draft', 'processing', 'failed', 'completed', 'converted'] as $status) {
+            $this->user->projects()->create(['name' => "A {$status}", 'client' => 'X', 'status' => $status, 'items_count' => 1]);
+        }
 
-        $this->actingAs($this->user)
-            ->get('/ai-takeoff?status=draft')
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('projects.data', 1)
-                ->where('projects.data.0.status', 'draft'));
+        $this->actingAs($this->user)->get('/ai-takeoff')->assertInertia(fn (Assert $page) => $page
+            ->has('projects.data', 3)
+            ->where('clients', ['X'])
+            ->has('projectOptions', 3));
+
+        $this->actingAs($this->user)->get('/ai-takeoff?status=completed')->assertInertia(fn (Assert $page) => $page
+            ->has('projects.data', 1)
+            ->where('projects.data.0.status', 'completed'));
+
+        // A draft is not a status this list has.
+        $this->actingAs($this->user)->get('/ai-takeoff?status=draft')->assertSessionHasErrors('status');
     }
 
     public function test_history_can_be_sorted_by_name(): void

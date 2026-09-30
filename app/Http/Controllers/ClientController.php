@@ -9,6 +9,8 @@ use App\Models\ProjectActivity;
 use App\Models\Team;
 use App\Rules\UsPhoneNumber;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\CompanyRule;
+use App\Support\Ownership;
 use App\Support\UsPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -337,7 +339,7 @@ class ClientController extends Controller
                 'required', 'string', 'min:2', 'max:160',
                 // A client renaming themselves is not a clash with themselves.
                 Rule::unique('clients', 'name')
-                    ->whereIn('user_id', \App\Support\Ownership::userIdList($request->user()))
+                    ->whereIn('user_id', Ownership::userIdList($request->user()))
                     ->ignore($client),
             ],
             /*
@@ -365,7 +367,7 @@ class ClientController extends Controller
              * Optional — a client can be on the register before anyone
              * decides who works their sites.
              */
-            'team_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             /*
              * The address book, filled in as the client is opened. It can be
              * empty — a client can be on the register before anyone knows where
@@ -485,6 +487,6 @@ class ClientController extends Controller
 
     private function authoriseOwner(Request $request, Client $client): void
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $client->user_id), 403);
     }
 }

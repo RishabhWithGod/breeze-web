@@ -238,11 +238,11 @@ export default function PaymentSettings({
           {/* ================================================ Subscription ======= */}
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             <div className="min-w-0 space-y-5">
-              <section className="rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-white/4 to-transparent p-6 shadow-glow sm:p-8">
+              <section className="rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-white/4 to-transparent p-5 shadow-glow sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="text-md text-white/85">Current Plan</p>
-                    <h3 className="mt-2 text-5xl font-bold text-white">{subscription.plan.name}</h3>
+                    <p className="text-sm text-white/85">Current Plan</p>
+                    <h3 className="mt-1 text-3xl font-bold text-white">{subscription.plan.name}</h3>
                   </div>
                   <StatusChip
                     pill
@@ -251,15 +251,15 @@ export default function PaymentSettings({
                   />
                 </div>
 
-                <p className="mt-5 max-w-md text-md text-white/85">{subscription.plan.description}</p>
+                <p className="mt-3 max-w-md text-sm text-white/85">{subscription.plan.description}</p>
 
-                <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                  <Button variant="blue" size="lg" fullWidth leftIcon={Layers} onClick={changePlan.open}>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <Button variant="blue" size="md" fullWidth leftIcon={Layers} onClick={changePlan.open}>
                     Change Plan
                   </Button>
                   <Button
                     variant="outline"
-                    size="lg"
+                    size="md"
                     fullWidth
                     leftIcon={BarChart3}
                     onClick={() => scrollTo('plan-details')}
@@ -270,10 +270,10 @@ export default function PaymentSettings({
               </section>
 
               <Panel icon={Package} title="Plan Features">
-                <ul className="space-y-3.5 p-5">
+                <ul className="space-y-2.5 p-4">
                   {subscription.plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-3 text-md text-white/90">
-                      <CheckCircle2 size={22} aria-hidden className="shrink-0 text-status-success" />
+                    <li key={feature} className="flex items-center gap-2.5 text-sm text-white/90">
+                      <CheckCircle2 size={18} aria-hidden className="shrink-0 text-status-success" />
                       {feature}
                     </li>
                   ))}
@@ -324,10 +324,10 @@ export default function PaymentSettings({
                     return (
                       <li
                         key={item.key}
-                        className="grid grid-cols-[6rem_minmax(0,1fr)_auto] items-center gap-4 px-5 py-3.5"
+                        className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3"
                       >
-                        <span className="text-sm text-white/90">{item.label}</span>
-                        <span className="h-2.5 overflow-hidden rounded-full bg-white/12" aria-hidden>
+                        <span className="text-xs text-white/90">{item.label}</span>
+                        <span className="h-2 overflow-hidden rounded-full bg-white/12" aria-hidden>
                           <span
                             className={cn(
                               'block h-full rounded-full',
@@ -340,7 +340,7 @@ export default function PaymentSettings({
                         </span>
                         <span
                           className={cn(
-                            'text-sm font-semibold whitespace-nowrap tabular-nums',
+                            'text-xs font-semibold whitespace-nowrap tabular-nums',
                             over ? 'text-red-300' : 'text-white',
                           )}
                         >
@@ -363,10 +363,10 @@ export default function PaymentSettings({
           <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             <div className="flex min-w-0 flex-col gap-5">
               {/* ============================================== The connection ==== */}
-              <section className="flex flex-1 flex-col rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-white/4 to-transparent p-6 shadow-glow sm:p-8">
+              <section className="flex flex-1 flex-col rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-white/4 to-transparent p-5 shadow-glow sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="text-md text-white/85">Payment processor</p>
+                    <p className="text-sm text-white/85">Payment processor</p>
                     <div className="mt-2 flex items-center gap-4">
                       {stripe && (
                         <ProcessorMark
@@ -375,7 +375,7 @@ export default function PaymentSettings({
                           className={!connected ? 'opacity-50 grayscale' : undefined}
                         />
                       )}
-                      <h2 className="text-4xl font-bold text-white">{stripe?.displayName ?? 'Stripe'}</h2>
+                      <h2 className="text-2xl font-bold text-white">{stripe?.displayName ?? 'Stripe'}</h2>
                     </div>
                   </div>
 
@@ -388,17 +388,17 @@ export default function PaymentSettings({
                   )}
                 </div>
 
-                <p className="mt-5 max-w-md text-md text-white/85">
+                <p className="mt-3 max-w-md text-sm text-white/85">
                   {connected
                     ? 'Clients can pay their invoices online, and each payment is recorded on the invoice as it clears.'
                     : 'Connect Stripe so clients can pay their invoices online. Until then, payments are recorded by hand.'}
                 </p>
 
                 <div className="mt-auto grid gap-3 pt-8 sm:grid-cols-2">
-                  <Button variant="blue" size="lg" fullWidth leftIcon={Layers} onClick={manageProcessors.open}>
+                  <Button variant="blue" size="md" fullWidth leftIcon={Layers} onClick={manageProcessors.open}>
                     {connected ? 'Manage Processor' : 'Connect Stripe'}
                   </Button>
-                  <Button variant="outline" size="lg" fullWidth leftIcon={BarChart3} onClick={scrollToHistory}>
+                  <Button variant="outline" size="md" fullWidth leftIcon={BarChart3} onClick={scrollToHistory}>
                     View Payment History
                   </Button>
                 </div>
@@ -741,9 +741,9 @@ function Panel({
         grow && 'flex flex-1 flex-col',
       )}
     >
-      <header className="flex items-center gap-3 border-b border-hairline bg-linear-to-b from-ocean-700/50 to-ocean-700/10 px-5 py-4">
-        <Icon size={20} aria-hidden className="text-white/90" />
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
+      <header className="flex items-center gap-3 border-b border-hairline bg-linear-to-b from-ocean-700/50 to-ocean-700/10 px-4 py-3">
+        <Icon size={18} aria-hidden className="text-white/90" />
+        <h2 className="text-md font-semibold text-white">{title}</h2>
       </header>
       {children}
     </section>
@@ -753,12 +753,12 @@ function Panel({
 /** One fact: an icon and what it is on the left, its value on the right. */
 function Row({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-5 py-4">
-      <dt className="flex items-center gap-3 text-md text-white/85">
-        <Icon size={20} aria-hidden className="text-white/85" />
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <dt className="flex items-center gap-2.5 text-sm text-white/85">
+        <Icon size={17} aria-hidden className="text-white/85" />
         {label}
       </dt>
-      <dd className="text-right text-md font-semibold text-white">{value}</dd>
+      <dd className="text-right text-sm font-semibold text-white">{value}</dd>
     </div>
   )
 }

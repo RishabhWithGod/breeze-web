@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Document;
 use App\Models\Project;
 use App\Services\Documents\DocumentStore;
+use App\Support\Ownership;
 use App\Support\UploadLimits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,7 +31,7 @@ class DocumentController extends Controller
 
     public function index(Request $request, Project $project): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $documents = Document::query()
             ->where('project_id', $project->id)
@@ -54,7 +55,7 @@ class DocumentController extends Controller
 
     public function store(Request $request, Project $project): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $data = $request->validate([
             'file' => [
@@ -94,7 +95,7 @@ class DocumentController extends Controller
 
     public function destroy(Request $request, Document $document): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $document->project?->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $document->project?->user_id), 403);
 
         $name = $document->name;
         $this->documents->delete($document);

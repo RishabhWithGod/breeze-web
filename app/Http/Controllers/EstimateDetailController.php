@@ -13,6 +13,7 @@ use App\Services\Clients\ProjectDirectory;
 use App\Services\Export\EstimatePdfWriter;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\Ownership;
 use App\Support\WireLengths;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,9 +34,14 @@ class EstimateDetailController extends Controller
 {
     public function __construct(private readonly ClientDirectory $clients) {}
 
-    public function show(Request $request, Estimate $estimate): Response
+    public function show(Request $request, Estimate $estimate): Response|RedirectResponse
     {
         $this->authorize('view', $estimate);
+
+        // One the builder sent for approval is read on the review screen, where it is decided.
+        if (config('features.estimate_builder') && $estimate->builder_managed && $estimate->status === 'sent') {
+            return redirect()->route('estimates.review', $estimate);
+        }
 
         // Opened as a step, so the flow is remembered from here too — coming
         // back to an estimate is a normal way to re-enter it.
@@ -307,7 +313,11 @@ class EstimateDetailController extends Controller
     {
         $this->authorize('update', $estimate);
 
-        $userId = \App\Support\Ownership::userIdList($request->user());
+        // An estimate the builder owns is changed in the builder while a draft, and by the
+        // review screen after that — not from here.
+        abort_if($estimate->builder_managed && $estimate->status !== 'draft', 409, 'This estimate is with review and approval and can no longer be edited here.');
+
+        $userId = Ownership::userIdList($request->user());
 
         $validated = $request->validate([
             /*
@@ -394,6 +404,10 @@ class EstimateDetailController extends Controller
     {
         $this->authorize('update', $estimate);
 
+        // An estimate the builder owns is changed in the builder while a draft, and by the
+        // review screen after that — not from here.
+        abort_if($estimate->builder_managed && $estimate->status !== 'draft', 409, 'This estimate is with review and approval and can no longer be edited here.');
+
         $validated = $request->validate([
             'category' => ['required', Rule::in(EstimateItem::CATEGORIES)],
             'description' => ['required', 'string', 'max:200'],
@@ -423,6 +437,10 @@ class EstimateDetailController extends Controller
     public function updateItem(Request $request, Estimate $estimate, EstimateItem $item): RedirectResponse
     {
         $this->authorize('update', $estimate);
+
+        // An estimate the builder owns is changed in the builder while a draft, and by the
+        // review screen after that — not from here.
+        abort_if($estimate->builder_managed && $estimate->status !== 'draft', 409, 'This estimate is with review and approval and can no longer be edited here.');
         abort_unless($item->estimate_id === $estimate->id, 404);
 
         $validated = $request->validate([
@@ -451,6 +469,10 @@ class EstimateDetailController extends Controller
     public function destroyItem(Estimate $estimate, EstimateItem $item): RedirectResponse
     {
         $this->authorize('update', $estimate);
+
+        // An estimate the builder owns is changed in the builder while a draft, and by the
+        // review screen after that — not from here.
+        abort_if($estimate->builder_managed && $estimate->status !== 'draft', 409, 'This estimate is with review and approval and can no longer be edited here.');
         abort_unless($item->estimate_id === $estimate->id, 404);
 
         $description = $item->description;

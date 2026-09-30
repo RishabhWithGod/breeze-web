@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\Billing\SubscriptionSummary;
 use App\Services\Technicians\TechnicianApprovalService;
 use App\Services\TimeTracking\TeamMemberResolver;
+use App\Support\CompanyRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -50,7 +51,7 @@ class TechnicianController extends Controller
         abort_unless($user->isFromMobile() && $user->company_id === $request->user()->company_id, 404);
 
         $data = $request->validate([
-            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['required', 'integer', CompanyRule::exists('teams')],
             'role' => ['required', Rule::in(self::ROLES)],
         ], [
             'team_id.required' => 'Pick a team before approving.',
@@ -90,7 +91,7 @@ class TechnicianController extends Controller
         abort_unless($user->isFromMobile() && $user->company_id === $request->user()->company_id, 404);
 
         $data = $request->validate([
-            'team_id' => ['sometimes', 'nullable', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['sometimes', 'nullable', 'integer', CompanyRule::exists('teams')],
             'role' => ['sometimes', 'nullable', Rule::in(self::ROLES)],
         ]);
 

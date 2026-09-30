@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Middleware\BlockApprenticeAccess;
+use App\Http\Middleware\EnforcePermissions;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureCompanySetUp;
+use App\Http\Middleware\EnsureFeatureEnabled;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -32,6 +34,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->alias([
             'company.setup' => EnsureCompanySetUp::class,
+            'permissions' => EnforcePermissions::class,
+            'feature' => EnsureFeatureEnabled::class,
             'account.active' => EnsureAccountIsActive::class,
             'block.apprentice' => BlockApprenticeAccess::class,
         ]);
@@ -76,21 +80,40 @@ return Application::configure(basePath: dirname(__DIR__))
                 };
             }
 
+            $status = $response->getStatusCode();
+
+            /*
+             * Someone asked to do something their role does not allow. In the app itself (every click
+             * and form goes through Inertia) they stay where they were and are told so, rather than
+             * landing on an error screen. A page opened directly gets a plain "no access" screen.
+             */
+            if ($status === 403 && ($request->header('X-Inertia') || ! $request->expectsJson())) {
+                $message = str_starts_with((string) $exception->getMessage(), 'Your role')
+                    ? $exception->getMessage().' Ask a manager if you need it.'
+                    : "You don't have permission to do that. Ask a manager if you need access.";
+
+                if ($request->header('X-Inertia')) {
+                    $previous = url()->previous();
+                    $back = $previous !== $request->fullUrl() && $previous !== url()->current() ? $previous : route('home');
+
+                    return redirect()->to($back)->with('denied', $message);
+                }
+
+                return Inertia::render('NoAccess', ['message' => $message])->toResponse($request)->setStatusCode(403);
+            }
+
+            if ($status === 419) {
+                return $request->header('X-Inertia') ? back()->with('warning', 'Your session expired — please try again.') : $response;
+            }
+
             if (! $request->header('X-Inertia')) {
                 return $response;
             }
 
-            if ($response->getStatusCode() === 419) {
-                return back()->with('warning', 'Your session expired — please try again.');
-            }
-
-            if (in_array($response->getStatusCode(), [403, 404, 500, 503], true)) {
-                return Inertia::render(
-                    $response->getStatusCode() === 404 ? 'NotFound' : 'ErrorState',
-                    ['status' => $response->getStatusCode()],
-                )
+            if (in_array($status, [404, 500, 503], true)) {
+                return Inertia::render($status === 404 ? 'NotFound' : 'ErrorState', ['status' => $status])
                     ->toResponse($request)
-                    ->setStatusCode($response->getStatusCode());
+                    ->setStatusCode($status);
             }
 
             return $response;

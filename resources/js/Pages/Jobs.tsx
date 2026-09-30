@@ -41,7 +41,7 @@ import {
   type JobTypeFilter,
   type JobView,
 } from '@/constants'
-import { useDisclosure } from '@/hooks'
+import { useDisclosure, usePermissions } from '@/hooks'
 import type {
   Job,
   Paginated,
@@ -95,6 +95,7 @@ export interface JobsProps {
  * query-string state. Row actions and bulk actions go through JobController.
  */
 export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
+  const { can: permitted } = usePermissions()
   const { flash } = usePage<SharedPageProps>().props
 
   const [query, setQuery] = useState(filters.search)
@@ -355,7 +356,7 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
           ariaLabel={`Actions for ${job.name}`}
           items={[
             { label: 'View', icon: Eye, onSelect: () => router.visit(routeTo.job(job.id)) },
-            ...(!job.isLocked
+            ...(!job.isLocked && permitted('jobs.edit')
               ? [
                   {
                     label: 'Edit',
@@ -383,7 +384,7 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
                   },
                 ]
               : []),
-            ...(!job.isLocked
+            ...(!job.isLocked && permitted('jobs.delete')
               ? [
                   {
                     label: 'Delete',
@@ -431,9 +432,11 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
             >
               Filters
             </Button>
-            <ButtonLink href={ROUTES.jobCreate} variant="dark" leftIcon={Plus}>
-              Create Job
-            </ButtonLink>
+            {permitted('jobs.create') && (
+              <ButtonLink href={ROUTES.jobCreate} variant="dark" leftIcon={Plus}>
+                Create Job
+              </ButtonLink>
+            )}
           </div>
         </header>
 

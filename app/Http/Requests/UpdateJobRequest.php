@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Models\Job;
+use App\Support\CompanyRule;
+use App\Support\Ownership;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,7 +18,7 @@ class UpdateJobRequest extends FormRequest
      */
     public function rules(): array
     {
-        $userId = \App\Support\Ownership::userIdList($this->user());
+        $userId = Ownership::userIdList($this->user());
 
         return [
             'name' => ['required', 'string', 'min:3', 'max:160'],
@@ -52,7 +54,7 @@ class UpdateJobRequest extends FormRequest
              * before anyone knows who will run it. Once it is set, it narrows
              * who a task on this job can be given to.
              */
-            'team_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             'status' => ['required', Rule::in(Job::STATUSES)],
             /*
              * Both required, exactly as they are when the job is raised. A job

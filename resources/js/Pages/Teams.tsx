@@ -34,6 +34,7 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
+import { usePermissions } from '@/hooks'
 import type { Paginated, SharedPageProps, TableColumn } from '@/types'
 import { formatDate } from '@/utils'
 
@@ -221,6 +222,7 @@ export default function Teams({
   teamOptions,
   technicianRoleOptions,
 }: TeamsProps) {
+  const { can } = usePermissions()
   const [search, setSearch] = useState(filters.search)
   // Which tab is open lives in the URL, so a link or a reload lands on the same one.
   const [tab, setTab] = useState<'teams' | 'managers'>(() =>
@@ -372,14 +374,23 @@ export default function Teams({
         subtitle="The crews work is handed to, and how much each member is already carrying."
         breadcrumbs={[{ label: 'Clients', href: ROUTES.clients }, { label: 'Teams' }]}
         actions={
-          canManage ? (
+          canManage || can('admin.manage_roles') ? (
             <>
-              <ButtonLink href={ROUTES.teamCreate} variant="secondary" leftIcon={Users}>
-                Add team
-              </ButtonLink>
-              <ButtonLink href={ROUTES.foremanCreate} leftIcon={UserPlus}>
-                Add member
-              </ButtonLink>
+              {can('admin.manage_roles') && (
+                <ButtonLink href={ROUTES.rolesPermissions} variant="secondary" leftIcon={ShieldCheck}>
+                  Roles &amp; Permissions
+                </ButtonLink>
+              )}
+              {canManage && (
+                <>
+                  <ButtonLink href={ROUTES.teamCreate} variant="secondary" leftIcon={Users}>
+                    Add team
+                  </ButtonLink>
+                  <ButtonLink href={ROUTES.foremanCreate} leftIcon={UserPlus}>
+                    Add member
+                  </ButtonLink>
+                </>
+              )}
             </>
           ) : undefined
         }

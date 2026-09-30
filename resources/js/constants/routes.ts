@@ -24,6 +24,7 @@ export const ROUTES = {
 
   // Protected
   home: '/home',
+  getStarted: '/get-started',
   /** AI Takeoff module landing screen — the takeoff history. */
   aiTakeoff: '/ai-takeoff',
   /** Address suggestions for the Site / Location field. JSON, not a page. */
@@ -43,6 +44,10 @@ export const ROUTES = {
   projectCreate: '/projects/create',
   /** The company's own rates, imported from its estimating workbooks. */
   priceBook: '/price-book',
+  commodities: '/commodities',
+  rolesPermissions: '/roles-permissions',
+  changeOrders: '/change-orders',
+  changeOrderCreate: '/change-orders/create',
   estimates: '/estimates',
   estimateCreate: '/estimates/create',
   /** Where a project's addenda are managed, and a job raised from a selection of them. */
@@ -208,7 +213,25 @@ export const routeTo = {
   projectCreateForClient: (clientId: number) => `/projects/create?client=${clientId}`,
   foreman: (foremanId: number) => `/foremen/${foremanId}`,
   team: (teamId: number) => `/teams/${teamId}`,
+  commodityTemplate: '/commodities/template',
+  commodityImport: '/commodities/import',
+  commoditySave: '/commodities/save',
+  commoditySkip: '/commodities/skip',
+  teamSetupInvitations: '/team-setup/invitations',
+  teamSetupInvitationResend: (invitationId: number) => `/team-setup/invitations/${invitationId}/resend`,
+  changeOrder: (id: number) => `/change-orders/${id}`,
+  changeOrderEdit: (id: number) => `/change-orders/${id}/edit`,
+  changeOrderAction: (id: number, action: 'submit' | 'withdraw' | 'approve' | 'reject' | 'attachments') =>
+    `/change-orders/${id}/${action}`,
+  changeOrderFile: (id: number, fileId: number) => `/change-orders/${id}/attachments/${fileId}`,
+  changeOrderForJob: (jobId: number) => `/change-orders/create?job=${jobId}`,
+  commodityUpdate: (itemId: number) => `/commodities/${itemId}`,
+  commodityArchive: (itemId: number) => `/commodities/${itemId}/archive`,
+  teamSetupInvitationCancel: (invitationId: number) => `/team-setup/invitations/${invitationId}`,
   estimateBuilderShow: (estimateId: number) => `/estimate-builder/${estimateId}`,
+  estimateReview: (estimateId: number) => `/estimates/${estimateId}/review`,
+  estimateApprove: (estimateId: number) => `/estimates/${estimateId}/approve`,
+  estimateReturn: (estimateId: number) => `/estimates/${estimateId}/return`,
   estimateBuilderImport: (estimateId: number) => `/estimate-builder/${estimateId}/import`,
   estimateBuilderRequestApproval: (estimateId: number) => `/estimate-builder/${estimateId}/request-approval`,
   estimateBuilderPriceList: '/estimate-builder/price-list',

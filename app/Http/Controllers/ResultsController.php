@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\ProjectDetailResource;
 use App\Models\AiResult;
 use App\Models\Project;
+use App\Support\Ownership;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -23,7 +24,7 @@ class ResultsController extends Controller
     public function latest(Request $request): Response|RedirectResponse
     {
         $result = AiResult::query()
-            ->whereHas('project', fn ($query) => $query->whereIn('user_id', \App\Support\Ownership::userIds($request->user())))
+            ->whereHas('project', fn ($query) => $query->whereIn('user_id', Ownership::userIds($request->user())))
             ->latest('id')
             ->first();
 
@@ -32,7 +33,7 @@ class ResultsController extends Controller
         }
 
         $project = Project::query()
-            ->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))
+            ->whereIn('user_id', Ownership::userIds($request->user()))
             ->whereHas('symbols')
             ->latest('completed_at')
             ->first();
@@ -44,7 +45,7 @@ class ResultsController extends Controller
 
     public function show(Request $request, Project $project): Response|RedirectResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $result = $project->latestAiResult;
 

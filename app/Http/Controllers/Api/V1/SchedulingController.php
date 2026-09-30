@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Models\CrewShift;
 use App\Models\Job;
+use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -74,7 +75,7 @@ class SchedulingController extends Controller
         ]);
 
         $job = Job::with('team', 'tasks.foreman', 'foreman')->findOrFail($data['job_id']);
-        abort_unless(\App\Support\Ownership::owns($request->user(), $job->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $job->user_id), 403);
 
         $crew = $this->crewLabel($job);
         $start = Carbon::parse($data['scheduled_date'])->startOfDay();

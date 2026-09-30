@@ -30,6 +30,8 @@ class DashboardScopeTest extends TestCase
             'user_id' => $manager->id, 'name' => $name, 'business_address' => '1 Main St', 'primary_contact' => 'A',
             'phone' => '(512) 555-0142', 'email' => 'o@x.test', 'timezone' => 'America/Chicago',
         ]);
+        // Setup is done, so the dashboard is the dashboard.
+        $company->forceFill(['onboarding_finished_at' => now()])->save();
         $manager->forceFill(['company_id' => $company->id])->save();
 
         return [$company, $manager->fresh()];

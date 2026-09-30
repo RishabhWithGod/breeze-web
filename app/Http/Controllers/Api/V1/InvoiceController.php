@@ -17,6 +17,7 @@ use App\Services\Billing\EstimateInvoiceSync;
 use App\Services\Billing\InvoiceSummaryCalculator;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Export\InvoicePdfWriter;
+use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response as ResponseFactory;
@@ -144,11 +145,11 @@ class InvoiceController extends Controller
         $data = $this->validated($request);
 
         $estimate = ! empty($data['estimate_id'])
-            ? Estimate::whereIn('user_id', \App\Support\Ownership::userIds($user))->find($data['estimate_id'])
+            ? Estimate::whereIn('user_id', Ownership::userIds($user))->find($data['estimate_id'])
             : null;
 
         if (! empty($data['job_id'])) {
-            $job = Job::whereIn('user_id', \App\Support\Ownership::userIds($user))->find($data['job_id']);
+            $job = Job::whereIn('user_id', Ownership::userIds($user))->find($data['job_id']);
             abort_unless($job !== null, 404);
 
             if (! $job->isLocked()) {
@@ -314,7 +315,7 @@ class InvoiceController extends Controller
     /** @return array<string, mixed> */
     private function validated(Request $request): array
     {
-        $userId = \App\Support\Ownership::userIdList($request->user());
+        $userId = Ownership::userIdList($request->user());
 
         return $request->validate([
             'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userId)],

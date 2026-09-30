@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateJobRequest;
 use App\Http\Resources\FeedItemResource;
 use App\Http\Resources\JobDetailResource;
 use App\Http\Resources\JobResource;
+use App\Models\ChangeOrder;
 use App\Models\Estimate;
 use App\Models\FeedItem;
 use App\Models\Job;
@@ -21,6 +22,7 @@ use App\Models\User;
 use App\Policies\InvoicePolicy;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Activity\FeedItemRecorder;
+use App\Services\ChangeOrders\ChangeOrderAccess;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\JobSites;
 use App\Services\Clients\ProjectDirectory;
@@ -29,6 +31,7 @@ use App\Services\Takeoff\TakeoffFlow;
 use App\Services\Takeoff\TakeoffLinkOptions;
 use App\Support\JobCrew;
 use App\Support\JobOrigin;
+use App\Support\Ownership;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -293,6 +296,7 @@ class JobController extends Controller
             // just gates the manager's "remove" action on the list below.
             'canManageApprentices' => $schedulePolicy->assignApprentice($request->user(), $job),
             'canCreateInvoice' => app(InvoicePolicy::class)->create($request->user()),
+            'changeOrders' => $this->changeOrdersFor($request, $job),
             'apprenticeAssignments' => $job->apprenticeAssignments()
                 ->with(['journeyman:id,name', 'apprentice:id,name'])
                 ->get()
@@ -309,6 +313,35 @@ class JobController extends Controller
             // and the job someone returns to still knows the way out.
             'from' => $this->originName($request),
         ]);
+    }
+
+    /**
+     * This job's change orders, for the tab on its page — null for anyone who has no change orders
+     * screen, so the tab is not offered at all.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function changeOrdersFor(Request $request, Job $job): ?array
+    {
+        $access = app(ChangeOrderAccess::class);
+        $user = $request->user();
+
+        if (! $access->canUse($user)) {
+            return null;
+        }
+
+        return [
+            'canRaise' => $access->canRaiseFor($user, $job),
+            'items' => $access->visible(ChangeOrder::query(), $user)->where('job_id', $job->id)->orderByDesc('number')->get()
+                ->map(fn (ChangeOrder $co) => [
+                    'id' => $co->id,
+                    'label' => $co->label(),
+                    'description' => $co->description,
+                    'source' => $co->source,
+                    'status' => $co->status,
+                    'amount' => (float) $co->sell_total,
+                ])->all(),
+        ];
     }
 
     public function edit(Request $request, Job $job): Response|RedirectResponse
@@ -516,7 +549,7 @@ class JobController extends Controller
     {
         $validated = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
-            'ids.*' => ['integer', Rule::exists('work_jobs', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($request->user()))],
+            'ids.*' => ['integer', Rule::exists('work_jobs', 'id')->whereIn('user_id', Ownership::userIdList($request->user()))],
             'action' => ['required', Rule::in(['archive', 'unarchive', 'delete', 'status'])],
             'status' => ['nullable', Rule::in(Job::STATUSES), 'required_if:action,status'],
         ]);

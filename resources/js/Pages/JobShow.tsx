@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
   Archive,
+  FilePen,
   ArrowLeft,
   BarChart3,
   Building2,
@@ -44,11 +45,14 @@ import {
   JobTaskFieldNotesPanel,
   JobTasksPanel,
 } from '@/components/jobs'
+import { ChangeOrderSourcePill, ChangeOrderStatusPill } from '@/components/changeOrders/ChangeOrderPills'
 import { appLayout, PageTransition } from '@/components/layout'
 import { JOB_STATUS_OPTIONS, routeTo } from '@/constants'
 import type { JobOrigin } from '@/constants'
-import { useDisclosure, useEchoConnectionState, usePrivateChannel } from '@/hooks'
+import { useDisclosure, useEchoConnectionState, usePrivateChannel, usePermissions } from '@/hooks'
 import type {
+  ChangeOrderSource,
+  ChangeOrderStatus,
   JobCostRow,
   JobDetail,
   JobStatus,
@@ -79,6 +83,18 @@ export interface JobShowProps {
   canManageApprentices: boolean
   /** Role-only — whether this user may raise an invoice at all. Already-invoiced is `job.hasInvoice`. */
   canCreateInvoice: boolean
+  /** This job's change orders — null for anyone who has no change orders screen. */
+  changeOrders: {
+    canRaise: boolean
+    items: readonly {
+      readonly id: number
+      readonly label: string
+      readonly description: string
+      readonly source: ChangeOrderSource
+      readonly status: ChangeOrderStatus
+      readonly amount: number
+    }[]
+  } | null
   apprenticeAssignments: readonly {
     readonly id: number
     readonly journeymanId: number
@@ -108,10 +124,12 @@ export default function JobShow({
   canPlanWork,
   canManageApprentices,
   canCreateInvoice,
+  changeOrders,
   apprenticeAssignments,
   back,
   from,
 }: JobShowProps) {
+  const { can: permitted } = usePermissions()
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
@@ -212,6 +230,7 @@ export default function JobShow({
     { key: 'tasks', label: 'Tasks', count: tasksTotal },
     { key: 'team', label: 'Crew', count: taskCrew.length },
     { key: 'estimates', label: 'Estimates', count: job.estimates.length },
+    ...(changeOrders ? [{ key: 'changeOrders' as const, label: 'Change Orders', count: changeOrders.items.length }] : []),
     { key: 'notes', label: 'Notes', count: job.notes.length },
     { key: 'documents', label: 'Documents', count: job.attachments.length + fieldFiles.length },
   ]
@@ -241,7 +260,7 @@ export default function JobShow({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {!isLocked && (
+          {!isLocked && permitted('jobs.edit') && (
             <ButtonLink href={routeTo.jobEditFrom(job.id, from)} variant="white" leftIcon={PencilLine}>
               Edit Job
             </ButtonLink>
@@ -274,7 +293,7 @@ export default function JobShow({
                 </span>
               }
               items={[
-                ...(canPlanWork
+                ...(canPlanWork && permitted('tasks.create')
                   ? [
                       {
                         label: 'Add task',
@@ -283,9 +302,20 @@ export default function JobShow({
                       },
                     ]
                   : []),
+                ...(changeOrders?.canRaise
+                  ? [
+                      {
+                        label: 'Create change order',
+                        icon: FilePen,
+                        onSelect: () => router.visit(routeTo.changeOrderForJob(job.id)),
+                      },
+                    ]
+                  : []),
                 { label: 'Add note', icon: NotebookPen, onSelect: () => setTab('notes') },
                 { label: 'Add document', icon: FileUp, onSelect: () => setTab('documents') },
-                { label: 'Delete job', icon: Trash2, destructive: true, onSelect: deleteDialog.open },
+                ...(permitted('jobs.delete')
+                  ? [{ label: 'Delete job', icon: Trash2, destructive: true, onSelect: deleteDialog.open }]
+                  : []),
               ]}
             />
           )}
@@ -424,6 +454,13 @@ export default function JobShow({
                     icon={ClipboardList}
                     label="Create Task"
                     onClick={() => router.visit(routeTo.jobTaskSetupFromJob(job.id, from))}
+                  />
+                )}
+                {changeOrders?.canRaise && (
+                  <QuickAction
+                    icon={FilePen}
+                    label="Create Change Order"
+                    onClick={() => router.visit(routeTo.changeOrderForJob(job.id))}
                   />
                 )}
                 <QuickAction icon={NotebookPen} label="Add Note" onClick={() => setTab('notes')} />
@@ -594,6 +631,44 @@ export default function JobShow({
         </Card>
       )}
 
+      {/* ================================================ Change orders ====== */}
+      {tab === 'changeOrders' && changeOrders && (
+        <Card padding="md" className="mt-5">
+          <SectionHeading
+            as="h3"
+            title="Change Orders"
+            subtitle="Work added to this job after it began"
+            actions={
+              changeOrders.canRaise ? (
+                <ButtonLink href={routeTo.changeOrderForJob(job.id)} variant="secondary" size="sm" leftIcon={Plus}>
+                  Create change order
+                </ButtonLink>
+              ) : undefined
+            }
+          />
+          {changeOrders.items.length === 0 ? (
+            <p className="text-sm text-white/75">
+              No change orders on this job yet.
+              {changeOrders.canRaise ? ' Create one when work is added after it began.' : ''}
+            </p>
+          ) : (
+            <ul className="divide-y divide-hairline">
+              {changeOrders.items.map((order) => (
+                <li key={order.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+                  <Link href={routeTo.changeOrder(order.id)} className="w-20 font-medium text-white hover:text-brand">
+                    {order.label}
+                  </Link>
+                  <span className="min-w-0 flex-1 text-sm text-white/90">{order.description}</span>
+                  <ChangeOrderSourcePill source={order.source} />
+                  <span className="w-24 text-right text-sm tabular-nums text-white">{formatCurrency(order.amount)}</span>
+                  <ChangeOrderStatusPill status={order.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
       {tab === 'notes' && (
         <Card padding="md" className="mt-5">
           <SectionHeading as="h3" title="Notes" subtitle={`${job.notes.length} recorded`} />
@@ -689,7 +764,7 @@ export default function JobShow({
 }
 
 
-type JobTab = 'overview' | 'tasks' | 'team' | 'estimates' | 'notes' | 'documents'
+type JobTab = 'overview' | 'tasks' | 'team' | 'estimates' | 'changeOrders' | 'notes' | 'documents'
 
 function MetaItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (

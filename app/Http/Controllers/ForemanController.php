@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Foreman;
-use App\Services\Company\ManagerRegistrar;
 use App\Models\Job;
 use App\Models\JobAttendance;
 use App\Models\JobSchedule;
@@ -12,7 +11,9 @@ use App\Models\Team;
 use App\Models\User;
 use App\Policies\JobSchedulePolicy;
 use App\Rules\UsPhoneNumber;
+use App\Services\Company\ManagerRegistrar;
 use App\Services\TimeTracking\TeamMemberResolver;
+use App\Support\CompanyRule;
 use App\Support\UsPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -356,6 +357,16 @@ class ForemanController extends Controller
         // are exactly where they were left.
         $job = $this->jobFor($request);
 
+        /*
+         * The task screen offers only the people staffed to the job's project. Someone added from
+         * there, to that job's own crew, is staffed to it too — otherwise they would be on the crew
+         * and still missing from the very dropdowns they were added for.
+         */
+        $project = $job?->project;
+        if ($project !== null && $project->members()->exists() && ($job->team_id === null || $job->team_id === $foreman->team_id)) {
+            $project->members()->syncWithoutDetaching([$foreman->id]);
+        }
+
         return redirect()
             ->to($job === null ? route('teams.index') : route('jobs.tasks.setup', $job))
             ->with('success', "“{$foreman->name}” was added.");
@@ -421,7 +432,7 @@ class ForemanController extends Controller
             'name' => [
                 'required', 'string', 'min:2', 'max:120',
                 // A foreman renaming themselves is not a clash with themselves.
-                \App\Support\CompanyRule::unique('foremen', 'name')->ignore($foreman),
+                CompanyRule::unique('foremen', 'name')->ignore($foreman),
             ],
             /*
              * Everything below is optional. A foreman exists to be handed work,
@@ -443,7 +454,7 @@ class ForemanController extends Controller
              * their team is decided, and the register shows them as exactly
              * that rather than inventing one.
              */
-            'team_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('teams')],
+            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             'phone' => ['nullable', 'string', 'max:40', new UsPhoneNumber],
             /*
              * Every member added here is also a mobile-app login — the same

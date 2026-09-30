@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\PriceBookImport;
 use App\Models\PriceBookItem;
 use App\Models\PriceBookLine;
+use App\Services\Takeoff\PriceBookLookup;
+use App\Support\Ownership;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Inertia\Inertia;
@@ -142,13 +144,13 @@ class PriceBookController extends Controller
      * Whose book this request reads: the signed-in user's own, or — while
      * they have never uploaded a rate list — the universal one.
      *
-     * The same rule {@see \App\Services\Takeoff\PriceBookLookup} prices
+     * The same rule {@see PriceBookLookup} prices
      * estimates with, so this screen always shows the book an estimate would
      * actually be raised against.
      */
     private function scopeFor(Request $request): ?int
     {
-        $userId = \App\Support\Ownership::bookOwnerId($request->user()->id);
+        $userId = Ownership::bookOwnerId($request->user()->id);
 
         return PriceBookItem::query()->where('user_id', $userId)->exists() ? $userId : null;
     }

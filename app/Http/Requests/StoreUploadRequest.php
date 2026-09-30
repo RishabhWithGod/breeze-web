@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\Ownership;
 use App\Support\UploadLimits;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -17,7 +18,7 @@ class StoreUploadRequest extends FormRequest
             'project_id' => [
                 'required',
                 'integer',
-                Rule::exists('projects', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($this->user())),
+                Rule::exists('projects', 'id')->whereIn('user_id', Ownership::userIdList($this->user())),
             ],
             /*
              * Set only when this drawing was sent through "Upload Addendum"
@@ -28,7 +29,7 @@ class StoreUploadRequest extends FormRequest
             'addendum_for_estimate_id' => [
                 'nullable',
                 'integer',
-                Rule::exists('estimates', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($this->user())),
+                Rule::exists('estimates', 'id')->whereIn('user_id', Ownership::userIdList($this->user())),
             ],
             'addendum_reason' => ['nullable', 'string', 'max:2000'],
             'affected_sheets' => ['nullable', 'string', 'max:500'],

@@ -9,6 +9,7 @@ use App\Models\PriceBookImport;
 use App\Models\PriceBookItem;
 use App\Models\User;
 use App\Support\Ownership;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -26,7 +27,7 @@ class EstimateWorksheet
      * Replaces the worksheet with `$lines` and brings the estimate in line with it.
      *
      * @param  list<array<string, mixed>>  $lines
-     * @param  array{tax_pct: float|int|string, markup_pct: float|int|string, labor_rate: float|int|string}  $settings
+     * @param  array{tax_pct: float|int|string, markup_pct: float|int|string, labor_rate: float|int|string, scope_of_work?: ?string, exclusions?: ?array<int, string>}  $settings
      */
     public function save(Estimate $estimate, array $lines, array $settings, User $user): void
     {
@@ -37,6 +38,17 @@ class EstimateWorksheet
                 'builder_labor_rate' => $settings['labor_rate'],
                 'commodity_version' => $this->commodityVersion($user),
             ]);
+
+            // What the estimate covers and leaves out — only touched when the page sent it.
+            if (array_key_exists('scope_of_work', $settings)) {
+                $estimate->update(['scope_of_work' => filled($settings['scope_of_work']) ? trim((string) $settings['scope_of_work']) : null]);
+            }
+            if (array_key_exists('exclusions', $settings)) {
+                $estimate->update(['exclusions' => array_values(array_filter(
+                    array_map(fn ($line) => trim((string) $line), $settings['exclusions'] ?? []),
+                    fn (string $line) => $line !== '',
+                ))]);
+            }
 
             $kept = [];
             foreach (array_values($lines) as $position => $row) {
@@ -175,18 +187,18 @@ class EstimateWorksheet
     public function commodityVersion(User $user): string
     {
         $owner = Ownership::bookOwnerId($user->id);
-        $items = PriceBookItem::query()->where('user_id', $owner)->count();
+        $items = PriceBookItem::query()->active()->where('user_id', $owner)->count();
 
         if ($items === 0) {
             $owner = null;
-            $items = PriceBookItem::query()->whereNull('user_id')->count();
+            $items = PriceBookItem::query()->active()->whereNull('user_id')->count();
         }
 
         $loaded = PriceBookImport::query()->where('user_id', $owner)->latest('id')->value('created_at');
 
         return $items === 0
             ? 'No price list'
-            : 'Price list of '.($loaded ? \Illuminate\Support\Carbon::parse($loaded)->format('M j, Y') : 'unknown date')." · {$items} items";
+            : 'Price list of '.($loaded ? Carbon::parse($loaded)->format('M j, Y') : 'unknown date')." · {$items} items";
     }
 
     /**
@@ -197,9 +209,10 @@ class EstimateWorksheet
     public function priceList(User $user, ?string $search = null, int $limit = 60): array
     {
         $owner = Ownership::bookOwnerId($user->id);
-        $useOwn = PriceBookItem::query()->where('user_id', $owner)->exists();
+        $useOwn = PriceBookItem::query()->active()->where('user_id', $owner)->exists();
 
         return PriceBookItem::query()
+            ->active()
             ->where('user_id', $useOwn ? $owner : null)
             ->search($search)
             ->orderBy('section')

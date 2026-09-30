@@ -12,6 +12,7 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
+import { usePermissions } from '@/hooks'
 import type { Paginated, TableColumn } from '@/types'
 
 interface ClientRow {
@@ -39,6 +40,7 @@ export interface ClientsProps {
  * did not already know.
  */
 export default function Clients({ clients, filters }: ClientsProps) {
+  const { can: permitted } = usePermissions()
   const [search, setSearch] = useState(filters.search)
   const rows = clients.data
 
@@ -160,9 +162,11 @@ export default function Clients({ clients, filters }: ClientsProps) {
         subtitle="Manage your clients and their associated projects, estimates, and activity — All in one place."
         breadcrumbs={[{ label: 'Clients' }]}
         actions={
-          <ButtonLink href={ROUTES.clientCreate} leftIcon={Plus}>
-            Add Client
-          </ButtonLink>
+          permitted('clients.create') ? (
+            <ButtonLink href={ROUTES.clientCreate} leftIcon={Plus}>
+              Add Client
+            </ButtonLink>
+          ) : undefined
         }
       />
 
@@ -187,7 +191,7 @@ export default function Clients({ clients, filters }: ClientsProps) {
                 ? 'Clear the search to see everyone on the register.'
                 : 'Add the client the work is for, then open a project under them.'
             }
-            {...(filters.search
+            {...(filters.search || !permitted('clients.create')
               ? {}
               : {
                   actions: (

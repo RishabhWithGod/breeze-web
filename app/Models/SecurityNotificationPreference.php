@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Collection;
 
 /** One row per (user, event type). Both channels default false — real, per-user preferences. */
 class SecurityNotificationPreference extends Model
@@ -47,7 +48,7 @@ class SecurityNotificationPreference extends Model
     }
 
     /** All four event rows for the user, creating any missing ones with both channels off. */
-    public static function allForUser(User $user): \Illuminate\Support\Collection
+    public static function allForUser(User $user): Collection
     {
         foreach (self::EVENT_TYPES as $type) {
             static::query()->firstOrCreate(['user_id' => $user->id, 'event_type' => $type]);

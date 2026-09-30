@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\ProjectSummaryResource;
 use App\Models\Project;
+use App\Support\Ownership;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -18,7 +19,7 @@ class TakeoffHistoryController extends Controller
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
             'status' => ['nullable', Rule::in([
-                'all', 'draft', 'processing', 'ready-for-review', 'completed', 'converted', 'failed',
+                'all', 'processing', 'ready-for-review', 'completed', 'converted',
             ])],
             'client' => ['nullable', 'string', 'max:160'],
             // Not an id-shaped rule: 'all' is the honest default here too, the
@@ -32,8 +33,7 @@ class TakeoffHistoryController extends Controller
         $project = $filters['project'] ?? 'all';
         $sort = $filters['sort'] ?? 'date-desc';
 
-        $projects = Project::query()
-            ->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))
+        $projects = $this->finished($request)
             ->search($filters['search'] ?? null)
             ->when($status !== 'all', function ($query) use ($status) {
                 // Not a stored column — it is `review_status` read a different
@@ -65,21 +65,31 @@ class TakeoffHistoryController extends Controller
             ],
             // Every one of this user's own clients and projects, for the
             // filter dropdowns — real options, not a guess at what exists.
-            'clients' => Project::query()
-                ->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))
+            'clients' => $this->finished($request)
                 ->whereNotNull('client')
                 ->distinct()
                 ->orderBy('client')
                 ->pluck('client'),
-            'projectOptions' => $request->user()->projects()
+            'projectOptions' => $this->finished($request)
                 ->orderBy('name')
                 ->get(['id', 'name']),
         ]);
     }
 
+    /**
+     * The takeoffs that are under way or done. A project whose takeoff was never run (a draft) or
+     * did not finish (failed) is not a takeoff yet, so it is not listed.
+     */
+    private function finished(Request $request)
+    {
+        return Project::query()
+            ->whereIn('user_id', Ownership::userIds($request->user()))
+            ->whereIn('status', ['processing', 'completed', 'converted']);
+    }
+
     public function destroy(Request $request, Project $project): RedirectResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $project->delete();
 
@@ -91,7 +101,7 @@ class TakeoffHistoryController extends Controller
     {
         $trashed = Project::onlyTrashed()->findOrFail($project);
 
-        abort_unless(\App\Support\Ownership::owns($request->user(), $trashed->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $trashed->user_id), 403);
 
         $trashed->restore();
 

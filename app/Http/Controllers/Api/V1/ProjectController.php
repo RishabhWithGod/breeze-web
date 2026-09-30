@@ -9,6 +9,7 @@ use App\Models\Estimate;
 use App\Models\Job;
 use App\Models\Project;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -74,7 +75,7 @@ class ProjectController extends Controller
      */
     public function show(Request $request, Project $project): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $project->load(['addresses', 'jobs.foreman:id,name,initials,role', 'estimates']);
         $project->loadCount(['uploads', 'aiResults']);
@@ -193,7 +194,7 @@ class ProjectController extends Controller
      */
     public function update(Request $request, Project $project): JsonResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
         $data = $request->validate([
             'name' => ['required', 'string', 'min:3', 'max:160'],

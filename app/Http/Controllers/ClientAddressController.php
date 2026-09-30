@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\ClientAddress;
 use App\Models\Job;
+use App\Support\Ownership;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,7 @@ class ClientAddressController extends Controller
 {
     public function store(Request $request, Client $client): RedirectResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $client->user_id), 403);
 
         $data = $request->validate([
             'label' => ['required', 'string', 'max:80'],
@@ -81,7 +82,7 @@ class ClientAddressController extends Controller
      */
     public function update(Request $request, Client $client, ClientAddress $address): RedirectResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $client->user_id), 403);
         abort_unless($address->client_id === $client->id, 404);
 
         $data = $request->validate([
@@ -166,7 +167,7 @@ class ClientAddressController extends Controller
      */
     public function destroy(Request $request, Client $client, ClientAddress $address): RedirectResponse
     {
-        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
+        abort_unless(Ownership::owns($request->user(), $client->user_id), 403);
         abort_unless($address->client_id === $client->id, 404);
 
         $jobs = $address->jobs()->count();

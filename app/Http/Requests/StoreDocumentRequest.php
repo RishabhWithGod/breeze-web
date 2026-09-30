@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Document;
+use App\Support\Ownership;
 use App\Support\UploadLimits;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -30,7 +31,7 @@ class StoreDocumentRequest extends FormRequest
              */
             'project_id' => [
                 'nullable', 'integer',
-                Rule::exists('projects', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($this->user())),
+                Rule::exists('projects', 'id')->whereIn('user_id', Ownership::userIdList($this->user())),
             ],
             'description' => ['nullable', 'string', 'max:1000'],
             /*

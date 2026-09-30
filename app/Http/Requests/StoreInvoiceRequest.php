@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Support\Ownership;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +18,7 @@ class StoreInvoiceRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        $userId = \App\Support\Ownership::userIdList($this->user());
+        $userId = Ownership::userIdList($this->user());
 
         return [
             /** The client, picked from the client register — see ClientDirectory. */

@@ -27,6 +27,8 @@ class EstimateBuilderTest extends TestCase
             'user_id' => $manager->id, 'name' => $name, 'business_address' => '1 Main St', 'primary_contact' => 'A',
             'phone' => '(512) 555-0142', 'email' => 'o@x.test', 'timezone' => 'America/Chicago',
         ]);
+        // Setup is done, so the dashboard is the dashboard.
+        $company->forceFill(['onboarding_finished_at' => now()])->save();
         $manager->forceFill(['company_id' => $company->id])->save();
 
         return [$company, $manager->fresh()];
@@ -47,7 +49,7 @@ class EstimateBuilderTest extends TestCase
     /** @return array<string, mixed> */
     private function payload(array $lines, array $settings = []): array
     {
-        return ['lines' => $lines, 'settings' => ['tax_pct' => 8.25, 'markup_pct' => 15, 'labor_rate' => 65, ...$settings]];
+        return ['lines' => $lines, 'settings' => ['tax_pct' => 8.25, 'markup_pct' => 15, 'labor_rate' => 65, 'scope_of_work' => 'Furnish all labor and materials for the electrical scope.', ...$settings]];
     }
 
     /** @return list<array<string, mixed>> */
@@ -194,8 +196,8 @@ class EstimateBuilderTest extends TestCase
         $estimate = $this->builderEstimate($pm);
 
         $source = Estimate::create([
-            'user_id' => $pm->id, 'number' => 'EST-2001', 'client' => 'Acme', 'project' => 'Takeoff', 'issued_on' => '2026-01-01',
-            'amount' => 0, 'status' => 'draft', 'kind' => 'standalone',
+            'user_id' => $pm->id, 'project_id' => $estimate->project_id, 'number' => 'EST-2001', 'client' => 'Acme', 'project' => 'Takeoff',
+            'issued_on' => '2026-01-01', 'amount' => 0, 'status' => 'draft', 'kind' => 'standalone',
         ]);
         $material = $source->items()->create(['category' => 'material', 'description' => 'Duplex outlet', 'unit' => 'EA', 'quantity' => 12, 'unit_cost' => 8.5, 'position' => 1]);
         $labor = $source->items()->create(['category' => 'labor', 'description' => 'Install outlets', 'unit' => 'HR', 'quantity' => 6, 'unit_cost' => 70, 'position' => 2]);
@@ -234,7 +236,7 @@ class EstimateBuilderTest extends TestCase
         $this->assertSame('draft', $estimate->fresh()->status);
 
         $this->actingAs($pm)->post(route('estimate-builder.request-approval', $estimate), $this->payload($this->twoLines()))
-            ->assertRedirect(route('estimates.show', $estimate))
+            ->assertRedirect(route('estimates.review', $estimate))
             ->assertSessionHas('success');
 
         $estimate->refresh();
@@ -254,13 +256,13 @@ class EstimateBuilderTest extends TestCase
         [$volt, $pm] = $this->company();
         $estimate = $this->builderEstimate($pm);
 
-        foreach (['Project Manager', 'Estimator', 'Foreman', 'Admin', 'Owner'] as $role) {
+        foreach (['Project Manager', 'Estimator', 'Supervisor', 'Admin', 'Owner'] as $role) {
             $user = User::factory()->create(['role' => $role, 'company_id' => $volt->id]);
             $this->actingAs($user)->get(route('estimate-builder.index'))->assertOk();
             $this->actingAs($user)->get(route('estimate-builder.show', $estimate))->assertOk();
         }
 
-        foreach (['Journeyman', 'Apprentice'] as $role) {
+        foreach (['Foreman', 'Journeyman', 'Apprentice'] as $role) {
             $user = User::factory()->create(['role' => $role, 'company_id' => $volt->id]);
             $this->actingAs($user)->get(route('estimate-builder.index'))->assertForbidden();
             $this->actingAs($user)->get(route('estimate-builder.show', $estimate))->assertForbidden();
@@ -344,5 +346,88 @@ class EstimateBuilderTest extends TestCase
         $this->assertEquals(18.22, $estimate->markup_total);
         $this->assertEquals(10.02, $estimate->tax_total);
         $this->assertEquals(210.45, $estimate->grand_total);
+    }
+
+    public function test_only_this_projects_estimates_and_addenda_can_be_imported(): void
+    {
+        [, $pm] = $this->company();
+        $estimate = $this->builderEstimate($pm);
+        $other = Project::create(['user_id' => $pm->id, 'name' => 'Some Other Project', 'client' => 'Acme', 'status' => 'draft']);
+
+        $make = function (array $attributes) use ($pm): Estimate {
+            static $n = 3000;
+            $made = Estimate::create($attributes + [
+                'user_id' => $pm->id, 'number' => 'EST-'.++$n, 'client' => 'Acme', 'project' => 'X', 'issued_on' => '2026-01-01',
+                'amount' => 0, 'status' => 'draft', 'kind' => 'standalone',
+            ]);
+            $made->items()->create(['category' => 'material', 'description' => 'Line', 'unit' => 'EA', 'quantity' => 1, 'unit_cost' => 5, 'position' => 1]);
+
+            return $made;
+        };
+
+        $sameEstimate = $make(['project_id' => $estimate->project_id]);
+        $sameAddendum = $make(['project_id' => $estimate->project_id, 'kind' => 'addendum', 'parent_estimate_id' => $sameEstimate->id, 'addendum_number' => 1, 'addendum_name' => 'Extra lighting']);
+        $otherProject = $make(['project_id' => $other->id]);
+        $otherAddendum = $make(['project_id' => $other->id, 'kind' => 'addendum', 'addendum_number' => 1]);
+        $noProject = $make(['project_id' => null]);
+        $merged = $make(['project_id' => $estimate->project_id, 'kind' => 'merged']);
+        $empty = Estimate::create([
+            'user_id' => $pm->id, 'project_id' => $estimate->project_id, 'number' => 'EST-3999', 'client' => 'Acme', 'project' => 'X',
+            'issued_on' => '2026-01-01', 'amount' => 0, 'status' => 'draft', 'kind' => 'standalone',
+        ]);
+
+        // The picker offers this project's estimate and its addendum — nothing else, the estimate first.
+        $this->actingAs($pm)->get(route('estimate-builder.show', $estimate))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('importSources', 2)
+                ->where('importSources.0.id', $sameEstimate->id)
+                ->where('importSources.0.kind', 'estimate')
+                ->where('importSources.1.id', $sameAddendum->id)
+                ->where('importSources.1.kind', 'addendum')
+                ->where('importSources.1.addendumNumber', 1)
+                ->where('importSources.1.addendumName', 'Extra lighting'));
+
+        // Naming any other one directly is refused just the same.
+        foreach ([$otherProject, $otherAddendum, $noProject, $merged, $empty] as $refused) {
+            $this->actingAs($pm)->post(route('estimate-builder.import', $estimate), ['source_estimate_id' => $refused->id])
+                ->assertSessionHasErrors('source_estimate_id');
+        }
+        $this->assertSame(0, $estimate->builderLines()->count());
+
+        // The addendum of this project goes in.
+        $this->actingAs($pm)->post(route('estimate-builder.import', $estimate), ['source_estimate_id' => $sameAddendum->id])
+            ->assertSessionHas('success');
+        $this->assertSame(1, $estimate->builderLines()->count());
+    }
+
+    public function test_switched_off_the_builder_and_its_review_are_out_of_sight(): void
+    {
+        [, $pm] = $this->company();
+        $estimate = $this->builderEstimate($pm);
+        $this->actingAs($pm)->post(route('estimate-builder.request-approval', $estimate), $this->payload($this->twoLines()));
+        $this->assertSame('sent', $estimate->fresh()->status);
+
+        // On, it is offered in the menu.
+        $this->actingAs($pm)->get(route('estimates.index'))->assertInertia(fn (Assert $page) => $page->where('features.estimateBuilder', true));
+
+        config(['features.estimate_builder' => false]);
+
+        // Off, the menu does not offer it and none of its addresses answer.
+        $this->actingAs($pm)->get(route('estimates.index'))->assertInertia(fn (Assert $page) => $page->where('features.estimateBuilder', false));
+        $this->actingAs($pm)->get(route('estimate-builder.index'))->assertNotFound();
+        $this->actingAs($pm)->get(route('estimate-builder.show', $estimate))->assertNotFound();
+        $this->actingAs($pm)->put(route('estimate-builder.save', $estimate), $this->payload($this->twoLines()))->assertNotFound();
+        $this->actingAs($pm)->post(route('estimate-builder.store'), ['project_id' => Project::sole()->id])->assertNotFound();
+        $this->actingAs($pm)->getJson(route('estimate-builder.price-list'))->assertNotFound();
+        $this->actingAs($pm)->get(route('estimates.review', $estimate))->assertNotFound();
+        $this->actingAs($pm)->post(route('estimates.approve', $estimate))->assertNotFound();
+        $this->actingAs($pm)->post(route('estimates.return', $estimate), ['notes' => 'No'])->assertNotFound();
+
+        // Nothing was decided, and the estimate opens in the ordinary place.
+        $this->assertSame('sent', $estimate->fresh()->status);
+        $this->actingAs($pm)->get(route('estimates.show', $estimate))->assertOk();
+
+        // The rest of Estimates is untouched.
+        $this->actingAs($pm)->get(route('estimates.index'))->assertOk();
     }
 }

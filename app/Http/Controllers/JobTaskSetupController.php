@@ -13,6 +13,7 @@ use App\Notifications\TaskScheduleChanged;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Scheduling\ScheduleBuilder;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\CompanyRule;
 use App\Support\JobOrigin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -169,7 +170,21 @@ class JobTaskSetupController extends Controller
     {
         $members = $job->project?->members;
 
-        return $members === null || $members->isEmpty() ? null : $members->pluck('id');
+        if ($members === null || $members->isEmpty()) {
+            return null;
+        }
+
+        /*
+         * Anyone added to the job's crew since the job was raised was added for this work — from its
+         * task screen, or the register — so they are offered too, not left out for not being among
+         * the people picked when the project was made.
+         */
+        $joinedSince = Foreman::query()
+            ->where('created_at', '>=', $job->created_at)
+            ->when($job->team_id !== null, fn ($query) => $query->where('team_id', $job->team_id))
+            ->pluck('id');
+
+        return $members->pluck('id')->merge($joinedSince)->unique()->values();
     }
 
     /**
@@ -193,10 +208,10 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'tasks' => ['required', 'array', 'min:1', 'max:50'],
             'tasks.*.title' => ['required', 'string', 'max:200'],
-            'tasks.*.foreman_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
+            'tasks.*.foreman_id' => ['required', 'integer', CompanyRule::exists('foremen')],
             // Who is over the task — required alongside the foreman, so every
             // task always has both someone running it and someone above them.
-            'tasks.*.supervisor_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
+            'tasks.*.supervisor_id' => ['required', 'integer', CompanyRule::exists('foremen')],
             /*
              * No `distinct`: with a nested wildcard it compares across every
              * task, not within one, and would report the right refusal under an
@@ -456,8 +471,8 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'status' => ['required', Rule::in(JobTask::STATUSES)],
-            'foreman_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
-            'supervisor_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
+            'foreman_id' => ['required', 'integer', CompanyRule::exists('foremen')],
+            'supervisor_id' => ['required', 'integer', CompanyRule::exists('foremen')],
             'estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],

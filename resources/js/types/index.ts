@@ -1,5 +1,6 @@
 export * from './billing.types'
 export * from './breezeBucks.types'
+export * from './changeOrder.types'
 export * from './common.types'
 export * from './dashboard.types'
 export * from './documents.types'

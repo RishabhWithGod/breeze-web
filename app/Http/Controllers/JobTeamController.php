@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Job;
 use App\Models\TeamMember;
+use App\Support\CompanyRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -15,7 +16,7 @@ class JobTeamController extends Controller
         $job->assertNotLocked();
 
         $validated = $request->validate([
-            'team_member_id' => ['required', 'integer', \App\Support\CompanyRule::exists('team_members')],
+            'team_member_id' => ['required', 'integer', CompanyRule::exists('team_members')],
             'role_on_job' => ['nullable', 'string', 'max:120'],
         ]);
 

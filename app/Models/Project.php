@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Ownership;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -250,7 +251,7 @@ class Project extends Model
     /** Only this user's own projects — same shape as `Estimate::scopeOwnedBy`/`Job::scopeOwnedBy`. */
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
-        return $query->whereIn($query->qualifyColumn('user_id'), \App\Support\Ownership::userIds($user));
+        return $query->whereIn($query->qualifyColumn('user_id'), Ownership::userIds($user));
     }
 
     /** Matches a project name, its drawing's filename, its client, its number or its site. */

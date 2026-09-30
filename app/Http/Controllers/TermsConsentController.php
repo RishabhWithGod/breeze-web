@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\TermsAcceptance;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -73,7 +74,7 @@ class TermsConsentController extends Controller
         return redirect()->route('home')->with('success', 'Your setup is complete. Welcome to Breeze.Ai.');
     }
 
-    private function today(Request $request): \Illuminate\Support\Carbon
+    private function today(Request $request): Carbon
     {
         return now($request->user()->company?->timezone ?? config('app.timezone'));
     }

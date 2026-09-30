@@ -22,8 +22,14 @@ class CompanyProfile extends Model
         'license_number',
         'timezone',
         'logo_path',
+        'onboarding_skipped',
         'user_id',
     ];
+
+    protected function casts(): array
+    {
+        return ['onboarding_skipped' => 'array', 'onboarding_finished_at' => 'datetime'];
+    }
 
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
