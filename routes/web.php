@@ -12,10 +12,14 @@ use App\Http\Controllers\BreezeBucksController;
 use App\Http\Controllers\ClientAddressController;
 use App\Http\Controllers\ClientContactController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CompanyManagerController;
+use App\Http\Controllers\CompanyProfileController;
+use App\Http\Controllers\CompanySetupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFolderController;
 use App\Http\Controllers\DrawingDetailsController;
+use App\Http\Controllers\EstimateBuilderController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\EstimateDetailController;
 use App\Http\Controllers\FinalTakeoffController;
@@ -38,6 +42,7 @@ use App\Http\Controllers\JobTaskSetupController;
 use App\Http\Controllers\JobTeamController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentSettingsController;
+use App\Http\Controllers\PaymentSetupController;
 use App\Http\Controllers\PriceBookController;
 use App\Http\Controllers\ProcessingController;
 use App\Http\Controllers\ProfileController;
@@ -51,6 +56,7 @@ use App\Http\Controllers\SymbolReviewController;
 use App\Http\Controllers\TakeoffFlowController;
 use App\Http\Controllers\TakeoffHistoryController;
 use App\Http\Controllers\TaskListController;
+use App\Http\Controllers\TermsConsentController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TechnicianController;
 use App\Http\Controllers\ThreeDViewController;
@@ -112,8 +118,28 @@ Route::middleware('guest')->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'company.setup'])->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+
+    // First-run company setup: where a new account lands before the dashboard.
+    Route::prefix('company-setup')->name('company.setup.')->group(function () {
+        Route::get('/', [CompanySetupController::class, 'create'])->name('create');
+        Route::post('/', [CompanySetupController::class, 'store'])->name('store');
+    });
+
+    // ...and then the terms, the second step.
+    Route::prefix('terms')->name('terms.')->group(function () {
+        Route::get('/', [TermsConsentController::class, 'create'])->name('create');
+        Route::post('/', [TermsConsentController::class, 'store'])->name('store');
+    });
+
+    // ...and then the plan and card, the third.
+    Route::prefix('payment-setup')->name('payment.setup.')->group(function () {
+        Route::get('/', [PaymentSetupController::class, 'create'])->name('create');
+        Route::post('/', [PaymentSetupController::class, 'store'])->name('store');
+        Route::get('complete', [PaymentSetupController::class, 'complete'])->name('complete');
+        Route::get('confirmed', [PaymentSetupController::class, 'confirmed'])->name('confirmed');
+    });
 
     // `/` and `/home` both open the dashboard.
     Route::get('/', [DashboardController::class, 'index']);
@@ -282,6 +308,15 @@ Route::middleware('auth')->group(function () {
     Route::get('price-book', [PriceBookController::class, 'index'])->name('price-book.index');
     Route::get('price-book/{priceBookItem}', [PriceBookController::class, 'show'])->name('price-book.show');
 
+    // The Estimate Builder: quantities into priced labor and material lines.
+    Route::get('estimate-builder', [EstimateBuilderController::class, 'index'])->name('estimate-builder.index');
+    Route::post('estimate-builder', [EstimateBuilderController::class, 'store'])->name('estimate-builder.store');
+    Route::get('estimate-builder/price-list', [EstimateBuilderController::class, 'priceList'])->name('estimate-builder.price-list');
+    Route::get('estimate-builder/{estimate}', [EstimateBuilderController::class, 'show'])->name('estimate-builder.show');
+    Route::put('estimate-builder/{estimate}', [EstimateBuilderController::class, 'save'])->name('estimate-builder.save');
+    Route::post('estimate-builder/{estimate}/request-approval', [EstimateBuilderController::class, 'requestApproval'])->name('estimate-builder.request-approval');
+    Route::post('estimate-builder/{estimate}/import', [EstimateBuilderController::class, 'import'])->name('estimate-builder.import');
+
     Route::get('estimates', [EstimateController::class, 'index'])->name('estimates.index');
     Route::get('estimates/create', [EstimateController::class, 'create'])->name('estimates.create');
     Route::post('estimates', [EstimateController::class, 'store'])->name('estimates.store');
@@ -306,6 +341,8 @@ Route::middleware('auth')->group(function () {
     Route::get('billing', [InvoiceController::class, 'index'])->name('billing.index');
     Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
     Route::get('invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+    // Before `invoices/{invoice}`, which would otherwise take "export" for an id.
+    Route::get('invoices/export', [InvoiceController::class, 'export'])->name('invoices.export');
     Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
     Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
     Route::post('invoices/{invoice}/restore', [InvoiceController::class, 'restore'])->name('invoices.restore');
@@ -351,6 +388,9 @@ Route::middleware('auth')->group(function () {
     Route::get('teams', [TeamController::class, 'index'])->name('teams.index');
     Route::get('teams/create', [TeamController::class, 'create'])->name('teams.create');
     Route::post('teams', [TeamController::class, 'store'])->name('teams.store');
+    Route::put('teams/{team}', [TeamController::class, 'update'])->name('teams.update');
+    Route::delete('teams/{team}', [TeamController::class, 'destroy'])->name('teams.destroy');
+    Route::get('teams/managers/{manager}/edit', [CompanyManagerController::class, 'edit'])->name('managers.edit');
 
     // The old address, kept so a bookmark or an old link still lands somewhere.
     Route::redirect('foremen', '/teams')->name('foremen.index');
@@ -535,9 +575,12 @@ Route::middleware('auth')->group(function () {
         // One technician's one day — every session behind the single total
         // the day-grouped list above shows for them on that date.
         Route::get('day/{user}/{date}', [TimeEntryController::class, 'showDay'])->name('time-entries.day');
+        Route::post('day/{user}/{date}/approve', [TimeEntryController::class, 'approveDay'])->name('time-entries.day.approve');
 
         Route::get('attendance/{attendance}', [TimeEntryController::class, 'showAttendance'])->name('attendance.show');
         Route::get('attendance/{attendance}/photo', [TimeEntryController::class, 'attendancePhoto'])->name('attendance.photo');
+        // A manager closing a check-in the technician never closed.
+        Route::post('attendance/{attendance}/check-out', [TimeEntryController::class, 'checkOutAttendance'])->name('attendance.check-out');
 
         Route::post('timer/start', [TimerController::class, 'start'])->name('timer.start');
         Route::post('timer/pause', [TimerController::class, 'pause'])->name('timer.pause');
@@ -551,6 +594,9 @@ Route::middleware('auth')->group(function () {
 
     // Payment Settings: processors, saved methods, billing defaults and the real transaction history.
     Route::get('settings', [PaymentSettingsController::class, 'index'])->name('settings.payment.index');
+    // The company's own details: read in Settings, corrected here by its owner.
+    Route::get('settings/company/edit', [CompanyProfileController::class, 'edit'])->name('settings.company.edit');
+    Route::put('settings/company', [CompanyProfileController::class, 'update'])->name('settings.company.update');
     Route::prefix('settings/payment')->name('settings.payment.')->group(function () {
         Route::post('processors/{processor}/connect', [PaymentSettingsController::class, 'connectProcessor'])->name('processors.connect');
         Route::post('processors/{processor}/test', [PaymentSettingsController::class, 'testProcessor'])->name('processors.test');
@@ -559,6 +605,8 @@ Route::middleware('auth')->group(function () {
         Route::patch('methods/{method}/default', [PaymentSettingsController::class, 'setDefaultPaymentMethod'])->name('methods.default');
         Route::delete('methods/{method}', [PaymentSettingsController::class, 'destroyPaymentMethod'])->name('methods.destroy');
         Route::put('billing', [PaymentSettingsController::class, 'updateBillingSettings'])->name('billing.update');
+        Route::put('managers/{manager}', [CompanyManagerController::class, 'update'])->name('managers.update');
+        Route::put('subscription', [PaymentSettingsController::class, 'changePlan'])->name('subscription.change');
     });
 
     // Profile: the user's own name. Email/phone/password live on Security

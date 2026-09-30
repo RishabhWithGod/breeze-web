@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Project;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Add Project: whose it is, what it is called, and — optionally — the budget
@@ -31,6 +33,8 @@ class StoreProjectRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'min:3', 'max:160'],
+            // A short line under the name — what the reference calls "Description".
+            'description' => ['nullable', 'string', 'max:255'],
             // A project is always for somebody.
             'client_id' => ['required', 'integer', 'exists:clients,id'],
             /*
@@ -39,12 +43,15 @@ class StoreProjectRequest extends FormRequest
              * ProjectController::store().
              */
             'member_ids' => ['nullable', 'array'],
-            'member_ids.*' => ['integer', 'exists:foremen,id'],
+            'member_ids.*' => ['integer', \App\Support\CompanyRule::exists('foremen')],
             /*
              * No address here. A project and the job on it are at the same
              * place, and that place is in the client's address book — asking
              * again on this form would be a second copy free to drift.
              */
+            'project_type' => ['nullable', Rule::in(Project::TYPES)],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             // The budget an estimate raised on this project should land on.
             // Optional — most projects still price off the takeoff alone.
             'estimate_target_total' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
@@ -70,6 +77,7 @@ class StoreProjectRequest extends FormRequest
             'name.required' => 'Project name is required',
             'client_id.required' => 'Pick the client this project is for',
             'name.min' => 'Use at least 3 characters',
+            'end_date.after_or_equal' => 'End date cannot be before the start date',
             'estimate_target_total.numeric' => 'Enter a valid amount',
             'estimate_target_total.min' => 'Amount cannot be negative',
             'vendor_rate_list.max' => 'Upload up to 20 files at a time',

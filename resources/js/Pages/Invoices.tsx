@@ -1,13 +1,17 @@
 import { useCallback, useState } from 'react'
-import { Head, router, usePage } from '@inertiajs/react'
+import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
+import type { LucideIcon } from 'lucide-react'
 import {
+  ChevronDown,
   DollarSign,
+  Eye,
+  Filter,
   Hourglass,
   Plus,
   SearchX,
-  SlidersHorizontal,
   Timer,
+  Trash2,
   Undo2,
   Wallet,
 } from 'lucide-react'
@@ -15,9 +19,9 @@ import {
   Alert,
   Button,
   ButtonLink,
-  Checkbox,
   ConfirmDialog,
   EmptyState,
+  MoreMenu,
   Pagination,
   SearchBox,
   SelectField,
@@ -25,7 +29,7 @@ import {
   Table,
   TextInput,
 } from '@/components/common'
-import { StatCard } from '@/components/dashboard'
+import { MetricCard, type MetricTone } from '@/components/billing'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import {
   INVOICE_SORT_OPTIONS,
@@ -49,8 +53,8 @@ import type {
 import {
   INVOICE_STATUS_LABEL,
   INVOICE_STATUS_TONE,
+  formatCalendarDate,
   formatCurrency,
-  formatDate,
 } from '@/utils'
 
 interface InvoiceFilters {
@@ -75,15 +79,14 @@ export interface InvoicesProps {
 }
 
 /**
- * Invoices — every client invoice in one place: filterable, exportable as a
- * PDF per record, and summarised at the bottom against real payment data.
+ * Billing Overview — every client invoice in one place, filterable, with the
+ * key figures (outstanding, overdue, paid, days to pay) above it from real payment data.
  */
 export default function Invoices({ invoices, filters, clients, jobs, summary, can }: InvoicesProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   const [query, setQuery] = useState(filters.search)
   const [draft, setDraft] = useState(filters)
-  const [selected, setSelected] = useState<ReadonlySet<number>>(new Set())
   const [pendingDelete, setPendingDelete] = useState<Invoice | null>(null)
   const [lastDeletedId, setLastDeletedId] = useState<number | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
@@ -179,109 +182,87 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
     setLastDeletedId(null)
   }, [lastDeletedId])
 
-  // Selection is a page-local UI concern — nothing on the server reads it, and
-  // no bulk action exists yet to act on it, so it never survives a navigation.
-  const selectableIds = rows.filter((row) => row.isEditable || can.manage).map((row) => row.id)
-  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id))
-  const someSelected = selectableIds.some((id) => selected.has(id)) && !allSelected
-
-  const toggleAll = () => {
-    setSelected(allSelected ? new Set() : new Set(selectableIds))
-  }
-
-  const toggleOne = (id: number) => {
-    setSelected((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
   const columns: TableColumn<Invoice>[] = [
+    { key: 'client', header: 'Client', render: (invoice) => <span className="text-white">{invoice.client}</span> },
     {
-      key: 'select',
-      header: '',
-      width: 'w-10',
-      render: (invoice) => (
-        <Checkbox
-          id={`invoice-select-${invoice.id}`}
-          label=""
-          aria-label={`Select ${invoice.invoiceNumber}`}
-          checked={selected.has(invoice.id)}
-          onChange={() => toggleOne(invoice.id)}
-        />
-      ),
+      key: 'project',
+      header: 'Project',
+      render: (invoice) => <span className="text-white">{invoice.jobName ?? '—'}</span>,
     },
     {
       key: 'invoice',
-      header: 'Invoice',
+      header: 'Invoice #',
       render: (invoice) => (
-        <ButtonLink href={routeTo.invoice(invoice.id)} variant="ghost" size="sm" className="px-0 font-bold text-brand hover:underline">
+        <Link
+          href={routeTo.invoice(invoice.id)}
+          className="font-semibold whitespace-nowrap text-brand hover:underline"
+        >
           #{invoice.invoiceNumber}
-        </ButtonLink>
+        </Link>
       ),
-    },
-    {
-      key: 'client',
-      header: 'Client',
-      render: (invoice) => <span className="text-white">{invoice.client}</span>,
     },
     {
       key: 'amount',
       header: 'Amount',
       render: (invoice) => (
-        <span className="whitespace-nowrap tabular-nums text-white">
-          {formatCurrency(invoice.total, 2)}
-        </span>
-      ),
-    },
-    {
-      key: 'date',
-      header: 'Date',
-      render: (invoice) => (
-        <span className="whitespace-nowrap text-white/90">{formatDate(invoice.date)}</span>
+        <span className="whitespace-nowrap tabular-nums text-white">{formatCurrency(invoice.total, 2)}</span>
       ),
     },
     {
       key: 'status',
       header: 'Status',
       render: (invoice) => (
-        <StatusChip hideDot tone={INVOICE_STATUS_TONE[invoice.status]} label={INVOICE_STATUS_LABEL[invoice.status]} />
+        <StatusChip pill hideDot tone={INVOICE_STATUS_TONE[invoice.status]} label={INVOICE_STATUS_LABEL[invoice.status]} />
+      ),
+    },
+    {
+      key: 'due',
+      header: 'Due Date',
+      render: (invoice) => (
+        <span className="whitespace-nowrap text-white/90">
+          {invoice.dueDate ? formatCalendarDate(invoice.dueDate, 'MM/dd/yyyy') : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'open',
+      header: 'Open Project',
+      render: (invoice) => (
+        <span className="text-white">{invoice.projectOpen === null ? '—' : invoice.projectOpen ? 'Yes' : 'No'}</span>
       ),
     },
     {
       key: 'actions',
       header: 'Actions',
-      width: 'w-40',
+      width: 'w-24',
       render: (invoice) => (
-        <div className="flex items-center gap-2">
-          <ButtonLink href={routeTo.invoice(invoice.id)} size="sm">
-            View
-          </ButtonLink>
-          <Button
-            variant="white"
-            size="sm"
-            disabled={!invoice.isEditable}
-            className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white disabled:opacity-50"
-            onClick={() => requestDelete(invoice)}
-          >
-            Delete
-          </Button>
-        </div>
+        <MoreMenu
+          variant="minimal"
+          ariaLabel={`Actions for ${invoice.invoiceNumber}`}
+          items={[
+            { label: 'View', icon: Eye, onSelect: () => router.visit(routeTo.invoice(invoice.id)) },
+            {
+              label: 'Delete',
+              icon: Trash2,
+              destructive: true,
+              disabled: !invoice.isEditable,
+              onSelect: () => requestDelete(invoice),
+            },
+          ]}
+        />
       ),
     },
   ]
 
-  const summaryCards: readonly { label: string; value: string; icon: typeof Wallet; tone?: 'brand' | 'danger' | 'success' | 'info' }[] = [
-    { label: 'Total Outstanding', value: formatCurrency(summary.totalOutstanding, 2), icon: Wallet, tone: 'brand' },
-    { label: 'Overdue', value: formatCurrency(summary.overdue, 2), icon: Timer, tone: 'danger' },
-    { label: 'Paid This Month', value: formatCurrency(summary.paidThisMonth, 2), icon: DollarSign, tone: 'success' },
+  const summaryCards: readonly { label: string; value: string; icon: LucideIcon; tone: MetricTone }[] = [
+    { label: 'Total Outstanding', value: formatCurrency(summary.totalOutstanding, 2), icon: Wallet, tone: 'cyan' },
+    { label: 'Overdue', value: formatCurrency(summary.overdue, 2), icon: Timer, tone: 'red' },
+    { label: 'Paid This Month', value: formatCurrency(summary.paidThisMonth, 2), icon: DollarSign, tone: 'green' },
     {
       label: 'Average Days to Pay',
-      value: summary.averageDaysToPay !== null ? `${summary.averageDaysToPay} days` : '—',
+      value: summary.averageDaysToPay !== null ? `${summary.averageDaysToPay} days` : '0 days',
       icon: Hourglass,
-      tone: 'info',
+      tone: 'cyan',
     },
   ]
 
@@ -290,27 +271,47 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
       <Head title="Invoices" />
 
       <PageHeader
-        title="Invoices"
-        subtitle="Manage and track all your client invoices"
-        breadcrumbs={[{ label: 'Billing', href: ROUTES.billing }, { label: 'Invoices' }]}
-        actions={
-          <>
-            <Button
-              variant="secondary"
-              leftIcon={SlidersHorizontal}
-              aria-expanded={filterBar.isOpen}
-              onClick={filterBar.toggle}
-            >
-              Filter
-            </Button>
-            {can.create && (
-              <ButtonLink href={ROUTES.invoiceCreate} leftIcon={Plus}>
-                Create Invoice
-              </ButtonLink>
-            )}
-          </>
-        }
+        title="Billing Overview"
+        subtitle="View key metrics and invoice details across all clients and projects."
+        breadcrumbs={[{ label: 'Billing' }, { label: 'Billing Overview' }]}
       />
+
+      {/* ================================================== Key figures ====== */}
+      <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((card) => (
+          <MetricCard key={card.label} {...card} />
+        ))}
+      </div>
+
+      {/* ============================================ Search + actions ======= */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <SearchBox
+          id="invoice-search"
+          value={query}
+          onValueChange={setQuery}
+          onSearch={(value) => applyFilters({ search: value })}
+          placeholder="Search clients, projects, or invoice numbers..."
+          aria-label="Search invoices"
+          containerClassName="w-full max-w-xl"
+        />
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="secondary"
+            leftIcon={Filter}
+            rightIcon={ChevronDown}
+            aria-expanded={filterBar.isOpen}
+            onClick={filterBar.toggle}
+          >
+            Filters
+          </Button>
+          {can.create && (
+            <ButtonLink href={ROUTES.invoiceCreate} variant="secondary" leftIcon={Plus}>
+              Create Invoice
+            </ButtonLink>
+          )}
+        </div>
+      </div>
 
       <AnimatePresence initial={false}>
         {notice && (
@@ -343,17 +344,6 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
             transition={{ duration: MOTION.base }}
             className="mb-6 overflow-hidden rounded-card border border-hairline glass p-5 shadow-panel sm:p-6"
           >
-            <div className="mb-4">
-              <SearchBox
-                value={query}
-                onValueChange={setQuery}
-                onSearch={(value) => applyFilters({ search: value })}
-                placeholder="Search invoice # or client…"
-                aria-label="Search invoices"
-                className="max-w-sm"
-              />
-            </div>
-
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <SelectField
                 id="invoice-status-filter"
@@ -448,22 +438,15 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
             />
           ) : (
             <>
-              <div className="mb-3">
-                <Checkbox
-                  id="invoice-select-all"
-                  label={`Select All${selected.size > 0 ? ` (${selected.size} selected)` : ''}`}
-                  checked={allSelected}
-                  aria-checked={someSelected ? 'mixed' : allSelected}
-                  onChange={toggleAll}
-                />
-              </div>
               <Table
                 dense
                 variant="lined"
                 headerVariant="plain"
+                className="text-sm [&_th]:text-sm [&_td]:text-sm"
                 columns={columns}
                 rows={rows}
                 getRowId={(invoice) => invoice.id}
+                onRowClick={(invoice) => router.visit(routeTo.invoice(invoice.id))}
                 caption="Client invoices"
               />
             </>
@@ -478,25 +461,6 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
             onPageChange={(page) => applyFilters({ page })}
             summary={meta.total === 0 ? 'No invoices to display' : `Showing ${rows.length} of ${meta.total} invoices`}
           />
-        </div>
-      </div>
-
-      {/* ================================================= Invoice summary ===== */}
-      <div className="mt-6">
-        <h2 className="mb-4 text-xl font-semibold text-white">Invoice Summary</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {summaryCards.map((card, index) => (
-            <StatCard
-              key={card.label}
-              index={index}
-              label={card.label}
-              value={card.value}
-              icon={card.icon}
-              tone={card.tone}
-              /* These four are the section, not decoration beside one. */
-              accent
-            />
-          ))}
         </div>
       </div>
 

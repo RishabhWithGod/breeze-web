@@ -21,6 +21,21 @@ use Illuminate\Support\Facades\DB;
  */
 class JobTask extends Model
 {
+    protected static function booted(): void
+    {
+        // The last task off a job takes its schedule with it, and the job is
+        // unassigned again — the calendar draws from tasks, so nothing is left
+        // to draw. While any task remains the schedule stays.
+        static::deleted(function (self $task): void {
+            if ($task->job_id === null || static::where('job_id', $task->job_id)->exists()) {
+                return;
+            }
+
+            JobSchedule::where('job_id', $task->job_id)->delete();
+            CrewShift::where('job_id', $task->job_id)->delete();
+        });
+    }
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_READY = 'ready';
@@ -123,6 +138,12 @@ class JobTask extends Model
     public function job(): BelongsTo
     {
         return $this->belongsTo(Job::class);
+    }
+
+    /** Only tasks on jobs of the company this person belongs to. */
+    public function scopeInCompanyOf(Builder $query, User $user): Builder
+    {
+        return $query->whereHas('job', fn (Builder $q) => $q->inCompanyOf($user));
     }
 
     /** Only tasks on this manager's own jobs. */
@@ -258,11 +279,13 @@ class JobTask extends Model
      *
      * @return Collection<int, object>
      */
-    public static function workload(bool $closed): Collection
+    public static function workload(bool $closed, ?\Closure $constrain = null): Collection
     {
-        $held = function (string $column) use ($closed) {
+        $held = function (string $column) use ($closed, $constrain) {
             $query = static::query()
                 ->whereHas('job')
+                // Narrowed to whose work it is, when asked (a manager's own jobs, or a company's).
+                ->when($constrain, fn (Builder $q) => $constrain($q))
                 ->whereNotNull($column)
                 ->when(
                     $closed,

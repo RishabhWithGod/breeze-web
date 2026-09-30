@@ -21,6 +21,12 @@ use Illuminate\Support\Facades\Auth;
  */
 class TimeEntry extends Model
 {
+    protected static function booted(): void
+    {
+        // Time belongs to the company of the person who logged it.
+        static::addGlobalScope(new \App\Models\Scopes\PeopleScope);
+    }
+
     use SoftDeletes;
 
     public const STATUS_DRAFT = 'draft';

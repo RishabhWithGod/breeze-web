@@ -309,20 +309,15 @@ class ClientController extends Controller
 
         $projects = $client->projects()->count();
 
-        if ($projects > 0) {
-            return back()->with(
-                'warning',
-                "“{$client->name}” has ".$projects.' '.str('project')->plural($projects).
-                '. Remove those first, or keep the client.',
-            );
-        }
-
         $name = $client->name;
         $client->delete();
 
         return redirect()
             ->route('clients.index')
-            ->with('warning', "“{$name}” was removed from the register.");
+            ->with('warning', $projects > 0
+                ? "“{$name}” was removed, along with ".$projects.' '.str('project')->plural($projects).
+                    ' and everything under '.($projects === 1 ? 'it' : 'them').'.'
+                : "“{$name}” was removed from the register.");
     }
 
     /**
@@ -342,7 +337,7 @@ class ClientController extends Controller
                 'required', 'string', 'min:2', 'max:160',
                 // A client renaming themselves is not a clash with themselves.
                 Rule::unique('clients', 'name')
-                    ->where('user_id', $request->user()->id)
+                    ->whereIn('user_id', \App\Support\Ownership::userIdList($request->user()))
                     ->ignore($client),
             ],
             /*
@@ -370,7 +365,7 @@ class ClientController extends Controller
              * Optional — a client can be on the register before anyone
              * decides who works their sites.
              */
-            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            'team_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('teams')],
             /*
              * The address book, filled in as the client is opened. It can be
              * empty — a client can be on the register before anyone knows where
@@ -490,6 +485,6 @@ class ClientController extends Controller
 
     private function authoriseOwner(Request $request, Client $client): void
     {
-        abort_unless($client->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
     }
 }

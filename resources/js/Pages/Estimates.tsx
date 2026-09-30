@@ -1,13 +1,13 @@
 import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { SearchX, SlidersHorizontal, Undo2 } from 'lucide-react'
+import { Eye, SearchX, SlidersHorizontal, Trash2, Undo2 } from 'lucide-react'
 import {
   Alert,
   Button,
-  ButtonLink,
   ConfirmDialog,
   EmptyState,
+  MoreMenu,
   Pagination,
   SearchBox,
   SelectField,
@@ -37,7 +37,6 @@ import {
   ESTIMATE_STATUS_LABEL,
   ESTIMATE_STATUS_TONE,
   formatCurrency,
-  formatDate,
 } from '@/utils'
 
 const STATUS_FILTER_OPTIONS = ESTIMATE_STATUS_FILTERS.map((option) => ({
@@ -54,6 +53,7 @@ interface EstimateFilters {
   search: string
   status: EstimateStatusFilter
   client: string
+  project: string
   date_from: string
   date_to: string
   sort: EstimateSort
@@ -63,6 +63,7 @@ export interface EstimatesProps {
   estimates: Paginated<Estimate>
   filters: EstimateFilters
   clients: readonly string[]
+  projects: readonly string[]
 }
 
 /**
@@ -75,6 +76,7 @@ export default function Estimates({
   estimates,
   filters,
   clients,
+  projects,
 }: EstimatesProps) {
   const { flash } = usePage<SharedPageProps>().props
 
@@ -82,12 +84,12 @@ export default function Estimates({
   const [pendingDelete, setPendingDelete] = useState<Estimate | null>(null)
   const [lastDeletedId, setLastDeletedId] = useState<number | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   // The reference screen shows its filter bar open; "More Filters" reveals the
   // secondary row beneath it.
   // Closed by default: most visits are to read the list, not to narrow it.
   const filterBar = useDisclosure()
-  const moreFilters = useDisclosure()
   const deleteDialog = useDisclosure()
 
   // Derived from the flash rather than mirrored into state. Undo is offered only
@@ -99,6 +101,11 @@ export default function Estimates({
   const clientOptions = [
     { label: 'All Clients', value: 'all' },
     ...clients.map((client) => ({ label: client, value: client })),
+  ]
+
+  const projectOptions = [
+    { label: 'All Projects', value: 'all' },
+    ...projects.map((project) => ({ label: project, value: project })),
   ]
 
   /**
@@ -174,24 +181,18 @@ export default function Estimates({
       key: 'number',
       header: 'Estimate #',
       render: (estimate) => (
-        <span className="font-bold whitespace-nowrap text-white">
-          {estimate.number}
-        </span>
+        <span className="font-medium whitespace-nowrap text-white">{estimate.number}</span>
       ),
+    },
+    {
+      key: 'project',
+      header: 'Project',
+      render: (estimate) => <span className="text-white">{estimate.project ?? '—'}</span>,
     },
     {
       key: 'client',
       header: 'Client',
       render: (estimate) => <span className="text-white">{estimate.client}</span>,
-    },
-    {
-      key: 'date',
-      header: 'Date',
-      render: (estimate) => (
-        <span className="whitespace-nowrap text-white/90">
-          {formatDate(estimate.date)}
-        </span>
-      ),
     },
     {
       key: 'amount',
@@ -203,11 +204,17 @@ export default function Estimates({
       ),
     },
     {
+      key: 'revision',
+      header: 'Revision',
+      render: (estimate) => <span className="tabular-nums text-white">{estimate.revision}</span>,
+    },
+    {
       key: 'status',
       header: 'Status',
       render: (estimate) => (
         <StatusChip
           hideDot
+          pill
           tone={ESTIMATE_STATUS_TONE[estimate.status]}
           label={ESTIMATE_STATUS_LABEL[estimate.status]}
         />
@@ -216,21 +223,25 @@ export default function Estimates({
     {
       key: 'actions',
       header: 'Actions',
-      width: 'w-44',
+      width: 'w-28',
       render: (estimate) => (
-        <div className="flex items-center gap-2">
-          <ButtonLink href={routeTo.estimate(estimate.id)} size="sm">
-            View
-          </ButtonLink>
-          <Button
-            variant="white"
-            size="sm"
-            className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
-            onClick={() => requestDelete(estimate)}
-          >
-            Delete
-          </Button>
-        </div>
+        <MoreMenu
+          variant="minimal"
+          ariaLabel={`Actions for ${estimate.number}`}
+          items={[
+            {
+              label: 'View',
+              icon: Eye,
+              onSelect: () => router.visit(routeTo.estimate(estimate.id)),
+            },
+            {
+              label: 'Delete',
+              icon: Trash2,
+              destructive: true,
+              onSelect: () => requestDelete(estimate),
+            },
+          ]}
+        />
       ),
     },
   ]
@@ -259,6 +270,58 @@ export default function Estimates({
         </header>
 
         <div className="p-5 sm:p-6">
+          {!bannerDismissed && (
+            <Alert
+              tone="info"
+              className="mb-5 [&_p]:text-md [&_div]:text-sm"
+              title="Addendums create estimate revisions"
+              onDismiss={() => setBannerDismissed(true)}
+            >
+              Apply revised or additional drawings to an existing estimate. Breeze.AI
+              identifies changes, updates the takeoff, and creates a new revision while
+              preserving the complete estimate history.
+            </Alert>
+          )}
+
+          {/* Search + the three quick filters, always in view. */}
+          <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+            <SearchBox
+              id="estimate-search"
+              value={query}
+              onValueChange={setQuery}
+              onSearch={(value) => applyFilters({ search: value })}
+              placeholder="Search estimates, projects, or clients..."
+              aria-label="Search estimates"
+              containerClassName="lg:max-w-xl"
+            />
+            <SelectField
+              id="estimate-status-filter"
+              aria-label="Status"
+              options={STATUS_FILTER_OPTIONS}
+              value={filters.status}
+              onChange={(event) =>
+                applyFilters({ status: event.target.value as EstimateStatusFilter })
+              }
+              className="lg:w-52"
+            />
+            <SelectField
+              id="estimate-client-filter"
+              aria-label="Client"
+              options={clientOptions}
+              value={filters.client}
+              onChange={(event) => applyFilters({ client: event.target.value })}
+              className="lg:w-44"
+            />
+            <SelectField
+              id="estimate-project-filter"
+              aria-label="Project"
+              options={projectOptions}
+              value={filters.project}
+              onChange={(event) => applyFilters({ project: event.target.value })}
+              className="lg:w-44"
+            />
+          </div>
+
           <AnimatePresence initial={false}>
             {filterBar.isOpen && (
               <motion.div
@@ -269,94 +332,33 @@ export default function Estimates({
                 transition={{ duration: MOTION.base }}
                 className="mb-5 overflow-hidden"
               >
-                {/* Primary filter row */}
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  <SelectField
-                    id="estimate-status-filter"
-                    label="Status"
-                    options={STATUS_FILTER_OPTIONS}
-                    value={filters.status}
-                    onChange={(event) =>
-                      applyFilters({
-                        status: event.target.value as EstimateStatusFilter,
-                      })
-                    }
-                  />
-                  <SelectField
-                    id="estimate-client-filter"
-                    label="Client"
-                    options={clientOptions}
-                    value={filters.client}
-                    onChange={(event) => applyFilters({ client: event.target.value })}
-                  />
+                <div className="grid gap-4 rounded-panel border border-hairline bg-white/4 p-4 sm:grid-cols-2 xl:grid-cols-4">
                   <TextInput
                     id="estimate-date-from"
                     type="date"
-                    label="Date Range"
-                    hint="Issued on or after"
+                    label="Issued on or after"
                     value={filters.date_from}
-                    onChange={(event) =>
-                      applyFilters({ date_from: event.target.value })
-                    }
+                    onChange={(event) => applyFilters({ date_from: event.target.value })}
+                  />
+                  <TextInput
+                    id="estimate-date-to"
+                    type="date"
+                    label="Issued on or before"
+                    value={filters.date_to}
+                    onChange={(event) => applyFilters({ date_to: event.target.value })}
                   />
                   <SelectField
                     id="estimate-sort"
                     label="Sort by"
                     options={SORT_OPTIONS}
                     value={filters.sort}
-                    onChange={(event) =>
-                      applyFilters({ sort: event.target.value as EstimateSort })
-                    }
+                    onChange={(event) => applyFilters({ sort: event.target.value as EstimateSort })}
                   />
-                </div>
-
-                {/* Secondary filters */}
-                <AnimatePresence initial={false}>
-                  {moreFilters.isOpen && (
-                    <motion.div
-                      key="more-filters"
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: MOTION.base }}
-                      className="overflow-hidden"
-                    >
-                      <div className="mt-4 grid gap-4 rounded-panel border border-hairline bg-white/4 p-4 sm:grid-cols-2">
-                        <SearchBox
-                          id="estimate-search"
-                          label="Search"
-                          value={query}
-                          onValueChange={setQuery}
-                          onSearch={(value) => applyFilters({ search: value })}
-                          placeholder="Search estimate #, client..."
-                          aria-label="Search estimates"
-                        />
-                        <TextInput
-                          id="estimate-date-to"
-                          type="date"
-                          label="Issued on or before"
-                          value={filters.date_to}
-                          onChange={(event) =>
-                            applyFilters({ date_to: event.target.value })
-                          }
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <Button
-                    size="sm"
-                    variant={moreFilters.isOpen ? 'primary' : 'secondary'}
-                    aria-expanded={moreFilters.isOpen}
-                    onClick={moreFilters.toggle}
-                  >
-                    More Filters
-                  </Button>
-                  <Button variant="white" size="sm" onClick={resetFilters}>
-                    Reset
-                  </Button>
+                  <div className="flex items-end">
+                    <Button variant="secondary" onClick={resetFilters}>
+                      Reset
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -407,6 +409,7 @@ export default function Estimates({
                   dense
                   variant="lined"
                   headerVariant="plain"
+                  className="text-sm [&_th]:text-sm [&_td]:text-sm [&_td_span]:text-sm"
                   columns={columns}
                   rows={rows}
                   getRowId={(estimate) => estimate.id}
@@ -438,7 +441,7 @@ export default function Estimates({
             summary={
               meta.total === 0
                 ? 'No estimates to display'
-                : `Showing ${rows.length} of ${meta.total} clients`
+                : `Showing ${meta.from} to ${meta.to} of ${meta.total} estimates`
             }
           />
         </div>

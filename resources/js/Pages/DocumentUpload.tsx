@@ -23,6 +23,8 @@ export interface DocumentUploadProps {
   jobId: number | null
   /** The takeoff this document is being filed under, when opened from one. */
   projectId: number | null
+  /** Set only by the project's own Add Document action — see `store()`. */
+  returnToProject: boolean
   maxFileSizeMb: number
 }
 
@@ -32,6 +34,7 @@ interface UploadDocumentForm {
   /** The takeoff it is filed under. Carried, not asked for. */
   project_id: string
   description: string
+  return_to_project: boolean
 }
 
 /**
@@ -42,6 +45,7 @@ interface UploadDocumentForm {
 export default function DocumentUpload({
   jobId,
   projectId,
+  returnToProject,
   maxFileSizeMb,
 }: DocumentUploadProps) {
   const [fileName, setFileName] = useState<string | null>(null)
@@ -53,11 +57,12 @@ export default function DocumentUpload({
     // the answer is already known.
     project_id: projectId ? String(projectId) : '',
     description: '',
+    return_to_project: returnToProject,
   })
 
   const canSubmit = Boolean(data.file)
   const cancelHref = projectId
-    ? routeTo.projectDocuments(projectId)
+    ? routeTo.project(projectId)
     : jobId
       ? routeTo.job(jobId)
       : ROUTES.documents

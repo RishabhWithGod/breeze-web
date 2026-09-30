@@ -23,7 +23,7 @@ class ResultsController extends Controller
     public function latest(Request $request): Response|RedirectResponse
     {
         $result = AiResult::query()
-            ->whereHas('project', fn ($query) => $query->where('user_id', $request->user()->id))
+            ->whereHas('project', fn ($query) => $query->whereIn('user_id', \App\Support\Ownership::userIds($request->user())))
             ->latest('id')
             ->first();
 
@@ -32,7 +32,7 @@ class ResultsController extends Controller
         }
 
         $project = Project::query()
-            ->where('user_id', $request->user()->id)
+            ->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))
             ->whereHas('symbols')
             ->latest('completed_at')
             ->first();
@@ -44,7 +44,7 @@ class ResultsController extends Controller
 
     public function show(Request $request, Project $project): Response|RedirectResponse
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
 
         $result = $project->latestAiResult;
 

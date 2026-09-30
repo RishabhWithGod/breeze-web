@@ -13,6 +13,7 @@ use App\Services\Clients\ProjectDirectory;
 use App\Services\Export\EstimatePdfWriter;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\WireLengths;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response as ResponseFactory;
@@ -164,12 +165,15 @@ class EstimateDetailController extends Controller
              * lines by hand.
              */
             'drawingData' => [
-                'wireSizes' => $estimate->aiResult?->wireSizes->map(fn ($wire) => [
-                    'page' => $wire->page,
-                    'size' => $wire->size,
-                    'context' => $wire->context,
-                    'count' => $wire->count,
-                ])->all() ?? [],
+                'wireSizes' => WireLengths::attach(
+                    $estimate->aiResult?->wireSizes->map(fn ($wire) => [
+                        'page' => $wire->page,
+                        'size' => $wire->size,
+                        'context' => $wire->context,
+                        'count' => $wire->count,
+                    ])->all() ?? [],
+                    $estimate->items->map(fn ($item) => [$item->description, $item->unit, $item->quantity]),
+                ),
                 'equipment' => $estimate->aiResult?->equipment->map(fn ($item) => [
                     'page' => $item->page,
                     'tag' => $item->tag,
@@ -303,7 +307,7 @@ class EstimateDetailController extends Controller
     {
         $this->authorize('update', $estimate);
 
-        $userId = $request->user()->id;
+        $userId = \App\Support\Ownership::userIdList($request->user());
 
         $validated = $request->validate([
             /*
@@ -312,14 +316,14 @@ class EstimateDetailController extends Controller
              * has to be answered, because the client is read from it. Must be
              * one of this manager's own.
              */
-            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->where('user_id', $userId)],
+            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', $userId)],
             /*
              * Who it is for. Sent by the form because that is the field the
              * project list is narrowed by, but not required: a project belongs
              * to exactly one client, and Estimate::booted derives the column
              * from the project either way.
              */
-            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')->where('user_id', $userId)],
+            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userId)],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
             'issued_on' => ['required', 'date'],
             'markup_pct' => ['required', 'numeric', 'min:0', 'max:200'],
@@ -334,7 +338,7 @@ class EstimateDetailController extends Controller
          * another one's project — and a project with no client record yet falls
          * back to the name it carries, because neither column may be empty.
          */
-        $project = Project::where('user_id', $userId)->with('clientRecord:id,name')->find($validated['project_id']);
+        $project = Project::whereIn('user_id', $userId)->with('clientRecord:id,name')->find($validated['project_id']);
         $validated['client_id'] = $project?->client_id;
         $validated['client'] = $project?->clientRecord?->name ?? $project?->client ?? 'Unassigned';
         $validated['project'] = $project?->name ?? $validated['client'];

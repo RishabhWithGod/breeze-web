@@ -66,7 +66,7 @@ class SchedulingTest extends TestCase
 
     /* --------------------------------------------------------------- calendar */
 
-    public function test_the_calendar_opens_on_the_current_week(): void
+    public function test_the_calendar_opens_on_the_current_month(): void
     {
         $job = $this->makeJob(['name' => 'Riverside Residence']);
         $this->book($job, Carbon::today());
@@ -75,10 +75,9 @@ class SchedulingTest extends TestCase
             ->get('/scheduling/calendar')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Scheduling')
-                ->where('view', 'week')
+                ->where('view', 'month')
+                ->where('board.view', 'month')
                 ->where('today', Carbon::today()->toDateString())
-                // A week view is exactly one row of the grid.
-                ->has('days', 7)
                 ->has('shifts', 1)
                 ->where('shifts.0.jobName', 'Riverside Residence')
                 ->where('shifts.0.crew', 'Team A')
@@ -296,15 +295,16 @@ class SchedulingTest extends TestCase
     /* ------------------------------------------------------------- unassigned */
 
     /**
-     * The defining rule: a job is unassigned until a crew is booked on it.
+     * The defining rule: a job is unassigned only while it has no tasks.
      *
-     * Its status is irrelevant — a job can read `scheduled` because an estimate was
-     * signed off and still have nobody going to site.
+     * The calendar draws a job from its tasks, so there is nothing to book — and
+     * its status is irrelevant, a job can read `scheduled` and still have nothing
+     * to draw.
      */
-    public function test_unassigned_means_no_shift_rather_than_a_status(): void
+    public function test_unassigned_means_no_tasks_rather_than_a_status(): void
     {
-        $booked = $this->makeJob(['name' => 'Has A Crew', 'status' => 'planning']);
-        $this->book($booked, Carbon::today());
+        $planned = $this->makeJob(['name' => 'Has Tasks', 'status' => 'planning']);
+        $this->task($planned, 'Rough-in', $this->foreman);
 
         $this->makeJob(['name' => 'Says Scheduled But Is Not', 'status' => 'scheduled']);
 
@@ -397,7 +397,7 @@ class SchedulingTest extends TestCase
 
     /* ---------------------------------------------------------------- booking */
 
-    public function test_booking_a_crew_moves_a_job_off_the_queue(): void
+    public function test_booking_a_crew_records_the_shift_and_schedules_the_job(): void
     {
         $job = $this->makeJob(['name' => 'Emergency Generator Repair', 'status' => 'planning']);
 
@@ -423,10 +423,6 @@ class SchedulingTest extends TestCase
 
         // Booked work is scheduled work, on every screen.
         $this->assertSame('scheduled', $job->fresh()->status);
-
-        $this->actingAs($this->user)
-            ->get('/scheduling')
-            ->assertInertia(fn (Assert $page) => $page->has('jobs.data', 0));
     }
 
     /** A multi-day booking is one row per day, so a crew can change mid-job. */
@@ -678,24 +674,19 @@ class SchedulingTest extends TestCase
     }
 
     /**
-     * The queue carries what the booking form fills itself in from: who is on
-     * the job, and the days it is meant to run.
+     * The queue carries the days each job is meant to run.
      */
-    public function test_the_queue_carries_the_dates_and_foremen_the_form_starts_from(): void
+    public function test_the_queue_carries_the_dates_each_job_is_meant_to_run(): void
     {
-        $job = $this->makeJob([
+        $this->makeJob([
             'foreman_id' => null,
             'start_date' => '2026-09-07',
             'end_date' => '2026-09-11',
         ]);
-        $this->task($job, 'Rough-in', $this->foreman);
 
         $this->actingAs($this->user)
             ->get('/scheduling')
             ->assertInertia(fn (Assert $page) => $page
-                ->where('jobs.data.0.foremen.0.name', 'Dana Wu')
-                ->where('jobs.data.0.foremen.0.initials', 'DW')
-                // Both dates, so the form can count the working days between.
                 ->has('jobs.data.0.startDate')
                 ->has('jobs.data.0.endDate'));
     }
@@ -751,32 +742,6 @@ class SchedulingTest extends TestCase
             ]);
 
         $this->assertSame('Dana Wu', CrewShift::sole()->crew);
-    }
-
-    public function test_the_queue_names_the_crew_and_both_roles(): void
-    {
-        $north = Team::create(['name' => 'North Crew']);
-        $torres = Foreman::create([
-            'name' => 'Michael Torres', 'initials' => 'MT',
-            'team_id' => $north->id, 'role' => 'supervisor',
-        ]);
-        $job = $this->makeJob(['foreman_id' => null, 'team_id' => $north->id]);
-
-        $schedule = JobSchedule::create(['job_id' => $job->id, 'working_days' => [1, 2, 3, 4, 5]]);
-        $job->tasks()->create([
-            'job_schedule_id' => $schedule->id,
-            'title' => 'Rough-in',
-            'position' => 0,
-            'foreman_id' => $this->foreman->id,
-            'supervisor_id' => $torres->id,
-        ]);
-
-        $this->actingAs($this->user)
-            ->get('/scheduling')
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('jobs.data.0.teamName', 'North Crew')
-                ->where('jobs.data.0.foremen.0.name', 'Dana Wu')
-                ->where('jobs.data.0.supervisors.0.name', 'Michael Torres'));
     }
 
     /**

@@ -23,6 +23,12 @@ class NotifyManagersOfTechnicianRegistered implements ShouldHandleEventsAfterCom
     {
         $managers = User::query()
             ->whereRaw('lower(trim(role)) in (?, ?, ?)', self::MANAGER_ROLES)
+            // Only the company they applied to decides on them.
+            ->when(
+                $event->technician->company_id !== null,
+                fn ($query) => $query->where('company_id', $event->technician->company_id),
+                fn ($query) => $query->whereNull('company_id'),
+            )
             ->get();
 
         if ($managers->isEmpty()) {

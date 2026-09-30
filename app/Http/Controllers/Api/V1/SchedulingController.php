@@ -74,7 +74,7 @@ class SchedulingController extends Controller
         ]);
 
         $job = Job::with('team', 'tasks.foreman', 'foreman')->findOrFail($data['job_id']);
-        abort_unless($job->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $job->user_id), 403);
 
         $crew = $this->crewLabel($job);
         $start = Carbon::parse($data['scheduled_date'])->startOfDay();

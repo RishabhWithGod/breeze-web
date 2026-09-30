@@ -22,7 +22,7 @@ class ClientAddressController extends Controller
 {
     public function store(Request $request, Client $client): RedirectResponse
     {
-        abort_unless($client->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
 
         $data = $request->validate([
             'label' => ['required', 'string', 'max:80'],
@@ -81,7 +81,7 @@ class ClientAddressController extends Controller
      */
     public function update(Request $request, Client $client, ClientAddress $address): RedirectResponse
     {
-        abort_unless($client->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
         abort_unless($address->client_id === $client->id, 404);
 
         $data = $request->validate([
@@ -166,7 +166,7 @@ class ClientAddressController extends Controller
      */
     public function destroy(Request $request, Client $client, ClientAddress $address): RedirectResponse
     {
-        abort_unless($client->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
         abort_unless($address->client_id === $client->id, 404);
 
         $jobs = $address->jobs()->count();

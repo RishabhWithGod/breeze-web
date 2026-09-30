@@ -107,6 +107,8 @@ export const ROUTES = {
 
   profile: '/profile',
   settings: '/settings',
+  estimateBuilder: '/estimate-builder',
+  companyEdit: '/settings/company/edit',
   security: '/security',
   twoFactorChallenge: '/two-factor-challenge',
   twoFactorChallengeResend: '/two-factor-challenge/resend',
@@ -205,6 +207,11 @@ export const routeTo = {
   /** Create Project, opened with this client already picked. */
   projectCreateForClient: (clientId: number) => `/projects/create?client=${clientId}`,
   foreman: (foremanId: number) => `/foremen/${foremanId}`,
+  team: (teamId: number) => `/teams/${teamId}`,
+  estimateBuilderShow: (estimateId: number) => `/estimate-builder/${estimateId}`,
+  estimateBuilderImport: (estimateId: number) => `/estimate-builder/${estimateId}/import`,
+  estimateBuilderRequestApproval: (estimateId: number) => `/estimate-builder/${estimateId}/request-approval`,
+  estimateBuilderPriceList: '/estimate-builder/price-list',
   foremanEdit: (foremanId: number) => `/foremen/${foremanId}/edit`,
   technicianApprove: (userId: number) => `/technicians/${userId}/approve`,
   technicianReject: (userId: number) => `/technicians/${userId}/reject`,
@@ -325,8 +332,10 @@ export const routeTo = {
   timeEntriesExport: (format: 'csv' | 'xlsx') => `/time-tracking/entries/export/${format}`,
   jobTimeEntryTasks: (jobId: number) => `/time-tracking/jobs/${jobId}/tasks`,
   attendance: (attendanceId: number) => `/time-tracking/attendance/${attendanceId}`,
+  attendanceCheckOut: (attendanceId: number) => `/time-tracking/attendance/${attendanceId}/check-out`,
   /** One technician's one day — every session behind the day-grouped list's single total. */
   timeEntryDay: (userId: number, date: string) => `/time-tracking/day/${userId}/${date}`,
+  timeEntryDayApprove: (userId: number, date: string) => `/time-tracking/day/${userId}/${date}/approve`,
   timeTrackingReportsExport: (format: 'csv' | 'xlsx') =>
     `/time-tracking/reports/export/${format}`,
 
@@ -377,9 +386,12 @@ export const routeTo = {
   paymentProcessorTest: (processorId: number) => `/settings/payment/processors/${processorId}/test`,
   paymentProcessorDisconnect: (processorId: number) => `/settings/payment/processors/${processorId}`,
   paymentMethodsStore: '/settings/payment/methods',
+  subscriptionChange: '/settings/payment/subscription',
   paymentMethodDefault: (methodId: number) => `/settings/payment/methods/${methodId}/default`,
   paymentMethodDestroy: (methodId: number) => `/settings/payment/methods/${methodId}`,
   billingSettingsUpdate: '/settings/payment/billing',
+  companyManagerUpdate: (managerId: number) => `/settings/payment/managers/${managerId}`,
+  managerEdit: (managerId: number) => `/teams/managers/${managerId}/edit`,
 
   securityTwoFactorChallenge: '/security/2fa/challenge',
   securityTwoFactorConfirm: '/security/2fa/confirm',

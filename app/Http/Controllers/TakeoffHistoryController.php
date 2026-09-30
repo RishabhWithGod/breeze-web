@@ -17,17 +17,35 @@ class TakeoffHistoryController extends Controller
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
-            'status' => ['nullable', Rule::in(['all', 'draft', 'completed', 'converted'])],
+            'status' => ['nullable', Rule::in([
+                'all', 'draft', 'processing', 'ready-for-review', 'completed', 'converted', 'failed',
+            ])],
+            'client' => ['nullable', 'string', 'max:160'],
+            // Not an id-shaped rule: 'all' is the honest default here too, the
+            // same way it is for status and client.
+            'project' => ['nullable', 'string', 'max:20'],
             'sort' => ['nullable', Rule::in(['date-desc', 'date-asc', 'name-asc'])],
         ]);
 
         $status = $filters['status'] ?? 'all';
+        $client = $filters['client'] ?? 'all';
+        $project = $filters['project'] ?? 'all';
         $sort = $filters['sort'] ?? 'date-desc';
 
         $projects = Project::query()
-            ->where('user_id', $request->user()->id)
+            ->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))
             ->search($filters['search'] ?? null)
-            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->when($status !== 'all', function ($query) use ($status) {
+                // Not a stored column — it is `review_status` read a different
+                // way, so it gets its own branch rather than a plain equals.
+                if ($status === 'ready-for-review') {
+                    return $query->whereIn('review_status', ['pending', 'in-review']);
+                }
+
+                return $query->where('status', $status);
+            })
+            ->when($client !== 'all', fn ($query) => $query->where('client', $client))
+            ->when($project !== 'all', fn ($query) => $query->whereKey((int) $project))
             ->tap(fn ($query) => match ($sort) {
                 'date-asc' => $query->oldest(),
                 'name-asc' => $query->orderBy('name'),
@@ -41,14 +59,27 @@ class TakeoffHistoryController extends Controller
             'filters' => [
                 'search' => $filters['search'] ?? '',
                 'status' => $status,
+                'client' => $client,
+                'project' => $project,
                 'sort' => $sort,
             ],
+            // Every one of this user's own clients and projects, for the
+            // filter dropdowns — real options, not a guess at what exists.
+            'clients' => Project::query()
+                ->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))
+                ->whereNotNull('client')
+                ->distinct()
+                ->orderBy('client')
+                ->pluck('client'),
+            'projectOptions' => $request->user()->projects()
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ]);
     }
 
     public function destroy(Request $request, Project $project): RedirectResponse
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
 
         $project->delete();
 
@@ -60,7 +91,7 @@ class TakeoffHistoryController extends Controller
     {
         $trashed = Project::onlyTrashed()->findOrFail($project);
 
-        abort_unless($trashed->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $trashed->user_id), 403);
 
         $trashed->restore();
 

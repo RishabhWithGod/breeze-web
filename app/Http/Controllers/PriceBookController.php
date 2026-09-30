@@ -148,7 +148,7 @@ class PriceBookController extends Controller
      */
     private function scopeFor(Request $request): ?int
     {
-        $userId = $request->user()->id;
+        $userId = \App\Support\Ownership::bookOwnerId($request->user()->id);
 
         return PriceBookItem::query()->where('user_id', $userId)->exists() ? $userId : null;
     }

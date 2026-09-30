@@ -18,6 +18,8 @@ class InvoiceResource extends JsonResource
             'client' => $this->client,
             'jobId' => $this->job_id,
             'jobName' => $this->job?->name,
+            // Whether the project it was raised on is still open — null when it was not raised on one.
+            'projectOpen' => $this->job === null ? null : ! $this->job->isLocked(),
             // ISO strings throughout — the client formats with date-fns.
             'date' => $this->invoice_date->toISOString(),
             'dueDate' => $this->due_date?->toISOString(),

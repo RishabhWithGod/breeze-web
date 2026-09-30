@@ -56,6 +56,8 @@ class TaskListController extends Controller
             );
 
         $jobs = Job::query()
+            // A manager sees the tasks on their own jobs, and nobody else's.
+            ->ownedBy($request->user())
             ->active()
             // Narrowed, a job earns its place by having a task that matches;
             // unnarrowed, every job is listed so any of them can be added to.
@@ -82,6 +84,8 @@ class TaskListController extends Controller
                         : (float) $task->estimated_hours,
                     'foreman' => $task->foreman?->name,
                     'supervisor' => $task->supervisor?->name,
+                    // A calendar date, sent as one — the screen reads it without a timezone.
+                    'dueOn' => $task->ends_on?->toDateString(),
                 ])->values(),
             ]);
 
@@ -120,6 +124,7 @@ class TaskListController extends Controller
     {
         return Inertia::render('TaskCreate', [
             'jobs' => Job::query()
+                ->ownedBy($request->user())
                 ->active()
                 ->orderBy('name')
                 ->get(['id', 'name', 'client'])

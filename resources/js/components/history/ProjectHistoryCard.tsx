@@ -1,11 +1,11 @@
 import { motion } from 'framer-motion'
-import { FileText } from 'lucide-react'
-import { Button, ButtonLink, StatusChip } from '@/components/common'
+import { GitBranch, Trash2 } from 'lucide-react'
+import { Button, ButtonLink, MoreMenu, StatusChip } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { TakeoffHistoryRow } from '@/types'
 import {
-  TAKEOFF_STATUS_LABEL,
-  TAKEOFF_STATUS_TONE,
+  HISTORY_STATUS_LABEL,
+  HISTORY_STATUS_TONE,
   cn,
   formatDate,
 } from '@/utils'
@@ -14,18 +14,20 @@ export interface ProjectHistoryCardProps {
   project: TakeoffHistoryRow
   index?: number
   onDelete: (project: TakeoffHistoryRow) => void
+  onRetry: (project: TakeoffHistoryRow) => void
   className?: string
 }
 
 /**
- * Small-screen equivalent of a history table row. Carries the same six fields
- * and the same three actions, so nothing is gated behind horizontal scrolling
+ * Small-screen equivalent of a history table row. Carries the same fields
+ * and actions as the table, so nothing is gated behind horizontal scrolling
  * on a phone.
  */
 export function ProjectHistoryCard({
   project,
   index = 0,
   onDelete,
+  onRetry,
   className,
 }: ProjectHistoryCardProps) {
   return (
@@ -40,44 +42,62 @@ export function ProjectHistoryCard({
       )}
     >
       <div className="flex items-start gap-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-sm bg-ocean-600 text-white">
-          <FileText size={15} aria-hidden />
+        <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-purple-400/15 text-purple-300 ring-1 ring-purple-400/40">
+          <GitBranch size={17} aria-hidden />
         </span>
 
         <div className="min-w-0 flex-1">
-          {/* The client's name — `client` holds the same string, so it is not repeated. */}
-          <p className="font-bold text-white">{project.name}</p>
+          <p className="truncate font-bold text-white">
+            {project.drawingName ?? 'Untitled drawing'}
+          </p>
+          <p className="truncate text-xs text-white/60">
+            {project.name} · {project.client}
+          </p>
         </div>
 
         <StatusChip
-          hideDot
-          tone={TAKEOFF_STATUS_TONE[project.status]}
-          label={TAKEOFF_STATUS_LABEL[project.status]}
+          pill
+          tone={HISTORY_STATUS_TONE[project.reviewStatus]}
+          label={HISTORY_STATUS_LABEL[project.reviewStatus]}
           className="shrink-0 text-sm"
         />
       </div>
 
       <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <div className="flex gap-2">
-          <dt className="text-white/70">Date</dt>
-          <dd className="text-white">{formatDate(project.date)}</dd>
+          <dt className="text-white/70">Uploaded</dt>
+          <dd className="text-white">{formatDate(project.uploadedAt)}</dd>
         </div>
         <div className="flex gap-2">
+          <dt className="text-white/70">Pages</dt>
+          <dd className="text-white">{project.pageCount}</dd>
         </div>
       </dl>
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
-        <ButtonLink href={routeTo.drawingDetails(project.id)} size="sm">
+        <ButtonLink href={`${routeTo.drawingDetails(project.id)}?from=history`} variant="purple" size="sm">
           View
         </ButtonLink>
-        <Button
-          variant="white"
-          size="sm"
-          className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
-          onClick={() => onDelete(project)}
-        >
-          Delete
-        </Button>
+
+        {project.reviewStatus === 'failed' && (
+          <Button variant="white" size="sm" onClick={() => onRetry(project)}>
+            Retry
+          </Button>
+        )}
+
+        <MoreMenu
+          className="ml-auto"
+          variant="minimal"
+          ariaLabel={`More actions for ${project.name}`}
+          items={[
+            {
+              label: 'Delete',
+              icon: Trash2,
+              destructive: true,
+              onSelect: () => onDelete(project),
+            },
+          ]}
+        />
       </div>
     </motion.li>
   )

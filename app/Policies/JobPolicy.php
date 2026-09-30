@@ -10,7 +10,7 @@ class JobPolicy
 {
     public function view(User $user, Job $job): bool
     {
-        return $job->user_id === $user->id;
+        return \App\Support\Ownership::owns($user, $job->user_id);
     }
 
     public function update(User $user, Job $job): bool

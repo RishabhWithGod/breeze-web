@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\Billing\SubscriptionSummary;
 use App\Services\Technicians\TechnicianApprovalService;
 use App\Services\TimeTracking\TeamMemberResolver;
 use Illuminate\Http\RedirectResponse;
@@ -33,6 +34,7 @@ class TechnicianController extends Controller
     public function __construct(
         private readonly TeamMemberResolver $resolver,
         private readonly TechnicianApprovalService $approvals,
+        private readonly SubscriptionSummary $subscription,
     ) {}
 
     /**
@@ -44,15 +46,21 @@ class TechnicianController extends Controller
     public function approve(Request $request, User $user): RedirectResponse
     {
         abort_unless($this->canManage($request->user()), 403);
-        abort_unless($user->isFromMobile(), 404);
+        // An application to another company is not this manager's to decide on.
+        abort_unless($user->isFromMobile() && $user->company_id === $request->user()->company_id, 404);
 
         $data = $request->validate([
-            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
             'role' => ['required', Rule::in(self::ROLES)],
         ], [
             'team_id.required' => 'Pick a team before approving.',
             'role.required' => 'Pick a role before approving.',
         ]);
+
+        // Approving gives someone an account; a plan that is full has no room for one.
+        if (! $user->isActive() && ! $this->subscription->hasSeatAvailable($request->user())) {
+            return back()->withErrors(['team_id' => 'Your plan is full. Upgrade in Settings → Subscription to approve '.$user->name.'.']);
+        }
 
         $this->approvals->approve($user, $request->user(), $data['team_id'], $data['role']);
 
@@ -62,7 +70,8 @@ class TechnicianController extends Controller
     public function reject(Request $request, User $user): RedirectResponse
     {
         abort_unless($this->canManage($request->user()), 403);
-        abort_unless($user->isFromMobile(), 404);
+        // An application to another company is not this manager's to decide on.
+        abort_unless($user->isFromMobile() && $user->company_id === $request->user()->company_id, 404);
 
         $this->approvals->reject($user);
 
@@ -77,10 +86,11 @@ class TechnicianController extends Controller
     public function assignTeam(Request $request, User $user): RedirectResponse
     {
         abort_unless($this->canManage($request->user()), 403);
-        abort_unless($user->isFromMobile(), 404);
+        // An application to another company is not this manager's to decide on.
+        abort_unless($user->isFromMobile() && $user->company_id === $request->user()->company_id, 404);
 
         $data = $request->validate([
-            'team_id' => ['sometimes', 'nullable', 'integer', 'exists:teams,id'],
+            'team_id' => ['sometimes', 'nullable', 'integer', \App\Support\CompanyRule::exists('teams')],
             'role' => ['sometimes', 'nullable', Rule::in(self::ROLES)],
         ]);
 

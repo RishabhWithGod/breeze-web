@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Head, router } from '@inertiajs/react'
-import { ArrowLeft, ArrowRight, Ban, CheckCircle2, Cog, RotateCcw, TriangleAlert } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Ban, Clock, FileText, Layers, LoaderCircle, RotateCcw, Tag } from 'lucide-react'
 import {
   Alert,
   Button,
   ButtonLink,
   Card,
   ConfirmDialog,
-  ProgressBar,
-  StatusChip,
 } from '@/components/common'
-import { PageHeader, PageTransition, StepWizard, appLayout } from '@/components/layout'
-import { ProcessingStepList, ProcessingVisual } from '@/components/processing'
+import { PageTransition, StepWizard, appLayout } from '@/components/layout'
+import { ProcessingStepList } from '@/components/processing'
 import { ROUTES, routeTo } from '@/constants'
 import {
   useCreepingProgress,
@@ -20,6 +19,7 @@ import {
   usePrivateChannel,
 } from '@/hooks'
 import { useUploadStore } from '@/store'
+import { cn } from '@/utils'
 import type {
   ProcessingStage,
   ProcessingStageState,
@@ -213,129 +213,117 @@ export default function Processing({
   const stageStates = stageStatesFor(stages, displayProgress, run.status)
   const reachedIndex = stageStates.findIndex((stage) => stage.status === 'active')
 
+  const elapsed = useElapsed(run.submittedAt ?? null, isRunning)
+  const headline = isDone
+    ? 'Detections are ready to review'
+    : isFailed || isCancelled
+      ? 'Nothing was written to your takeoff'
+      : `${run.stageLabel ?? stageStates[Math.max(reachedIndex, 0)]?.label ?? 'Analyzing drawings'}…`
+  const stageNumber = isDone ? stages.length : Math.min(Math.max(reachedIndex, 0) + 1, stages.length)
+  const fileName = uploads[0]?.name ?? project.drawingName ?? 'Drawing'
+  const tone = isFailed || isCancelled ? 'danger' : isDone ? 'success' : 'brand'
+
   return (
     <PageTransition>
       <Head title="AI Takeoff Processing" />
 
       <StepWizard current="analysis" hrefs={{ upload: ROUTES.upload }} />
 
-      <PageHeader
-        title="AI Takeoff Processing"
-        subtitle={
-          uploads.length > 0
-            ? `Analysing ${uploads.length} file(s) from ${project.name}.`
-            : 'Analysing your electrical plans.'
-        }
-        breadcrumbs={[{ label: 'AI Takeoff', href: ROUTES.aiTakeoff }, { label: 'Processing' }]}
-        actions={
-          <>
-          <StatusChip
-            tone={isFailed ? 'danger' : isCancelled ? 'warning' : isDone ? 'success' : 'brand'}
-            label={
-              isFailed
-                ? 'Failed'
-                : isCancelled
-                  ? 'Cancelled'
-                  : isDone
-                    ? 'Completed'
-                    : run.stageLabel ?? 'Processing'
-            }
-            pulse={isRunning}
-          />
-          <ButtonLink href={ROUTES.aiTakeoff} variant="secondary" leftIcon={ArrowLeft}>
-            Back
-          </ButtonLink>
-          </>
-        }
-      />
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <Card accent="brand" variant="spotlight" padding="lg" className="text-center">
-          <ProcessingVisual isActive={isRunning} />
-
-          <h2 className="mt-6 text-2xl font-bold text-white sm:text-3xl">
-            {isFailed
-              ? 'The analysis could not be completed'
-              : isCancelled
-                ? 'Processing cancelled'
-                : isDone
-                  ? 'Takeoff complete'
-                  : 'AI Takeoff Processing'}
-          </h2>
-
-          <ProgressBar
-            value={displayProgress}
-            size="lg"
-            showValue
-            tone={isFailed || isCancelled ? 'danger' : isDone ? 'success' : 'brand'}
-            className="mt-7"
-          />
-
-          <div className="mt-6 inline-flex items-center gap-3">
-            {isDone ? (
-              <CheckCircle2 size={22} aria-hidden className="text-status-success" />
-            ) : isFailed || isCancelled ? (
-              <TriangleAlert size={22} aria-hidden className="text-red-300" />
-            ) : (
-              <Cog size={22} aria-hidden className="animate-spin-slow text-brand" />
-            )}
-            <p className="text-xl font-semibold text-white">
-              {isDone
-                ? 'Detections are ready to review'
-                : isFailed || isCancelled
-                  ? 'Nothing was written to your takeoff'
-                  : `${run.stageLabel ?? stageStates[Math.max(reachedIndex, 0)]?.label ?? 'Working'}…`}
-            </p>
-          </div>
-
-          <p className="mx-auto mt-4 max-w-xl text-md text-white/90">
-            {isDone
-              ? 'Every detected symbol is waiting for review. Nothing reaches an estimate until you approve it.'
-              : isFailed
-                ? run.error ?? 'The AI service did not return a usable response.'
-                : isCancelled
-                  ? 'The run was cancelled and the uploaded drawing was removed. Upload it again when you are ready.'
-                  : 'The drawing is with the AI service. Progress updates as it reports back — you may navigate away.'}
+      <Card padding="none" className="overflow-hidden">
+        <div className="border-b border-hairline px-6 py-5 sm:px-8">
+          <h1 className="text-2xl font-bold text-white sm:text-3xl">Breeze Takeoff Processing</h1>
+          <p className="mt-1 text-md text-white/90">
+            {uploads.length > 1
+              ? `Our AI is analyzing ${uploads.length} drawings from ${project.name}`
+              : 'Our AI is analyzing your drawings and extracting takeoff data'}
           </p>
+        </div>
 
-          {run.processingTime && (
-            <p className="mt-2 font-mono text-2xs text-white/65">
-              {run.processingTime.toFixed(1)}s
-            </p>
-          )}
-
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            {isDone ? (
-              <>
-                <Button variant="white" leftIcon={RotateCcw} onClick={handleStartOver}>
-                  New takeoff
-                </Button>
-                <Button
-                  rightIcon={ArrowRight}
-                  onClick={() => run.reviewUrl && router.visit(run.reviewUrl)}
-                >
-                  Continue to review
-                </Button>
-              </>
-            ) : isFailed || isCancelled ? (
-              <>
-                {/* Cancelling removes the drawing (see ProcessingController::cancel)
-                    — there is nothing left to resubmit, only a genuine failure
-                    leaves the file in place to retry against. */}
-                {isFailed && (
-                  <Button variant="white" leftIcon={RotateCcw} onClick={handleRestart}>
-                    Resubmit drawing
-                  </Button>
+        <div className="p-4 sm:p-6">
+          <div className="rounded-card border border-hairline bg-white/3 p-4 sm:p-6">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,21rem)_minmax(0,1fr)]">
+              {/* No page image exists until the run returns — a drawing-sheet stand-in. */}
+              <div className="blueprint-grid relative grid aspect-4/3 place-items-center overflow-hidden rounded-panel border border-hairline-strong bg-navy-900/70">
+                <FileText size={56} aria-hidden className="text-brand/70" />
+                {isRunning && (
+                  <span
+                    className="pointer-events-none absolute inset-x-0 top-0 h-10 animate-scan bg-linear-to-b from-brand/30 to-transparent"
+                    aria-hidden
+                  />
                 )}
-                <Button variant="dark" onClick={handleStartOver}>
-                  Back to upload
-                </Button>
-              </>
-            ) : (
-              <Button variant="white" leftIcon={Ban} onClick={cancelDialog.open}>
-                Cancel run
-              </Button>
-            )}
+                <span className="absolute right-2 bottom-2 rounded-sm bg-navy-950/80 px-2 py-0.5 text-2xs font-semibold text-white/85">
+                  {(uploads[0]?.format ?? project.format ?? 'PDF').toString().toUpperCase()}
+                </span>
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-xl font-bold text-white sm:text-2xl">{project.name}</h2>
+                    <p className="mt-1 truncate text-md text-white/75">{fileName}</p>
+                  </div>
+                  <StatusPill
+                    tone={tone}
+                    isRunning={isRunning}
+                    label={
+                      isFailed ? 'Failed' : isCancelled ? 'Cancelled' : isDone ? 'Completed' : 'Processing'
+                    }
+                  />
+                </div>
+
+                <div className="mt-5 flex items-center gap-4">
+                  <div
+                    className="h-3 flex-1 overflow-hidden rounded-full bg-white/10"
+                    role="progressbar"
+                    aria-valuenow={Math.round(displayProgress)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-[width] duration-700',
+                        tone === 'danger'
+                          ? 'bg-status-danger'
+                          : tone === 'success'
+                            ? 'bg-status-success'
+                            : 'bg-brand',
+                      )}
+                      style={{ width: `${Math.min(Math.max(displayProgress, 0), 100)}%` }}
+                    />
+                  </div>
+                  <span className="w-12 text-right text-lg font-bold text-white">
+                    {Math.round(displayProgress)}%
+                  </span>
+                </div>
+                <p className="mt-3 text-md text-white/90">{headline}</p>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <MetricTile icon={FileText} value={String(project.pageCount)} label="Pages" />
+                  <MetricTile icon={Tag} value={String(uploads.length || 1)} label={uploads.length === 1 ? 'File' : 'Files'} />
+                  <MetricTile icon={Layers} value={`${stageNumber}/${stages.length}`} label="Stage" />
+                  <MetricTile icon={Clock} value={elapsed} label="Elapsed" />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-hairline pt-5">
+              <h3 className="mb-4 text-md font-semibold text-white">Current Status</h3>
+              <ProcessingStepList stages={stageStates} className="max-w-md" />
+
+              {run.processingTime && (
+                <p className="mt-3 font-mono text-2xs text-white/65">{run.processingTime.toFixed(1)}s</p>
+              )}
+
+              {(isFailed || isCancelled || isDone) && (
+                <p className="mt-4 max-w-2xl text-md text-white/90">
+                  {isDone
+                    ? 'Every detected symbol is waiting for review. Nothing reaches an estimate until you approve it.'
+                    : isFailed
+                      ? (run.error ?? 'The AI service did not return a usable response.')
+                      : 'The run was cancelled and the uploaded drawing was removed. Upload it again when you are ready.'}
+                </p>
+              )}
+            </div>
           </div>
 
           {/*
@@ -343,11 +331,7 @@ export default function Processing({
             Said plainly, with the one action that fixes it, rather than spinning.
           */}
           {run.awaitingWorker && isRunning && (
-            <Alert
-              tone="warning"
-              className="mt-8 text-left"
-              title="This is taking longer than usual"
-            >
+            <Alert tone="warning" className="mt-6 text-left" title="This is taking longer than usual">
               <p>
                 Your drawing is saved and queued for analysis, but it hasn't started yet.
                 This screen will update automatically once it does — try again if it
@@ -365,20 +349,48 @@ export default function Processing({
             </Alert>
           )}
 
-          {isRunning && !run.awaitingWorker && (
-            <Alert tone="info" className="mt-8 text-left">
-              We're identifying symbols, circuits and connections in your drawing.
-              Cancelling stops the analysis and removes the uploaded drawing — you'll
-              upload it again to retry.
-            </Alert>
-          )}
-        </Card>
-
-        <Card accent="success" padding="lg">
-          <h3 className="mb-6 text-xl font-semibold text-white">Processing steps</h3>
-          <ProcessingStepList stages={stageStates} />
-        </Card>
-      </div>
+          <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+            {isRunning && (
+              <Button variant="ghost" leftIcon={Ban} onClick={cancelDialog.open}>
+                Cancel run
+              </Button>
+            )}
+            {isDone && (
+              <>
+                <Button variant="secondary" leftIcon={RotateCcw} onClick={handleStartOver}>
+                  New takeoff
+                </Button>
+                <Button
+                  rightIcon={ArrowRight}
+                  onClick={() => run.reviewUrl && router.visit(run.reviewUrl)}
+                >
+                  Continue to review
+                </Button>
+              </>
+            )}
+            {(isFailed || isCancelled) && (
+              <>
+                {/* Cancelling removes the drawing (see ProcessingController::cancel)
+                    — there is nothing left to resubmit, only a genuine failure
+                    leaves the file in place to retry against. */}
+                {isFailed && (
+                  <Button variant="secondary" leftIcon={RotateCcw} onClick={handleRestart}>
+                    Resubmit drawing
+                  </Button>
+                )}
+                <Button variant="outline" onClick={handleStartOver}>
+                  Back to upload
+                </Button>
+              </>
+            )}
+            {isRunning && (
+              <ButtonLink href={ROUTES.aiTakeoff} variant="outline" size="lg" leftIcon={ArrowLeft}>
+                Continue Working
+              </ButtonLink>
+            )}
+          </div>
+        </div>
+      </Card>
 
       <ConfirmDialog
         isOpen={cancelDialog.isOpen}
@@ -392,6 +404,65 @@ export default function Processing({
         onCancel={cancelDialog.close}
       />
     </PageTransition>
+  )
+}
+
+/** Minutes/seconds since the run was submitted; freezes once it finishes. */
+function useElapsed(submittedAt: string | null, running: boolean): string {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!running) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [running])
+
+  if (!submittedAt) return '—'
+  const seconds = Math.max(0, Math.floor((now - new Date(submittedAt).getTime()) / 1000))
+  const minutes = Math.floor(seconds / 60)
+
+  return minutes > 0 ? `${minutes}m ${String(seconds % 60).padStart(2, '0')}s` : `${seconds}s`
+}
+
+const PILL_STYLES = {
+  brand: 'border-brand/40 bg-brand/15 text-brand',
+  success: 'border-status-success/40 bg-status-success/12 text-status-success',
+  danger: 'border-status-danger/50 bg-status-danger/20 text-red-300',
+} as const
+
+function StatusPill({
+  tone,
+  label,
+  isRunning,
+}: {
+  tone: keyof typeof PILL_STYLES
+  label: string
+  isRunning: boolean
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-2 rounded-panel border px-5 py-2.5 text-md font-semibold',
+        PILL_STYLES[tone],
+      )}
+    >
+      {isRunning && <LoaderCircle size={17} aria-hidden className="animate-spin" />}
+      {label}
+    </span>
+  )
+}
+
+function MetricTile({ icon: Icon, value, label }: { icon: LucideIcon; value: string; label: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-panel border border-hairline bg-white/4 px-3 py-3">
+      <span className="grid size-11 shrink-0 place-items-center rounded-panel bg-ocean-600 text-white">
+        <Icon size={20} aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-xl leading-tight font-bold text-white">{value}</p>
+        <p className="truncate text-xs text-white/80">{label}</p>
+      </div>
+    </div>
   )
 }
 

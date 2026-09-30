@@ -21,7 +21,7 @@ import {
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ESTIMATE_STATUS_OPTIONS, ROUTES } from '@/constants'
+import { ESTIMATE_STATUS_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type {
   ClientOption,
   EstimateDraft,
@@ -44,7 +44,12 @@ export interface EstimateCreateProps {
   projects: readonly ProjectOption[]
   /** And their drawings, narrowed in turn to the picked project's. */
   uploads: readonly TakeoffUploadOption[]
+  /** Set when opened from a project's own Quick Actions — fills the form in and Back/Cancel return there. */
+  defaultProjectId: number | null
 }
+
+/** Adds the marker that tells `store()` to land back on the project, not the estimates list. */
+type EstimateForm = EstimateDraft & { return_to_project: boolean }
 
 /**
  * Create Estimate — a full screen rather than a dialog, so the form has room
@@ -59,15 +64,22 @@ export default function EstimateCreate({
   clients,
   projects,
   uploads,
+  defaultProjectId,
 }: EstimateCreateProps) {
+  const defaultProject = defaultProjectId
+    ? projects.find((project) => project.id === defaultProjectId)
+    : undefined
+  const returnUrl = defaultProjectId ? routeTo.project(defaultProjectId) : null
+
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
-    useForm<EstimateDraft>({
+    useForm<EstimateForm>({
       issued_on: '',
       amount: '',
       status: 'draft',
-      client_id: '',
-      project_id: '',
+      client_id: defaultProject?.clientId ? String(defaultProject.clientId) : '',
+      project_id: defaultProjectId ? String(defaultProjectId) : '',
       upload_id: '',
+      return_to_project: Boolean(defaultProjectId),
     })
 
   /**
@@ -75,9 +87,9 @@ export default function EstimateCreate({
    * would leave "Client is required" sitting under a field the user has just
    * filled in, so each edit clears its own message.
    */
-  const update = <K extends FormDataKeys<EstimateDraft>>(
+  const update = <K extends FormDataKeys<EstimateForm>>(
     field: K,
-    value: FormDataValues<EstimateDraft, K>,
+    value: FormDataValues<EstimateForm, K>,
   ) => {
     setData(field, value)
     if (errors[field]) clearErrors(field)
@@ -150,13 +162,20 @@ export default function EstimateCreate({
       <PageHeader
         title="Create Estimate"
         subtitle="Add a client-facing estimate to your workspace."
-        breadcrumbs={[
-          { label: 'Estimates', href: ROUTES.estimates },
-          { label: 'Create' },
-        ]}
+        breadcrumbs={
+          returnUrl
+            ? [
+                { label: defaultProject?.name ?? 'Project', href: returnUrl },
+                { label: 'Create Estimate' },
+              ]
+            : [
+                { label: 'Estimates', href: ROUTES.estimates },
+                { label: 'Create' },
+              ]
+        }
         actions={
-          <ButtonLink href={ROUTES.estimates} variant="secondary" leftIcon={ArrowLeft}>
-            Back to estimates
+          <ButtonLink href={returnUrl ?? ROUTES.estimates} variant="secondary" leftIcon={ArrowLeft}>
+            {returnUrl ? 'Back to project' : 'Back to estimates'}
           </ButtonLink>
         }
       />
@@ -276,7 +295,7 @@ export default function EstimateCreate({
                   Create Estimate
                 </Button>
               )}
-              <ButtonLink href={ROUTES.estimates} variant="secondary">
+              <ButtonLink href={returnUrl ?? ROUTES.estimates} variant="secondary">
                 Cancel
               </ButtonLink>
             </div>

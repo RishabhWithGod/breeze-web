@@ -25,8 +25,12 @@ class Document extends Model
         'Schedule',
         'Report',
         'Photo',
+        'Commodity List',
         'Other',
     ];
+
+    /** The project's own commodity list — a file, not a structured list; see `ProjectController`. */
+    public const TYPE_COMMODITY_LIST = 'Commodity List';
 
     public const VISIBILITY_TEAM = 'team';
 

@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { Link, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ROUTES, SIDEBAR_ITEMS } from '@/constants'
@@ -30,6 +31,9 @@ const MODULE_PATHS: Readonly<Record<string, readonly string[]>> = {
   // The entry links straight to the invoices list, which is the module's
   // landing screen — but the overview at /billing is the same module.
   [ROUTES.billing]: ['/billing'],
+  // The calendar is the module's entry; the rest of scheduling (the unassigned
+  // list, availability) sits under /scheduling and is the same module.
+  [ROUTES.schedulingCalendar]: ['/scheduling'],
 }
 
 /**
@@ -104,10 +108,12 @@ interface SidebarLinkProps {
   onNavigate?: () => void
   /** A child row, shown smaller and indented under its parent — see Estimates → Addendum. */
   nested?: boolean
+  /** Leaves room on the right for a fold chevron drawn over the row. */
+  padEnd?: boolean
 }
 
 /** One row of the rail — a plain link, or (when `nested`) a smaller, indented one under its parent. */
-function SidebarLink({ item, isActive, onNavigate, nested = false }: SidebarLinkProps) {
+function SidebarLink({ item, isActive, onNavigate, nested = false, padEnd = false }: SidebarLinkProps) {
   return (
     <Link
       href={item.href}
@@ -117,6 +123,7 @@ function SidebarLink({ item, isActive, onNavigate, nested = false }: SidebarLink
         ITEM_BASE,
         'text-white',
         nested && 'py-2.5 pl-11 text-sm',
+        padEnd && 'pr-14',
         isActive ? 'grad-midnight text-white' : 'hover:bg-white/8 hover:text-brand',
       )}
     >
@@ -136,6 +143,33 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname()
   const active = activeHref(pathname)
 
+  // Groups start open, as the reference draws them. Two different clicks:
+  // the row is the whole tab — it opens the group's own screen and its submenu —
+  // while the chevron only folds or opens the submenu and goes nowhere. A group
+  // holding the page you are on stays open whatever was asked of it, so the rail
+  // never hides where you are.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
+
+  const toggle = (label: string) =>
+    setFolded((current) => {
+      const next = new Set(current)
+
+      if (!next.delete(label)) next.add(label)
+
+      return next
+    })
+
+  /** Opening a group's own screen also opens its group — the row is the whole tab. */
+  const unfold = (label: string) =>
+    setFolded((current) => {
+      if (!current.has(label)) return current
+
+      const next = new Set(current)
+      next.delete(label)
+
+      return next
+    })
+
   return (
     // `overscroll-contain` keeps a flick at the end of the list from scrolling
     // the page behind it; the bottom padding stops the last entry sitting hard
@@ -145,29 +179,58 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
       className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain py-2 pb-6"
     >
       <ul>
-        {SIDEBAR_ITEMS.map((item: NavItem) => (
-          <li key={item.label}>
-            <SidebarLink
-              item={item}
-              isActive={item.href === active}
-              onNavigate={onNavigate}
-            />
-            {item.children && item.children.length > 0 && (
-              <ul>
-                {item.children.map((child) => (
-                  <li key={child.label}>
-                    <SidebarLink
-                      item={child}
-                      isActive={child.href === active}
-                      onNavigate={onNavigate}
-                      nested
+        {SIDEBAR_ITEMS.map((item: NavItem) => {
+          const children = item.children ?? []
+          const holdsActive = children.some((child) => child.href === active)
+          const isOpen = holdsActive || !folded.has(item.label)
+
+          return (
+            <li key={item.label}>
+              <div className="relative">
+                <SidebarLink
+                  item={item}
+                  isActive={item.href === active}
+                  onNavigate={() => {
+                    onNavigate()
+                    if (children.length > 0) unfold(item.label)
+                  }}
+                  {...(children.length > 0 ? { padEnd: true } : {})}
+                />
+                {children.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => toggle(item.label)}
+                    aria-expanded={isOpen}
+                    aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${item.label}`}
+                    disabled={holdsActive}
+                    className="absolute top-1/2 right-3 grid size-8 -translate-y-1/2 place-items-center rounded-full text-white/85 transition-colors hover:bg-white/12 hover:text-white disabled:cursor-default disabled:hover:bg-transparent"
+                  >
+                    <ChevronDown
+                      size={17}
+                      aria-hidden
+                      className={cn('transition-transform duration-200', !isOpen && '-rotate-90')}
                     />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </li>
-        ))}
+                  </button>
+                )}
+              </div>
+
+              {children.length > 0 && isOpen && (
+                <ul>
+                  {children.map((child) => (
+                    <li key={child.label}>
+                      <SidebarLink
+                        item={child}
+                        isActive={child.href === active}
+                        onNavigate={onNavigate}
+                        nested
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          )
+        })}
       </ul>
     </nav>
   )

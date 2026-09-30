@@ -7,12 +7,18 @@ use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectDocumentResource;
 use App\Http\Resources\ProjectListResource;
 use App\Models\Client;
+use App\Models\Document;
+use App\Models\Estimate;
 use App\Models\FeedItem;
 use App\Models\Foreman;
+use App\Models\Invoice;
+use App\Models\Job;
 use App\Models\Project;
+use App\Models\ProjectActivity;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Estimating\ProjectRateBookImporter;
+use App\Services\Estimating\RateListReader;
 use App\Services\Takeoff\TakeoffFlow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -160,6 +166,7 @@ class ProjectController extends Controller
         $project = $request->user()->projects()->create([
             'client_id' => $client->id,
             'name' => $data['name'],
+            'description' => $data['description'] ?? null,
             // The client's name, snapshotted: every list, filter and printed
             // document already reads this column rather than the join.
             'client' => $client->name,
@@ -167,6 +174,9 @@ class ProjectController extends Controller
             'latitude' => $site?->latitude,
             'longitude' => $site?->longitude,
             'place_id' => $site?->place_id,
+            'project_type' => $data['project_type'] ?? null,
+            'started_at' => $data['start_date'] ?? null,
+            'due_date' => $data['end_date'] ?? null,
             'status' => 'draft',
             'review_status' => 'none',
             'estimate_target_total' => $data['estimate_target_total'] ?? null,
@@ -219,14 +229,16 @@ class ProjectController extends Controller
             $flash = [...$flash, ...$this->importVendorRateLists($request, $importer, $project)];
         }
 
-        return redirect()->route('projects.show', $project)->with($flash);
+        // A project exists to have drawings taken off it — straight to upload,
+        // with this project already picked.
+        return redirect()->route('uploads.create', ['project' => $project->id])->with($flash);
     }
 
     /**
      * The project's own rates, folded into its own rate book.
      *
      * Any number of files at once, in whatever format the vendor actually
-     * sent — Excel, PDF, or Word — {@see \App\Services\Estimating\RateListReader}
+     * sent — Excel, PDF, or Word — {@see RateListReader}
      * reads whichever one it is, and their lines are pooled into this one
      * project's rate book and its quoted rates rebuilt once. Scoped strictly
      * to this project: nothing here is shared with any other project or with
@@ -265,12 +277,14 @@ class ProjectController extends Controller
         $this->authorize('view', $project);
 
         $project->loadCount(['uploads', 'aiResults', 'estimates', 'jobs', 'members', 'documents', 'invoices']);
-        $project->load('members');
+        $project->load('members', 'user', 'estimates', 'jobs', 'invoices', 'documents', 'latestAiResult');
         $documents = $project->uploads()->oldest()->get();
 
         return Inertia::render('ProjectShow', [
             'project' => [
                 ...ProjectListResource::make($project)->resolve($request),
+                // Who raised it — the only user a project is ever tied to.
+                'owner' => $project->user->name,
                 // Who from the client's crew is staffed to it — same roster
                 // Edit Project's picker staffs from.
                 'members' => $project->members->map(fn (Foreman $member) => [
@@ -282,6 +296,15 @@ class ProjectController extends Controller
                     'phone' => $member->phone,
                     'email' => $member->email,
                 ])->values(),
+                // Its own timeline. Empty until something starts writing to
+                // it — same relation the client's own Recent Activity reads.
+                'activity' => $project->activities()->limit(5)->get()->map(fn (ProjectActivity $entry) => [
+                    'id' => $entry->id,
+                    'title' => $entry->title,
+                    'description' => $entry->description,
+                    'tone' => $entry->tone,
+                    'occurredAt' => $entry->occurred_at?->toISOString(),
+                ])->values(),
                 'notes' => $project->notes,
                 'drawingName' => $project->drawing_name,
                 // Which drawing the next takeoff runs against. Falls back to
@@ -289,6 +312,7 @@ class ProjectController extends Controller
                 'selectedUploadId' => $project->takeoffDrawing()?->id,
                 'pageCount' => $project->page_count,
                 'startedAt' => $project->started_at?->toISOString(),
+                'dueDate' => $project->due_date?->toDateString(),
                 'completedAt' => $project->completed_at?->toISOString(),
                 // Set once the engine has returned something for this project, so
                 // the screen can hand off to the takeoff instead of restating it.
@@ -304,6 +328,55 @@ class ProjectController extends Controller
                 'teamCount' => $project->members_count,
                 'documentCount' => $project->documents_count,
                 'invoiceCount' => $project->invoices_count,
+                /*
+                 * The tabs' own data — each reads only what actually belongs to
+                 * this project, so switching tabs never has to leave the
+                 * screen to show it.
+                 */
+                'estimatesList' => $project->estimates->map(fn (Estimate $estimate) => [
+                    'id' => $estimate->id,
+                    'number' => $estimate->number,
+                    'status' => $estimate->status,
+                    'amount' => (float) $estimate->amount,
+                    'issuedOn' => $estimate->issued_on?->toDateString(),
+                ])->values(),
+                'jobsList' => $project->jobs->map(fn (Job $job) => [
+                    'id' => $job->id,
+                    'name' => $job->name,
+                    'status' => $job->status,
+                    'jobType' => $job->job_type,
+                    'startDate' => $job->start_date?->toDateString(),
+                    'endDate' => $job->end_date?->toDateString(),
+                ])->values(),
+                'invoicesList' => $project->invoices->map(fn (Invoice $invoice) => [
+                    'id' => $invoice->id,
+                    'invoiceNumber' => $invoice->invoice_number,
+                    'status' => $invoice->status,
+                    'total' => (float) $invoice->total,
+                    'invoiceDate' => $invoice->invoice_date?->toDateString(),
+                    'dueDate' => $invoice->due_date?->toDateString(),
+                ])->values(),
+                'documentsList' => $project->documents->map(fn (Document $document) => [
+                    'id' => $document->id,
+                    'name' => $document->name,
+                    'documentType' => $document->document_type,
+                    'fileSizeBytes' => $document->file_size,
+                    'createdAt' => $document->created_at?->toISOString(),
+                ])->values(),
+                // The latest run's own date — enough to say something real on
+                // the Takeoffs tab without a whole run history nobody asked for.
+                'latestTakeoffAt' => $project->latestAiResult?->created_at?->toISOString(),
+                // The commodity list is a file, not a structured feature — the
+                // same documents already loaded above, narrowed to this type.
+                'commodityDocuments' => $project->documents
+                    ->where('document_type', Document::TYPE_COMMODITY_LIST)
+                    ->map(fn (Document $document) => [
+                        'id' => $document->id,
+                        'name' => $document->name,
+                        'documentType' => $document->document_type,
+                        'fileSizeBytes' => $document->file_size,
+                        'createdAt' => $document->created_at?->toISOString(),
+                    ])->values(),
             ],
             'documents' => ProjectDocumentResource::collection($documents)->resolve($request),
         ]);
@@ -321,7 +394,11 @@ class ProjectController extends Controller
             'project' => [
                 'id' => $project->id,
                 'name' => $project->name,
+                'description' => $project->description,
                 'clientId' => $project->client_id,
+                'projectType' => $project->project_type,
+                'startDate' => $project->started_at?->toDateString(),
+                'endDate' => $project->due_date?->toDateString(),
                 'estimateTargetTotal' => $project->estimate_target_total,
                 // Who from the client's crew is already staffed to it.
                 'memberIds' => $project->members->pluck('id'),
@@ -351,11 +428,15 @@ class ProjectController extends Controller
         $project->update([
             'client_id' => $client->id,
             'name' => $data['name'],
+            'description' => $data['description'] ?? null,
             'client' => $client->name,
             'location' => $site?->address,
             'latitude' => $site?->latitude,
             'longitude' => $site?->longitude,
             'place_id' => $site?->place_id,
+            'project_type' => $data['project_type'] ?? null,
+            'started_at' => $data['start_date'] ?? null,
+            'due_date' => $data['end_date'] ?? null,
             'estimate_target_total' => $data['estimate_target_total'] ?? null,
         ]);
 

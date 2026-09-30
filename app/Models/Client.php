@@ -18,6 +18,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class Client extends Model
 {
+    protected static function booted(): void
+    {
+        // A client's projects go with them, and so does everything under each:
+        // AI results, jobs, tasks and schedules.
+        static::deleted(function (self $client): void {
+            $client->projects()->get()->each->delete();
+        });
+    }
+
     use SoftDeletes;
 
     protected $fillable = [

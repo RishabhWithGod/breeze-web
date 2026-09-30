@@ -865,7 +865,7 @@ class SymbolReviewController extends Controller
     /** The review must belong to this takeoff's own project, and the project to the signed-in user, and review must still be open. */
     private function authorise(Request $request, Project $project, SymbolReview $review): AiResult
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
         $result = $review->aiResult;
         abort_unless($result !== null && $result->project_id === $project->id, 404);
         abort_if($result->isFinalised(), 403, 'This takeoff has already been finalised.');
@@ -877,7 +877,7 @@ class SymbolReviewController extends Controller
     /** Same gate as {@see authorise()}, for an action that names no single review (merge, manual add, bulk, undo). */
     private function authoriseResult(Request $request, Project $project): AiResult
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
         $result = $project->latestAiResult;
         abort_unless($result !== null, 404);
         abort_if($result->isFinalised(), 403, 'This takeoff has already been finalised.');

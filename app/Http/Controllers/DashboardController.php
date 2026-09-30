@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\FeedItemResource;
+use App\Models\AiJob;
 use App\Models\AiResult;
 use App\Models\CrewShift;
 use App\Models\Estimate;
 use App\Models\FeedItem;
 use App\Models\Job;
 use App\Models\Project;
+use App\Models\User;
 use App\Services\Billing\InvoiceSummaryCalculator;
 use App\Services\Dashboard\JobPerformanceCalculator;
 use Illuminate\Http\Request;
@@ -26,25 +28,25 @@ class DashboardController extends Controller
     public function index(Request $request): Response
     {
         return Inertia::render('Home', [
-            'summary' => $this->summary(),
+            'summary' => $this->summary($request->user()),
             // resolve() keeps these as plain arrays — only paginated props need
             // the data/meta envelope. Uncapped — the card itself scrolls
             // rather than truncating the list.
             'activity' => FeedItemResource::collection(
-                FeedItem::scope(FeedItem::DASHBOARD_ACTIVITY)->get()
+                FeedItem::scope(FeedItem::DASHBOARD_ACTIVITY)->visibleTo($request->user())->get()
             )->resolve(),
             // Not `notifications` — that name is taken by the shared prop the
             // header bell reads, and a page prop would shadow it.
             'notificationFeed' => FeedItemResource::collection(
-                FeedItem::scope(FeedItem::DASHBOARD_NOTIFICATIONS)->get()
+                FeedItem::scope(FeedItem::DASHBOARD_NOTIFICATIONS)->visibleTo($request->user())->get()
             )->resolve(),
-            'schedule' => $this->upcomingSchedule(),
-            'performance' => $this->performance->series(),
+            'schedule' => $this->upcomingSchedule($request->user()),
+            'performance' => $this->performance->series($request->user()),
             // Same figures as the Invoice Summary card — one calculator, so the
             // two screens can never disagree with each other.
             'billing' => $this->invoiceSummary->calculate($request->user()),
-            'draftEstimates' => $this->draftEstimates(),
-            'reviewsNeedingAttention' => $this->reviewsNeedingAttention(),
+            'draftEstimates' => $this->draftEstimates($request->user()),
+            'reviewsNeedingAttention' => $this->reviewsNeedingAttention($request->user()),
         ]);
     }
 
@@ -56,9 +58,10 @@ class DashboardController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private function upcomingSchedule(): array
+    private function upcomingSchedule(User $user): array
     {
         return CrewShift::query()
+            ->ownedBy($user)
             ->with(['job', 'teamMember'])
             ->where('scheduled_date', '>=', now()->toDateString())
             ->orderBy('scheduled_date')
@@ -90,16 +93,17 @@ class DashboardController extends Controller
 
     /**
      * The three headline tiles. Counted from the database rather than hardcoded,
-     * so the figures always match what the Jobs and History screens list.
+     * over the company's own work only, so the figures match what the Jobs and
+     * History screens list — and a brand-new account starts at zero.
      *
      * @return list<array<string, mixed>>
      */
-    private function summary(): array
+    private function summary(User $user): array
     {
         return [
             [
                 'id' => 'sum_jobs',
-                'value' => Job::where('status', 'in-progress')->count(),
+                'value' => Job::ownedBy($user)->where('status', 'in-progress')->count(),
                 'label' => 'Active Jobs',
                 'icon' => 'briefcase',
                 'linkLabel' => 'View all jobs',
@@ -107,7 +111,11 @@ class DashboardController extends Controller
             ],
             [
                 'id' => 'sum_takeoffs',
-                'value' => Project::whereIn('status', ['processing', 'draft'])->count(),
+                // Takeoffs the AI is actually working on. A project that is merely opened
+                // (a draft, or one marked processing with nothing sent) is not one.
+                'value' => Project::ownedBy($user)
+                    ->whereHas('aiJobs', fn ($jobs) => $jobs->whereIn('status', AiJob::IN_FLIGHT))
+                    ->count(),
                 'label' => 'Pending AI Takeoffs',
                 'icon' => 'bot',
                 'linkLabel' => 'View all takeoffs',
@@ -121,7 +129,7 @@ class DashboardController extends Controller
                  * before, a number that had nothing to do with the label above
                  * it or the list the link now opens.
                  */
-                'value' => Estimate::where('status', 'sent')->count(),
+                'value' => Estimate::ownedBy($user)->where('status', 'sent')->count(),
                 'label' => 'Estimates Awaiting Approval',
                 'icon' => 'receipt-text',
                 // The estimates list, not the latest takeoff result: the tile
@@ -139,9 +147,10 @@ class DashboardController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private function draftEstimates(): array
+    private function draftEstimates(User $user): array
     {
         return Estimate::query()
+            ->ownedBy($user)
             ->where('status', 'draft')
             ->orderByDesc('issued_on')
             ->take(5)
@@ -164,7 +173,7 @@ class DashboardController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private function reviewsNeedingAttention(): array
+    private function reviewsNeedingAttention(User $user): array
     {
         return AiResult::query()
             ->whereIn('review_status', [AiResult::REVIEW_PENDING, AiResult::REVIEW_IN_PROGRESS])
@@ -181,7 +190,7 @@ class DashboardController extends Controller
              * a decision nobody is allowed to make. The same rule the foreman
              * and team registers use for tasks on a deleted job.
              */
-            ->whereHas('project')
+            ->whereHas('project', fn ($query) => $query->ownedBy($user))
             ->with('project')
             ->orderByDesc('received_at')
             ->take(5)

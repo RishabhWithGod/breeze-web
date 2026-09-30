@@ -121,15 +121,15 @@ class JobController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $userId = $request->user()->id;
+        $userId = \App\Support\Ownership::userIdList($request->user());
 
         $data = $request->validate([
-            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->where('user_id', $userId)],
-            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->where('user_id', $userId)],
+            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userId)],
+            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', $userId)],
             'name' => ['required', 'string', 'min:3', 'max:160'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             // Optional, same as `update()`: a job can be on the books before
@@ -192,14 +192,14 @@ class JobController extends Controller
      */
     public function update(Request $request, Job $job): JsonResponse
     {
-        abort_unless($job->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $job->user_id), 403);
         $job->assertNotLocked();
 
         $data = $request->validate([
             'name' => ['required', 'string', 'min:3', 'max:160'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             // Optional, same as the create flow: a job can be on the books

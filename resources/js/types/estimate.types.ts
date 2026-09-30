@@ -5,6 +5,9 @@ export interface Estimate {
   /** Human reference, e.g. "EST-1082". */
   readonly number: string
   readonly client: string
+  readonly project: string | null
+  /** How many addenda have revised this estimate. */
+  readonly revision: number
   /** ISO timestamp — formatted with date-fns at render time. */
   readonly date: string
   readonly amount: number

@@ -26,7 +26,7 @@ class JobAssignmentController extends Controller
 
         $validated = $request->validate([
             'role' => ['required', Rule::in(JobAssignment::ROLES)],
-            'team_member_id' => ['nullable', 'integer', 'exists:team_members,id'],
+            'team_member_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('team_members')],
             'name' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);

@@ -130,6 +130,15 @@ class Job extends Model
      */
     protected static function booted(): void
     {
+        // A job's plan goes with it: its tasks, its schedule and any crew shifts.
+        // Hard deletes, and the job itself is soft-deleted as before — so Undo
+        // brings back the job, not the plan that was under it.
+        static::deleted(function (self $job): void {
+            JobTask::where('job_id', $job->id)->delete();
+            JobSchedule::where('job_id', $job->id)->delete();
+            CrewShift::where('job_id', $job->id)->delete();
+        });
+
         static::saving(function (self $job): void {
             if ($job->user_id !== null && ! $job->isDirty('project_id')) {
                 return;
@@ -242,10 +251,29 @@ class Job extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /**
+     * Every job of the company this person belongs to — its managers' jobs, not
+     * just their own. What a signed-in field crew member or a time entry is
+     * measured against.
+     *
+     * An account with no company (from before there were companies) belongs to
+     * the jobs that have none.
+     */
+    public function scopeInCompanyOf(Builder $query, User $user): Builder
+    {
+        if ($user->company_id === null) {
+            return $query->where(fn (Builder $w) => $w
+                ->whereNull('user_id')
+                ->orWhereIn('user_id', User::query()->whereNull('company_id')->select('id')));
+        }
+
+        return $query->whereIn('user_id', User::query()->where('company_id', $user->company_id)->select('id'));
+    }
+
     /** Only this manager's own jobs. */
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
-        return $query->where('user_id', $user->id);
+        return $query->whereIn($query->qualifyColumn('user_id'), \App\Support\Ownership::userIds($user));
     }
 
     /** @return BelongsTo<AiResult, $this> */
@@ -453,6 +481,22 @@ class Job extends Model
             ->active()
             ->where('status', '!=', 'completed')
             ->whereDoesntHave('crewShifts');
+    }
+
+    /**
+     * Jobs with no tasks — the ones the crew calendar has nothing to draw.
+     *
+     * The calendar places a job from its tasks, so a job that has been raised but
+     * not yet broken into tasks is unassigned, whatever its status says. Removing a
+     * job's last task puts it back here. Completed and archived work is left out:
+     * there is nothing left to plan.
+     */
+    public function scopeWithoutCrew(Builder $query): Builder
+    {
+        return $query
+            ->active()
+            ->where('status', '!=', 'completed')
+            ->whereDoesntHave('tasks');
     }
 
     /** The inverse: jobs that already have at least one shift booked. */

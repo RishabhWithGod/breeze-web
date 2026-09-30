@@ -17,6 +17,7 @@ use App\Policies\TimeEntryPolicy;
 use App\Services\Export\TimesheetExporter;
 use App\Services\TimeTracking\DailyTimesheetBuilder;
 use App\Services\TimeTracking\JobLaborSummary;
+use App\Services\TimeTracking\SessionLogBuilder;
 use App\Services\TimeTracking\TaskActualHoursRecalculator;
 use App\Services\TimeTracking\TeamTimesheetBuilder;
 use App\Services\TimeTracking\TimeEntryWriteService;
@@ -76,7 +77,32 @@ class TimeEntryController extends Controller
             (int) $request->query('page', 1),
         );
 
+        $exceptionsOnly = (bool) ($filters['exceptions'] ?? false);
+        $log = app(SessionLogBuilder::class)->paginate(
+            $filters,
+            $canViewCrew,
+            $request->user()->id,
+            (int) config('time_tracking.per_page'),
+            (int) $request->query('page', 1),
+            $exceptionsOnly,
+            $request->user(),
+        );
+
         return Inertia::render('TimeEntries', [
+            // One row per session — a check-in cycle or a timer/manual entry — with
+            // when it started and ended and how it was recorded.
+            'log' => [
+                'data' => $log->items(),
+                'meta' => [
+                    'current_page' => $log->currentPage(),
+                    'last_page' => $log->lastPage(),
+                    'per_page' => $log->perPage(),
+                    'total' => $log->total(),
+                    'from' => $log->firstItem(),
+                    'to' => $log->lastItem(),
+                ],
+            ],
+            'exceptionCount' => app(SessionLogBuilder::class)->exceptionCount($filters, $canViewCrew, $request->user()->id),
             // Plain arrays, not Eloquent models — `TimeEntryResource::collection()`
             // isn't in play here to get Laravel's `{data, meta}` shape for free,
             // so it is built by hand to match what the frontend's `Paginated<T>`
@@ -94,7 +120,7 @@ class TimeEntryController extends Controller
             ],
             'filters' => $filters,
             'weekSummary' => $weekSummary,
-            'jobs' => Job::query()->active()->orderBy('name')->get(['id', 'name', 'client', 'status']),
+            'jobs' => Job::query()->inCompanyOf($request->user())->active()->orderBy('name')->get(['id', 'name', 'client', 'status']),
             'teamMembers' => TeamMember::orderBy('name')->get(['id', 'name', 'role']),
             'taskTypes' => JobTask::CATEGORIES,
             'can' => app(TimeEntryPolicy::class)->abilities($request->user()),
@@ -117,7 +143,7 @@ class TimeEntryController extends Controller
 
         $entries = TimeEntry::query()
             ->with([
-                'job:id,name',
+                'job:id,name,user_id',
                 'jobTask:id,title',
                 'teamMember:id,name,role',
                 'user:id,name,role,initials',
@@ -165,6 +191,12 @@ class TimeEntryController extends Controller
                 'attendanceStatus' => $this->dailyBuilder->aggregateAttendanceStatus($attendance),
                 'jobBreakdown' => $jobBreakdown,
                 'entries' => TimeEntryResource::collection($entries)->resolve($request),
+                // The sessions this manager can approve right now.
+                'approvableEntryIds' => $entries
+                    ->filter(fn (TimeEntry $entry) => $request->user()->can('approve', $entry))
+                    ->pluck('id')
+                    ->values()
+                    ->all(),
                 'attendance' => $attendance->map(fn (JobAttendance $row) => [
                     'id' => $row->id,
                     'date' => $row->date->toDateString(),
@@ -172,6 +204,14 @@ class TimeEntryController extends Controller
                     'employeeRole' => $user->role,
                     'job' => $row->job ? ['id' => $row->job->id, 'name' => $row->job->name] : null,
                     'status' => $row->status,
+                    // An open check-in on a day that is over: nobody is on site from yesterday.
+                    'missingCheckout' => $row->isCheckedIn() && $row->date->lt(Carbon::today()),
+                    // Said in the same clock as the time log, so the two never disagree.
+                    'checkInLabel' => $row->check_in_at?->format('g:i A'),
+                    'checkOutLabel' => $row->check_out_at?->format('g:i A'),
+                    'canCheckOut' => app(TimeEntryPolicy::class)->closeAttendance($request->user(), $row),
+                    'checkOutMin' => $row->check_in_at?->format('Y-m-d\TH:i'),
+                    'checkOutSuggested' => $row->check_in_at?->copy()->addHours(8)->min(now())->format('Y-m-d\TH:i'),
                     'checkInAt' => $row->check_in_at?->toISOString(),
                     'checkOutAt' => $row->check_out_at?->toISOString(),
                     'checkInMethod' => $row->check_in_method,
@@ -329,6 +369,7 @@ class TimeEntryController extends Controller
             'task_type' => ['nullable', Rule::in(['all', ...JobTask::CATEGORIES])],
             'status' => ['nullable', Rule::in(['all', ...TimeEntry::STATUSES])],
             'billable' => ['nullable', Rule::in(['all', 'yes', 'no'])],
+            'exceptions' => ['nullable', 'boolean'],
             'sort' => ['nullable', 'string'],
         ]);
 
@@ -344,6 +385,7 @@ class TimeEntryController extends Controller
                 'task_type' => $raw['task_type'] ?? 'all',
                 'status' => $raw['status'] ?? 'all',
                 'billable' => $raw['billable'] ?? 'all',
+                'exceptions' => (bool) ($raw['exceptions'] ?? false),
             ],
             $canViewCrew,
         ];
@@ -354,7 +396,7 @@ class TimeEntryController extends Controller
     {
         return Inertia::render('TimeEntryForm', [
             'entry' => null,
-            'jobs' => Job::query()->active()->orderBy('name')->get(['id', 'name', 'client', 'status']),
+            'jobs' => Job::query()->inCompanyOf($request->user())->active()->orderBy('name')->get(['id', 'name', 'client', 'status']),
         ]);
     }
 
@@ -520,7 +562,7 @@ class TimeEntryController extends Controller
 
         return Inertia::render('TimeEntryForm', [
             'entry' => (new TimeEntryResource($entry->load(['job', 'jobTask'])))->resolve($request),
-            'jobs' => Job::query()->active()->orderBy('name')->get(['id', 'name', 'client', 'status']),
+            'jobs' => Job::query()->inCompanyOf($request->user())->active()->orderBy('name')->get(['id', 'name', 'client', 'status']),
         ]);
     }
 
@@ -561,10 +603,49 @@ class TimeEntryController extends Controller
     {
         $this->authorize('approve', $entry);
 
-        DB::transaction(function () use ($request, $entry) {
+        $this->approveEntry($request->user(), $entry);
+
+        return back()->with('success', 'Time entry approved.');
+    }
+
+    /**
+     * Approves everything a manager can approve on one technician's one day — the
+     * finished sessions, in one go. Each still goes through the same per-entry
+     * rules; one that is not ready (or not theirs) is left as it was.
+     */
+    public function approveDay(Request $request, User $user, string $date): RedirectResponse
+    {
+        $entries = TimeEntry::query()
+            ->with(['job:id,name,user_id', 'jobTask'])
+            ->where('user_id', $user->id)
+            ->whereDate('date', Carbon::parse($date))
+            ->get()
+            ->filter(fn (TimeEntry $entry) => $request->user()->can('approve', $entry));
+
+        abort_if($entries->isEmpty(), 403);
+
+        $entries->each(fn (TimeEntry $entry) => $this->approveEntry($request->user(), $entry));
+
+        return back()->with('success', $entries->count().' '.str('entry')->plural($entries->count()).' approved.');
+    }
+
+    /**
+     * One entry to approved. A finished draft is submitted on the employee's behalf
+     * first, so the trail still reads draft → submitted → approved rather than
+     * skipping a step.
+     */
+    private function approveEntry(User $actor, TimeEntry $entry): void
+    {
+        DB::transaction(function () use ($actor, $entry) {
+            if ($entry->status === TimeEntry::STATUS_DRAFT) {
+                $entry->changeStatus(TimeEntry::STATUS_SUBMITTED);
+                $entry->update(['submitted_at' => now()]);
+                $entry->recordActivity('submitted', "Submitted for approval by {$actor->name} on the employee's behalf.");
+            }
+
             $entry->changeStatus(TimeEntry::STATUS_APPROVED);
-            $entry->update(['approved_at' => now(), 'approved_by' => $request->user()->id]);
-            $entry->recordActivity('approved', "Approved by {$request->user()->name}.");
+            $entry->update(['approved_at' => now(), 'approved_by' => $actor->id]);
+            $entry->recordActivity('approved', "Approved by {$actor->name}.");
 
             if ($entry->job_task_id !== null) {
                 $this->taskHours->refresh($entry->jobTask);
@@ -572,8 +653,33 @@ class TimeEntryController extends Controller
         });
 
         TimeEntryApproved::dispatch($entry);
+    }
 
-        return back()->with('success', 'Time entry approved.');
+    /**
+     * Closes a check-in the technician never closed.
+     *
+     * The manager says when they actually left — the time cannot precede the check-in
+     * and cannot be in the future. Recorded as a manual check-out, so nothing reads
+     * it as a geofence one.
+     */
+    public function checkOutAttendance(Request $request, JobAttendance $attendance): RedirectResponse
+    {
+        abort_unless(app(TimeEntryPolicy::class)->closeAttendance($request->user(), $attendance), 403);
+
+        $data = $request->validate([
+            'check_out_at' => ['required', 'date', 'before_or_equal:now', 'after:'.$attendance->check_in_at?->toDateTimeString()],
+        ], [
+            'check_out_at.after' => 'The checkout has to be after the check-in.',
+            'check_out_at.before_or_equal' => 'The checkout cannot be in the future.',
+        ]);
+
+        $attendance->update([
+            'status' => JobAttendance::STATUS_CHECKED_OUT,
+            'check_out_at' => Carbon::parse($data['check_out_at']),
+            'check_out_method' => JobAttendance::METHOD_MANUAL,
+        ]);
+
+        return back()->with('success', 'Checked out.');
     }
 
     public function reject(Request $request, TimeEntry $entry): RedirectResponse
@@ -635,8 +741,11 @@ class TimeEntryController extends Controller
     }
 
     /** Tasks for the job selector's cascading picker. */
-    public function jobTasks(Job $job): JsonResponse
+    public function jobTasks(Request $request, Job $job): JsonResponse
     {
+        // Another company's job is not one to list tasks of.
+        abort_unless(Job::query()->inCompanyOf($request->user())->whereKey($job->id)->exists(), 404);
+
         return response()->json(
             $job->tasks()
                 ->orderBy('position')

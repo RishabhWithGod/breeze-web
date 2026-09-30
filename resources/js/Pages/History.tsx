@@ -1,14 +1,14 @@
 import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { FileText, Plus, SearchX, Undo2 } from 'lucide-react'
+import { GitBranch, Plus, SearchX, Trash2, Undo2 } from 'lucide-react'
 import {
   Alert,
   Button,
   ButtonLink,
   ConfirmDialog,
   EmptyState,
-  FilterTabs,
+  MoreMenu,
   Pagination,
   SearchBox,
   SelectField,
@@ -28,35 +28,41 @@ import {
 import { useDisclosure } from '@/hooks'
 import type {
   Paginated,
+  SelectOption,
   SharedPageProps,
   TableColumn,
   TakeoffHistoryRow,
 } from '@/types'
 import {
-  TAKEOFF_STATUS_LABEL,
-  TAKEOFF_STATUS_TONE,
+  HISTORY_STATUS_LABEL,
+  HISTORY_STATUS_TONE,
   formatDate,
 } from '@/utils'
 
 interface HistoryFilters {
   search: string
   status: HistoryFilter
+  client: string
+  project: string
   sort: HistorySort
 }
 
 export interface HistoryProps {
   projects: Paginated<TakeoffHistoryRow>
   filters: HistoryFilters
+  clients: readonly string[]
+  projectOptions: readonly { id: number; name: string }[]
 }
 
 /**
- * AI Takeoff History.
+ * AI Takeoff.
  *
- * Search, status filter, sort and pagination are query-string driven, so the
- * database does the work and every view is a shareable URL. Deletes are soft,
- * which is what makes "Undo" a real restore rather than a re-insert.
+ * Search, status/client/project filters, sort and pagination are all
+ * query-string driven, so the database does the work and every view is a
+ * shareable URL. Deletes are soft, which is what makes "Undo" a real restore
+ * rather than a re-insert.
  */
-export default function History({ projects, filters }: HistoryProps) {
+export default function History({ projects, filters, clients, projectOptions }: HistoryProps) {
   const { flash } = usePage<SharedPageProps>().props
 
   const [query, setQuery] = useState(filters.search)
@@ -70,6 +76,16 @@ export default function History({ projects, filters }: HistoryProps) {
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
   const canUndo = lastDeletedId !== null && Boolean(flash.warning)
+
+  const clientOptions: SelectOption[] = [
+    { label: 'All Clients', value: 'all' },
+    ...clients.map((client) => ({ label: client, value: client })),
+  ]
+
+  const projectFilterOptions: SelectOption[] = [
+    { label: 'All Projects', value: 'all' },
+    ...projectOptions.map((project) => ({ label: project.name, value: String(project.id) })),
+  ]
 
   /** Reload with changed filters, leaving scroll position and focus alone. */
   const applyFilters = useCallback(
@@ -112,60 +128,96 @@ export default function History({ projects, filters }: HistoryProps) {
     [deleteDialog],
   )
 
+  // A restart, not a retry — `retry()` refuses once a run has finished in any
+  // state, including failed, so a genuinely failed run needs the full restart.
+  const handleRetry = useCallback((row: TakeoffHistoryRow) => {
+    router.post(routeTo.processingRestart(row.id), {}, { preserveScroll: true })
+  }, [])
+
   const resetFilters = useCallback(() => {
     setQuery('')
-    applyFilters({ search: '', status: 'all' })
+    applyFilters({ search: '', status: 'all', client: 'all', project: 'all' })
   }, [applyFilters])
 
   const columns: TableColumn<TakeoffHistoryRow>[] = [
     {
-      key: 'name',
-      header: 'Client',
+      key: 'drawingSet',
+      header: 'Drawing Set',
       render: (row) => (
         <div className="flex items-center gap-3">
-          <span className="grid size-8 shrink-0 place-items-center rounded-sm bg-ocean-600 text-white">
-            <FileText size={15} aria-hidden />
+          <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-purple-400/15 text-purple-300 ring-1 ring-purple-400/40">
+            <GitBranch size={17} aria-hidden />
           </span>
-          <span className="font-bold text-white">{row.name}</span>
+          <div className="min-w-0">
+            <p className="truncate font-bold text-white">
+              {row.drawingName ?? 'Untitled drawing'}
+            </p>
+            {row.format && <p className="truncate text-xs text-white/60">{row.format}</p>}
+          </div>
         </div>
       ),
     },
     {
-      key: 'date',
-      header: 'Date',
+      key: 'project',
+      header: 'Project',
       render: (row) => (
-        <span className="whitespace-nowrap text-white/90">{formatDate(row.date)}</span>
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-white">{row.name}</p>
+          <p className="truncate text-xs text-white/60">{row.client}</p>
+        </div>
       ),
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: 'uploadedAt',
+      header: 'Uploaded',
+      render: (row) => (
+        <span className="whitespace-nowrap text-white/90">{formatDate(row.uploadedAt)}</span>
+      ),
+    },
+    {
+      key: 'pageCount',
+      header: 'Pages',
+      render: (row) => <span className="text-white/90">{row.pageCount}</span>,
+    },
+    {
+      key: 'reviewStatus',
+      header: 'Review Status',
       render: (row) => (
         <StatusChip
-          hideDot
-          tone={TAKEOFF_STATUS_TONE[row.status]}
-          label={TAKEOFF_STATUS_LABEL[row.status]}
+          pill
+          tone={HISTORY_STATUS_TONE[row.reviewStatus]}
+          label={HISTORY_STATUS_LABEL[row.reviewStatus]}
         />
       ),
     },
     {
       key: 'actions',
       header: 'Actions',
-      width: 'w-44',
-      // Text-only buttons, matching the reference's compact action cluster.
+      width: 'w-52',
       render: (row) => (
         <div className="flex items-center gap-2">
-          <ButtonLink href={routeTo.drawingDetails(row.id)} size="sm">
+          <ButtonLink href={`${routeTo.drawingDetails(row.id)}?from=history`} variant="purple" size="sm">
             View
           </ButtonLink>
-          <Button
-            variant="white"
-            size="sm"
-            className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
-            onClick={() => requestDelete(row)}
-          >
-            Delete
-          </Button>
+
+          {row.reviewStatus === 'failed' && (
+            <Button variant="white" size="sm" onClick={() => handleRetry(row)}>
+              Retry
+            </Button>
+          )}
+
+          <MoreMenu
+            variant="minimal"
+            ariaLabel={`More actions for ${row.name}`}
+            items={[
+              {
+                label: 'Delete',
+                icon: Trash2,
+                destructive: true,
+                onSelect: () => requestDelete(row),
+              },
+            ]}
+          />
         </div>
       ),
     },
@@ -176,17 +228,15 @@ export default function History({ projects, filters }: HistoryProps) {
 
   return (
     <PageTransition>
-      <Head title="AI Takeoff History" />
+      <Head title="AI Takeoff" />
 
       {/* ============================================= History panel ========= */}
       <section className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
         <header className="flex flex-col gap-4 border-b border-hairline grad-ocean-soft px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-white sm:text-3xl">
-              AI Takeoff History
-            </h1>
+            <h1 className="text-2xl font-bold text-white sm:text-3xl">AI Takeoff</h1>
             <p className="mt-1 text-md text-white/90">
-              View and manage your previous takeoff clients
+              Upload and process your drawings to extract takeoff data
             </p>
           </div>
 
@@ -195,12 +245,12 @@ export default function History({ projects, filters }: HistoryProps) {
               value={query}
               onValueChange={setQuery}
               onSearch={(value) => applyFilters({ search: value })}
-              placeholder="Search clients..."
+              placeholder="Search drawings or projects..."
               containerClassName="sm:w-72"
-              aria-label="Search clients"
+              aria-label="Search drawings or projects"
             />
             <ButtonLink href={ROUTES.upload} variant="dark" leftIcon={Plus}>
-              New Takeoff
+              Upload Drawings
             </ButtonLink>
           </div>
         </header>
@@ -208,12 +258,31 @@ export default function History({ projects, filters }: HistoryProps) {
         <div className="p-5 sm:p-6">
           {/* Filters + sort */}
           <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <FilterTabs
-              solid
-              options={HISTORY_FILTERS}
-              value={filters.status}
-              onChange={(status) => applyFilters({ status })}
-            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:flex xl:flex-wrap">
+              <SelectField
+                aria-label="Filter by status"
+                options={HISTORY_FILTERS}
+                value={filters.status}
+                onChange={(event) =>
+                  applyFilters({ status: event.target.value as HistoryFilter })
+                }
+                className="xl:w-44"
+              />
+              <SelectField
+                aria-label="Filter by project"
+                options={projectFilterOptions}
+                value={filters.project}
+                onChange={(event) => applyFilters({ project: event.target.value })}
+                className="xl:w-44"
+              />
+              <SelectField
+                aria-label="Filter by client"
+                options={clientOptions}
+                value={filters.client}
+                onChange={(event) => applyFilters({ client: event.target.value })}
+                className="xl:w-44"
+              />
+            </div>
 
             <div className="flex items-center gap-3">
               <label
@@ -263,7 +332,7 @@ export default function History({ projects, filters }: HistoryProps) {
           {rows.length === 0 ? (
             <EmptyState
               icon={SearchX}
-              title="No clients found"
+              title="No drawing sets found"
               description="No takeoffs match your current filters. Try another status or clear the search."
               actions={
                 <Button variant="secondary" onClick={resetFilters}>
@@ -282,7 +351,7 @@ export default function History({ projects, filters }: HistoryProps) {
                   columns={columns}
                   rows={rows}
                   getRowId={(row) => row.id}
-                  caption="Previous AI takeoff clients"
+                  caption="Previous AI takeoff drawing sets"
                 />
               </div>
 
@@ -295,6 +364,7 @@ export default function History({ projects, filters }: HistoryProps) {
                     project={row}
                     index={rowIndex}
                     onDelete={requestDelete}
+                    onRetry={handleRetry}
                   />
                 ))}
               </ul>
@@ -310,8 +380,8 @@ export default function History({ projects, filters }: HistoryProps) {
             onPageChange={(page) => applyFilters({ page })}
             summary={
               meta.total === 0
-                ? 'No clients to display'
-                : `Showing ${rows.length} of ${meta.total} clients`
+                ? 'No drawing sets to display'
+                : `Showing ${rows.length} of ${meta.total} drawing sets`
             }
           />
         </div>
@@ -321,8 +391,8 @@ export default function History({ projects, filters }: HistoryProps) {
         isOpen={deleteDialog.isOpen}
         tone="danger"
         title={`Delete “${pendingDelete?.name ?? ''}”?`}
-        description="The client is removed from your history. You can undo this straight after."
-        confirmLabel="Delete client"
+        description="The project is removed from your history. You can undo this straight after."
+        confirmLabel="Delete"
         confirmVariant="danger"
         onConfirm={handleDeleteConfirmed}
         onCancel={() => {

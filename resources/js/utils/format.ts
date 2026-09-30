@@ -25,6 +25,18 @@ export function formatDate(iso: string, pattern = 'MM/dd/yyyy'): string {
   return format(parseISO(iso), pattern)
 }
 
+/**
+ * A calendar date ("2026-09-18") that the server sent as UTC midnight.
+ *
+ * `formatDate` parses that as an instant, so a browser west of UTC shows the
+ * day before. A date with no time of day has no zone to convert — its
+ * year-month-day is read as written.
+ */
+export function formatCalendarDate(iso: string, pattern = 'MMM d, yyyy'): string {
+  const [year = 0, month = 1, day = 1] = iso.slice(0, 10).split('-').map(Number)
+  return format(new Date(year, month - 1, day), pattern)
+}
+
 /** "2026-08-01T10:00:00Z" → "about 2 hours ago" */
 export function formatRelative(iso: string): string {
   return `${formatDistanceToNow(parseISO(iso))} ago`

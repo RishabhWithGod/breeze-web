@@ -15,7 +15,7 @@ class JobTeamController extends Controller
         $job->assertNotLocked();
 
         $validated = $request->validate([
-            'team_member_id' => ['required', 'integer', 'exists:team_members,id'],
+            'team_member_id' => ['required', 'integer', \App\Support\CompanyRule::exists('team_members')],
             'role_on_job' => ['nullable', 'string', 'max:120'],
         ]);
 

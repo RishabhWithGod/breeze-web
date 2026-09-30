@@ -14,6 +14,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class JobAttendance extends Model
 {
+    protected static function booted(): void
+    {
+        // Time belongs to the company of the person who logged it.
+        static::addGlobalScope(new \App\Models\Scopes\PeopleScope);
+    }
+
     public const STATUS_CHECKED_IN = 'checkedIn';
 
     public const STATUS_CHECKED_OUT = 'checkedOut';

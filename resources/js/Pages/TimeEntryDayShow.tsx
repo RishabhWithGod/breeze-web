@@ -1,264 +1,384 @@
-import { Head } from '@inertiajs/react'
-import { Camera, MapPin } from 'lucide-react'
-import { Badge, ButtonLink, Card, SectionHeading, StatusChip } from '@/components/common'
-import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { useMemo, useState } from 'react'
+import { Head, Link, router } from '@inertiajs/react'
 import {
-  DAY_STATUS_LABEL,
-  DAY_STATUS_TONE,
-  ROUTES,
-  TIME_ENTRY_STATUS_LABEL,
-  TIME_ENTRY_STATUS_TONE,
-  routeTo,
-} from '@/constants'
-import type { AttendanceRow, TimeEntry, TimeTrackingDayDetail } from '@/types'
-import { formatDate, formatHours } from '@/utils'
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Clock,
+  Hourglass,
+  Layers,
+  LogOut,
+  MapPin,
+  PencilLine,
+  Timer,
+  type LucideIcon,
+} from 'lucide-react'
+import { Button, ButtonLink, Card, Table } from '@/components/common'
+import { appLayout, PageTransition } from '@/components/layout'
+import {
+  CheckOutDialog,
+  SessionStatus,
+  clockTime,
+  entrySessionStatus,
+  type CheckOutTarget,
+  type SessionStatusKey,
+} from '@/components/timeTracking'
+import { ROUTES, routeTo } from '@/constants'
+import type { AttendanceRow, TableColumn, TimeEntry, TimeTrackingDayDetail } from '@/types'
+import { formatCalendarDate, formatHours } from '@/utils'
 
 export interface TimeEntryDayShowProps {
   day: TimeTrackingDayDetail
 }
 
-const ATTENDANCE_METHOD_LABEL: Record<NonNullable<AttendanceRow['checkInMethod']>, string> = {
-  manual: 'Manual',
-  automatic: 'GPS match',
-  photo: 'Photo',
+const METHOD_SOURCE: Record<NonNullable<AttendanceRow['checkInMethod']>, string> = {
+  automatic: 'Auto (Geofence)',
+  photo: 'Photo check-in',
+  manual: 'Manual check-in',
 }
 
-const formatTime = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—'
+function attendanceStatus(row: AttendanceRow): SessionStatusKey {
+  if (row.status === 'checkedOut') return 'completed'
+
+  return row.missingCheckout ? 'missing-checkout' : 'on-site'
+}
 
 /**
- * One technician's one day — laid out the same way a single time entry's
- * own detail screen is (summary cards, then a figures card, then history),
- * so it reads as the same screen a manager already knows, just totalled
- * for the day rather than one session. Every timer/manual entry and every
- * GPS check-in behind that total is broken out below, in full, with a link
- * to the exact same per-session detail screen this page used to send
- * someone to directly — nothing about approving, editing or rejecting one
- * session moved; it still lives there.
+ * One technician's one day — every timer/manual session and every GPS check-in
+ * behind the day's total, with what has been approved and what is waiting.
+ *
+ * A manager approves from here: each finished session has its own button, and
+ * "Approve all" takes every one of them at once. A check-in nobody closed can be
+ * closed here too, by saying when they actually left.
  */
 export default function TimeEntryDayShow({ day }: TimeEntryDayShowProps) {
-  const initials = day.employee.name
-    .split(' ')
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase()
+  const [closing, setClosing] = useState<CheckOutTarget | null>(null)
+  const approvable = useMemo(() => new Set(day.approvableEntryIds), [day.approvableEntryIds])
+
+  const approve = (entryId: number) =>
+    router.post(routeTo.timeEntryApprove(entryId), {}, { preserveScroll: true })
+
+  const approveAll = () =>
+    router.post(routeTo.timeEntryDayApprove(day.userId, day.date), {}, { preserveScroll: true })
+
+  const hours = useMemo(() => {
+    const sum = (keep: (entry: TimeEntry) => boolean) =>
+      day.entries.filter(keep).reduce((total, entry) => total + entry.hours, 0)
+
+    return {
+      approved: sum((entry) => entrySessionStatus(entry) === 'approved'),
+      waiting: sum((entry) => entrySessionStatus(entry) === 'pending'),
+    }
+  }, [day.entries])
+
+  // One status for the whole day: anything that needs a person first.
+  const overall: SessionStatusKey = useMemo(() => {
+    if (day.attendance.some((row) => row.missingCheckout)) return 'missing-checkout'
+    if (day.status === 'rejected') return 'rejected'
+    if (day.status === 'pending' || day.status === 'mixed') return 'pending'
+    if (day.status === 'approved') return 'approved'
+    if (day.attendance.some((row) => row.status === 'checkedIn')) return 'on-site'
+
+    return 'completed'
+  }, [day.attendance, day.status])
 
   const sessionCount = day.entries.length + day.attendance.length
+  const total = Math.max(day.totalHours, 0.0001)
+
+  const openCheckOut = (row: AttendanceRow) =>
+    setClosing({
+      attendanceId: row.id,
+      employee: day.employee.name,
+      job: row.job?.name ?? null,
+      checkedInAt: row.checkInLabel ? `${formatCalendarDate(row.date, 'MM/dd/yyyy')} ${row.checkInLabel}` : null,
+      min: row.checkOutMin,
+      suggested: row.checkOutSuggested,
+    })
+
+  const entryColumns: TableColumn<TimeEntry>[] = [
+    {
+      key: 'job',
+      header: 'Job',
+      render: (entry) => <span className="font-medium text-white">{entry.job?.name ?? 'No job'}</span>,
+    },
+    {
+      key: 'task',
+      header: 'Task',
+      render: (entry) => (
+        <span className="text-white/90">{entry.jobTask?.title ?? entry.taskLabel ?? '—'}</span>
+      ),
+    },
+    {
+      key: 'in',
+      header: 'Check-in',
+      render: (entry) => <Clocked icon={entry.source === 'timer' ? Timer : PencilLine} value={clockTime(entry.startTime)} />,
+    },
+    {
+      key: 'out',
+      header: 'Checkout',
+      render: (entry) => <Clocked icon={entry.source === 'timer' ? Timer : PencilLine} value={clockTime(entry.endTime)} />,
+    },
+    {
+      key: 'hours',
+      header: 'Duration',
+      render: (entry) => (
+        <span className="font-semibold whitespace-nowrap tabular-nums text-white">{formatHours(entry.hours)}</span>
+      ),
+    },
+    {
+      key: 'source',
+      header: 'Source',
+      render: (entry) => (
+        <span className="text-white/90">{entry.source === 'timer' ? 'Timer' : 'Manual entry'}</span>
+      ),
+    },
+    { key: 'status', header: 'Status', render: (entry) => <SessionStatus status={entrySessionStatus(entry)} /> },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (entry) => (
+        <div className="flex items-center gap-2">
+          {approvable.has(entry.id) && (
+            <Button size="sm" leftIcon={Check} onClick={() => approve(entry.id)}>
+              Approve
+            </Button>
+          )}
+          <ButtonLink href={routeTo.timeEntry(entry.id)} size="sm" variant="secondary">
+            View
+          </ButtonLink>
+        </div>
+      ),
+    },
+  ]
+
+  const attendanceColumns: TableColumn<AttendanceRow>[] = [
+    {
+      key: 'job',
+      header: 'Job',
+      render: (row) => <span className="font-medium text-white">{row.job?.name ?? 'No job'}</span>,
+    },
+    {
+      key: 'in',
+      header: 'Check-in',
+      render: (row) => <Clocked icon={MapPin} value={row.checkInLabel ?? '—'} />,
+    },
+    {
+      key: 'out',
+      header: 'Checkout',
+      render: (row) =>
+        row.checkOutLabel ? (
+          <Clocked icon={MapPin} value={row.checkOutLabel} />
+        ) : (
+          <span className="text-white/60">—</span>
+        ),
+    },
+    {
+      key: 'hours',
+      header: 'Duration',
+      render: (row) => (
+        <span className="font-semibold whitespace-nowrap tabular-nums text-white">
+          {row.status === 'checkedIn' ? '—' : formatHours(row.hours)}
+        </span>
+      ),
+    },
+    {
+      key: 'source',
+      header: 'Source',
+      render: (row) => (
+        <span className="text-white/90">
+          {row.checkInMethod ? METHOD_SOURCE[row.checkInMethod] : 'Manual check-in'}
+        </span>
+      ),
+    },
+    { key: 'status', header: 'Status', render: (row) => <SessionStatus status={attendanceStatus(row)} /> },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          {row.canCheckOut && (
+            <Button size="sm" variant="secondary" leftIcon={LogOut} onClick={() => openCheckOut(row)}>
+              Check out
+            </Button>
+          )}
+          <ButtonLink href={routeTo.attendance(row.id)} size="sm" variant="secondary">
+            View
+          </ButtonLink>
+        </div>
+      ),
+    },
+  ]
 
   return (
     <PageTransition>
-      <Head title={`${day.employee.name} — ${formatDate(day.date)}`} />
+      <Head title={`${day.employee.name} — ${formatCalendarDate(day.date)}`} />
 
-      <PageHeader
-        title={day.employee.name}
-        subtitle={formatDate(day.date)}
-        breadcrumbs={[
-          { label: 'Time Tracking', href: ROUTES.timeTracking },
-          { label: formatDate(day.date) },
-        ]}
-        actions={
-          <ButtonLink href={ROUTES.timeEntries} variant="secondary" size="sm">
-            Back to Time Log
-          </ButtonLink>
-        }
-      />
+      {/* ==================================================== Header ========= */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <Link
+            href={ROUTES.timeTracking}
+            className="inline-flex items-center gap-2 text-md font-medium text-white transition-colors hover:text-brand"
+          >
+            <ArrowLeft size={17} aria-hidden />
+            Time Tracking
+          </Link>
 
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        {day.status ? (
-          <StatusChip tone={DAY_STATUS_TONE[day.status]} label={DAY_STATUS_LABEL[day.status]} />
-        ) : day.attendanceStatus === 'checkedIn' ? (
-          <Badge tone="success">
-            <Camera size={12} className="mr-1 inline" aria-hidden />
-            On site
-          </Badge>
-        ) : (
-          <Badge tone="neutral">
-            <Camera size={12} className="mr-1 inline" aria-hidden />
-            Checked out
-          </Badge>
-        )}
-        <span className="text-sm text-white/70">
-          {formatDate(day.date)} · {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'} logged
-        </span>
-      </div>
-
-      {/* ============================================ Summary cards =========== */}
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card accent="brand" padding="lg">
-          <SectionHeading as="h3" title="Electrician Information" />
-          <div className="flex items-start gap-4">
-            <span className="grid size-14 shrink-0 place-items-center rounded-full bg-ocean-800 text-md font-semibold text-white ring-1 ring-steel-600">
-              {initials || '—'}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-lg font-semibold text-white">{day.employee.name}</p>
-              {day.employee.role && <p className="text-sm text-white/80">{day.employee.role}</p>}
-            </div>
-          </div>
-        </Card>
-
-        <Card accent="success" padding="lg">
-          <SectionHeading as="h3" title="Time by Job / Site" subtitle="Every site this day's total is split across" />
-          <dl className="flex flex-col gap-2">
-            {day.jobBreakdown.map((row) => (
-              <TotalRow key={row.job} label={row.job} value={formatHours(row.hours)} />
-            ))}
-            {day.jobBreakdown.length > 1 && (
-              <TotalRow label="Total" value={formatHours(day.totalHours)} strong />
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-bold text-white sm:text-4xl">{day.employee.name}</h1>
+            {day.employee.role && (
+              <span className="inline-flex rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-medium text-brand">
+                {day.employee.role}
+              </span>
             )}
-          </dl>
+            <SessionStatus status={overall} />
+          </div>
+
+          <p className="mt-2 text-md text-white/85">
+            {formatCalendarDate(day.date, 'EEEE, MMMM d, yyyy')} · {sessionCount}{' '}
+            {sessionCount === 1 ? 'session' : 'sessions'} logged
+          </p>
+        </div>
+
+        {approvable.size > 0 && (
+          <Button leftIcon={Check} onClick={approveAll}>
+            {approvable.size === 1 ? 'Approve session' : `Approve all ${approvable.size}`}
+          </Button>
+        )}
+      </div>
+
+      {/* ================================================= Summary cards ===== */}
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard icon={Clock} label="Total Hours" value={formatHours(day.totalHours)} />
+        <StatCard icon={CheckCircle2} label="Approved" value={formatHours(hours.approved)} />
+        <StatCard icon={Hourglass} label="Waiting on Approval" value={formatHours(hours.waiting)} />
+        <StatCard
+          icon={Layers}
+          label="Sessions"
+          value={String(sessionCount)}
+          note={`${day.entries.length} timer / manual · ${day.attendance.length} GPS`}
+        />
+      </div>
+
+      <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_21rem]">
+        <div className="min-w-0 space-y-5">
+          {day.entries.length > 0 && (
+            <Card padding="md">
+              <CardTitle title="Timer & Manual Entries" count={day.entries.length} />
+              <div className="mt-3 overflow-x-auto">
+                <Table
+                  dense
+                  variant="lined"
+                  headerVariant="plain"
+                  className="min-w-4xl text-sm [&_th]:text-sm [&_td]:text-sm"
+                  columns={entryColumns}
+                  rows={day.entries}
+                  getRowId={(entry) => entry.id}
+                  caption="Timer and manual entries for the day"
+                />
+              </div>
+            </Card>
+          )}
+
+          {day.attendance.length > 0 && (
+            <Card padding="md">
+              <CardTitle title="GPS Check-ins" count={day.attendance.length} />
+              <div className="mt-3 overflow-x-auto">
+                <Table
+                  dense
+                  variant="lined"
+                  headerVariant="plain"
+                  className="min-w-4xl text-sm [&_th]:text-sm [&_td]:text-sm"
+                  columns={attendanceColumns}
+                  rows={day.attendance}
+                  getRowId={(row) => row.id}
+                  caption="GPS check-ins for the day"
+                />
+              </div>
+            </Card>
+          )}
+        </div>
+
+        <Card padding="md">
+          <h2 className="text-lg font-semibold text-white">Time by Job / Site</h2>
+          <p className="mt-0.5 text-xs text-white/70">Every site the day&apos;s total is split across</p>
+
+          <ul className="mt-4 space-y-4">
+            {day.jobBreakdown.map((row) => {
+              const share = Math.round((row.hours / total) * 100)
+
+              return (
+                <li key={row.job}>
+                  <div className="flex items-baseline justify-between gap-3 text-md">
+                    <span className="min-w-0 truncate text-white">{row.job}</span>
+                    <span className="shrink-0 font-semibold tabular-nums text-white">{formatHours(row.hours)}</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/12" aria-hidden>
+                    <div
+                      className="h-full rounded-full bg-linear-to-r from-status-success/40 to-status-success"
+                      style={{ width: `${Math.min(share, 100)}%` }}
+                    />
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+
+          {day.jobBreakdown.length > 1 && (
+            <div className="mt-5 flex items-center justify-between border-t border-hairline pt-3">
+              <span className="text-md font-semibold text-white">Total</span>
+              <span className="text-lg font-bold tabular-nums text-white">{formatHours(day.totalHours)}</span>
+            </div>
+          )}
         </Card>
       </div>
 
-      {/* ================================================= Time details ======= */}
-      <Card accent="neutral" padding="lg" className="mt-6">
-        <SectionHeading as="h3" title="Time Details" subtitle="Calculated by the server — never recomputed here" />
-        <dl className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
-          <Field label="Date" value={formatDate(day.date)} />
-          <Field label="Total Hours" value={formatHours(day.totalHours)} strong />
-          <Field label="Timer & Manual Sessions" value={String(day.entries.length)} />
-          <Field label="GPS Check-Ins" value={String(day.attendance.length)} />
-        </dl>
-      </Card>
-
-      {/* ==================================== Timer & manual sessions ========= */}
-      {day.entries.length > 0 && (
-        <Card accent="warning" padding="lg" className="mt-6">
-          <SectionHeading
-            as="h3"
-            title="Timer & Manual Entries"
-            subtitle={`${day.entries.length} logged on ${formatDate(day.date)}`}
-          />
-          <div className="flex flex-col divide-y divide-hairline">
-            {day.entries.map((entry) => (
-              <EntrySession key={entry.id} entry={entry} />
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* ========================================== GPS check-ins ============= */}
-      {day.attendance.length > 0 && (
-        <Card accent="success" padding="lg" className="mt-6">
-          <SectionHeading
-            as="h3"
-            title="GPS Check-Ins"
-            subtitle={`${day.attendance.length} on ${formatDate(day.date)}`}
-          />
-          <div className="flex flex-col divide-y divide-hairline">
-            {day.attendance.map((row) => (
-              <AttendanceSession key={row.id} row={row} />
-            ))}
-          </div>
-        </Card>
-      )}
+      <CheckOutDialog target={closing} onClose={() => setClosing(null)} />
     </PageTransition>
   )
 }
 
-/** One timer/manual session — the same fields its own detail screen's
- *  "Time Details" card shows, plus a link through to that full screen for
- *  anything that needs editing, submitting or approving. */
-function EntrySession({ entry }: { entry: TimeEntry }) {
-  return (
-    <div className="py-4 first:pt-0 last:pb-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-md font-semibold text-white">{entry.job?.name ?? 'No job'}</p>
-        <div className="flex items-center gap-2">
-          <StatusChip tone={TIME_ENTRY_STATUS_TONE[entry.status]} label={TIME_ENTRY_STATUS_LABEL[entry.status]} />
-          <ButtonLink href={routeTo.timeEntry(entry.id)} size="sm" variant="ghost">
-            View
-          </ButtonLink>
-        </div>
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <Field label="Task" value={entry.jobTask?.title ?? entry.taskLabel ?? '—'} />
-        <Field label="Check In" value={entry.startTime?.slice(0, 5) ?? '—'} />
-        <Field label="Check Out" value={entry.endTime?.slice(0, 5) ?? '—'} />
-        <Field label="Hours" value={formatHours(entry.hours)} strong />
-        <Field label="Source" value={entry.source === 'timer' ? 'Timer' : 'Manual'} />
-      </dl>
-    </div>
-  )
-}
-
-/** One GPS check-in/check-out cycle — the same fields its own detail
- *  screen's Check In/Check Out cards show, condensed to one row. */
-function AttendanceSession({ row }: { row: AttendanceRow }) {
-  return (
-    <div className="py-4 first:pt-0 last:pb-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-md font-semibold text-white">{row.job?.name ?? 'No job'}</p>
-        <div className="flex items-center gap-2">
-          {row.status === 'checkedIn' ? (
-            <Badge tone="success">On site</Badge>
-          ) : (
-            <Badge tone="neutral">Checked out</Badge>
-          )}
-          <ButtonLink href={routeTo.attendance(row.id)} size="sm" variant="ghost">
-            View
-          </ButtonLink>
-        </div>
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <Field label="Check In" value={formatTime(row.checkInAt)} />
-        <Field label="Check Out" value={formatTime(row.checkOutAt)} />
-        <Field label="Hours" value={formatHours(row.hours)} strong />
-        <Field
-          label="Verified"
-          value={row.checkInMethod ? ATTENDANCE_METHOD_LABEL[row.checkInMethod] : '—'}
-        />
-        {row.photoUrl && (
-          <div>
-            <dt className="text-2xs tracking-wide text-white/80 uppercase">Photo</dt>
-            <dd className="mt-1">
-              <a href={row.photoUrl} target="_blank" rel="noreferrer">
-                <img
-                  src={row.photoUrl}
-                  alt="Check-in photo"
-                  className="h-10 w-10 rounded-md border border-hairline object-cover"
-                />
-              </a>
-            </dd>
-          </div>
-        )}
-      </dl>
-      {row.checkInMethod === 'automatic' && (
-        <p className="mt-3 flex items-center gap-1.5 text-xs text-white/60">
-          <MapPin size={12} aria-hidden />
-          Verified by GPS match against the job site.
-        </p>
-      )}
-    </div>
-  )
-}
-
-function Field({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-2xs tracking-wide text-white/80 uppercase">{label}</dt>
-      <dd className={strong ? 'mt-1 text-lg font-semibold text-white' : 'mt-1 truncate text-md text-white'} title={value}>
-        {value}
-      </dd>
-    </div>
-  )
-}
-
-function TotalRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div
-      className={
-        strong
-          ? 'flex items-center justify-between gap-3 border-t border-hairline pt-2'
-          : 'flex items-center justify-between gap-3'
-      }
-    >
-      <dt className={strong ? 'text-md font-semibold text-white' : 'text-md text-white/90'}>{label}</dt>
-      <dd className={strong ? 'text-lg font-bold text-white' : 'text-md font-medium text-white/90'}>{value}</dd>
-    </div>
-  )
-}
-
 TimeEntryDayShow.layout = appLayout
+
+function CardTitle({ title, count }: { title: string; count: number }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <h2 className="text-lg font-semibold text-white">{title}</h2>
+      <span className="rounded-full bg-white/12 px-2 py-0.5 text-2xs text-white/85">{count}</span>
+    </div>
+  )
+}
+
+function Clocked({ icon: Icon, value }: { icon: LucideIcon; value: string }) {
+  return (
+    <span className="flex items-center gap-2 whitespace-nowrap text-white">
+      <Icon size={14} aria-hidden className="shrink-0 text-white/75" />
+      {value}
+    </span>
+  )
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  note,
+}: {
+  icon: LucideIcon
+  label: string
+  value: string
+  note?: string
+}) {
+  return (
+    <Card padding="md" className="flex items-center gap-4">
+      <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+        <Icon size={22} aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-white/75">{label}</p>
+        <p className="text-xl leading-tight font-bold text-white">{value}</p>
+        {note && <p className="text-xs text-white/65">{note}</p>}
+      </div>
+    </Card>
+  )
+}

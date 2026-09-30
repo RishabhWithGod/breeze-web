@@ -11,13 +11,19 @@ import { useUploadStore } from '@/store'
  * multipart POST. On success the server redirects to the processing screen for
  * the run it opened, so there is nothing to navigate to here.
  */
+/** What the addendum screen asks for beyond the drawings themselves. */
+export interface AddendumDetails {
+  addendum_reason?: string
+  affected_sheets?: string
+}
+
 export function useFileUpload(): {
   isUploading: boolean
-  startUpload: () => void
+  startUpload: (extra?: AddendumDetails) => void
 } {
   const [isUploading, setIsUploading] = useState(false)
 
-  const startUpload = useCallback(() => {
+  const startUpload = useCallback((extra?: AddendumDetails) => {
     const {
       files,
       projectId,
@@ -55,6 +61,12 @@ export function useFileUpload(): {
         project_id: projectId,
         files: targets.map((file) => file.source),
         ...(addendumForEstimateId ? { addendum_for_estimate_id: addendumForEstimateId } : {}),
+        ...(addendumForEstimateId && extra?.addendum_reason?.trim()
+          ? { addendum_reason: extra.addendum_reason.trim() }
+          : {}),
+        ...(addendumForEstimateId && extra?.affected_sheets?.trim()
+          ? { affected_sheets: extra.affected_sheets.trim() }
+          : {}),
       },
       {
         forceFormData: true,

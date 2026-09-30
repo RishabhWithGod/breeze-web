@@ -17,7 +17,7 @@ class StoreJobFromEstimatesRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        $userId = $this->user()->id;
+        $userId = \App\Support\Ownership::userIdList($this->user());
 
         return [
             /*
@@ -29,15 +29,15 @@ class StoreJobFromEstimatesRequest extends FormRequest
             'estimate_ids' => ['required', 'array', 'min:1'],
             'estimate_ids.*' => [
                 'integer', 'distinct',
-                Rule::exists('estimates', 'id')->where('user_id', $userId),
+                Rule::exists('estimates', 'id')->whereIn('user_id', $userId),
             ],
             'name' => ['required', 'string', 'min:3', 'max:160'],
-            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
             'address_ids' => ['required', 'array', 'size:1'],
             'address_ids.*' => [
                 'integer', 'distinct',
                 Rule::exists('client_addresses', 'id')->where(
-                    fn ($query) => $query->whereIn('client_id', fn ($sub) => $sub->select('id')->from('clients')->where('user_id', $userId))
+                    fn ($query) => $query->whereIn('client_id', fn ($sub) => $sub->select('id')->from('clients')->whereIn('user_id', $userId))
                 ),
             ],
             'start_date' => ['required', 'date'],

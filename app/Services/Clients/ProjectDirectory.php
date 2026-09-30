@@ -22,7 +22,7 @@ class ProjectDirectory
     public function options(User $user): Collection
     {
         return Project::with(['addresses', 'clientRecord:id,name,team_id', 'clientRecord.team:id,name', 'selectedUpload', 'primaryUpload'])
-            ->where('user_id', $user->id)
+            ->whereIn('user_id', \App\Support\Ownership::userIds($user))
             ->orderBy('name')
             ->get(['id', 'client_id', 'name', 'project_type', 'selected_upload_id'])
             ->map(fn (Project $project) => [

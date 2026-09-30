@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use App\Models\Relations\CompanyHasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -68,6 +69,9 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
             'approved_at' => 'datetime',
+            'needs_company_setup' => 'boolean',
+            'needs_terms_acceptance' => 'boolean',
+            'needs_payment_setup' => 'boolean',
             'password' => 'hashed',
         ];
     }
@@ -113,40 +117,67 @@ class User extends Authenticatable
             ->implode('');
     }
 
+    /** @return HasOne<CompanyProfile, $this> */
+    public function company(): HasOne
+    {
+        return $this->hasOne(CompanyProfile::class);
+    }
+
+    /** @return HasMany<TermsAcceptance, $this> */
+    public function termsAcceptances(): HasMany
+    {
+        return $this->hasMany(TermsAcceptance::class);
+    }
+
+    /**
+     * A `hasMany` that reads the whole company's rows — see {@see CompanyHasMany}.
+     *
+     * @template TRelated of \Illuminate\Database\Eloquent\Model
+     *
+     * @param  class-string<TRelated>  $related
+     * @return CompanyHasMany<TRelated, $this>
+     */
+    private function companyHasMany(string $related): CompanyHasMany
+    {
+        $instance = $this->newRelatedInstance($related);
+
+        return new CompanyHasMany($instance->newQuery(), $this, $instance->qualifyColumn('user_id'), $this->getKeyName());
+    }
+
     /** @return HasMany<Client, $this> */
     public function clients(): HasMany
     {
-        return $this->hasMany(Client::class)->orderBy('name');
+        return $this->companyHasMany(Client::class)->orderBy('name');
     }
 
     /** @return HasMany<Project, $this> */
     public function projects(): HasMany
     {
-        return $this->hasMany(Project::class);
+        return $this->companyHasMany(Project::class);
     }
 
     /** @return HasMany<Job, $this> */
     public function jobs(): HasMany
     {
-        return $this->hasMany(Job::class);
+        return $this->companyHasMany(Job::class);
     }
 
     /** @return HasMany<Estimate, $this> */
     public function estimates(): HasMany
     {
-        return $this->hasMany(Estimate::class);
+        return $this->companyHasMany(Estimate::class);
     }
 
     /** @return HasMany<Invoice, $this> */
     public function invoices(): HasMany
     {
-        return $this->hasMany(Invoice::class);
+        return $this->companyHasMany(Invoice::class);
     }
 
     /** @return HasMany<Upload, $this> */
     public function uploads(): HasMany
     {
-        return $this->hasMany(Upload::class);
+        return $this->companyHasMany(Upload::class);
     }
 
     /** @return HasMany<AppNotification, $this> */

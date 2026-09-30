@@ -12,6 +12,7 @@ use App\Models\FeedItem;
 use App\Models\Job;
 use App\Models\JobApprenticeAssignment;
 use App\Models\JobSchedule;
+use App\Models\JobTask;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
@@ -26,6 +27,7 @@ use App\Services\Clients\ProjectDirectory;
 use App\Services\JobCosting\JobCostSummary;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Services\Takeoff\TakeoffLinkOptions;
+use App\Support\JobCrew;
 use App\Support\JobOrigin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -72,8 +74,15 @@ class JobController extends Controller
 
         $jobs = Job::query()
             ->ownedBy($request->user())
-            ->with(['foreman', 'team:id,name', 'activeAssignments.assigner', 'invoices:id,job_id'])
-            ->withCount(['teamMembers', 'estimates'])
+            ->with(['foreman', 'team:id,name', 'project:id,name', 'activeAssignments.assigner', 'invoices:id,job_id'])
+            ->withCount([
+                'teamMembers',
+                'estimates',
+                'tasks',
+                // Done work, and work still to do: cancelled tasks are neither.
+                'tasks as tasks_done_count' => fn ($query) => $query->where('status', JobTask::STATUS_COMPLETED),
+                'tasks as tasks_open_count' => fn ($query) => $query->whereNotIn('status', [JobTask::STATUS_COMPLETED, JobTask::STATUS_CANCELLED]),
+            ])
             ->search($filters['search'] ?? null)
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when($type !== 'all', fn ($query) => $query->where('job_type', $type))
@@ -86,6 +95,10 @@ class JobController extends Controller
             ->sorted($sort)
             ->paginate(config('takeoff.per_page'))
             ->withQueryString();
+
+        // The crew on each job: everyone on any of its tasks, counted once.
+        $crew = JobCrew::countsFor($jobs->pluck('id')->all());
+        $jobs->getCollection()->each(fn (Job $job) => $job->setAttribute('crew_count', $crew[$job->id] ?? 0));
 
         return Inertia::render('Jobs', [
             'jobs' => JobResource::collection($jobs),
@@ -112,6 +125,12 @@ class JobController extends Controller
     /** Full-page create form. */
     public function create(Request $request): Response
     {
+        // Opened from a project's own screen, so the form fills it in and
+        // Back/Cancel return there rather than to the jobs list.
+        $defaultProjectId = $request->user()->projects()
+            ->whereKey($request->integer('project'))
+            ->value('id');
+
         return Inertia::render('JobCreate', [
             'clients' => $this->clients->options($request->user()),
             // Their projects, each carrying its sites and its default drawing.
@@ -123,6 +142,7 @@ class JobController extends Controller
             // Raising a job by hand forks a takeoff mid-flow: its own job is
             // raised from its review summary, not here.
             'unfinishedTakeoff' => app(TakeoffFlow::class)->inProgress($request),
+            'defaultProjectId' => $defaultProjectId,
         ]);
     }
 
@@ -221,18 +241,19 @@ class JobController extends Controller
             // each covers — the detail the panel states without the lines.
             'tasks' => fn ($query) => $query
                 ->with(
-                    'foreman:id,name',
-                    'supervisor:id,name',
+                    'foreman:id,name,initials',
+                    'supervisor:id,name,initials',
+                    'assignments.member:id,name,initials',
                     // Field notes/photos — the crew's own Materials screen on
                     // the mobile app, read-only here. The task-level pair is
                     // legacy (mobile writes per-material now, below); kept
                     // loaded only because nothing has migrated off it.
                     'comments.author:id,name',
-                    'attachments.uploader:id,name',
+                    'attachments.uploader:id,name,role',
                     // Per-material notes/photos — what the Materials screen
                     // actually writes to now, one line at a time.
                     'estimateItems.comments.author:id,name',
-                    'estimateItems.attachments.uploader:id,name',
+                    'estimateItems.attachments.uploader:id,name,role',
                 )
                 ->withCount('estimateItems')
                 ->orderBy('position')
@@ -495,7 +516,7 @@ class JobController extends Controller
     {
         $validated = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
-            'ids.*' => ['integer', Rule::exists('work_jobs', 'id')->where('user_id', $request->user()->id)],
+            'ids.*' => ['integer', Rule::exists('work_jobs', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($request->user()))],
             'action' => ['required', Rule::in(['archive', 'unarchive', 'delete', 'status'])],
             'status' => ['nullable', Rule::in(Job::STATUSES), 'required_if:action,status'],
         ]);

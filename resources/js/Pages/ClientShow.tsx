@@ -465,6 +465,8 @@ function SummaryStat({ label, value, tone = 'neutral' }: SummaryStatProps) {
     warning: 'text-status-warning',
     danger: 'text-red-300',
     info: 'text-status-info',
+    purple: 'text-status-purple',
+    blue: 'text-status-blue',
     neutral: 'text-white',
   }
 
@@ -482,9 +484,10 @@ interface RemoveClientProps {
 }
 
 /**
- * A client with projects cannot be removed: deleting them would take their
- * drawings, takeoffs, estimates and jobs with them — a delete that looks tidy
- * and quietly removes years of work.
+ * Removing a client removes everything under them: their projects, each
+ * project's AI takeoffs, and the jobs, tasks and schedules built from them.
+ * The dialog says so, because the button itself looks no different for a client
+ * with years of work than for one with none.
  */
 function RemoveClient({ client, projectCount }: RemoveClientProps) {
   const dialog = useDisclosure()
@@ -494,14 +497,9 @@ function RemoveClient({ client, projectCount }: RemoveClientProps) {
     <>
       <IconButton
         icon={Trash2}
-        label={
-          hasWork
-            ? 'They have work on, so removing them would take it with them.'
-            : `Remove ${client.name}`
-        }
+        label={`Remove ${client.name}`}
         variant="danger"
         size="sm"
-        disabled={hasWork}
         onClick={dialog.open}
       />
 
@@ -509,8 +507,12 @@ function RemoveClient({ client, projectCount }: RemoveClientProps) {
         isOpen={dialog.isOpen}
         tone="danger"
         title={`Remove “${client.name}”?`}
-        description="They come off the register. This cannot be undone."
-        confirmLabel="Remove client"
+        description={
+          hasWork
+            ? `This also deletes their ${projectCount} ${projectCount === 1 ? 'project' : 'projects'} and everything under ${projectCount === 1 ? 'it' : 'them'} — AI takeoffs, jobs, tasks and schedules. This cannot be undone.`
+            : 'They come off the register. This cannot be undone.'
+        }
+        confirmLabel={hasWork ? 'Delete client and all work' : 'Remove client'}
         confirmVariant="danger"
         onConfirm={() => {
           router.delete(routeTo.client(client.id))

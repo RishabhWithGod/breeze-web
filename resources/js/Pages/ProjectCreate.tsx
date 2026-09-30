@@ -11,18 +11,23 @@ import {
   CardHeader,
   IconButton,
   SelectField,
+  TextArea,
   TextInput,
   UnfinishedTakeoffNotice,
 } from '@/components/common'
 import { ProjectMemberPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { ROUTES, routeTo } from '@/constants'
+import { PROJECT_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type { ClientOption, ResumableTakeoff } from '@/types'
 import { cleanAmountInput, formatAmountInput, formatFileSize } from '@/utils'
 
 interface ProjectDraft {
   client_id: string
   name: string
+  description: string
+  project_type: string
+  start_date: string
+  end_date: string
   estimate_target_total: string
   member_ids: string[]
   vendor_rate_list: File[]
@@ -51,10 +56,22 @@ export default function ProjectCreate({
 }: ProjectCreateProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  /*
+   * A client opened with is already selected, so the type its site answers for
+   * has to be there on arrival too — not only after the picker is changed.
+   */
+  const defaultClient = clients.find((option) => option.id === defaultClientId)
+  const defaultSite =
+    defaultClient?.addresses.find((site) => site.isPrimary) ?? defaultClient?.addresses[0]
+
   const { data, setData, post, processing, errors, hasErrors, clearErrors } =
     useForm<ProjectDraft>({
       client_id: defaultClientId === null ? '' : String(defaultClientId),
       name: '',
+      description: '',
+      project_type: defaultSite?.siteType ?? '',
+      start_date: '',
+      end_date: '',
       estimate_target_total: '',
       member_ids: [],
       vendor_rate_list: [],
@@ -74,7 +91,22 @@ export default function ProjectCreate({
   }
 
   const selectClient = (clientId: string) => {
-    setData((current) => ({ ...current, client_id: clientId, member_ids: [] }))
+    const client = clients.find((option) => String(option.id) === clientId)
+    const primary =
+      client?.addresses.find((site) => site.isPrimary) ?? client?.addresses[0]
+
+    setData((current) => ({
+      ...current,
+      client_id: clientId,
+      member_ids: [],
+      /*
+       * The type comes from the site, because it is the building that
+       * decides it — a client can own a house and a warehouse. Only a site
+       * that has been answered for speaks; otherwise whatever was already
+       * chosen stands.
+       */
+      project_type: primary?.siteType ?? current.project_type,
+    }))
     if (errors.client_id) clearErrors('client_id')
   }
 
@@ -165,23 +197,83 @@ export default function ProjectCreate({
           <CardHeader title="Project details" />
 
           <div className="space-y-6">
-            <SelectField
-              id="project-client"
-              label="Client*"
-              options={clientOptions}
-              value={data.client_id}
-              onChange={(event) => selectClient(event.target.value)}
-              {...(errors.client_id ? { error: errors.client_id } : {})}
+            <div className="grid gap-6 sm:grid-cols-2">
+              <SelectField
+                id="project-client"
+                label="Client*"
+                options={clientOptions}
+                value={data.client_id}
+                onChange={(event) => selectClient(event.target.value)}
+                {...(errors.client_id ? { error: errors.client_id } : {})}
+              />
+
+              <TextInput
+                id="project-name"
+                label="Project Name*"
+                placeholder="e.g. Harborview Phase 2"
+                autoComplete="off"
+                value={data.name}
+                onChange={(event) => update('name', event.target.value)}
+                {...(errors.name ? { error: errors.name } : {})}
+              />
+            </div>
+
+            {/*
+              Told, not asked. A project and the job on it are at the same
+              place, and that place is already in the client's book — shown
+              here rather than entered a second time, and never editable from
+              this screen for the same reason.
+            */}
+            <TextInput
+              id="project-address"
+              label="Address"
+              leftIcon={MapPin}
+              disabled
+              value={primarySite?.display ?? ''}
+              placeholder={
+                selectedClient
+                  ? 'No site on this client yet — one is added the first time a job needs it'
+                  : 'Select a client to see their address'
+              }
             />
 
-            <TextInput
-              id="project-name"
-              label="Project Name*"
-              placeholder="e.g. Harborview Phase 2"
-              autoComplete="off"
-              value={data.name}
-              onChange={(event) => update('name', event.target.value)}
-              {...(errors.name ? { error: errors.name } : {})}
+            <div className="grid gap-6 sm:grid-cols-3">
+              <SelectField
+                id="project-type"
+                label="Project Type"
+                options={[{ label: 'Select project type', value: '' }, ...PROJECT_TYPE_OPTIONS]}
+                value={data.project_type}
+                onChange={(event) => update('project_type', event.target.value)}
+                {...(errors.project_type ? { error: errors.project_type } : {})}
+              />
+
+              <TextInput
+                id="project-start-date"
+                type="date"
+                label="Start Date"
+                value={data.start_date}
+                onChange={(event) => update('start_date', event.target.value)}
+                {...(errors.start_date ? { error: errors.start_date } : {})}
+              />
+
+              <TextInput
+                id="project-end-date"
+                type="date"
+                label="End Date"
+                value={data.end_date}
+                onChange={(event) => update('end_date', event.target.value)}
+                {...(errors.end_date ? { error: errors.end_date } : {})}
+              />
+            </div>
+
+            <TextArea
+              id="project-description"
+              label="Description"
+              rows={5}
+              placeholder="Enter project description (optional)..."
+              value={data.description}
+              onChange={(event) => update('description', event.target.value)}
+              {...(errors.description ? { error: errors.description } : {})}
             />
 
             <TextInput
@@ -275,30 +367,6 @@ export default function ProjectCreate({
                 </p>
               )}
             </div>
-
-            {/*
-              Told, not asked. A project and the job on it are at the same
-              place, and that place is already in the client's book — so it is
-              shown here rather than entered a second time.
-            */}
-            {selectedClient && (
-              <div className="flex items-start gap-3 rounded-panel border border-hairline bg-white/4 p-4">
-                <MapPin size={16} aria-hidden className="mt-0.5 shrink-0 text-white/60" />
-                <span className="min-w-0">
-                  <span className="block text-2xs tracking-wide text-white/70 uppercase">
-                    Site location
-                  </span>
-                  <span className="mt-0.5 block truncate text-md text-white">
-                    {primarySite?.display ?? 'No site on this client yet'}
-                  </span>
-                  {!primarySite && (
-                    <span className="mt-1 block text-sm text-white/60">
-                      One is added the first time a job needs it.
-                    </span>
-                  )}
-                </span>
-              </div>
-            )}
 
             {/*
               Who from the client's own crew works this project. Offered only

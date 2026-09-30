@@ -17,10 +17,21 @@ use Illuminate\Validation\Rules\Password;
  */
 class RegisterTechnicianRequest extends FormRequest
 {
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'company_id.required' => 'Choose the company you work for.',
+            'company_id.exists' => 'Choose a company from the list.',
+        ];
+    }
+
     /** @return array<string, mixed> */
     public function rules(): array
     {
         return [
+            // The company whose manager will decide on this application.
+            'company_id' => ['required', 'integer', 'exists:company_profiles,id'],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:40', new UsPhoneNumber],

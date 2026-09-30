@@ -29,7 +29,7 @@ class ClientDirectory
     public function options(User $user): Collection
     {
         return Client::with(['addresses', 'team.members'])
-            ->where('user_id', $user->id)
+            ->whereIn('user_id', \App\Support\Ownership::userIds($user))
             ->orderBy('name')
             ->get(['id', 'name', 'team_id'])
             ->map(fn (Client $client) => [
@@ -78,7 +78,7 @@ class ClientDirectory
             return null;
         }
 
-        return Client::whereKey($clientId)->where('user_id', $user->id)->value('name');
+        return Client::whereKey($clientId)->whereIn('user_id', \App\Support\Ownership::userIds($user))->value('name');
     }
 
     /**

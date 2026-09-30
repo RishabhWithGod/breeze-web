@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\BlockApprenticeAccess;
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsureCompanySetUp;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -30,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
         ]);
         $middleware->alias([
+            'company.setup' => EnsureCompanySetUp::class,
             'account.active' => EnsureAccountIsActive::class,
             'block.apprentice' => BlockApprenticeAccess::class,
         ]);

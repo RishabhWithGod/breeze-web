@@ -5,10 +5,13 @@ import type { EstimateStatus, JobStatus, SelectOption } from '@/types'
 /* -------------------------------------------------------------------------- */
 
 export const HISTORY_FILTERS = [
-  { label: 'All Clients', value: 'all' },
-  { label: 'Drafts', value: 'draft' },
+  { label: 'All Statuses', value: 'all' },
+  { label: 'Draft', value: 'draft' },
+  { label: 'Processing', value: 'processing' },
+  { label: 'Ready for Review', value: 'ready-for-review' },
   { label: 'Completed', value: 'completed' },
   { label: 'Converted', value: 'converted' },
+  { label: 'Failed', value: 'failed' },
 ] as const
 
 export type HistoryFilter = (typeof HISTORY_FILTERS)[number]['value']
@@ -139,7 +142,7 @@ export const JOB_STATUSES: readonly JobStatus[] = JOB_STATUS_OPTIONS.map(
 export const ESTIMATE_STATUS_FILTERS = [
   { label: 'All Statuses', value: 'all' },
   { label: 'Draft', value: 'draft' },
-  { label: 'Sent', value: 'sent' },
+  { label: 'Approval Pending', value: 'sent' },
   { label: 'Approved', value: 'approved' },
   { label: 'Rejected', value: 'rejected' },
 ] as const

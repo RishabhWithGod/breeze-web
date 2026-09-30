@@ -18,9 +18,19 @@ class JobPerformanceTest extends TestCase
 {
     use RefreshDatabase;
 
+    private User $manager;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->manager = User::factory()->create(['role' => 'Project Manager']);
+    }
+
     private function makeJob(string $status, ?string $endDate): Job
     {
         return Job::create([
+            'user_id' => $this->manager->id,
             'name' => 'Test job '.uniqid(),
             'client' => 'Acme Corp',
             'location' => 'Fairview, CA',
@@ -37,7 +47,7 @@ class JobPerformanceTest extends TestCase
         $job = $this->makeJob('in-progress', '2026-08-25');
         $job->changeStatus('completed');
 
-        $series = app(JobPerformanceCalculator::class)->series();
+        $series = app(JobPerformanceCalculator::class)->series($this->manager);
         $thisMonth = collect($series)->firstWhere('month', 'Aug 2026');
 
         $this->assertSame(1, $thisMonth['count']);
@@ -53,7 +63,7 @@ class JobPerformanceTest extends TestCase
         $job = $this->makeJob('in-progress', '2026-08-01');
         $job->changeStatus('completed');
 
-        $series = app(JobPerformanceCalculator::class)->series();
+        $series = app(JobPerformanceCalculator::class)->series($this->manager);
         $thisMonth = collect($series)->firstWhere('month', 'Aug 2026');
 
         $this->assertSame(1, $thisMonth['count']);
@@ -69,7 +79,7 @@ class JobPerformanceTest extends TestCase
         $job = $this->makeJob('in-progress', null);
         $job->changeStatus('completed');
 
-        $series = app(JobPerformanceCalculator::class)->series();
+        $series = app(JobPerformanceCalculator::class)->series($this->manager);
         $thisMonth = collect($series)->firstWhere('month', 'Aug 2026');
 
         $this->assertSame(100, $thisMonth['value']);
@@ -81,7 +91,7 @@ class JobPerformanceTest extends TestCase
     {
         Carbon::setTestNow('2026-08-20 12:00:00');
 
-        $series = app(JobPerformanceCalculator::class)->series();
+        $series = app(JobPerformanceCalculator::class)->series($this->manager);
         $thisMonth = collect($series)->firstWhere('month', 'Aug 2026');
 
         $this->assertSame(0, $thisMonth['count']);
@@ -93,7 +103,7 @@ class JobPerformanceTest extends TestCase
     public function test_completing_a_real_job_changes_the_dashboard_chart(): void
     {
         Carbon::setTestNow('2026-08-20 12:00:00');
-        $user = User::factory()->create();
+        $user = $this->manager;
 
         $before = $this->actingAs($user)->get('/home');
         $before->assertInertia(fn (Assert $page) => $page
@@ -121,7 +131,7 @@ class JobPerformanceTest extends TestCase
         $job->changeStatus('in-progress');
         $job->changeStatus('completed'); // still late, but only counted once
 
-        $series = app(JobPerformanceCalculator::class)->series();
+        $series = app(JobPerformanceCalculator::class)->series($this->manager);
         $thisMonth = collect($series)->firstWhere('month', 'Aug 2026');
 
         $this->assertSame(1, $thisMonth['count']);

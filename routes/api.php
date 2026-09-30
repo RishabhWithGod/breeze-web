@@ -54,6 +54,9 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::post('auth/login', [AuthController::class, 'login'])
         ->name('auth.login');
+    Route::get('companies', [AuthController::class, 'companies'])
+        ->middleware('throttle:signup')
+        ->name('companies.index');
     Route::post('auth/register', [AuthController::class, 'register'])
         ->middleware('throttle:signup')
         ->name('auth.register');

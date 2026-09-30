@@ -9,7 +9,7 @@ class AiJobPolicy
 {
     public function view(User $user, AiJob $aiJob): bool
     {
-        return $aiJob->project->user_id === $user->id;
+        return \App\Support\Ownership::owns($user, $aiJob->project->user_id);
     }
 
     public function update(User $user, AiJob $aiJob): bool

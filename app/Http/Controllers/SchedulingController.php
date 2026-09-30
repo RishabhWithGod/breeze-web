@@ -10,6 +10,7 @@ use App\Models\JobActivity;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\Scheduling\CrewBoard;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -45,14 +46,14 @@ class SchedulingController extends Controller
     public function calendar(Request $request): Response
     {
         $filters = $request->validate([
-            'view' => ['nullable', Rule::in(['month', 'week'])],
+            'view' => ['nullable', Rule::in(['month', 'week', 'day'])],
             'date' => ['nullable', 'date'],
             'crew' => ['nullable', 'string', 'max:60'],
-            'member' => ['nullable', 'integer', 'exists:team_members,id'],
+            'member' => ['nullable', 'integer', \App\Support\CompanyRule::exists('team_members')],
         ]);
 
         $user = $request->user();
-        $view = $filters['view'] ?? 'week';
+        $view = $filters['view'] ?? 'month';
         $anchor = $this->anchorDate($filters['date'] ?? null);
         [$from, $to] = $this->window($view, $anchor);
 
@@ -80,6 +81,8 @@ class SchedulingController extends Controller
             ->get();
 
         return Inertia::render('Scheduling', [
+            // The calendar as drawn: crews down the side, days across, every job where its crew has it.
+            'board' => app(CrewBoard::class)->build($user, $view, $anchor),
             'view' => $view,
             'anchor' => $anchor->toDateString(),
             'today' => Carbon::today()->toDateString(),
@@ -92,12 +95,12 @@ class SchedulingController extends Controller
             'shifts' => CrewShiftResource::collection($shifts)->resolve(),
             'unassigned' => SchedulableJobResource::collection(
                 Job::query()->ownedBy($user)
-                    ->with(['foreman', 'team:id,name', 'tasks.foreman', 'tasks.supervisor'])->unscheduled()
+                    ->with(['foreman', 'team:id,name', 'tasks.foreman', 'tasks.supervisor'])->withoutCrew()
                     ->sortedForScheduling('start-desc')
                     ->take(self::STRIP_LIMIT)
                     ->get()
             )->resolve(),
-            'unassignedTotal' => Job::query()->ownedBy($user)->unscheduled()->count(),
+            'unassignedTotal' => Job::query()->ownedBy($user)->withoutCrew()->count(),
             'crews' => $this->crews($user),
             'members' => $this->members(),
             'filters' => [
@@ -128,7 +131,7 @@ class SchedulingController extends Controller
         $jobs = Job::query()
             ->ownedBy($user)
             ->with(['foreman', 'team:id,name', 'tasks.foreman', 'tasks.supervisor'])
-            ->unscheduled()
+            ->withoutCrew()
             ->search($filters['search'] ?? null)
             ->when($type !== 'all', fn ($query) => $query->where('job_type', $type))
             ->sortedForScheduling($sort)
@@ -246,7 +249,7 @@ class SchedulingController extends Controller
     {
         $data = $request->validate([
             'job_id' => ['required', 'integer', 'exists:work_jobs,id'],
-            'team_member_id' => ['nullable', 'integer', 'exists:team_members,id'],
+            'team_member_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('team_members')],
             /*
              * Who the shift is booked for. No longer asked at the modal: a job's
              * foremen are decided when its work is broken into tasks, and asking
@@ -333,7 +336,7 @@ class SchedulingController extends Controller
         $this->authorize('update', $schedule->job);
 
         $data = $request->validate([
-            'team_member_id' => ['nullable', 'integer', 'exists:team_members,id'],
+            'team_member_id' => ['nullable', 'integer', \App\Support\CompanyRule::exists('team_members')],
             'crew' => ['nullable', 'string', 'max:60'],
             'scheduled_date' => ['nullable', 'date'],
             'start_time' => ['nullable', 'date_format:H:i'],
@@ -726,7 +729,7 @@ class SchedulingController extends Controller
         $rows = Job::query()
             ->ownedBy($user)
             ->reorder()
-            ->unscheduled()
+            ->withoutCrew()
             ->search($search)
             ->selectRaw('job_type, count(*) as total')
             ->groupBy('job_type')

@@ -57,7 +57,8 @@ class PriceBookLookup
     public function forUser(?int $userId): self
     {
         $scoped = clone $this;
-        $scoped->userId = $userId;
+        // The company's book, whichever of its managers is asking.
+        $scoped->userId = \App\Support\Ownership::bookOwnerId($userId);
         $scoped->items = null;
 
         return $scoped;

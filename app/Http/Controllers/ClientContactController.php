@@ -21,7 +21,7 @@ class ClientContactController extends Controller
 {
     public function store(Request $request, Client $client): RedirectResponse
     {
-        abort_unless($client->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
 
         $data = $this->validated($request);
 
@@ -42,7 +42,7 @@ class ClientContactController extends Controller
 
     public function update(Request $request, Client $client, ClientContact $contact): RedirectResponse
     {
-        abort_unless($client->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
         abort_unless($contact->client_id === $client->id, 404);
 
         $data = $this->validated($request);
@@ -65,7 +65,7 @@ class ClientContactController extends Controller
      */
     public function destroy(Request $request, Client $client, ClientContact $contact): RedirectResponse
     {
-        abort_unless($client->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $client->user_id), 403);
         abort_unless($contact->client_id === $client->id, 404);
 
         $name = $contact->name;

@@ -3,6 +3,8 @@ import type { LucideIcon } from 'lucide-react'
 /** Visual weight shared by buttons, badges and chips. */
 export type Variant =
   | 'primary'
+  | 'blue'
+  | 'purple'
   | 'secondary'
   | 'dark'
   | 'ghost'
@@ -12,7 +14,15 @@ export type Variant =
 
 export type Size = 'sm' | 'md' | 'lg'
 
-export type Tone = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'
+export type Tone =
+  | 'brand'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info'
+  | 'purple'
+  | 'blue'
+  | 'neutral'
 
 export interface NavItem {
   readonly label: string

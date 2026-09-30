@@ -50,6 +50,8 @@ export interface SharedPageProps {
   /** False when no Places key is configured — the address field says so. */
   readonly addressLookupEnabled: boolean
   readonly auth: { readonly user: AuthUser | null }
+  /** The company this person works for; null when they have none. */
+  readonly company: { readonly name: string; readonly logoUrl: string | null } | null
   readonly notifications: readonly AppNotification[]
   readonly unreadNotificationCount: number
   readonly activeTimer: ActiveTimer | null

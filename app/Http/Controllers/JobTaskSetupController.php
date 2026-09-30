@@ -193,10 +193,10 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'tasks' => ['required', 'array', 'min:1', 'max:50'],
             'tasks.*.title' => ['required', 'string', 'max:200'],
-            'tasks.*.foreman_id' => ['required', 'integer', 'exists:foremen,id'],
+            'tasks.*.foreman_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
             // Who is over the task — required alongside the foreman, so every
             // task always has both someone running it and someone above them.
-            'tasks.*.supervisor_id' => ['required', 'integer', 'exists:foremen,id'],
+            'tasks.*.supervisor_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
             /*
              * No `distinct`: with a nested wildcard it compares across every
              * task, not within one, and would report the right refusal under an
@@ -456,8 +456,8 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'status' => ['required', Rule::in(JobTask::STATUSES)],
-            'foreman_id' => ['required', 'integer', 'exists:foremen,id'],
-            'supervisor_id' => ['required', 'integer', 'exists:foremen,id'],
+            'foreman_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
+            'supervisor_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
             'estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],

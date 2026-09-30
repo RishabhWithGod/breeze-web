@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -21,6 +21,11 @@ export interface CollapsibleCardProps {
   summary?: ReactNode
   /** Buttons for this section. Only drawn while it is open. */
   actions?: ReactNode
+  /**
+   * Drops the lit border and left stripe, so the card sits like any plain card
+   * on the screen, and the icon takes the screen's standard blue tile.
+   */
+  plain?: boolean
   isOpen: boolean
   onToggle: () => void
   children: ReactNode
@@ -45,6 +50,7 @@ export function CollapsibleCard({
   tone = 'brand',
   summary,
   actions,
+  plain = false,
   isOpen,
   onToggle,
   children,
@@ -55,7 +61,7 @@ export function CollapsibleCard({
   return (
     <Card
       padding="none"
-      className={cn('relative overflow-hidden', cardAccent(tone), className)}
+      className={cn('relative overflow-hidden', !plain && cardAccent(tone), className)}
     >
       <button
         type="button"
@@ -64,7 +70,14 @@ export function CollapsibleCard({
         aria-controls={panelId}
         className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-white/4 sm:px-6"
       >
-        <IconBubble icon={icon} tone={tone} size="sm" />
+        {plain ? (
+          // The same icon tile the job screen's stat and progress cards wear.
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+            {createElement(icon, { size: 16, 'aria-hidden': true })}
+          </span>
+        ) : (
+          <IconBubble icon={icon} tone={tone} size="sm" />
+        )}
 
         <span className="min-w-0 flex-1">
           <span className="block truncate font-semibold text-white">{title}</span>

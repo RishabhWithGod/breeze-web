@@ -42,6 +42,8 @@ export interface JobCreateProps {
    * the takeoff's own job is raised from its review summary.
    */
   unfinishedTakeoff: ResumableTakeoff | null
+  /** Set when opened from a project's own Quick Actions — fills the form in and Back/Cancel return there. */
+  defaultProjectId: number | null
 }
 
 /**
@@ -57,12 +59,18 @@ export default function JobCreate({
   uploads,
   teams,
   unfinishedTakeoff,
+  defaultProjectId,
 }: JobCreateProps) {
   const [savingDraft, setSavingDraft] = useState(false)
 
+  const defaultProject = defaultProjectId
+    ? projects.find((project) => project.id === defaultProjectId)
+    : undefined
+  const returnUrl = defaultProjectId ? routeTo.project(defaultProjectId) : null
+
   const { data, setData, post, processing, errors, hasErrors, clearErrors, transform } =
     useForm<JobDraft>({
-      client_id: '',
+      client_id: defaultProject?.clientId ? String(defaultProject.clientId) : '',
       name: '',
       address_ids: [],
       description: '',
@@ -71,7 +79,7 @@ export default function JobCreate({
       start_date: '',
       end_date: '',
       save_as_draft: false,
-      project_id: '',
+      project_id: defaultProjectId ? String(defaultProjectId) : '',
       upload_id: '',
     })
 
@@ -198,13 +206,20 @@ export default function JobCreate({
       <PageHeader
         title="Create New Job"
         subtitle="Fill in the details below to create a new job in the system"
-        breadcrumbs={[
-          { label: 'Jobs', href: ROUTES.jobs },
-          { label: 'Create' },
-        ]}
+        breadcrumbs={
+          returnUrl
+            ? [
+                { label: defaultProject?.name ?? 'Project', href: returnUrl },
+                { label: 'Create Job' },
+              ]
+            : [
+                { label: 'Jobs', href: ROUTES.jobs },
+                { label: 'Create' },
+              ]
+        }
         actions={
-          <ButtonLink href={ROUTES.jobs} variant="secondary" leftIcon={ArrowLeft}>
-            Back
+          <ButtonLink href={returnUrl ?? ROUTES.jobs} variant="secondary" leftIcon={ArrowLeft}>
+            {returnUrl ? 'Back to project' : 'Back'}
           </ButtonLink>
         }
       />
@@ -431,7 +446,7 @@ export default function JobCreate({
 
 
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-              <ButtonLink href={ROUTES.jobs} variant="white">
+              <ButtonLink href={returnUrl ?? ROUTES.jobs} variant="white">
                 Cancel
               </ButtonLink>
               <Button

@@ -130,6 +130,15 @@ export interface AttendanceRow {
   readonly employeeRole: string | null
   readonly job: { readonly id: number; readonly name: string } | null
   readonly status: 'checkedIn' | 'checkedOut'
+  /** An open check-in on a day that is already over. */
+  readonly missingCheckout: boolean
+  /** Clock times in the server's zone, e.g. "6:58 AM" — the same the time log prints. */
+  readonly checkInLabel: string | null
+  readonly checkOutLabel: string | null
+  /** A manager, for a check-in that is still open. */
+  readonly canCheckOut: boolean
+  readonly checkOutMin: string | null
+  readonly checkOutSuggested: string | null
   readonly checkInAt: string | null
   readonly checkOutAt: string | null
   readonly checkInMethod: 'manual' | 'automatic' | 'photo' | null
@@ -175,6 +184,39 @@ export interface TimeTrackingDayRow {
   readonly attendanceStatus: 'checkedIn' | 'checkedOut' | null
 }
 
+/** One row of the time log: a GPS check-in cycle, or a timer/manual entry. */
+export interface TimeLogRow {
+  readonly key: string
+  readonly userId: number
+  readonly date: string
+  readonly employee: { readonly name: string; readonly role: string | null }
+  readonly job: string | null
+  /** Already formatted on the server, e.g. "09/16/2026 6:58 AM". */
+  readonly checkIn: { readonly at: string | null; readonly note: string | null }
+  readonly checkOut: { readonly at: string | null; readonly note: string | null }
+  /** Null while a check-in is still open. */
+  readonly hours: number | null
+  readonly source: string
+  readonly sourceKind: 'geofence' | 'manual' | 'timer'
+  readonly status:
+    | 'approved'
+    | 'pending'
+    | 'draft'
+    | 'rejected'
+    | 'completed'
+    | 'on-site'
+    | 'missing-checkout'
+  readonly entryId: number | null
+  readonly attendanceId: number | null
+  /** A manager, for an entry that has been submitted. */
+  readonly canApprove: boolean
+  /** A manager, for a check-in that is still open. */
+  readonly canCheckOut: boolean
+  /** The earliest a checkout can be, and a sensible first guess — both `YYYY-MM-DDTHH:mm`. */
+  readonly checkOutMin: string | null
+  readonly checkOutSuggested: string | null
+}
+
 /** One job/site's share of a day's total — the multi-site breakdown on the
  *  day detail screen. */
 export interface TimeTrackingDayJobHours {
@@ -185,6 +227,8 @@ export interface TimeTrackingDayJobHours {
 /** The day detail screen — every session behind one [TimeTrackingDayRow],
  *  laid out the same way a single [TimeEntry]'s own detail screen is. */
 export interface TimeTrackingDayDetail {
+  /** Entries of this day the signed-in manager can approve right now — finished sessions. */
+  readonly approvableEntryIds: readonly number[]
   readonly userId: number
   readonly date: string
   readonly employee: { readonly name: string; readonly role: string | null }

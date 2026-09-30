@@ -19,12 +19,11 @@ import {
   Checkbox,
   ConfirmDialog,
   EmptyState,
-  IconButton,
+  MoreMenu,
   Pagination,
   SearchBox,
   SelectField,
   StatusChip,
-  StatusDot,
   Table,
 } from '@/components/common'
 import { JobCard } from '@/components/jobs'
@@ -49,7 +48,7 @@ import type {
   SharedPageProps,
   TableColumn,
 } from '@/types'
-import { JOB_STATUS_LABEL, JOB_STATUS_TONE, formatCurrency, formatDate } from '@/utils'
+import { JOB_STATUS_LABEL, JOB_STATUS_TONE, formatCalendarDate } from '@/utils'
 
 const STATUS_FILTER_OPTIONS = JOB_STATUS_FILTERS.map((option) => ({
   label: option.label,
@@ -250,124 +249,152 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
     },
     {
       key: 'name',
-      header: 'Job Name',
+      header: 'Job',
       render: (job) => (
-        <span className="flex items-center gap-2.5">
-          <StatusDot
-            tone={JOB_STATUS_TONE[job.status]}
-            pulse={job.status === 'in-progress'}
-          />
-          <span className="min-w-0">
-            <a
-              href={routeTo.job(job.id)}
-              className="font-bold text-white transition-colors hover:text-brand"
-              onClick={(event) => {
-                event.preventDefault()
-                router.visit(routeTo.job(job.id))
-              }}
-            >
-              {job.name}
-            </a>
-            <span className="mt-0.5 flex items-center gap-2 text-sm text-white/75">
-              {job.client ?? '—'}
-              {job.isArchived && (
-                <Badge tone="warning" className="py-0 text-2xs">
-                  Archived
-                </Badge>
-              )}
-            </span>
+        <span className="min-w-0">
+          <a
+            href={routeTo.job(job.id)}
+            className="font-bold text-white transition-colors hover:text-brand"
+            onClick={(event) => {
+              event.preventDefault()
+              router.visit(routeTo.job(job.id))
+            }}
+          >
+            {job.name}
+          </a>
+          <span className="mt-0.5 flex items-center gap-2 text-xs text-white/75">
+            {job.location ?? '—'}
+            {job.isArchived && (
+              <Badge tone="warning" className="py-0 text-2xs">
+                Archived
+              </Badge>
+            )}
           </span>
         </span>
       ),
     },
     {
-      key: 'team',
-      header: 'Team',
-      // Who the work is handed to. "No team" is a real answer — plenty of jobs
-      // are raised before anyone knows who will run them.
-      render: (job) => (
-        <span className="whitespace-nowrap text-white/90">
-          {job.teamName ?? <span className="text-white/45">No team</span>}
-        </span>
-      ),
+      key: 'project',
+      header: 'Project',
+      render: (job) => <span className="text-white">{job.projectName ?? '—'}</span>,
+    },
+    {
+      key: 'client',
+      header: 'Client',
+      render: (job) => <span className="text-white">{job.client ?? '—'}</span>,
     },
     {
       key: 'status',
       header: 'Status',
       render: (job) => (
         <StatusChip
-          hideDot
+          pill
           tone={JOB_STATUS_TONE[job.status]}
           label={JOB_STATUS_LABEL[job.status]}
         />
       ),
     },
     {
-      key: 'startDate',
-      header: 'Start Date',
-      render: (job) => (
-        <span className="whitespace-nowrap text-white/90">
-          {job.startDate ? formatDate(job.startDate) : '—'}
-        </span>
-      ),
+      key: 'progress',
+      header: 'Progress',
+      render: (job) =>
+        job.progress === null ? (
+          <span className="text-white/45">—</span>
+        ) : (
+          <span className="flex items-center gap-3">
+            <span className="h-2 w-24 overflow-hidden rounded-full bg-white/15" aria-hidden>
+              <span
+                className="block h-full rounded-full bg-linear-to-r from-status-success/40 to-status-success"
+                style={{ width: `${job.progress}%` }}
+              />
+            </span>
+            <span className="tabular-nums text-white">{job.progress}%</span>
+          </span>
+        ),
     },
     {
-      key: 'budget',
-      header: 'Budget',
-      render: (job) => (
-        <span className="whitespace-nowrap tabular-nums text-white">
-          {job.budget === null ? '—' : formatCurrency(job.budget, 2)}
-        </span>
-      ),
+      key: 'crew',
+      header: 'Crew',
+      render: (job) => <span className="tabular-nums text-white">{job.crewCount}</span>,
+    },
+    {
+      key: 'schedule',
+      header: 'Schedule',
+      render: (job) => {
+        if (!job.startDate && !job.endDate) return <span className="text-white/45">—</span>
+
+        const start = job.startDate ? formatCalendarDate(job.startDate) : null
+        const end = job.endDate ? formatCalendarDate(job.endDate) : null
+
+        // One day, or one end only: nothing to span, so no dash.
+        if (start === end || !start || !end) {
+          return <span className="whitespace-nowrap text-white/90">{start ?? end}</span>
+        }
+
+        return (
+          <span className="text-white/90">
+            <span className="whitespace-nowrap">{start} –</span>
+            <br />
+            <span className="whitespace-nowrap">{end}</span>
+          </span>
+        )
+      },
+    },
+    {
+      key: 'openTasks',
+      header: 'Open Tasks',
+      align: 'center',
+      render: (job) => <span className="tabular-nums text-white">{job.openTasks}</span>,
     },
     {
       key: 'actions',
       header: 'Actions',
-      width: 'w-40',
+      width: 'w-24',
       render: (job) => (
-        <div className="flex items-center gap-1">
-          <ButtonLink href={routeTo.job(job.id)} size="sm" leftIcon={Eye}>
-            View
-          </ButtonLink>
-          {!job.isLocked && (
-            <IconButton
-              icon={PencilLine}
-              label={`Edit ${job.name}`}
-              size="sm"
-              className="text-white/85 hover:text-brand"
-              onClick={() => router.visit(routeTo.jobEdit(job.id))}
-            />
-          )}
-          {!job.isLocked && (
-            <IconButton
-              icon={Trash2}
-              label={`Delete ${job.name}`}
-              size="sm"
-              className="text-white/85 hover:text-status-danger"
-              onClick={() => requestDelete(job)}
-            />
-          )}
-          {/*
-            Only once a job is completed — an in-progress job has nothing
-            final to bill yet. Already invoiced opens that invoice instead of
-            starting a second one; enforced again server-side, not only here.
-          */}
-          {job.isLocked && canCreateInvoice && (
-            <IconButton
-              icon={Receipt}
-              label={job.hasInvoice ? `View invoice for ${job.name}` : `Create invoice for ${job.name}`}
-              size="sm"
-              className="text-white/85 hover:text-brand"
-              onClick={() =>
-                router.visit(
-                  job.hasInvoice && job.invoiceId
-                    ? routeTo.invoice(job.invoiceId)
-                    : routeTo.invoiceCreateForJob(job.id),
-                )
-              }
-            />
-          )}
-        </div>
+        <MoreMenu
+          ariaLabel={`Actions for ${job.name}`}
+          items={[
+            { label: 'View', icon: Eye, onSelect: () => router.visit(routeTo.job(job.id)) },
+            ...(!job.isLocked
+              ? [
+                  {
+                    label: 'Edit',
+                    icon: PencilLine,
+                    onSelect: () => router.visit(routeTo.jobEdit(job.id)),
+                  },
+                ]
+              : []),
+            /*
+              Only once a job is completed — an in-progress job has nothing
+              final to bill yet. Already invoiced opens that invoice instead of
+              starting a second one; enforced again server-side, not only here.
+            */
+            ...(job.isLocked && canCreateInvoice
+              ? [
+                  {
+                    label: job.hasInvoice ? 'View invoice' : 'Create invoice',
+                    icon: Receipt,
+                    onSelect: () =>
+                      router.visit(
+                        job.hasInvoice && job.invoiceId
+                          ? routeTo.invoice(job.invoiceId)
+                          : routeTo.invoiceCreateForJob(job.id),
+                      ),
+                  },
+                ]
+              : []),
+            ...(!job.isLocked
+              ? [
+                  {
+                    label: 'Delete',
+                    icon: Trash2,
+                    destructive: true,
+                    onSelect: () => requestDelete(job),
+                  },
+                ]
+              : []),
+          ]}
+        />
       ),
     },
   ]
@@ -381,12 +408,21 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
         <header className="flex flex-col gap-4 border-b border-hairline grad-ocean-soft px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-white sm:text-3xl">Jobs</h1>
-            <p className="mt-1 text-md text-white/90">
-              Manage all your electrical clients in one place
+            <p className="mt-1 text-sm text-white/85">
+              Manage active jobs, track progress, and keep project details, field activity, and job performance organized in one place
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 lg:shrink-0">
+            <SearchBox
+              id="job-search"
+              value={query}
+              onValueChange={setQuery}
+              onSearch={(value) => applyFilters({ search: value })}
+              placeholder="Search jobs, projects, clients..."
+              aria-label="Search jobs"
+              containerClassName="w-full sm:w-72"
+            />
             <Button
               variant={isFiltersOpen ? 'primary' : 'white'}
               leftIcon={SlidersHorizontal}
@@ -402,6 +438,10 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
         </header>
 
         <div className="p-5 sm:p-6">
+          <Alert tone="info" className="mb-5 [&_p]:text-md [&_div]:text-sm" title="Office & Field, Fully Connected">
+            Keep your office and field teams aligned with real-time updates to job details, tasks, schedules, and project changes across web and mobile.
+          </Alert>
+
           <AnimatePresence initial={false}>
             {isFiltersOpen && (
               <motion.div
@@ -412,16 +452,7 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
                 transition={{ duration: MOTION.base }}
                 className="overflow-hidden"
               >
-                <div className="mb-6 grid gap-4 rounded-panel border border-hairline bg-white/4 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
-                  <SearchBox
-                    id="job-search"
-                    label="Search"
-                    value={query}
-                    onValueChange={setQuery}
-                    onSearch={(value) => applyFilters({ search: value })}
-                    placeholder="Search jobs, clients, locations…"
-                    aria-label="Search jobs"
-                  />
+                <div className="mb-6 grid gap-4 rounded-panel border border-hairline bg-white/4 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
                   <SelectField
                     id="job-status-filter"
                     label="Status"
@@ -559,9 +590,11 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
                   dense
                   variant="lined"
                   headerVariant="plain"
+                  className="text-sm [&_th]:text-sm [&_td]:text-sm [&_td_span]:text-sm"
                   columns={columns}
                   rows={rows}
                   getRowId={(job) => job.id}
+                  onRowClick={(job) => router.visit(routeTo.job(job.id))}
                   caption="All electrical jobs"
                 />
               </div>
@@ -599,7 +632,7 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
             summary={
               meta.total === 0
                 ? 'No jobs to display'
-                : `Showing ${rows.length} of ${meta.total} clients`
+                : `Showing ${meta.from}–${meta.to} of ${meta.total} jobs`
             }
           />
         </div>

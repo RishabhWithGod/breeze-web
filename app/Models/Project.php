@@ -13,6 +13,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Project extends Model
 {
+    protected static function booted(): void
+    {
+        // Deleting a project takes what was built under it: its AI results (and
+        // the jobs made from them), the jobs raised on it — each of which takes
+        // its own tasks and schedule — and the AI runs themselves. The drawings
+        // stay on file.
+        static::deleted(function (self $project): void {
+            $project->aiResults()->get()->each->delete();
+            $project->jobs()->get()->each->delete();
+            $project->aiJobs()->delete();
+        });
+    }
+
     use SoftDeletes;
 
     public const STATUSES = ['completed', 'converted', 'draft', 'failed', 'processing'];
@@ -27,6 +40,7 @@ class Project extends Model
         'user_id',
         'client_id',
         'name',
+        'description',
         'code',
         'client',
         'location',
@@ -236,7 +250,7 @@ class Project extends Model
     /** Only this user's own projects — same shape as `Estimate::scopeOwnedBy`/`Job::scopeOwnedBy`. */
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
-        return $query->where('user_id', $user->id);
+        return $query->whereIn($query->qualifyColumn('user_id'), \App\Support\Ownership::userIds($user));
     }
 
     /** Matches a project name, its drawing's filename, its client, its number or its site. */

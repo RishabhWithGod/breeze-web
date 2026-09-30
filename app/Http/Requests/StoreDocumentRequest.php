@@ -30,7 +30,7 @@ class StoreDocumentRequest extends FormRequest
              */
             'project_id' => [
                 'nullable', 'integer',
-                Rule::exists('projects', 'id')->where('user_id', $this->user()->id),
+                Rule::exists('projects', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($this->user())),
             ],
             'description' => ['nullable', 'string', 'max:1000'],
             /*

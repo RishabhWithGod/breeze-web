@@ -27,7 +27,7 @@ class InvoicePolicy
 
     public function view(User $user, Invoice $invoice): bool
     {
-        return $invoice->user_id === $user->id;
+        return \App\Support\Ownership::owns($user, $invoice->user_id);
     }
 
     public function create(User $user): bool

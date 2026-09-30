@@ -41,6 +41,16 @@ class JobResource extends JsonResource
             'budget' => $this->budget === null ? null : (float) $this->budget,
             'isArchived' => $this->archived_at !== null,
             'teamCount' => $this->team_members_count ?? 0,
+            // Distinct people assigned to this job's tasks.
+            'crewCount' => (int) ($this->crew_count ?? 0),
+            // The project this job was raised from, when it came from one.
+            'projectName' => $this->relationLoaded('project') ? $this->project?->name : null,
+            // From the job's own task schedule. `progress` is null when it has
+            // no tasks yet — there is nothing to measure, not 0% done.
+            'openTasks' => (int) ($this->tasks_open_count ?? 0),
+            'progress' => ($this->tasks_count ?? 0) > 0
+                ? (int) round(($this->tasks_done_count ?? 0) / $this->tasks_count * 100)
+                : null,
             'estimateCount' => $this->estimates_count ?? 0,
             // Whether this job already has an invoice — "Create Invoice"
             // becomes "View Invoice" instead of raising a second one.

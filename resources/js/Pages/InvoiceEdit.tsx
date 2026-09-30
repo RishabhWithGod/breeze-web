@@ -13,19 +13,17 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import type { ClientOption, InvoiceDetail, InvoiceJobOption } from '@/types'
+import type { ClientOption, InvoiceDetail } from '@/types'
 
 export interface InvoiceEditProps {
   invoice: InvoiceDetail
-  /** The client register. Clients are projects, so this is one list, not two. */
+  /** The client register — only used to pick one for an old invoice that has none. */
   clients: readonly ClientOption[]
-  jobs: readonly InvoiceJobOption[]
 }
 
 interface InvoiceEditForm {
-  /** The client. Clients are projects, so this is a `projects` id. */
+  /** Only sent for an old invoice with no client record; otherwise the client is fixed. */
   client_id: string
-  job_id: string
   invoice_date: string
   due_date: string
   tax_pct: string
@@ -36,11 +34,10 @@ interface InvoiceEditForm {
  * Edit Invoice — the header fields only. Status moves forward through Send
  * and Mark as Paid on the detail screen, never through this form.
  */
-export default function InvoiceEdit({ invoice, clients, jobs }: InvoiceEditProps) {
+export default function InvoiceEdit({ invoice, clients }: InvoiceEditProps) {
   const { data, setData, put, processing, errors, hasErrors, clearErrors } =
     useForm<InvoiceEditForm>({
       client_id: invoice.clientId === null ? '' : String(invoice.clientId),
-      job_id: invoice.jobId ? String(invoice.jobId) : '',
       invoice_date: invoice.invoiceDate,
       due_date: invoice.dueDate ?? '',
       tax_pct: String(invoice.taxPct),
@@ -104,28 +101,35 @@ export default function InvoiceEdit({ invoice, clients, jobs }: InvoiceEditProps
           <SectionHeading title="Invoice details" />
 
           <div className="space-y-5">
-            <SelectField
-              id="invoice-client"
-              label="Client *"
-              options={clientOptions}
-              value={data.client_id}
-              onChange={(event) => update('client_id', event.target.value)}
-              {...(errors.client_id ? { error: errors.client_id } : {})}
-            />
-
-            <SelectField
-              id="invoice-job"
-              label="Job (optional)"
-              options={[
-                { label: 'No job', value: '' },
-                ...jobs.map((job) => ({
-                  label: job.client ? `${job.name} — ${job.client}` : job.name,
-                  value: String(job.id),
-                })),
-              ]}
-              value={data.job_id}
-              onChange={(event) => update('job_id', event.target.value)}
-            />
+            {/* Settled when the invoice was raised, and not changed under it. */}
+            <div className="grid gap-5 sm:grid-cols-3">
+              <TextInput
+                id="invoice-project"
+                label="Project"
+                value={invoice.projectName ?? invoice.jobName ?? '—'}
+                readOnly
+                disabled
+              />
+              {invoice.clientId === null ? (
+                <SelectField
+                  id="invoice-client"
+                  label="Client *"
+                  options={clientOptions}
+                  value={data.client_id}
+                  onChange={(event) => update('client_id', event.target.value)}
+                  {...(errors.client_id ? { error: errors.client_id } : {})}
+                />
+              ) : (
+                <TextInput id="invoice-client" label="Client" value={invoice.client} readOnly disabled />
+              )}
+              <TextInput
+                id="invoice-estimate"
+                label="Estimate"
+                value={invoice.estimateNumber ?? '—'}
+                readOnly
+                disabled
+              />
+            </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
               <TextInput

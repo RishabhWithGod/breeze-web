@@ -15,7 +15,7 @@ class UpdateInvoiceRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        $userId = $this->user()->id;
+        $userId = \App\Support\Ownership::userIdList($this->user());
 
         return [
             /** The client, picked from the client register — see ClientDirectory. */
@@ -25,9 +25,16 @@ class UpdateInvoiceRequest extends FormRequest
             // Scoped for the same reason `StoreInvoiceRequest` scopes them: an
             // edit must not be able to re-point this invoice at another
             // manager's client, job or estimate.
-            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->where('user_id', $userId)],
-            'job_id' => ['nullable', 'integer', Rule::exists('work_jobs', 'id')->where('user_id', $userId)],
-            'estimate_id' => ['nullable', 'integer', Rule::exists('estimates', 'id')->where('user_id', $userId)],
+            //
+            // Who it is for, which project and which estimate it bills are settled when
+            // the invoice is raised and do not change under it — the one exception is an
+            // old invoice that never had a client record, which needs one picked.
+            'client_id' => [
+                Rule::requiredIf(fn () => $this->route('invoice')?->client_id === null),
+                'nullable',
+                'integer',
+                Rule::exists('clients', 'id')->whereIn('user_id', $userId),
+            ],
             'invoice_date' => ['required', 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'tax_pct' => ['required', 'numeric', 'min:0', 'max:100'],

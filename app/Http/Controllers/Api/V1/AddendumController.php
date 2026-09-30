@@ -27,7 +27,7 @@ class AddendumController extends Controller
         $data = $request->validate([
             'project_id' => [
                 'nullable', 'integer',
-                Rule::exists('projects', 'id')->where('user_id', $request->user()->id),
+                Rule::exists('projects', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($request->user())),
             ],
         ]);
 
@@ -38,10 +38,10 @@ class AddendumController extends Controller
         }
 
         $originals = Estimate::query()
-            ->where('user_id', $request->user()->id)
+            ->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))
             ->where('project_id', $projectId)
             ->where('kind', Estimate::KIND_STANDALONE)
-            ->with(['addenda' => fn ($query) => $query->where('user_id', $request->user()->id)])
+            ->with(['addenda' => fn ($query) => $query->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))])
             ->orderByDesc('issued_on')
             ->get()
             ->map(fn (Estimate $estimate) => $this->present($estimate, $estimate->addenda))

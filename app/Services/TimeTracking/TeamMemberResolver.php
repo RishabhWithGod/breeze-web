@@ -44,6 +44,8 @@ class TeamMemberResolver
             'name' => $user->name,
             'initials' => $user->initials,
             'role' => $user->role,
+            // The company they belong to, whoever happens to be creating the row.
+            'company_id' => $user->company_id,
         ]);
     }
 }

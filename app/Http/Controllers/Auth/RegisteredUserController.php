@@ -27,6 +27,9 @@ class RegisteredUserController extends Controller
             'password' => Hash::make((string) $request->input('password')),
         ]);
 
+        // Every new account describes its company, accepts the terms and sets up payment before it does anything else.
+        $user->forceFill(['needs_company_setup' => true, 'needs_terms_acceptance' => true, 'needs_payment_setup' => true])->save();
+
         Auth::login($user);
 
         return redirect()->route('home');

@@ -10,7 +10,7 @@ class EstimatePolicy
 {
     public function view(User $user, Estimate $estimate): bool
     {
-        return $estimate->user_id === $user->id;
+        return \App\Support\Ownership::owns($user, $estimate->user_id);
     }
 
     public function update(User $user, Estimate $estimate): bool

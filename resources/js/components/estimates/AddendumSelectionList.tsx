@@ -124,6 +124,8 @@ function Row({
 
       <div className="flex items-center gap-3">
         <StatusChip
+          pill
+          hideDot
           tone={ESTIMATE_STATUS_TONE[status as EstimateStatus] ?? 'neutral'}
           label={ESTIMATE_STATUS_LABEL[status as EstimateStatus] ?? status}
         />

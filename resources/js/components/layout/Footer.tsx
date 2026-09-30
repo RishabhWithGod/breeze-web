@@ -9,34 +9,27 @@ const SOCIALS: readonly { label: string; icon: LucideIcon }[] = [
   { label: 'Website', icon: Globe },
 ]
 
-export function Footer({ className }: { className?: string }) {
-  const year = new Date().getFullYear()
+const TAGLINE = 'Every takeoff is reviewed by a person before it reaches a job or an estimate.'
 
+export function Footer({ className }: { className?: string }) {
   return (
     <footer
       className={cn(
-        'mt-12 rounded-card border border-hairline glass px-6 py-8 sm:px-8',
+        'mt-12 rounded-card border border-hairline glass px-5 py-4 sm:px-6',
         className,
       )}
     >
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-md font-semibold text-white">
-            {APP_NAME}
-          </p>
-          <p className="mt-1 text-sm text-white/75">
-            © {year} {APP_NAME}. Every takeoff is reviewed by a person before it
-            reaches a job or an estimate.
-          </p>
-        </div>
+      <p className="text-sm font-semibold text-white">{APP_NAME}</p>
+      <p className="mt-0.5 text-xs text-white/80">{TAGLINE}</p>
 
-        <nav aria-label="Footer">
-          <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
+      <div className="mt-3 flex items-center justify-between gap-4 border-t border-hairline pt-3">
+        <nav aria-label="Footer" className="min-w-0">
+          <ul className="flex flex-wrap items-center gap-x-5 gap-y-1">
             {FOOTER_LINKS.map((link) => (
               <li key={link.label}>
                 <a
                   href={link.href}
-                  className="text-sm text-white/90 transition-colors hover:text-brand"
+                  className="text-xs whitespace-nowrap text-white/90 transition-colors hover:text-brand"
                 >
                   {link.label}
                 </a>
@@ -45,15 +38,15 @@ export function Footer({ className }: { className?: string }) {
           </ul>
         </nav>
 
-        <ul className="flex items-center gap-2">
+        <ul className="flex shrink-0 items-center gap-2">
           {SOCIALS.map(({ label, icon: Icon }) => (
             <li key={label}>
               <a
                 href="#"
                 aria-label={label}
-                className="grid size-9 place-items-center rounded-full border border-hairline text-white/90 transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-brand"
+                className="grid size-8 place-items-center rounded-full border border-hairline text-white/90 transition-colors hover:border-brand/60 hover:bg-white/10 hover:text-brand"
               >
-                <Icon size={16} aria-hidden />
+                <Icon size={15} aria-hidden />
               </a>
             </li>
           ))}

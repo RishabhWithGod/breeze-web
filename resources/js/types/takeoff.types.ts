@@ -62,4 +62,23 @@ export interface TakeoffHistoryRow {
   readonly date: string
   readonly status: TakeoffStatus
   readonly items: number
+  /** The drawing's own name — null until one has actually been uploaded. */
+  readonly drawingName: string | null
+  readonly format: string | null
+  readonly pageCount: number
+  readonly uploadedAt: string
+  readonly reviewStatus: HistoryReviewStatus
 }
+
+/**
+ * `status` and `review_status` read together — richer than `status` alone
+ * once a review has actually started. Local to the history table; nothing
+ * else reads a takeoff's status this way.
+ */
+export type HistoryReviewStatus =
+  | 'draft'
+  | 'processing'
+  | 'ready-for-review'
+  | 'completed'
+  | 'converted'
+  | 'failed'

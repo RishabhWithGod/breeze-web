@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Layers } from 'lucide-react'
 import type { UploadFile } from '@/types'
-import { cn, formatFileSize } from '@/utils'
+import { cn } from '@/utils'
 import { FileListItem } from './FileListItem'
 
 export interface UploadFileListProps {
@@ -12,7 +11,7 @@ export interface UploadFileListProps {
   className?: string
 }
 
-/** Animated queue of selected files with a size summary. */
+/** Queued files as a table — file, validation status, actions. */
 export function UploadFileList({
   files,
   onRemove,
@@ -22,22 +21,18 @@ export function UploadFileList({
 }: UploadFileListProps) {
   if (files.length === 0) return null
 
-  const totalSize = files.reduce((total, file) => total + file.size, 0)
-
   return (
-    <motion.div layout className={cn('mt-5', className)}>
-      <div className="mb-3 flex items-center justify-between">
-        <p className="flex items-center gap-2 text-md font-medium text-white">
-          <Layers size={16} aria-hidden className="text-brand" />
-          Selected files
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/90">
-            {files.length}
-          </span>
-        </p>
-        <p className="text-sm text-white/75">{formatFileSize(totalSize)} total</p>
+    <motion.div
+      layout
+      className={cn('overflow-hidden rounded-panel border border-hairline', className)}
+    >
+      <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_6rem] gap-3 bg-ocean-700/40 px-4 py-3 text-sm font-semibold text-white sm:grid">
+        <span>File Name</span>
+        <span>Status</span>
+        <span className="text-right">Actions</span>
       </div>
 
-      <ul className="space-y-2">
+      <ul>
         <AnimatePresence initial={false}>
           {files.map((file) => (
             <FileListItem

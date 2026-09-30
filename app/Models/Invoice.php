@@ -148,7 +148,7 @@ class Invoice extends Model
     /** Only this manager's own invoices. */
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
-        return $query->where('user_id', $user->id);
+        return $query->whereIn($query->qualifyColumn('user_id'), \App\Support\Ownership::userIds($user));
     }
 
     /** @return HasMany<InvoiceItem, $this> */
@@ -290,7 +290,7 @@ class Invoice extends Model
 
         // One series per manager — see `Estimate::nextNumber()`.
         $highest = (int) static::withTrashed()
-            ->where('user_id', $user->id)
+            ->whereIn('user_id', \App\Support\Ownership::userIds($user))
             ->selectRaw("MAX(CAST(SUBSTR(invoice_number, 5) AS {$integerType})) AS seq")
             ->value('seq');
 

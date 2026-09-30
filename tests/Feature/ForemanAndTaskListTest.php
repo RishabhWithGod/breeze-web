@@ -431,6 +431,7 @@ class ForemanAndTaskListTest extends TestCase
     {
         $this->taskFor(null, 'Harborview rough-in');
         $empty = Job::create([
+            'user_id' => $this->planner->id,
             'name' => 'Eastside Depot',
             'client' => 'Eastside Holdings',
             'location' => '9 Depot Road',
@@ -480,9 +481,8 @@ class ForemanAndTaskListTest extends TestCase
         $this->taskFor(null, 'Harborview rough-in');
         $this->taskFor(null, 'Depot rough-in', 'Eastside Depot', 'Eastside Holdings');
 
-        // A soft delete with an Undo behind it, so the tasks are kept — but
-        // until the job is restored there is nothing to group them under, and
-        // every link on the row would point at a job that will not resolve.
+        // The job's tasks go with it, so nothing is left to group under a job
+        // that will not resolve.
         Job::where('name', 'Eastside Depot')->sole()->delete();
 
         $this->actingAs($this->planner)
@@ -491,7 +491,7 @@ class ForemanAndTaskListTest extends TestCase
                 ->has('jobs.data', 1)
                 ->where('jobs.data.0.name', 'Harborview Fit-out'));
 
-        $this->assertSame(2, JobTask::count());
+        $this->assertSame(1, JobTask::count());
     }
 
     public function test_editing_a_task_whose_job_is_gone_is_a_missing_page_not_an_error(): void
@@ -576,6 +576,57 @@ class ForemanAndTaskListTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('canEdit', false));
     }
 
+    public function test_one_managers_tasks_are_never_shown_to_another(): void
+    {
+        $dana = Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW']);
+        $mine = $this->taskFor($dana, 'My rough-in');
+
+        // Another manager's job, with a task on it that Dana is carrying too.
+        $other = User::factory()->create(['role' => 'Project Manager']);
+        $theirJob = Job::create(['user_id' => $other->id, 'name' => 'Their Tower', 'client' => 'Rival Co', 'status' => 'planning']);
+        $theirSchedule = app(ScheduleBuilder::class)->build($theirJob, $other, withTasks: false);
+        $theirTask = $theirSchedule->tasks()->create([
+            'job_id' => $theirJob->id, 'foreman_id' => $dana->id, 'title' => 'Their secret task',
+            'status' => JobTask::STATUS_PENDING, 'position' => 0,
+        ]);
+
+        // The task list and the "add a task" picker show only my own job.
+        $this->actingAs($this->planner)->get(route('tasks.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('jobs.data', 1)
+                ->where('jobs.data.0.name', 'Harborview Fit-out')
+                ->has('jobs.data.0.tasks', 1)
+                ->where('jobs.data.0.tasks.0.title', 'My rough-in'));
+        $this->actingAs($this->planner)->get(route('tasks.create'))
+            ->assertInertia(fn (Assert $page) => $page->has('jobs', 1)->where('jobs.0.name', 'Harborview Fit-out'));
+
+        // A search cannot reach it either.
+        $this->actingAs($this->planner)->get(route('tasks.index', ['search' => 'secret']))
+            ->assertInertia(fn (Assert $page) => $page->has('jobs.data', 0));
+
+        // Dana's own screen and the register count only the work on my jobs.
+        $this->actingAs($this->planner)->get(route('foremen.show', $dana))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('tasks', 1)
+                ->where('tasks.0.title', 'My rough-in'));
+        $this->actingAs($this->planner)->get(route('teams.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('unassigned.0.openTasks', 1)
+                ->where('unassigned.0.jobs', ['Harborview Fit-out']));
+
+        // ...and the other manager sees only theirs.
+        $this->actingAs($other)->get(route('tasks.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('jobs.data', 1)
+                ->where('jobs.data.0.name', 'Their Tower'));
+
+        // Nor can the task be opened or changed by someone it is not theirs.
+        $this->actingAs($this->planner)->get(route('tasks.edit', $theirTask))->assertForbidden();
+        $this->actingAs($this->planner)->delete(route('tasks.remove', $theirTask))->assertForbidden();
+        $this->assertNotNull($mine->fresh());
+        $this->assertNotNull($theirTask->fresh());
+    }
+
     private function taskFor(
         ?Foreman $foreman,
         string $title = 'Rough-in first floor',
@@ -584,7 +635,7 @@ class ForemanAndTaskListTest extends TestCase
     ): JobTask {
         $job = Job::firstOrCreate(
             ['name' => $jobName],
-            ['client' => $client, 'location' => '41 Harbor Way', 'status' => 'planning'],
+            ['user_id' => $this->planner->id, 'client' => $client, 'location' => '41 Harbor Way', 'status' => 'planning'],
         );
 
         // Built the way the app builds one — a schedule has working days, a

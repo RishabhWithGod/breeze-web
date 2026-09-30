@@ -81,8 +81,8 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'tasks' => ['required', 'array', 'min:1', 'max:50'],
             'tasks.*.title' => ['required', 'string', 'max:200'],
-            'tasks.*.foreman_id' => ['required', 'integer', 'exists:foremen,id'],
-            'tasks.*.supervisor_id' => ['required', 'integer', 'exists:foremen,id'],
+            'tasks.*.foreman_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
+            'tasks.*.supervisor_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
             'tasks.*.estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],
@@ -221,8 +221,8 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'status' => ['required', Rule::in(JobTask::STATUSES)],
-            'foreman_id' => ['required', 'integer', 'exists:foremen,id'],
-            'supervisor_id' => ['required', 'integer', 'exists:foremen,id'],
+            'foreman_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
+            'supervisor_id' => ['required', 'integer', \App\Support\CompanyRule::exists('foremen')],
             'estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],
@@ -531,6 +531,6 @@ class JobTaskSetupController extends Controller
 
     private function authorise(Request $request, Job $job): void
     {
-        abort_unless($job->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $job->user_id), 403);
     }
 }

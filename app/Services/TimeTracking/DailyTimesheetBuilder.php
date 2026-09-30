@@ -193,7 +193,7 @@ class DailyTimesheetBuilder
     /**
      * @param  array<string, mixed>  $filters
      */
-    private function entryQuery(array $filters, bool $canViewCrew, int $viewerId)
+    public function entryQuery(array $filters, bool $canViewCrew, int $viewerId)
     {
         $status = $filters['status'] ?? 'all';
         $billable = $filters['billable'] ?? 'all';
@@ -220,7 +220,7 @@ class DailyTimesheetBuilder
      *
      * @param  array<string, mixed>  $filters
      */
-    private function attendanceQuery(array $filters, bool $canViewCrew, int $viewerId)
+    public function attendanceQuery(array $filters, bool $canViewCrew, int $viewerId)
     {
         $teamMemberUserId = ! empty($filters['team_member'])
             ? TeamMember::find($filters['team_member'])?->user_id

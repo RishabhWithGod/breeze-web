@@ -398,6 +398,11 @@ class JobTaskController extends Controller
         // Dependencies cascade, so removing a task cannot leave a dangling edge.
         $task->delete();
 
+        // The last task takes the schedule with it — nothing left to settle.
+        if ($schedule !== null && ! JobSchedule::whereKey($schedule->id)->exists()) {
+            $schedule = null;
+        }
+
         // The job is the sum of its tasks, so one fewer changes the total.
         $job?->refreshEstimatedHours();
 
@@ -414,7 +419,7 @@ class JobTaskController extends Controller
         $this->assertNotLocked($task->job);
 
         $data = $request->validate([
-            'team_member_id' => ['required', 'integer', 'exists:team_members,id'],
+            'team_member_id' => ['required', 'integer', \App\Support\CompanyRule::exists('team_members')],
             'role' => ['required', Rule::in(JobTask::ROLES)],
         ]);
 
@@ -586,7 +591,7 @@ class JobTaskController extends Controller
         abort_unless($attachment->job_task_id === $task->id, 404);
 
         return response()->streamDownload(
-            fn () => print(Storage::disk('local')->get($attachment->path)),
+            fn () => print (Storage::disk('local')->get($attachment->path)),
             $attachment->name,
             ['Content-Type' => $attachment->mime_type ?? 'application/octet-stream'],
             'inline',
@@ -606,7 +611,7 @@ class JobTaskController extends Controller
         abort_unless($attachment->estimate_item_id === $item->id, 404);
 
         return response()->streamDownload(
-            fn () => print(Storage::disk('local')->get($attachment->path)),
+            fn () => print (Storage::disk('local')->get($attachment->path)),
             $attachment->name,
             ['Content-Type' => $attachment->mime_type ?? 'application/octet-stream'],
             'inline',

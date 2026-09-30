@@ -33,7 +33,7 @@ class TimerController extends Controller
             'billable' => ['nullable', 'boolean'],
         ]);
 
-        $job = Job::findOrFail($data['job_id']);
+        $job = Job::query()->inCompanyOf($request->user())->findOrFail($data['job_id']);
         $task = ! empty($data['job_task_id']) ? JobTask::findOrFail($data['job_task_id']) : null;
 
         if ($task !== null && $task->job_id !== $job->id) {

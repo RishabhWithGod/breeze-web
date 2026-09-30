@@ -49,6 +49,14 @@ class AppNotification extends Model
         'task-delayed' => 'scheduling',
     ];
 
+    /**
+     * The types that ask somebody to decide — a signup to approve, time to approve, a
+     * job the crew has finished that wants signing off. Everything else only informs.
+     *
+     * @var list<string>
+     */
+    public const APPROVAL_TYPES = ['technician-pending', 'time-entry-submitted', 'job-ready-for-review'];
+
     public const CATEGORY_LABELS = [
         'jobs' => 'Jobs',
         'tasks' => 'Tasks',
@@ -79,6 +87,24 @@ class AppNotification extends Model
     public function scopeUnread(Builder $query): Builder
     {
         return $query->whereNull('read_at');
+    }
+
+    /** Notifications waiting on a decision. */
+    public function scopeApprovals(Builder $query): Builder
+    {
+        return $query->whereIn('type', self::APPROVAL_TYPES);
+    }
+
+    /** Matches the title or the detail. */
+    public function scopeMatching(Builder $query, ?string $term): Builder
+    {
+        if (blank($term)) {
+            return $query;
+        }
+
+        return $query->where(fn (Builder $q) => $q
+            ->where('title', 'like', "%{$term}%")
+            ->orWhere('detail', 'like', "%{$term}%"));
     }
 
     public function scopeRead(Builder $query): Builder

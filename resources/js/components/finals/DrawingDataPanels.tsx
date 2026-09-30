@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { Badge, Card, EmptyState, SectionHeading, Table } from '@/components/common'
 import type {
   CircuitRow,
@@ -43,6 +43,32 @@ export interface WireSizesPanelProps {
  * rows are evidence for the estimator, not part of the device takeoff.
  */
 export function WireSizesPanel({ wireSizes, bare = false }: WireSizesPanelProps) {
+  /*
+   * One row per size. The engine reports a size once per place it read it, but
+   * a reader wants "#10 THHN Solid — 1,020 ft", not the same size twice. The
+   * length is the same on every row of a size, so the first one found stands.
+   */
+  const rows = useMemo(() => {
+    const bySize = new Map<string, WireSizeRow>()
+
+    for (const row of wireSizes) {
+      const key = row.size.trim().toLowerCase()
+      const existing = bySize.get(key)
+
+      bySize.set(
+        key,
+        existing
+          ? { ...existing, count: existing.count + row.count, length: existing.length ?? row.length ?? null }
+          : row,
+      )
+    }
+
+    return [...bySize.values()]
+  }, [wireSizes])
+
+  // Wire is priced by length; the column follows it whenever any size has one.
+  const hasLength = rows.some((row) => row.length != null)
+
   const columns: readonly TableColumn<WireSizeRow>[] = [
     {
       key: 'size',
@@ -50,19 +76,29 @@ export function WireSizesPanel({ wireSizes, bare = false }: WireSizesPanelProps)
       render: (row) => <span className="font-medium text-white">{row.size}</span>,
     },
     {
-      key: 'count',
-      header: 'Count',
+      key: 'length',
+      header: hasLength ? 'Total Length' : 'Count',
       align: 'right',
-      width: 'w-32',
-      render: (row) => row.count,
+      width: 'w-40',
+      render: (row) =>
+        row.length != null ? (
+          <span className="tabular-nums">
+            {row.length.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            {row.lengthUnit ?? 'ft'}
+          </span>
+        ) : hasLength ? (
+          <span className="text-white/60">—</span>
+        ) : (
+          row.count
+        ),
     },
   ]
 
   return (
-    <Frame bare={bare} title="Wire sizes" subtitle={`${wireSizes.length} conductor ${wireSizes.length === 1 ? 'size' : 'sizes'} found on the drawing`}>
+    <Frame bare={bare} title="Wire sizes" subtitle={`${rows.length} conductor ${rows.length === 1 ? 'size' : 'sizes'} found on the drawing`}>
       <Table
         columns={columns}
-        rows={wireSizes}
+        rows={rows}
         getRowId={(row, index) => `${row.size}-${row.page}-${index}`}
         variant="lined"
         dense

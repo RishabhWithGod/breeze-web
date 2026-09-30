@@ -20,6 +20,7 @@ use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\EstimateMergeJobBuilder;
 use App\Services\Takeoff\JobFactory;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\WireLengths;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response as ResponseFactory;
@@ -86,7 +87,7 @@ class FinalTakeoffController extends Controller
          */
         $mergeEstimateIds = Estimate::query()
             ->whereIn('id', $this->parseMergeEstimateIds($request, 'merge_estimates'))
-            ->where('user_id', $request->user()->id)
+            ->whereIn('user_id', \App\Support\Ownership::userIds($request->user()))
             ->where('kind', '!=', Estimate::KIND_MERGED)
             ->pluck('id')
             ->all();
@@ -172,12 +173,15 @@ class FinalTakeoffController extends Controller
             ])->all(),
 
             // Everything else the engine read off the drawing.
-            'wireSizes' => $result->wireSizes->map(fn ($wire) => [
-                'page' => $wire->page,
-                'size' => $wire->size,
-                'context' => $wire->context,
-                'count' => $wire->count,
-            ])->all(),
+            'wireSizes' => WireLengths::attach(
+                $result->wireSizes->map(fn ($wire) => [
+                    'page' => $wire->page,
+                    'size' => $wire->size,
+                    'context' => $wire->context,
+                    'count' => $wire->count,
+                ])->all(),
+                $result->boqLines->map(fn ($line) => [$line->description ?: $line->item, $line->unit, $line->quantity]),
+            ),
             'panelSchedules' => $result->panelSchedules->map(fn ($panel) => [
                 'page' => $panel->page,
                 'panelName' => $panel->panel_name,
@@ -338,7 +342,7 @@ class FinalTakeoffController extends Controller
             // The crew, as the Create Job screen asks for it — this is the same
             // step of the same flow, reached from the takeoff instead. Required:
             // a job needs a crew to be planned into tasks against.
-            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
             // The same two the Create Job screen requires — this is the same
             // step of the same flow, reached from the takeoff instead.
             'start_date' => ['required', 'date'],
@@ -428,7 +432,7 @@ class FinalTakeoffController extends Controller
      */
     private function storeMergedJob(Request $request, array $estimateIds, EstimateMergeJobBuilder $builder): RedirectResponse
     {
-        $userId = $request->user()->id;
+        $userId = \App\Support\Ownership::userIdList($request->user());
 
         $attributes = $request->validate([
             'name' => ['required', 'string', 'min:3', 'max:160'],
@@ -436,12 +440,12 @@ class FinalTakeoffController extends Controller
             'address_ids.*' => [
                 'integer', 'distinct',
                 Rule::exists('client_addresses', 'id')->where(
-                    fn ($query) => $query->whereIn('client_id', fn ($sub) => $sub->select('id')->from('clients')->where('user_id', $userId))
+                    fn ($query) => $query->whereIn('client_id', fn ($sub) => $sub->select('id')->from('clients')->whereIn('user_id', $userId))
                 ),
             ],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
-            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
         ], [
@@ -456,7 +460,7 @@ class FinalTakeoffController extends Controller
         // and "not already a merge" both need the rows in hand.
         $sources = Estimate::query()
             ->whereIn('id', $estimateIds)
-            ->where('user_id', $userId)
+            ->whereIn('user_id', $userId)
             ->where('kind', '!=', Estimate::KIND_MERGED)
             ->with('items')
             ->get();

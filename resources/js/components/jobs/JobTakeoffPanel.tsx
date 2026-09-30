@@ -1,5 +1,6 @@
-import { Sparkles } from 'lucide-react'
-import { Alert, ButtonLink, Card, SectionHeading, Table } from '@/components/common'
+import { useState } from 'react'
+import { ClipboardList, Sparkles } from 'lucide-react'
+import { Alert, ButtonLink, CollapsibleCard, Table } from '@/components/common'
 import type { JobBoqLine, JobTakeoff, TableColumn } from '@/types'
 import { formatCurrency } from '@/utils'
 
@@ -15,6 +16,8 @@ export interface JobTakeoffPanelProps {
  */
 export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
   const boqLines = takeoff.boqLines ?? []
+  // Closed to begin with: a long table the crew reads on demand, not on arrival.
+  const [isOpen, setIsOpen] = useState(false)
 
   const columns: readonly TableColumn<JobBoqLine>[] = [
     {
@@ -63,16 +66,24 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
       )}
 
       {boqLines.length > 0 && (
-        <Card accent="warning" padding="lg">
-          <SectionHeading
-            as="h3"
-            title="Bill of quantities"
-            subtitle={
-              takeoff.reviewed === false
-                ? 'From the AI response — rewritten when the review is signed off'
-                : 'Copied from the reviewed takeoff'
-            }
-          />
+        <CollapsibleCard
+          title="Bill of quantities"
+          subtitle={
+            takeoff.reviewed === false
+              ? 'From the AI response — rewritten when the review is signed off'
+              : 'Copied from the reviewed takeoff'
+          }
+          icon={ClipboardList}
+          tone="warning"
+          plain
+          summary={
+            <span className="tabular-nums">
+              {boqLines.length} {boqLines.length === 1 ? 'item' : 'items'}
+            </span>
+          }
+          isOpen={isOpen}
+          onToggle={() => setIsOpen((open) => !open)}
+        >
           <Table
             columns={columns}
             rows={boqLines}
@@ -81,7 +92,7 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
             dense
             caption="Bill of quantities carried onto this job"
           />
-        </Card>
+        </CollapsibleCard>
       )}
     </div>
   )

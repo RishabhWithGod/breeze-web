@@ -21,7 +21,7 @@ class StoreJobRequest extends FormRequest
      */
     public function rules(): array
     {
-        $userId = $this->user()->id;
+        $userId = \App\Support\Ownership::userIdList($this->user());
 
         return [
             'name' => ['required', 'string', 'min:3', 'max:160'],
@@ -38,7 +38,7 @@ class StoreJobRequest extends FormRequest
             'address_ids.*' => [
                 'integer', 'distinct',
                 Rule::exists('client_addresses', 'id')->where(
-                    fn ($query) => $query->whereIn('client_id', fn ($sub) => $sub->select('id')->from('clients')->where('user_id', $userId))
+                    fn ($query) => $query->whereIn('client_id', fn ($sub) => $sub->select('id')->from('clients')->whereIn('user_id', $userId))
                 ),
             ],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -48,7 +48,7 @@ class StoreJobRequest extends FormRequest
              * be planned into tasks against, and it narrows who a task on
              * this job can be given to.
              */
-            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
             /*
              * When the work runs. Required: a job with no dates cannot be
              * scheduled, cannot be crewed, and shows as a blank row on every
@@ -68,14 +68,14 @@ class StoreJobRequest extends FormRequest
             /** "Save as Draft" instead of "Create Job". */
             'save_as_draft' => ['boolean'],
             /** Who the work is for, from this manager's own client register. */
-            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->where('user_id', $userId)],
+            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userId)],
             /*
              * And which of their projects it is on. Every drawing, takeoff and
              * estimate hangs off a project, so the job does too — the client
              * alone cannot say which set of drawings this is. Also this
              * manager's own.
              */
-            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->where('user_id', $userId)],
+            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', $userId)],
             /*
              * Required: a job is the work on a drawing. Without one there is no
              * takeoff, no estimate, and nothing for the task step that follows
@@ -84,7 +84,7 @@ class StoreJobRequest extends FormRequest
             'upload_id' => [
                 'required', 'integer',
                 Rule::exists('uploads', 'id')->where(
-                    fn ($query) => $query->whereIn('project_id', fn ($sub) => $sub->select('id')->from('projects')->where('user_id', $userId))
+                    fn ($query) => $query->whereIn('project_id', fn ($sub) => $sub->select('id')->from('projects')->whereIn('user_id', $userId))
                 ),
             ],
         ];

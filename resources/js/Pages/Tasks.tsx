@@ -20,7 +20,7 @@ import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { MOTION, ROUTES, TASK_STATUS_LABEL, TASK_STATUS_TONE, routeTo } from '@/constants'
 import { useDisclosure } from '@/hooks'
 import type { Paginated, TableColumn, TaskStatus } from '@/types'
-import { formatHours } from '@/utils'
+import { formatCalendarDate, formatHours } from '@/utils'
 
 interface TaskRow {
   readonly id: number
@@ -30,6 +30,8 @@ interface TaskRow {
   readonly foreman: string | null
   /** Who is over it. Null for work with a foreman and nobody above them. */
   readonly supervisor: string | null
+  /** The day it is due, as "2026-09-18". */
+  readonly dueOn: string | null
 }
 
 /** One job and the tasks on it, which is the unit this screen pages through. */
@@ -125,11 +127,20 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
       ),
     },
     {
+      key: 'due',
+      header: 'Due',
+      render: (row) => (
+        <span className={row.dueOn ? 'whitespace-nowrap text-white/90' : 'text-white/60'}>
+          {row.dueOn ? formatCalendarDate(row.dueOn) : '—'}
+        </span>
+      ),
+    },
+    {
       key: 'status',
       header: 'Status',
       render: (row) => (
         <StatusChip
-          hideDot
+          pill
           tone={TASK_STATUS_TONE[row.status]}
           label={TASK_STATUS_LABEL[row.status]}
         />
@@ -137,8 +148,7 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
     },
     {
       key: 'hours',
-      header: 'Hours',
-      align: 'right',
+      header: 'Planned Hours',
       /*
        * The estimate alone. Pairing it with actual hours meant almost every row
        * opened with "0m /", which read as a figure rather than as work that has
@@ -155,11 +165,10 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
       ? [
           {
             key: 'actions',
-            header: '',
-            align: 'right' as const,
+            header: 'Actions',
             width: 'w-40',
             render: (row: TaskRow) => (
-              <span className="flex items-center justify-end gap-1">
+              <span className="flex items-center justify-start gap-1">
                 {row.status !== 'completed' && (
                   <Button
                     variant="ghost"
@@ -223,7 +232,7 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
            * a second entry point here only asked the question again.
            */
           <Button
-            variant="secondary"
+            variant="white"
             leftIcon={SlidersHorizontal}
             aria-expanded={filterBar.isOpen}
             onClick={filterBar.toggle}
@@ -383,7 +392,7 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
                     {canEdit && (
                       <ButtonLink
                         href={routeTo.jobTaskSetupFromList(group.id)}
-                        variant="secondary"
+                        variant="blue"
                         size="sm"
                         leftIcon={Plus}
                       >

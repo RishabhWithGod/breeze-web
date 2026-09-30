@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\TechnicianController as WebTechnicianController;
 use App\Models\User;
+use App\Services\Billing\SubscriptionSummary;
 use App\Services\Technicians\TechnicianApprovalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,20 +26,28 @@ class TechnicianController extends Controller
 
     private const MANAGER_ROLES = ['project manager', 'admin', 'owner'];
 
-    public function __construct(private readonly TechnicianApprovalService $approvals) {}
+    public function __construct(
+        private readonly TechnicianApprovalService $approvals,
+        private readonly SubscriptionSummary $subscription,
+    ) {}
 
     public function approve(Request $request, User $user): JsonResponse
     {
         abort_unless($this->canManage($request->user()), 403);
-        abort_unless($user->isFromMobile(), 404);
+        // An application to another company is not this manager's to decide on.
+        abort_unless($user->isFromMobile() && $user->company_id === $request->user()->company_id, 404);
 
         $data = $request->validate([
-            'team_id' => ['required', 'integer', 'exists:teams,id'],
+            'team_id' => ['required', 'integer', \App\Support\CompanyRule::exists('teams')],
             'role' => ['required', Rule::in(WebTechnicianController::ROLES)],
         ], [
             'team_id.required' => 'Pick a team before approving.',
             'role.required' => 'Pick a role before approving.',
         ]);
+
+        if (! $user->isActive() && ! $this->subscription->hasSeatAvailable($request->user())) {
+            return $this->fail('Your plan is full. Upgrade in Settings → Subscription to approve '.$user->name.'.', 422);
+        }
 
         $this->approvals->approve($user, $request->user(), $data['team_id'], $data['role']);
 
@@ -48,7 +57,8 @@ class TechnicianController extends Controller
     public function reject(Request $request, User $user): JsonResponse
     {
         abort_unless($this->canManage($request->user()), 403);
-        abort_unless($user->isFromMobile(), 404);
+        // An application to another company is not this manager's to decide on.
+        abort_unless($user->isFromMobile() && $user->company_id === $request->user()->company_id, 404);
 
         $this->approvals->reject($user);
 

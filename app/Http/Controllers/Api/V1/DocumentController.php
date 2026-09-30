@@ -30,7 +30,7 @@ class DocumentController extends Controller
 
     public function index(Request $request, Project $project): JsonResponse
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
 
         $documents = Document::query()
             ->where('project_id', $project->id)
@@ -54,7 +54,7 @@ class DocumentController extends Controller
 
     public function store(Request $request, Project $project): JsonResponse
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $project->user_id), 403);
 
         $data = $request->validate([
             'file' => [
@@ -94,7 +94,7 @@ class DocumentController extends Controller
 
     public function destroy(Request $request, Document $document): JsonResponse
     {
-        abort_unless($document->project?->user_id === $request->user()->id, 403);
+        abort_unless(\App\Support\Ownership::owns($request->user(), $document->project?->user_id), 403);
 
         $name = $document->name;
         $this->documents->delete($document);

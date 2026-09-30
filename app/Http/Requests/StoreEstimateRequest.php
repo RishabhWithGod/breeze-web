@@ -11,7 +11,7 @@ class StoreEstimateRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        $userId = $this->user()->id;
+        $userId = \App\Support\Ownership::userIdList($this->user());
 
         return [
             'issued_on' => ['required', 'date'],
@@ -23,18 +23,18 @@ class StoreEstimateRequest extends FormRequest
              * has to be answered, because the client is read from it. Must be
              * one of this manager's own.
              */
-            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->where('user_id', $userId)],
+            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', $userId)],
             /*
              * Who it is for. Sent by the form because that is the field the
              * project list is narrowed by, but not required: a project belongs
              * to exactly one client, and the client column is derived from it.
              */
-            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')->where('user_id', $userId)],
+            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userId)],
             /** The drawing it is priced from, one of that project's own. */
             'upload_id' => [
                 'nullable', 'integer',
                 Rule::exists('uploads', 'id')->where(
-                    fn ($query) => $query->whereIn('project_id', fn ($sub) => $sub->select('id')->from('projects')->where('user_id', $userId))
+                    fn ($query) => $query->whereIn('project_id', fn ($sub) => $sub->select('id')->from('projects')->whereIn('user_id', $userId))
                 ),
             ],
         ];

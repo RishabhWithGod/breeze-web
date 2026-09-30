@@ -151,7 +151,7 @@ class JobSchedulePolicy
      */
     private function owns(User $user, ?Job $job): bool
     {
-        return $job === null || $job->user_id === $user->id;
+        return $job === null || \App\Support\Ownership::owns($user, $job->user_id);
     }
 
     /**

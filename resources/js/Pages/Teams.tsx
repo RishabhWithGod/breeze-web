@@ -1,6 +1,21 @@
 import { useState } from 'react'
-import { Head, Link, router, usePage } from '@inertiajs/react'
-import { Check, Eye, HardHat, UserCheck, UserPlus, Users, X } from 'lucide-react'
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react'
+import type { LucideIcon } from 'lucide-react'
+import {
+  Check,
+  Eye,
+  GraduationCap,
+  HardHat,
+  Pencil,
+  ShieldCheck,
+  Trash2,
+  UserCheck,
+  UserPlus,
+  UserRound,
+  Users,
+  Wrench,
+  X,
+} from 'lucide-react'
 import {
   Alert,
   Button,
@@ -8,16 +23,19 @@ import {
   Card,
   ConfirmDialog,
   EmptyState,
+  FilterTabs,
+  Modal,
   Pagination,
   SearchBox,
   SelectField,
   StatusChip,
   Table,
+  TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import type { Paginated, SharedPageProps, TableColumn, Tone } from '@/types'
-import { formatDate, formatHours } from '@/utils'
+import type { Paginated, SharedPageProps, TableColumn } from '@/types'
+import { formatDate } from '@/utils'
 
 interface MemberRow {
   readonly id: number
@@ -30,6 +48,10 @@ interface MemberRow {
   readonly openTasks: number
   readonly openJobs: number
   readonly openHours: number
+  /** The jobs their open tasks are on. */
+  readonly jobs: readonly string[]
+  /** Checked in at a site right now. */
+  readonly onSite: boolean
   readonly phone: string | null
   readonly email: string | null
   readonly licenceNumber: string | null
@@ -61,6 +83,19 @@ interface TechnicianRow {
   readonly createdAt: string | null
 }
 
+export interface ManagerRow {
+  readonly id: number
+  readonly name: string
+  readonly email: string
+  readonly phone: string | null
+  readonly role: string
+  readonly isOwner: boolean
+  readonly isYou: boolean
+  readonly canEdit: boolean
+  readonly canEditEmail: boolean
+  readonly addedAt: string | null
+}
+
 export interface TeamsProps {
   teams: Paginated<TeamGroup>
   /**
@@ -78,10 +113,78 @@ export interface TeamsProps {
   rejectedTechnicians: readonly TechnicianRow[]
   /** False for anyone who cannot approve/reject a technician application. */
   canApproveTechnicians: boolean
+  /** True for a manager of a company — who gets the Managers tab. */
+  canSeeManagers: boolean
+  /** Everyone who manages the company, its owner first. */
+  managers: readonly ManagerRow[]
   /** Every team, unpaginated — for the "assign a team" picker. */
   teamOptions: readonly TeamOption[]
   /** 'Foreman' / 'Journeyman' / 'Apprentice' — what a mobile signup can be corrected to. */
   technicianRoleOptions: readonly string[]
+}
+
+/** The people who manage this company, its owner first. */
+function ManagersList({ managers, canAdd }: { managers: readonly ManagerRow[]; canAdd: boolean }) {
+  return (
+    <Card padding="none" className="overflow-hidden">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-4">
+        <div>
+          <h2 className="text-lg font-semibold text-white">Managers</h2>
+          <p className="text-sm text-white/70">
+            Everyone here sees all of this company&apos;s clients, projects, jobs, crews and time.
+          </p>
+        </div>
+        {canAdd && (
+          <ButtonLink href={ROUTES.foremanCreate} leftIcon={UserPlus}>
+            Add manager
+          </ButtonLink>
+        )}
+      </header>
+
+      <ul className="divide-y divide-hairline">
+        {managers.map((manager) => (
+          <li key={manager.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+            <div className="flex min-w-0 items-center gap-4">
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand/20 text-sm font-bold text-white">
+                {manager.name
+                  .split(' ')
+                  .slice(0, 2)
+                  .map((word) => word.charAt(0).toUpperCase())
+                  .join('')}
+              </span>
+              <div className="min-w-0">
+                <p className="text-md font-semibold text-white">
+                  {manager.name}
+                  {manager.isYou && <span className="ml-2 text-xs font-normal text-white/60">(you)</span>}
+                </p>
+                <p className="truncate text-sm text-white/70">
+                  {manager.email}
+                  {manager.phone ? ` · ${manager.phone}` : ''}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {manager.addedAt && (
+                <span className="hidden text-xs text-white/60 sm:inline">Added {formatDate(manager.addedAt)}</span>
+              )}
+              <StatusChip
+                pill
+                hideDot
+                tone={manager.isOwner ? 'brand' : 'neutral'}
+                label={manager.isOwner ? 'Owner' : manager.role}
+              />
+              {manager.canEdit && (
+                <ButtonLink href={routeTo.managerEdit(manager.id)} variant="secondary" size="sm">
+                  Edit
+                </ButtonLink>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
 }
 
 /** The task list, narrowed to one member — what a row's numbers describe. */
@@ -90,11 +193,12 @@ const tasksFor = (name: string) => `${ROUTES.tasks}?foreman=${encodeURIComponent
 /** The stored value is already the label — kept as a function so every call site reads the same way. */
 const roleLabel = (role: string) => role
 
-/** A foreman reads differently from a journeyman or apprentice at a glance — the point of toning the chip at all. */
-const ROLE_TONE: Record<string, Tone> = {
-  foreman: 'info',
-  journeyman: 'neutral',
-  apprentice: 'brand',
+/** A colour and icon per role, so a crew reads at a glance. */
+const ROLE_TONE: Record<string, { chip: string; icon: LucideIcon }> = {
+  Foreman: { chip: 'bg-status-success/12 text-status-success ring-status-success/40', icon: HardHat },
+  Journeyman: { chip: 'bg-status-warning/12 text-status-warning ring-status-warning/40', icon: Wrench },
+  Apprentice: { chip: 'bg-status-purple/12 text-status-purple ring-status-purple/40', icon: GraduationCap },
+  'Project Manager': { chip: 'bg-brand/12 text-brand ring-brand/40', icon: UserRound },
 }
 
 /**
@@ -112,11 +216,28 @@ export default function Teams({
   activeTechnicians,
   rejectedTechnicians,
   canApproveTechnicians,
+  canSeeManagers,
+  managers,
   teamOptions,
   technicianRoleOptions,
 }: TeamsProps) {
   const [search, setSearch] = useState(filters.search)
-  const { flash } = usePage<SharedPageProps>().props
+  // Which tab is open lives in the URL, so a link or a reload lands on the same one.
+  const [tab, setTab] = useState<'teams' | 'managers'>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'managers'
+      ? 'managers'
+      : 'teams',
+  )
+  const openTab = (next: 'teams' | 'managers') => {
+    setTab(next)
+    const params = new URLSearchParams(window.location.search)
+    if (next === 'managers') params.set('tab', next)
+    else params.delete('tab')
+    const query = params.toString()
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}`)
+  }
+  const showingManagers = canSeeManagers && tab === 'managers'
+  const { flash, errors } = usePage<SharedPageProps>().props
   const groups = teams.data
 
   const apply = (changes: Record<string, string>) => {
@@ -147,97 +268,79 @@ export default function Teams({
           <span
             className={
               row.openTasks > 0
-                ? 'grid size-9 shrink-0 place-items-center rounded-full bg-brand/15 text-sm font-semibold text-brand ring-1 ring-brand/30'
-                : 'grid size-9 shrink-0 place-items-center rounded-full bg-white/8 text-sm font-semibold text-white/70 ring-1 ring-hairline'
+                ? 'grid size-9 shrink-0 place-items-center rounded-full bg-brand/15 text-xs font-semibold text-brand ring-1 ring-brand/30'
+                : 'grid size-9 shrink-0 place-items-center rounded-full bg-white/8 text-xs font-semibold text-white/75 ring-1 ring-hairline'
             }
           >
             {row.initials}
           </span>
-          <span className="min-w-0">
-            <span className="block truncate font-semibold text-white transition-colors group-hover:text-brand">
-              {row.name}
-            </span>
-            {/* Identity, so it sits with the name rather than in a column. */}
-            <span className="block truncate text-sm text-white/60">
-              {row.licenceNumber ? `Licence ${row.licenceNumber}` : 'No licence recorded'}
-            </span>
-          </span>
+          <span className="truncate font-semibold text-white transition-colors group-hover:text-brand">{row.name}</span>
         </Link>
       ),
     },
     {
       key: 'role',
       header: 'Role',
-      /* Toned, not just written: a foreman reads differently from a journeyman
-         or apprentice at a glance, which is the point of showing it in the
-         crew's own list. */
-      render: (row) => (
-        <StatusChip hideDot tone={ROLE_TONE[row.role] ?? 'neutral'} label={row.roleLabel} />
-      ),
+      render: (row) => {
+        const tone = ROLE_TONE[row.roleLabel] ?? ROLE_TONE['Project Manager']!
+
+        return (
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${tone.chip}`}
+          >
+            <tone.icon size={13} aria-hidden />
+            {row.roleLabel}
+          </span>
+        )
+      },
     },
     {
-      key: 'contact',
-      header: 'Contact',
-      // Recorded when they were added; shown here so it is not write-only.
+      key: 'job',
+      header: 'Assigned Project or Job',
       render: (row) =>
-        row.phone === null && row.email === null ? (
-          <span className="text-sm text-white/45">Not recorded</span>
+        row.jobs.length === 0 ? (
+          <span className="text-white/50">Nothing assigned</span>
         ) : (
-          <span className="block min-w-0 text-sm">
-            {row.phone && <span className="block text-white/90">{row.phone}</span>}
-            {row.email && (
-              <a
-                href={`mailto:${row.email}`}
-                className="block truncate text-white/70 transition-colors hover:text-brand"
-              >
-                {row.email}
-              </a>
-            )}
+          <span className="text-white" title={row.jobs.join(', ')}>
+            {row.jobs[0]}
+            {row.jobs.length > 1 && <span className="text-white/65"> +{row.jobs.length - 1} more</span>}
           </span>
         ),
     },
     {
-      key: 'joined',
-      header: 'Joined',
-      render: (row) => (
-        <span className="whitespace-nowrap text-sm text-white/80">
-          {row.joinedOn ? formatDate(row.joinedOn) : '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      // Free is the state worth spotting — it is who you hand work to.
-      render: (row) => (
-        <StatusChip
-          hideDot
-          tone={row.openTasks > 0 ? 'brand' : 'neutral'}
-          label={row.openTasks > 0 ? 'On work' : 'Free'}
-        />
-      ),
-    },
-    {
       key: 'tasks',
-      header: 'Open tasks',
-      align: 'right',
-      render: (row) => <span className="tabular-nums text-white/90">{row.openTasks}</span>,
+      header: 'Open Tasks',
+      align: 'center',
+      render: (row) => <span className="tabular-nums text-white">{row.openTasks}</span>,
     },
     {
-      key: 'jobs',
-      header: 'Jobs',
-      align: 'right',
-      render: (row) => <span className="tabular-nums text-white/90">{row.openJobs}</span>,
-    },
-    {
-      key: 'hours',
-      header: 'Hours',
-      align: 'right',
-      render: (row) => (
-        <span className="whitespace-nowrap tabular-nums text-white/90">
-          {row.openHours > 0 ? formatHours(row.openHours) : '—'}
-        </span>
-      ),
+      key: 'availability',
+      header: 'Availability',
+      // One answer, not two: on a site now, carrying work, or free to be handed some.
+      render: (row) => {
+        const state = row.onSite
+          ? { label: 'On site', dot: 'bg-brand', chip: 'bg-brand/12 text-brand ring-brand/40' }
+          : row.openTasks > 0
+            ? {
+                label: 'On work',
+                dot: 'bg-status-warning',
+                chip: 'bg-status-warning/12 text-status-warning ring-status-warning/40',
+              }
+            : {
+                label: 'Available',
+                dot: 'bg-status-success',
+                chip: 'bg-status-success/12 text-status-success ring-status-success/40',
+              }
+
+        return (
+          <span
+            className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ring-1 ${state.chip}`}
+          >
+            <span className={`size-2 rounded-full ${state.dot}`} aria-hidden />
+            {state.label}
+          </span>
+        )
+      },
     },
     {
       key: 'actions',
@@ -267,7 +370,7 @@ export default function Teams({
       <PageHeader
         title="Teams"
         subtitle="The crews work is handed to, and how much each member is already carrying."
-        breadcrumbs={[{ label: 'Jobs', href: ROUTES.jobs }, { label: 'Teams' }]}
+        breadcrumbs={[{ label: 'Clients', href: ROUTES.clients }, { label: 'Teams' }]}
         actions={
           canManage ? (
             <>
@@ -293,103 +396,217 @@ export default function Teams({
         </Alert>
       )}
 
-      {pendingTechnicians.length > 0 && (
-        <TechnicianApprovalSection
-          pendingTechnicians={pendingTechnicians}
-          canApprove={canApproveTechnicians}
-          teamOptions={teamOptions}
-          roleOptions={technicianRoleOptions}
+      {errors['team_id'] && (
+        <Alert key={errors['team_id']} tone="danger" className="mb-6">
+          {errors['team_id']}
+        </Alert>
+      )}
+
+      {canSeeManagers && (
+        <FilterTabs
+          className="mb-5"
+          value={showingManagers ? 'managers' : 'teams'}
+          onChange={openTab}
+          options={[
+            { label: 'Teams', value: 'teams' },
+            { label: 'Managers', value: 'managers' },
+          ]}
+          counts={{ managers: managers.length }}
         />
       )}
 
-      <Card padding="md" className="mb-4">
-        <SearchBox
-          value={search}
-          onValueChange={setSearch}
-          onSearch={(value) => apply({ search: value })}
-          placeholder="Search teams and members…"
-          aria-label="Search teams and members"
-          containerClassName="sm:max-w-xs"
-        />
-      </Card>
-
-      {nothingAtAll ? (
-        <Card accent="brand" padding="lg">
-          <EmptyState
-            icon={HardHat}
-            title={filters.search ? 'Nothing matches that' : 'No teams yet'}
-            description={
-              filters.search
-                ? 'Clear the search to see every crew on the register.'
-                : 'Add a crew, then add the people who run its work.'
-            }
-            {...(!filters.search && canManage
-              ? {
-                  actions: (
-                    <ButtonLink href={ROUTES.teamCreate} leftIcon={Users}>
-                      Add team
-                    </ButtonLink>
-                  ),
-                }
-              : {})}
-          />
-        </Card>
+      {showingManagers ? (
+        <ManagersList managers={managers} canAdd={canManage} />
       ) : (
-        <div className="space-y-6">
-          {groups.map((team, index) => (
-            <TeamCard
-              key={team.id}
-              name={team.name}
-              members={team.members}
-              columns={columns}
-              canManage={canManage}
-              index={index}
-            />
-          ))}
-
-          {unassigned.length > 0 && (
-            <TeamCard
-              /* Last in the list, so it carries on the same colour cycle. */
-              index={groups.length}
-              name="Not on a team"
-              /* Said plainly rather than left as a gap: these are people on the
-                 register whose crew nobody has decided yet. */
-              description="Everyone on the register who has not been put on a crew."
-              members={unassigned}
-              columns={columns}
-              canManage={canManage}
+        <>
+          {/* First thing on the page, and only when someone is waiting — no request, no card.
+          Rejected applications are further down. */}
+          {pendingTechnicians.length > 0 && (
+            <TechnicianApprovalSection
+              pendingTechnicians={pendingTechnicians}
+              canApprove={canApproveTechnicians}
+              teamOptions={teamOptions}
+              roleOptions={technicianRoleOptions}
             />
           )}
-        </div>
-      )}
 
-      <Pagination
-        withLabels
-        className="mt-6"
-        page={teams.meta.current_page}
-        pageCount={teams.meta.last_page}
-        onPageChange={(page) => apply({ page: String(page) })}
-        summary={
-          teams.meta.total === 0
-            ? 'No teams to display'
-            : `Showing ${groups.length} of ${teams.meta.total} teams`
-        }
-      />
+          <Card padding="md" className="mb-5">
+            <SearchBox
+              value={search}
+              onValueChange={setSearch}
+              onSearch={(value) => apply({ search: value })}
+              placeholder="Search teams and members..."
+              aria-label="Search teams and members"
+              containerClassName="sm:max-w-sm"
+            />
+          </Card>
 
-      {(activeTechnicians.length > 0 || rejectedTechnicians.length > 0) && (
-        <TechnicianRegisterSection
-          activeTechnicians={activeTechnicians}
-          rejectedTechnicians={rejectedTechnicians}
-          canApprove={canApproveTechnicians}
-          teamOptions={teamOptions}
-          roleOptions={technicianRoleOptions}
-        />
+          {nothingAtAll ? (
+            <Card accent="brand" padding="lg">
+              <EmptyState
+                icon={HardHat}
+                title={filters.search ? 'Nothing matches that' : 'No teams yet'}
+                description={
+                  filters.search
+                    ? 'Clear the search to see every crew on the register.'
+                    : 'Add a crew, then add the people who run its work.'
+                }
+                {...(!filters.search && canManage
+                  ? {
+                      actions: (
+                        <ButtonLink href={ROUTES.teamCreate} leftIcon={Users}>
+                          Add team
+                        </ButtonLink>
+                      ),
+                    }
+                  : {})}
+              />
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {groups.map((team, index) => (
+                <TeamCard
+                  key={team.id}
+                  teamId={team.id}
+                  name={team.name}
+                  members={team.members}
+                  columns={columns}
+                  canManage={canManage}
+                  index={index}
+                />
+              ))}
+
+              {unassigned.length > 0 && (
+                <TeamCard
+                  /* Last in the list, so it carries on the same colour cycle. */
+                  index={groups.length}
+                  name="Not on a team"
+                  /* Said plainly rather than left as a gap: these are people on the
+                 register whose crew nobody has decided yet. */
+                  description="Everyone on the register who has not been put on a crew."
+                  members={unassigned}
+                  columns={columns}
+                  canManage={canManage}
+                />
+              )}
+            </div>
+          )}
+
+          <RolePermissions />
+
+          <Pagination
+            withLabels
+            className="mt-6"
+            page={teams.meta.current_page}
+            pageCount={teams.meta.last_page}
+            onPageChange={(page) => apply({ page: String(page) })}
+            summary={
+              teams.meta.total === 0 ? 'No teams to display' : `Showing ${groups.length} of ${teams.meta.total} teams`
+            }
+          />
+
+          {(activeTechnicians.length > 0 || rejectedTechnicians.length > 0) && (
+            <TechnicianRegisterSection
+              activeTechnicians={activeTechnicians}
+              rejectedTechnicians={rejectedTechnicians}
+              canApprove={canApproveTechnicians}
+              teamOptions={teamOptions}
+              roleOptions={technicianRoleOptions}
+            />
+          )}
+        </>
       )}
     </PageTransition>
   )
 }
 
+/*
+ * What each role can do, from the rules the app actually enforces — not a wish
+ * list. Planning work is for project managers and foremen; deciding time and
+ * billing is for project managers; the crew's time is visible to all four.
+ */
+const ROLE_SUMMARY: readonly {
+  role: string
+  icon: LucideIcon
+  colour: string
+  ring: string
+  points: readonly string[]
+}[] = [
+  {
+    role: 'Project Manager',
+    icon: UserRound,
+    colour: 'text-brand',
+    ring: 'bg-brand/15 ring-brand/40',
+    points: [
+      'Plan and assign work on their own jobs',
+      "Approve the crew's time",
+      'Raise and send invoices',
+      'See job costs and reports',
+    ],
+  },
+  {
+    role: 'Foreman',
+    icon: HardHat,
+    colour: 'text-status-success',
+    ring: 'bg-status-success/15 ring-status-success/40',
+    points: ['Plan tasks and schedules', 'Staff tasks from their crew', "See the crew's time"],
+  },
+  {
+    role: 'Journeyman',
+    icon: Wrench,
+    colour: 'text-status-warning',
+    ring: 'bg-status-warning/15 ring-status-warning/40',
+    points: ['Work the tasks handed to them', "See the crew's time"],
+  },
+  {
+    role: 'Apprentice',
+    icon: GraduationCap,
+    colour: 'text-status-purple',
+    ring: 'bg-status-purple/15 ring-status-purple/40',
+    points: ['Work the tasks handed to them', "See the crew's time"],
+  },
+]
+
+function RolePermissions() {
+  return (
+    <Card padding="md" className="mt-6">
+      <div className="flex items-center gap-4">
+        <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-brand/15 text-brand ring-1 ring-brand/30">
+          <ShieldCheck size={24} aria-hidden />
+        </span>
+        <div>
+          <h2 className="text-lg font-semibold text-white">Role Permissions Summary</h2>
+          <p className="text-sm text-white/75">What each role can do in Breeze.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {ROLE_SUMMARY.map(({ role, icon: Icon, colour, ring, points }) => (
+          <div key={role} className="rounded-panel border border-hairline bg-white/4 p-4">
+            <div className="flex items-center gap-3">
+              <span className={`grid size-11 shrink-0 place-items-center rounded-full ring-1 ${ring}`}>
+                <Icon size={21} aria-hidden className={colour} />
+              </span>
+              <h3 className={`text-md font-semibold ${colour}`}>{role}</h3>
+            </div>
+            <ul className="mt-4 space-y-2">
+              {points.map((point) => (
+                <li key={point} className="flex items-start gap-2.5 text-sm text-white/90">
+                  <Check size={15} aria-hidden className="mt-0.5 shrink-0 text-brand" />
+                  {point}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
 interface TeamCardProps {
+  /** Set for a real crew; absent for the "Not on a team" group, which is not one to rename or delete. */
+  teamId?: number
   name: string
   /** Overrides the member count, for a group that needs explaining. */
   description?: string
@@ -401,20 +618,86 @@ interface TeamCardProps {
 }
 
 /** One crew and everyone on it. */
-function TeamCard({ name, description, members, columns, canManage, index }: TeamCardProps) {
+function TeamCard({ teamId, name, description, members, columns, canManage, index }: TeamCardProps) {
+  const [renaming, setRenaming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  // Only a crew with nobody on it can be deleted; a crew can always be renamed.
+  const canEdit = canManage && teamId !== undefined
+  const canDelete = canEdit && members.length === 0
+
+  const remove = () => {
+    if (teamId === undefined) return
+    router.delete(routeTo.team(teamId), {
+      preserveScroll: true,
+      onStart: () => setBusy(true),
+      onFinish: () => {
+        setBusy(false)
+        setDeleting(false)
+      },
+    })
+  }
+
   return (
     /* A colour per crew, cycling down the list the way every other list on the
        screen does — one repeated accent makes a page of crews read as one. */
     <Card accent="auto" index={index} padding="lg">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-white">{name}</h2>
-          <p className="mt-1 text-sm text-white/70">
-            {description ??
-              `${members.length} ${members.length === 1 ? 'member' : 'members'}`}
-          </p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-4">
+          <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-linear-to-br from-brand/35 to-blue-500/25 text-white ring-1 ring-brand/30">
+            <Users size={22} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-semibold text-white">{name}</h2>
+            <p className="text-sm text-white/70">
+              {description ?? `${members.length} ${members.length === 1 ? 'member' : 'members'}`}
+            </p>
+          </div>
+        </div>
+
+        {/* Status and actions together, in the corner — not floating between the name and the buttons. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+          {members.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+              <span className="rounded-full bg-status-warning/12 px-3 py-1 text-status-warning ring-1 ring-status-warning/30">
+                {members.filter((member) => member.openTasks > 0).length} on work
+              </span>
+              <span className="rounded-full bg-status-success/12 px-3 py-1 text-status-success ring-1 ring-status-success/30">
+                {members.filter((member) => member.openTasks === 0).length} available
+              </span>
+            </div>
+          )}
+
+          {canEdit && (
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" size="sm" leftIcon={Pencil} onClick={() => setRenaming(true)}>
+                Rename
+              </Button>
+              {canDelete && (
+                <Button variant="danger" size="sm" leftIcon={Trash2} onClick={() => setDeleting(true)}>
+                  Delete team
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      {renaming && teamId !== undefined && (
+        <RenameTeamModal teamId={teamId} currentName={name} onClose={() => setRenaming(false)} />
+      )}
+      <ConfirmDialog
+        isOpen={deleting}
+        title={`Delete “${name}”?`}
+        description="This crew has nobody on it. Deleting it cannot be undone, but you can add a new crew any time."
+        confirmLabel="Delete team"
+        confirmVariant="danger"
+        tone="danger"
+        isBusy={busy}
+        onConfirm={remove}
+        onCancel={() => setDeleting(false)}
+      />
 
       {members.length === 0 ? (
         /* A crew with nobody on it is a real state — it was just created — and
@@ -441,6 +724,60 @@ function TeamCard({ name, description, members, columns, canManage, index }: Tea
         />
       )}
     </Card>
+  )
+}
+
+/** Renaming a crew: just its name. */
+function RenameTeamModal({
+  teamId,
+  currentName,
+  onClose,
+}: {
+  teamId: number
+  currentName: string
+  onClose: () => void
+}) {
+  const { data, setData, put, processing, errors } = useForm({ name: currentName })
+
+  const save = () => put(routeTo.team(teamId), { preserveScroll: true, onSuccess: onClose })
+
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="Rename team"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            isLoading={processing}
+            disabled={data.name.trim() === '' || data.name.trim() === currentName}
+            onClick={save}
+          >
+            Save name
+          </Button>
+        </>
+      }
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          save()
+        }}
+      >
+        <TextInput
+          id={`rename-team-${teamId}`}
+          label="Team name"
+          autoFocus
+          maxLength={120}
+          value={data.name}
+          onChange={(event) => setData('name', event.target.value)}
+          {...(errors.name ? { error: errors.name } : {})}
+        />
+      </form>
+    </Modal>
   )
 }
 
@@ -499,16 +836,17 @@ function TechnicianApprovalSection({
 
   return (
     <Card accent="warning" padding="lg" className="mb-6">
-      <div className="mb-4">
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <UserCheck size={18} className="text-brand" />
-          Technicians waiting for approval
-        </h2>
-        <p className="mt-1 text-sm text-white/70">
-          Signed up from the mobile app. {pendingTechnicians.length}{' '}
-          {pendingTechnicians.length === 1 ? 'technician' : 'technicians'} cannot use the app
-          until approved.
-        </p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
+            <UserCheck size={18} className="text-brand" />
+            Technicians waiting for approval
+          </h2>
+          <p className="mt-1 text-sm text-white/70">
+            Signed up from the mobile app. {pendingTechnicians.length}{' '}
+            {pendingTechnicians.length === 1 ? 'technician' : 'technicians'} cannot use the app until approved.
+          </p>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -626,6 +964,7 @@ function PendingTechnicianRow({
 
 interface TechnicianRegisterSectionProps {
   activeTechnicians: readonly TechnicianRow[]
+  /** Turned away earlier — a rejection is not final, so they can be approved from here. */
   rejectedTechnicians: readonly TechnicianRow[]
   canApprove: boolean
   teamOptions: readonly TeamOption[]
@@ -656,8 +995,8 @@ function TechnicianRegisterSection({
   ]
 
   // A rejected applicant is approved through the same required-team-and-role
-  // flow as a pending one, so the picker here needs a real placeholder
-  // rather than the "No team yet" default the active-correction pickers use.
+  // flow as a pending one, so the pickers here need a real placeholder rather
+  // than the "No team yet" default the active-correction pickers use.
   const approvalTeamSelectOptions = [
     { value: '', label: 'Select a team' },
     ...teamOptions.map((team) => ({ value: String(team.id), label: team.name })),
@@ -686,9 +1025,7 @@ function TechnicianRegisterSection({
         <Card accent="neutral" padding="lg">
           <div className="mb-4">
             <h2 className="text-lg font-semibold text-white">Technicians</h2>
-            <p className="mt-1 text-sm text-white/70">
-              {activeTechnicians.length} approved from the mobile app.
-            </p>
+            <p className="mt-1 text-sm text-white/70">{activeTechnicians.length} approved from the mobile app.</p>
           </div>
           <div className="space-y-3">
             {activeTechnicians.map((technician) => (
@@ -713,11 +1050,7 @@ function TechnicianRegisterSection({
                 A rejection is not final — pick a role and a team here to bring someone back in.
               </p>
             </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setShowRejected((value) => !value)}
-            >
+            <Button size="sm" variant="secondary" onClick={() => setShowRejected((value) => !value)}>
               {showRejected ? 'Hide' : 'View'} rejected applications ({rejectedTechnicians.length})
             </Button>
           </div>
@@ -770,9 +1103,7 @@ function ActiveTechnicianRow({
   teamSelectOptions,
   roleSelectOptions,
 }: ActiveTechnicianRowProps) {
-  const [teamId, setTeamId] = useState(
-    technician.teamMember?.teamId ? String(technician.teamMember.teamId) : '',
-  )
+  const [teamId, setTeamId] = useState(technician.teamMember?.teamId ? String(technician.teamMember.teamId) : '')
   // A role saved before this page required a valid one (e.g. the old
   // free-text "Technician") won't match any option here — starting blank in
   // that case forces an explicit, valid pick instead of silently resubmitting

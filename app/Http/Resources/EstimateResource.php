@@ -15,8 +15,10 @@ class EstimateResource extends JsonResource
         return [
             'id' => $this->id,
             'number' => $this->number,
-            // `project` holds the same snapshot and is not sent twice.
             'client' => $this->client,
+            'project' => $this->project,
+            // Revisions are the addenda raised against this estimate.
+            'revision' => (int) ($this->addenda_count ?? 0),
             // ISO strings throughout — the browser formats with date-fns.
             'date' => $this->issued_on->toISOString(),
             'amount' => (float) $this->amount,

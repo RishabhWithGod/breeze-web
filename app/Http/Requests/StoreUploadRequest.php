@@ -17,7 +17,7 @@ class StoreUploadRequest extends FormRequest
             'project_id' => [
                 'required',
                 'integer',
-                Rule::exists('projects', 'id')->where('user_id', $this->user()->id),
+                Rule::exists('projects', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($this->user())),
             ],
             /*
              * Set only when this drawing was sent through "Upload Addendum"
@@ -28,8 +28,10 @@ class StoreUploadRequest extends FormRequest
             'addendum_for_estimate_id' => [
                 'nullable',
                 'integer',
-                Rule::exists('estimates', 'id')->where('user_id', $this->user()->id),
+                Rule::exists('estimates', 'id')->whereIn('user_id', \App\Support\Ownership::userIdList($this->user())),
             ],
+            'addendum_reason' => ['nullable', 'string', 'max:2000'],
+            'affected_sheets' => ['nullable', 'string', 'max:500'],
             'files' => ['required', 'array', 'min:1', 'max:'.$limits['max_files']],
             'files.*' => [
                 'required',

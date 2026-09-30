@@ -114,7 +114,7 @@ export function Table<T>({
                       // A real control inside the row — a link, a button, the
                       // more-menu trigger — keeps its own click behaviour
                       // instead of also navigating the row.
-                      if (target.closest('a, button, [role="button"], input, select, textarea, label')) return
+                      if (target.closest('a, button, [role="button"], [role="menu"], input, select, textarea, label')) return
                       onRowClick(row, rowIndex)
                     }
                   : undefined

@@ -14,6 +14,8 @@ const TONE_STROKE: Record<Tone, string> = {
   warning: 'stroke-status-warning',
   danger: 'stroke-status-danger',
   info: 'stroke-status-info',
+  purple: 'stroke-status-purple',
+  blue: 'stroke-status-blue',
   neutral: 'stroke-white/30',
 }
 
@@ -23,6 +25,8 @@ const TONE_BG: Record<Tone, string> = {
   warning: 'bg-status-warning',
   danger: 'bg-status-danger',
   info: 'bg-status-info',
+  purple: 'bg-status-purple',
+  blue: 'bg-status-blue',
   neutral: 'bg-white/30',
 }
 

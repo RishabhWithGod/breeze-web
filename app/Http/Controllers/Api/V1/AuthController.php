@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterTechnicianRequest;
 use App\Models\SecurityEvent;
+use App\Models\CompanyProfile;
 use App\Models\User;
 use App\Models\UserSecuritySetting;
 use App\Services\Security\DeviceRecognizer;
@@ -88,6 +89,10 @@ class AuthController extends Controller
             'role' => 'Journeyman',
         ]);
 
+        // Which company they applied to — decided by them, not by a manager, so
+        // it is set here the way `status` is, outside mass assignment.
+        $user->company_id = $data['company_id'];
+
         // `status`/`registration_source` are deliberately not in `$fillable`
         // (nothing should ever be able to mass-assign its own approval), so
         // they are set directly here rather than passed to `create()`, which
@@ -99,6 +104,20 @@ class AuthController extends Controller
         TechnicianRegistered::dispatch($user);
 
         return $this->created($this->issueSession($user, $request), 'Account created — awaiting manager approval.');
+    }
+
+    /**
+     * The companies a technician can apply to, for the sign-up screen's picker.
+     * Public on purpose — someone signing up has no account yet — and names only.
+     */
+    public function companies(): JsonResponse
+    {
+        return $this->ok(
+            CompanyProfile::query()->orderBy('name')->get(['id', 'name'])->map(fn (CompanyProfile $company) => [
+                'id' => $company->id,
+                'name' => $company->name,
+            ])->values(),
+        );
     }
 
     public function verifyTwoFactor(Request $request): JsonResponse

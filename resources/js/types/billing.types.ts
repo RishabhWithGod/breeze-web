@@ -14,6 +14,8 @@ export interface Invoice {
   readonly client: string
   readonly jobId: number | null
   readonly jobName: string | null
+  /** Whether its project is still open; null when it was not raised on one. */
+  readonly projectOpen: boolean | null
   readonly date: string
   readonly dueDate: string | null
   readonly total: number
@@ -32,8 +34,14 @@ export interface InvoiceDetail {
   readonly clientId: number | null
   readonly jobId: number | null
   readonly jobName: string | null
+  /** The project the job was raised on. */
+  readonly projectName: string | null
+  /** Where the client is billed — their primary site. */
+  readonly billingAddress: string | null
   readonly estimateId: number | null
   readonly estimateNumber: string | null
+  /** What the estimate it bills came to. */
+  readonly estimateTotal: number | null
   readonly invoiceDate: string
   readonly dueDate: string | null
   readonly subtotal: number
@@ -59,6 +67,8 @@ export interface InvoiceItemRow {
    * own line item (see `EstimateInvoiceSync`); null for a hand-typed line.
    */
   readonly sourceCategory: string | null
+  /** Copied off the estimate, or typed in. */
+  readonly source: 'estimate' | 'manual' | null
   readonly quantity: number
   readonly unitPrice: number
   readonly total: number
@@ -79,6 +89,25 @@ export interface InvoiceJobOption {
   readonly client?: string | null
   /** Its client's id, so picking a job can fill the Client select in. */
   readonly client_id?: number | null
+  /** The project it was raised on. */
+  readonly project_id?: number | null
+  readonly project?: string | null
+  /** Only a completed job can be invoiced. */
+  readonly completed?: boolean
+  /** What it really cost, for whoever may see costs; null otherwise. */
+  readonly actual_cost?: number | null
+}
+
+/** What an invoice line is for. */
+export type InvoiceLineCategory = 'labor' | 'material' | 'equipment' | 'other'
+
+/** One line of an invoice not yet saved — what the Create screen builds and posts. */
+export interface InvoiceDraftLine {
+  readonly description: string
+  readonly source_category: InvoiceLineCategory | null
+  readonly source?: 'estimate' | 'manual'
+  readonly quantity: number
+  readonly unit_price: number
 }
 
 /** A convertible estimate offered on the Create Invoice screen. */
@@ -89,7 +118,17 @@ export interface InvoiceEstimateOption {
   /** Its client's id, so converting an estimate fills the Client select in. */
   readonly client_id: number | null
   readonly job_id: number | null
+  /** The job it belongs to: its own, or — for an addendum — its original's. */
+  readonly owner_job_id: number | null
+  readonly project_id: number | null
+  readonly kind: 'standalone' | 'addendum' | 'merged'
+  readonly status: 'draft' | 'sent' | 'approved' | 'rejected'
+  readonly addendum_number: number | null
+  /** The original an addendum adds to. */
+  readonly parent_number: string | null
   readonly grand_total: number
+  /** Its lines, which become the invoice's starting lines. */
+  readonly items: readonly InvoiceDraftLine[]
 }
 
 /** What the signed-in user may do — computed server-side, never guessed client-side. */

@@ -1,5 +1,7 @@
+import type { InvoiceStatus } from './billing.types'
+import type { Tone } from './common.types'
 import type { EstimateStatus } from './estimate.types'
-import type { JobType } from './job.types'
+import type { JobStatus, JobType } from './job.types'
 import type { ActivityEntry, TakeoffStatus } from './takeoff.types'
 import type { SupportedFormat } from './upload.types'
 
@@ -30,6 +32,8 @@ export interface ProjectDocument {
 export interface ProjectListRow {
   readonly id: number
   readonly name: string
+  /** A short line under the name — the reference's own "Description". */
+  readonly description: string | null
   /** The client's own project number, when they use one. */
   readonly code: string | null
   readonly clientId: number
@@ -54,6 +58,7 @@ export interface ProjectRecord extends ProjectListRow {
   readonly selectedUploadId: number | null
   readonly pageCount: number
   readonly startedAt: string | null
+  readonly dueDate: string | null
   readonly completedAt: string | null
   /** Set once the AI engine has returned a result for this project. */
   readonly takeoffUrl: string | null
@@ -67,6 +72,69 @@ export interface ProjectRecord extends ProjectListRow {
   readonly invoiceCount: number
   /** Who from the client's crew is staffed to it. */
   readonly members: readonly ProjectMemberRow[]
+  /** Who raised it — the only user a project is ever tied to. */
+  readonly owner: string
+  /** Its own timeline, empty until something starts writing to it. */
+  readonly activity: readonly ProjectTimelineEntry[]
+  /** The tabs' own data — each is this project's own, never another one's. */
+  readonly estimatesList: readonly ProjectEstimateRow[]
+  readonly jobsList: readonly ProjectJobRow[]
+  readonly invoicesList: readonly ProjectInvoiceRow[]
+  readonly documentsList: readonly ProjectDocumentRow[]
+  /** The latest AI takeoff run's own date, when one has run at all. */
+  readonly latestTakeoffAt: string | null
+  /** A file, not a structured list — narrowed from `documentsList` to this project's commodity list uploads. */
+  readonly commodityDocuments: readonly ProjectDocumentRow[]
+}
+
+/**
+ * One row of a project's own timeline — distinct from `ActivityEntry`
+ * (takeoff.types.ts), which is the AI takeoff run's own activity feed.
+ */
+export interface ProjectTimelineEntry {
+  readonly id: number
+  readonly title: string
+  readonly description: string | null
+  readonly tone: Tone
+  readonly occurredAt: string | null
+}
+
+/** One estimate raised against this project, as its own Estimates tab shows it. */
+export interface ProjectEstimateRow {
+  readonly id: number
+  readonly number: string
+  readonly status: EstimateStatus
+  readonly amount: number
+  readonly issuedOn: string | null
+}
+
+/** One job raised against this project, as its own Jobs tab shows it. */
+export interface ProjectJobRow {
+  readonly id: number
+  readonly name: string
+  readonly status: JobStatus
+  readonly jobType: JobType | null
+  readonly startDate: string | null
+  readonly endDate: string | null
+}
+
+/** One invoice raised against this project, as its own Invoices tab shows it. */
+export interface ProjectInvoiceRow {
+  readonly id: number
+  readonly invoiceNumber: string
+  readonly status: InvoiceStatus
+  readonly total: number
+  readonly invoiceDate: string | null
+  readonly dueDate: string | null
+}
+
+/** One document filed under this project, as its own Documents tab shows it. */
+export interface ProjectDocumentRow {
+  readonly id: number
+  readonly name: string
+  readonly documentType: string | null
+  readonly fileSizeBytes: number
+  readonly createdAt: string
 }
 
 /** One crew member staffed to a project, as the project's own screen shows them. */

@@ -61,6 +61,8 @@ class UploadController extends Controller
             'addendumFor' => $addendumFor === null ? null : [
                 'estimateId' => $addendumFor->id,
                 'estimateNumber' => $addendumFor->number,
+                'projectName' => $addendumFor->project,
+                'nextNumber' => Estimate::nextAddendumNumber($addendumFor->id),
             ],
             /*
              * A takeoff already running, unless it is the very one this screen
@@ -126,7 +128,7 @@ class UploadController extends Controller
             return null;
         }
 
-        return Estimate::where('user_id', $request->user()->id)->find($id);
+        return Estimate::whereIn('user_id', \App\Support\Ownership::userIds($request->user()))->find($id);
     }
 
     /**
@@ -195,6 +197,8 @@ class UploadController extends Controller
                 $uploads[] = $project->uploads()->create([
                     'user_id' => $request->user()->id,
                     'addendum_for_estimate_id' => $request->integer('addendum_for_estimate_id') ?: null,
+                    'addendum_reason' => $request->input('addendum_reason') ?: null,
+                    'affected_sheets' => $request->input('affected_sheets') ?: null,
                     'name' => $originalName,
                     'format' => Upload::formatFor($originalName),
                     'size_bytes' => $file->getSize(),

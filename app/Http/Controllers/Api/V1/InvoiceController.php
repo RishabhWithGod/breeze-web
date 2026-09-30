@@ -144,11 +144,11 @@ class InvoiceController extends Controller
         $data = $this->validated($request);
 
         $estimate = ! empty($data['estimate_id'])
-            ? Estimate::where('user_id', $user->id)->find($data['estimate_id'])
+            ? Estimate::whereIn('user_id', \App\Support\Ownership::userIds($user))->find($data['estimate_id'])
             : null;
 
         if (! empty($data['job_id'])) {
-            $job = Job::where('user_id', $user->id)->find($data['job_id']);
+            $job = Job::whereIn('user_id', \App\Support\Ownership::userIds($user))->find($data['job_id']);
             abort_unless($job !== null, 404);
 
             if (! $job->isLocked()) {
@@ -314,12 +314,12 @@ class InvoiceController extends Controller
     /** @return array<string, mixed> */
     private function validated(Request $request): array
     {
-        $userId = $request->user()->id;
+        $userId = \App\Support\Ownership::userIdList($request->user());
 
         return $request->validate([
-            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->where('user_id', $userId)],
-            'job_id' => ['nullable', 'integer', Rule::exists('work_jobs', 'id')->where('user_id', $userId)],
-            'estimate_id' => ['nullable', 'integer', Rule::exists('estimates', 'id')->where('user_id', $userId)],
+            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userId)],
+            'job_id' => ['nullable', 'integer', Rule::exists('work_jobs', 'id')->whereIn('user_id', $userId)],
+            'estimate_id' => ['nullable', 'integer', Rule::exists('estimates', 'id')->whereIn('user_id', $userId)],
             'invoice_date' => ['required', 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'tax_pct' => ['required', 'numeric', 'min:0', 'max:100'],

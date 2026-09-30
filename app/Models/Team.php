@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -19,6 +20,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Team extends Model
 {
+    use BelongsToCompany;
+
     /** A team is its name. What it covers shows in the work it carries. */
     protected $fillable = ['name'];
 
