@@ -360,10 +360,12 @@ class ForemanController extends Controller
         /*
          * The task screen offers only the people staffed to the job's project. Someone added from
          * there, to that job's own crew, is staffed to it too — otherwise they would be on the crew
-         * and still missing from the very dropdowns they were added for.
+         * and still missing from the very dropdowns they were added for. Staffed even when this is
+         * the project's first member: being added here, for this job, is itself the staffing
+         * decision, not something that only counts once someone else has already been picked.
          */
         $project = $job?->project;
-        if ($project !== null && $project->members()->exists() && ($job->team_id === null || $job->team_id === $foreman->team_id)) {
+        if ($project !== null && ($job->team_id === null || $job->team_id === $foreman->team_id)) {
             $project->members()->syncWithoutDetaching([$foreman->id]);
         }
 
