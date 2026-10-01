@@ -283,7 +283,7 @@ export default function CommodityList({
                     <tr key={row.id} className={cn('hover:bg-white/4', row.archived && 'opacity-60')}>
                       <td className="px-4 py-2.5">{row.category}</td>
                       <td className="px-4 py-2.5 font-medium text-white">{row.itemCode}</td>
-                      <td className="px-4 py-2.5">{row.description}</td>
+                      <td className="px-4 py-2.5">{row.description || '—'}</td>
                       <td className="px-4 py-2.5">{row.unit}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{money(row.materialPrice)}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{money(row.laborHours)}</td>
@@ -429,7 +429,7 @@ function ItemModal({
         }}
       >
         <RequiredFieldsNotice
-          fields={['Category', 'Description', 'Unit', 'Material price', 'Labor hours']}
+          fields={['Category', 'Unit', 'Material price', 'Labor hours']}
           className="sm:col-span-2"
         />
         <div>
@@ -460,7 +460,7 @@ function ItemModal({
         />
         <TextInput
           id="commodity-description"
-          label="Description"
+          label="Description (optional)"
           maxLength={255}
           className="sm:col-span-2"
           value={form.description}

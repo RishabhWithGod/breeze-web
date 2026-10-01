@@ -17,7 +17,7 @@ interface JobOption {
 interface ExistingOrder {
   readonly id: number
   readonly label: string
-  readonly description: string
+  readonly description: string | null
   readonly reason: string | null
   readonly source: ChangeOrderSource
   readonly markupPct: number
@@ -255,7 +255,7 @@ export default function ChangeOrderForm({ changeOrder, jobs, preselectedJob, isM
         className="mb-5"
       />
 
-      <RequiredFieldsNotice fields={['Job', 'Description']} className="mb-4" />
+      <RequiredFieldsNotice fields={['Job']} className="mb-4" />
 
       {editing && changeOrder.rejection && (
         <Alert tone="warning" title="This change order was rejected" className="mb-4">

@@ -374,7 +374,9 @@ class ChangeOrderController extends Controller
     private function validated(Request $request): array
     {
         return $request->validate([
-            'description' => ['required', 'string', 'max:255'],
+            // Optional: the lines already say what the change is. This is a
+            // summary for the list and the header, not the record's identity.
+            'description' => ['nullable', 'string', 'max:255'],
             'reason' => ['nullable', 'string', 'max:2000'],
             'source' => ['nullable', Rule::in(ChangeOrder::SOURCES)],
             'markup_pct' => ['nullable', 'numeric', 'min:0', 'max:500'],
@@ -386,7 +388,6 @@ class ChangeOrderController extends Controller
             'lines.*.unit_cost' => ['required', 'numeric', 'min:0', 'max:9999999'],
             ...$this->fileRules(),
         ], [
-            'description.required' => 'Describe the change.',
             'lines.required' => 'Add at least one material or labor line.',
             'lines.min' => 'Add at least one material or labor line.',
             'lines.*.description.required' => 'Name this line.',

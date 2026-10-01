@@ -22,7 +22,7 @@ interface Row {
   readonly id: number
   readonly label: string
   readonly job: { readonly id: number; readonly name: string }
-  readonly description: string
+  readonly description: string | null
   readonly source: ChangeOrderSource
   readonly laborHours: number
   readonly materialCost: number
@@ -211,7 +211,7 @@ export default function ChangeOrders({ orders, page, filters, jobs, canCreate }:
                         </Link>
                       </td>
                       <td className="px-4 py-3">{row.job.name}</td>
-                      <td className="max-w-xs px-4 py-3">{row.description}</td>
+                      <td className="max-w-xs px-4 py-3">{row.description ?? '—'}</td>
                       <td className="px-4 py-3">
                         <ChangeOrderSourcePill source={row.source} />
                       </td>

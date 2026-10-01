@@ -214,7 +214,7 @@ class CommodityListController extends Controller
             // An item code is one item's, within the company — archived items keep theirs.
             'item_code' => ['nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9][A-Za-z0-9._\-\/ ]*$/',
                 Rule::unique('price_book_items', 'item_code')->where('user_id', $owner)->ignore($item?->id)],
-            'description' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:255'],
             'unit' => ['required', 'string', 'max:24'],
             'material_price' => ['required', 'numeric', 'min:0', 'max:9999999.99'],
             'labor_hours' => ['required', 'numeric', 'min:0', 'max:9999.99'],
@@ -224,6 +224,11 @@ class CommodityListController extends Controller
             'item_code.regex' => 'Use letters, numbers, dashes or dots.',
         ]);
         $data['unit'] = mb_strtoupper(trim($data['unit']));
+        // The column isn't nullable, and the match key it's hashed into
+        // (PriceBookLine::keyFor()) takes a string, not null — left blank,
+        // this is what every other "optional" text field on this form
+        // already normalises to.
+        $data['description'] ??= '';
 
         return $data;
     }
