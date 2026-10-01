@@ -77,17 +77,5 @@ return [
                 'Advanced Security',
             ],
         ],
-        'electric_ai_estimating' => [
-            'name' => 'Breeze Electric AI Estimating',
-            'tagline' => 'AI-powered takeoffs and estimating, standalone',
-            'description' => 'Just the AI Estimating engine — electrical takeoffs and estimates, without the job and crew management tools.',
-            'price' => 375.00,
-            'max_users' => 10,
-            'users_label' => 'Up to 10 users',
-            'popular' => false,
-            'limits' => ['ai_takeoffs' => 500, 'estimates' => 200, 'projects' => 100, 'storage_gb' => 100],
-            'highlights' => ['AI-powered takeoffs', 'AI-powered estimating', 'Standalone — no crew tools'],
-            'features' => ['AI-Powered Takeoffs', 'AI-Powered Estimating', 'Bill of Quantities', 'Email Support'],
-        ],
     ],
 ];
