@@ -376,7 +376,7 @@ export default function Upload({
                   fullWidth
                   leftIcon={Sparkles}
                   isLoading={isSubmitting}
-                  disabled={files.length === 0}
+                  disabled={files.length === 0 || isSubmitting}
                   onClick={() =>
                     startUpload({ addendum_reason: reason, affected_sheets: sheets })
                   }
