@@ -1,5 +1,5 @@
 import { Head, router, usePage } from '@inertiajs/react'
-import { ArrowRight, Pencil, Plus, RotateCw, Search, Send, Trash2, UserPlus } from 'lucide-react'
+import { ArrowRight, Pencil, Plus, RotateCw, Search, Send, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Alert, Button, Card, ConfirmDialog, Modal, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
@@ -91,7 +91,6 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
   const [drafts, setDrafts] = useState<Draft[]>(() => [blankDraft(defaultRole)])
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
-  const [touched, setTouched] = useState(false)
   const [cancelling, setCancelling] = useState<InvitationRow | null>(null)
 
   const term = search.trim().toLowerCase()
@@ -103,7 +102,10 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
     () => drafts.filter((draft) => draft.name.trim() !== '' || draft.email.trim() !== ''),
     [drafts],
   )
-  const invalid = (draft: Draft) => draft.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(draft.email.trim())
+  // Name, email and a team are all required before a row can be sent — "not on a
+  // team" is still a real choice, but it has to be picked, not just left blank.
+  const invalid = (draft: Draft) =>
+    draft.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(draft.email.trim()) || draft.teamId.trim() === ''
 
   const seatsLeft = seats.available === null ? null : seats.available - filled.length
   const overSeats = seatsLeft !== null && seatsLeft < 0
@@ -117,7 +119,6 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
     )
 
   const send = () => {
-    setTouched(true)
     if (filled.length === 0 || filled.some(invalid) || overSeats) return
 
     router.post(
@@ -130,17 +131,16 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
           // Left empty, the person is emailed a link to choose their own.
           password: draft.password === '' ? null : draft.password,
           role: draft.role,
-          team_id: draft.teamId === '' ? null : Number(draft.teamId),
+          team_id: draft.teamId === 'none' ? null : Number(draft.teamId),
         })),
       },
       {
         preserveScroll: true,
         onStart: () => setBusy(true),
         onFinish: () => setBusy(false),
-        onSuccess: () => {
-          setDrafts([blankDraft(defaultRole)])
-          setTouched(false)
-        },
+        // Team Setup is done once invitations are out — move on to the next
+        // setup step, same as clicking "Continue to Commodity List".
+        onSuccess: () => router.visit(ROUTES.commodities),
       },
     )
   }
@@ -157,7 +157,10 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
 
   const teamOptions = (
     <>
-      <option value="">Not on a team</option>
+      <option value="" disabled>
+        Select team
+      </option>
+      <option value="none">Not on a team</option>
       {teams.map((team) => (
         <option key={team.id} value={team.id}>
           {team.name}
@@ -210,7 +213,7 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
 
       {/* ------------------------------------------------------------- invitations -- */}
       <Card padding="md" className="mt-4">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-4">
           <TextInput
             id="setup-search"
             aria-label="Search members by name or email"
@@ -220,14 +223,6 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" leftIcon={UserPlus} onClick={addDraft}>
-              Add another member
-            </Button>
-            <Button leftIcon={Send} isLoading={busy} disabled={filled.length === 0 || overSeats} onClick={send}>
-              Send invitations
-            </Button>
-          </div>
         </div>
 
         <div className="overflow-x-auto rounded-panel border border-hairline">
@@ -296,13 +291,14 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
               })}
 
               {shownDrafts.map((draft) => {
-                const started = draft.name.trim() !== '' || draft.email.trim() !== ''
-                const show = touched && started
+                const show = draft.name.trim() !== '' || draft.email.trim() !== '' || draft.teamId !== ''
                 const nameError =
                   errorFor(draft, 'name') ?? (show && draft.name.trim().length < 2 ? 'Enter a name.' : undefined)
                 const emailError =
                   errorFor(draft, 'email') ??
                   (show && !/^\S+@\S+\.\S+$/.test(draft.email.trim()) ? 'Enter a valid email.' : undefined)
+                const teamError =
+                  errorFor(draft, 'team_id') ?? (show && draft.teamId.trim() === '' ? 'Choose a team.' : undefined)
 
                 return (
                   <tr key={draft.key}>
@@ -379,10 +375,11 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
                         aria-label="Team assignment"
                         value={draft.teamId}
                         onChange={(event) => change(draft.key, { teamId: event.target.value })}
-                        className={cn(CONTROL, '[&>option]:bg-navy-900')}
+                        className={cn(CONTROL, '[&>option]:bg-navy-900', teamError && 'border-status-danger/70')}
                       >
                         {teamOptions}
                       </select>
+                      {teamError && <span className="mt-1 block text-xs text-red-300">{teamError}</span>}
                     </td>
                     <td className="px-3 py-2.5 align-top">
                       <Chip className={STATUS.draft.className}>{STATUS.draft.label}</Chip>
@@ -411,7 +408,12 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
                 Only {seats.available} {seats.available === 1 ? 'seat is' : 'seats are'} left on your plan.
               </span>
             )}
-            <Button leftIcon={Send} isLoading={busy} disabled={filled.length === 0 || overSeats} onClick={send}>
+            <Button
+              leftIcon={Send}
+              isLoading={busy}
+              disabled={filled.length === 0 || filled.some(invalid) || overSeats}
+              onClick={send}
+            >
               Send invitations
             </Button>
             <Button variant="outline" rightIcon={ArrowRight} onClick={() => router.visit(ROUTES.commodities)}>
