@@ -59,7 +59,7 @@ export interface ProjectEditProps {
 export default function ProjectEdit({ project, clients }: ProjectEditProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data, setData, put, processing, errors, hasErrors, clearErrors } =
+  const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
     useForm<ProjectEditDraft>({
       client_id: project.clientId === null ? '' : String(project.clientId),
       name: project.name,
@@ -149,7 +149,15 @@ export default function ProjectEdit({ project, clients }: ProjectEditProps) {
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    put(routeTo.project(project.id), { forceFormData: true })
+    /*
+     * Sent as a spoofed PUT, not a real one: PHP never parses a multipart
+     * body on an actual PUT request, so every field — not just the file —
+     * would arrive empty and "required" would fire on whatever has that
+     * rule. Posting with `_method` is what every other multipart edit in
+     * this app already does — see ChangeOrderForm's own `editing` branch.
+     */
+    transform((form) => ({ ...form, _method: 'put' }))
+    post(routeTo.project(project.id), { forceFormData: true })
   }
 
   return (
