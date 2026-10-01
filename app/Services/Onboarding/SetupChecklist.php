@@ -16,7 +16,9 @@ use App\Support\Ownership;
  * Nothing is ticked by hand: each step is done when the thing it asks for exists
  * — a company on file, someone on the team, a price list, a client, a project — so
  * the progress is always what is true, and it follows the work wherever it is done.
- * None of the steps may be skipped; the project waits for its client.
+ * Team, Client and Project may be left for later; Company still has to be
+ * done first, and the checklist is not finished until Client and Project
+ * are too — see REQUIRED.
  */
 class SetupChecklist
 {
@@ -30,8 +32,8 @@ class SetupChecklist
 
     public const PROJECT = 'project';
 
-    /** Steps a company may leave for later. Empty: every step must be done. */
-    public const SKIPPABLE = [];
+    /** Steps a company may leave for later. */
+    public const SKIPPABLE = [self::TEAM, self::CLIENT, self::PROJECT];
 
     /** Steps that have to be done before setup can be called finished. */
     public const REQUIRED = [self::COMPANY, self::CLIENT, self::PROJECT];
