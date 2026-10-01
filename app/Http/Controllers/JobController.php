@@ -164,7 +164,9 @@ class JobController extends Controller
 
         // Refused here rather than trusted: the ids must be this client's own.
         // Against the client's own book — a project and its job share a place.
-        $addresses = $this->sites->resolve((int) $data['client_id'], $data['address_ids']);
+        // Both optional now: a job raised with no client or no site yet just
+        // resolves to no addresses, same as `attach()` already handles.
+        $addresses = $this->sites->resolve((int) ($data['client_id'] ?? 0), $data['address_ids'] ?? []);
         unset($data['address_ids']);
 
         // The selected PDF already carries an estimate — link it rather than
@@ -398,7 +400,7 @@ class JobController extends Controller
 
         // The drawing has to be one of the project's own — the form narrows the
         // list to them, and a hand-made request is held to the same rule.
-        if (! $upload || (int) $upload->project_id !== (int) $data['project_id']) {
+        if (! $upload || (int) $upload->project_id !== (int) ($data['project_id'] ?? 0)) {
             return $data;
         }
 
@@ -422,7 +424,9 @@ class JobController extends Controller
         unset($data['status']);
 
         // Against the client's own book — a project and its job share a place.
-        $addresses = $this->sites->resolve((int) $data['client_id'], $data['address_ids']);
+        // Both optional now: a job edited down to no client or no site just
+        // resolves to no addresses, same as `attach()` already handles.
+        $addresses = $this->sites->resolve((int) ($data['client_id'] ?? 0), $data['address_ids'] ?? []);
         unset($data['address_ids']);
 
         $data = $this->withRelinkedDrawing($job, $data);

@@ -2,7 +2,15 @@ import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { ArrowLeft, ArrowRight, CloudUpload, Globe, Mail, Phone, Save } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, ButtonLink, Checkbox, SelectField, TextArea, TextInput } from '@/components/common'
+import {
+  Button,
+  ButtonLink,
+  Checkbox,
+  RequiredFieldsNotice,
+  SelectField,
+  TextArea,
+  TextInput,
+} from '@/components/common'
 import { appLayout, PageTransition } from '@/components/layout'
 import type { SelectOption } from '@/types'
 import { cn, formatUsPhone } from '@/utils'
@@ -127,6 +135,11 @@ export default function CompanySetup({ company, defaults, timezones, editing }: 
             ? 'Correct your company details. They are used across your account.'
             : "Let’s get your company set up. This information will be used across your account."}
         </p>
+
+        <RequiredFieldsNotice
+          fields={['Company Name', 'Business Address', 'Primary Contact', 'Phone', 'Email', 'Time Zone']}
+          className="mt-6"
+        />
 
         <div className="mt-8 grid gap-5 md:grid-cols-2">
           <FieldCard>

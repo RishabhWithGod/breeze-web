@@ -8,6 +8,7 @@ import {
   Card,
   EmptyState,
   IconButton,
+  RequiredFieldsNotice,
   SectionHeading,
   TextInput,
   WorkflowProgress,
@@ -236,6 +237,8 @@ export default function JobTaskSetup({
         />
       )}
 
+      <RequiredFieldsNotice fields={['Task name']} className="mb-6" />
+
       {hasErrors && (
         <Alert tone="danger" title="Check the tasks" className="mb-6">
           Some rows need attention before this plan can be saved.
@@ -349,7 +352,7 @@ export default function JobTaskSetup({
                       <div>
                         <CrewMemberPicker
                           id={`task-foreman-${index}`}
-                          label="Journeyman*"
+                          label="Journeyman"
                           slot="worker"
                           people={foremen}
                           value={row.foreman_id}
@@ -386,7 +389,7 @@ export default function JobTaskSetup({
 
                       <CrewMemberPicker
                         id={`task-supervisor-${index}`}
-                        label="Foreman*"
+                        label="Foreman"
                         slot="foreman"
                         people={supervisors}
                         value={row.supervisor_id}

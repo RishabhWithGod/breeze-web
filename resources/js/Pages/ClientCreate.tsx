@@ -10,6 +10,7 @@ import {
   Card,
   CardHeader,
   ConfirmDialog,
+  RequiredFieldsNotice,
   TextArea,
   TextInput,
   UnfinishedTakeoffNotice,
@@ -133,6 +134,7 @@ export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, team
       />
 
       <form onSubmit={submit} noValidate className="space-y-6">
+        <RequiredFieldsNotice fields={['Client Name']} />
         <AnimatePresence initial={false}>
           {hasErrors && (
             <Alert key="form-error" tone="danger" title="Check the form">

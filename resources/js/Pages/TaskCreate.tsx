@@ -6,6 +6,7 @@ import {
   ButtonLink,
   Card,
   EmptyState,
+  RequiredFieldsNotice,
   SectionHeading,
   SelectField,
 } from '@/components/common'
@@ -66,6 +67,8 @@ export default function TaskCreate({ jobs }: TaskCreateProps) {
         ) : (
           <>
             <SectionHeading as="h3" title="Which job?" />
+
+            <RequiredFieldsNotice fields={['Job']} className="mb-4" />
 
             <SelectField
               id="task-job"

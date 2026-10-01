@@ -8,6 +8,7 @@ import {
   ButtonLink,
   Card,
   CardHeader,
+  RequiredFieldsNotice,
   TextArea,
   TextInput,
 } from '@/components/common'
@@ -102,6 +103,7 @@ export default function ClientEdit({ client, teams }: ClientEditProps) {
       />
 
       <form onSubmit={submit} noValidate className="space-y-6">
+        <RequiredFieldsNotice fields={['Client Name']} />
         <AnimatePresence initial={false}>
           {hasErrors && (
             <Alert key="form-error" tone="danger" title="Check the form">

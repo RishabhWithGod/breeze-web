@@ -15,6 +15,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  RequiredFieldsNotice,
   SectionHeading,
   SelectField,
   StatusChip,
@@ -180,6 +181,8 @@ export default function EstimateCreate({
         }
       />
 
+      <RequiredFieldsNotice fields={['Client']} className="mb-6" />
+
       {hasErrors && (
         <Alert tone="danger" title="Check the form" className="mb-6">
           Some fields need attention before this estimate can be saved.
@@ -208,7 +211,7 @@ export default function EstimateCreate({
                 />
                 <SelectField
                   id="estimate-project"
-                  label="Project*"
+                  label="Project"
                   options={projectOptions}
                   value={data.project_id}
                   disabled={!data.client_id}

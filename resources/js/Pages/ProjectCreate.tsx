@@ -10,6 +10,7 @@ import {
   Card,
   CardHeader,
   IconButton,
+  RequiredFieldsNotice,
   SelectField,
   TextArea,
   TextInput,
@@ -183,6 +184,7 @@ export default function ProjectCreate({
       />
 
       <form onSubmit={submit} noValidate className="space-y-6">
+        <RequiredFieldsNotice fields={['Client', 'Project Name']} />
         <AnimatePresence initial={false}>
           {hasErrors && (
             <Alert key="form-error" tone="danger" title="Check the form">

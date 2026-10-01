@@ -19,12 +19,13 @@ class StoreEstimateRequest extends FormRequest
             'amount' => ['required', 'numeric', 'min:0', 'max:99999999'],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
             /*
-             * What the estimate is on. Every drawing and takeoff hangs off a
-             * project, so the estimate does too — and it is the one thing that
-             * has to be answered, because the client is read from it. Must be
-             * one of this manager's own.
+             * What the estimate is on. Optional: a standalone estimate can be
+             * started before a project exists for it — the client snapshot
+             * then falls back to "Unassigned" (see EstimateController) rather
+             * than demanding one up front. Must be one of this manager's own
+             * when given.
              */
-            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', $userId)],
+            'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', $userId)],
             /*
              * Who it is for. Sent by the form because that is the field the
              * project list is narrowed by, but not required: a project belongs

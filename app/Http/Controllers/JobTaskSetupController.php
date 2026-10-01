@@ -208,10 +208,10 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'tasks' => ['required', 'array', 'min:1', 'max:50'],
             'tasks.*.title' => ['required', 'string', 'max:200'],
-            'tasks.*.foreman_id' => ['required', 'integer', CompanyRule::exists('foremen')],
-            // Who is over the task — required alongside the foreman, so every
-            // task always has both someone running it and someone above them.
-            'tasks.*.supervisor_id' => ['required', 'integer', CompanyRule::exists('foremen')],
+            // Optional: a task can be planned before anyone is staffed to run
+            // it or over it, and assigned later from the Tasks list.
+            'tasks.*.foreman_id' => ['nullable', 'integer', CompanyRule::exists('foremen')],
+            'tasks.*.supervisor_id' => ['nullable', 'integer', CompanyRule::exists('foremen')],
             /*
              * No `distinct`: with a nested wildcard it compares across every
              * task, not within one, and would report the right refusal under an
@@ -225,8 +225,6 @@ class JobTaskSetupController extends Controller
         ], [
             'tasks.required' => 'A job needs at least one task.',
             'tasks.*.title.required' => 'Give the task a name, or remove the row.',
-            'tasks.*.foreman_id.required' => 'Pick the foreman running this task.',
-            'tasks.*.supervisor_id.required' => 'Pick the supervisor overseeing this task.',
             'tasks.*.estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
             'tasks.*.estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
@@ -471,21 +469,20 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'status' => ['required', Rule::in(JobTask::STATUSES)],
-            'foreman_id' => ['required', 'integer', CompanyRule::exists('foremen')],
-            'supervisor_id' => ['required', 'integer', CompanyRule::exists('foremen')],
+            // Optional: a task can be left unassigned and staffed later.
+            'foreman_id' => ['nullable', 'integer', CompanyRule::exists('foremen')],
+            'supervisor_id' => ['nullable', 'integer', CompanyRule::exists('foremen')],
             'estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],
             'estimate_item_ids.*' => ['integer'],
         ], [
             'title.required' => 'Give the task a name.',
-            'foreman_id.required' => 'Pick the foreman running this task.',
-            'supervisor_id.required' => 'Pick the supervisor overseeing this task.',
             'estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
             'estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
 
-        $this->refuseOffCrew($job, [$data['foreman_id'], $data['supervisor_id']]);
+        $this->refuseOffCrew($job, [$data['foreman_id'] ?? null, $data['supervisor_id'] ?? null]);
 
         $title = trim($data['title']);
 
@@ -537,7 +534,7 @@ class JobTaskSetupController extends Controller
             $task->update([
                 'title' => $title,
                 'status' => $data['status'],
-                'foreman_id' => $data['foreman_id'],
+                'foreman_id' => $data['foreman_id'] ?? null,
                 'supervisor_id' => $data['supervisor_id'] ?? null,
                 // Re-read off the labour it now covers, never typed.
                 'estimated_hours' => $this->hoursOn($ids),

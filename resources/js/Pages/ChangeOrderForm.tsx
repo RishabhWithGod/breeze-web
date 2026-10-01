@@ -1,7 +1,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/react'
 import { FileText, Paperclip, Plus, Save, Send, Trash2, Upload, X } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { Alert, Button, Card, SelectField, TextArea, TextInput } from '@/components/common'
+import { Alert, Button, Card, RequiredFieldsNotice, SelectField, TextArea, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { ChangeOrderLineKind, ChangeOrderSource, SharedPageProps } from '@/types'
@@ -254,6 +254,8 @@ export default function ChangeOrderForm({ changeOrder, jobs, preselectedJob, isM
         ]}
         className="mb-5"
       />
+
+      <RequiredFieldsNotice fields={['Job', 'Description']} className="mb-4" />
 
       {editing && changeOrder.rejection && (
         <Alert tone="warning" title="This change order was rejected" className="mb-4">

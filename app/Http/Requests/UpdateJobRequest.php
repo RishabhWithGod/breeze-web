@@ -23,14 +23,14 @@ class UpdateJobRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'min:3', 'max:160'],
             /** Who the work is for, from this manager's own client register. */
-            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userId)],
+            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userId)],
             /*
              * And which of their projects it is on. Every drawing, takeoff and
              * estimate hangs off a project, so the job does too — the client
              * alone cannot say which set of drawings this is. Also this
              * manager's own.
              */
-            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', $userId)],
+            'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', $userId)],
             /*
              * The site this job is at, one of its project's own. `location` is
              * not posted: it is written from this, so the two cannot disagree.
@@ -40,7 +40,7 @@ class UpdateJobRequest extends FormRequest
              * Refused here rather than trusted: the address must be on one of
              * this manager's own clients.
              */
-            'address_ids' => ['required', 'array', 'size:1'],
+            'address_ids' => ['nullable', 'array', 'size:1'],
             'address_ids.*' => [
                 'integer', 'distinct',
                 Rule::exists('client_addresses', 'id')->where(
@@ -56,14 +56,8 @@ class UpdateJobRequest extends FormRequest
              */
             'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             'status' => ['required', Rule::in(Job::STATUSES)],
-            /*
-             * Both required, exactly as they are when the job is raised. A job
-             * that can be created only with dates but saved without them can
-             * lose them on the way through this form, and every calendar in
-             * the app then has a blank row where the work was.
-             */
-            'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'budget' => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
             // No foreman on a job: work is handed to someone task by task, so
             // the edit form does not offer one and nothing may set one here.
@@ -89,11 +83,8 @@ class UpdateJobRequest extends FormRequest
         return [
             'name.required' => 'Job name is required',
             'name.min' => 'Use at least 3 characters',
-            'client_id.required' => 'Client is required',
             'client_id.exists' => 'Pick a client from the list',
-            'project_id.required' => 'Pick the project this job is on',
             'project_id.exists' => 'Pick a project from the list',
-            'address_ids.required' => 'Pick the site this job runs at',
             'address_ids.size' => 'A job runs at one site',
             'address_ids.*.exists' => 'That site is not on the project\'s record',
             'end_date.after_or_equal' => 'End date must be on or after the start date',

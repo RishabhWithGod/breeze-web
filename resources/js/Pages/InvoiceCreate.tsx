@@ -23,6 +23,7 @@ import {
   EmptyState,
   IconButton,
   Modal,
+  RequiredFieldsNotice,
   SelectField,
   Table,
   TextArea,
@@ -328,6 +329,8 @@ export default function InvoiceCreate({
           { label: 'Create Invoice' },
         ]}
       />
+
+      <RequiredFieldsNotice fields={['Client', 'Invoice Date', 'line Description']} className="mb-5" />
 
       {hasErrors && (
         <Alert tone="danger" title="Check the invoice" className="mb-5">

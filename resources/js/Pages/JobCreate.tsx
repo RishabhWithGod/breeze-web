@@ -7,6 +7,7 @@ import {
   Button,
   ButtonLink,
   RadioGroup,
+  RequiredFieldsNotice,
   SelectField,
   TextArea,
   TextInput,
@@ -233,6 +234,8 @@ export default function JobCreate({
       <section className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
         <div className="p-6 sm:p-8 xl:p-10">
 
+          <RequiredFieldsNotice fields={['Job Name']} className="mb-6" />
+
           {hasErrors && (
             <Alert tone="danger" title="Check the form" className="mb-6">
               Some fields need attention before this job can be saved.
@@ -261,7 +264,7 @@ export default function JobCreate({
               <div className="grid gap-6 lg:grid-cols-2">
                 <SelectField
                   id="job-client"
-                  label="Client*"
+                  label="Client"
                   options={clientOptions}
                   value={data.client_id}
                   onChange={(event) => selectClient(event.target.value)}
@@ -269,7 +272,7 @@ export default function JobCreate({
                 />
                 <SelectField
                   id="job-project"
-                  label="Project*"
+                  label="Project"
                   options={projectOptions}
                   value={data.project_id}
                   disabled={!data.client_id}
@@ -281,7 +284,7 @@ export default function JobCreate({
               <div className="mt-6">
                 <SelectField
                   id="job-upload"
-                  label="AI Takeoff PDF*"
+                  label="AI Takeoff PDF"
                   className="lg:max-w-md"
                   options={uploadOptions}
                   value={data.upload_id}
@@ -347,7 +350,7 @@ export default function JobCreate({
               without leaving this form.
             */}
             <fieldset>
-              <legend className="mb-1 text-md font-medium text-white">Site Location*</legend>
+              <legend className="mb-1 text-md font-medium text-white">Site Location</legend>
               <JobSitePicker
                 clientId={selectedClient?.id ?? null}
                 clientName={selectedClient?.name ?? ''}
@@ -390,7 +393,6 @@ export default function JobCreate({
               onChange={(next) => update('team_id', next)}
               hint="Tasks on this job are handed to this crew."
               disabled={processing}
-              required
               allowInlineAdd={false}
               {...(errors.team_id ? { error: errors.team_id } : {})}
             />
@@ -405,7 +407,7 @@ export default function JobCreate({
               <TextInput
                 id="job-start"
                 type="date"
-                label="Start Date*"
+                label="Start Date"
                 value={data.start_date}
                 max={data.end_date || undefined}
                 onChange={(event) => update('start_date', event.target.value)}
@@ -415,7 +417,7 @@ export default function JobCreate({
               <TextInput
                 id="job-end"
                 type="date"
-                label="End Date*"
+                label="End Date"
                 value={data.end_date}
                 // The browser refuses the impossible pairing before the server
                 // has to; the server checks it too.

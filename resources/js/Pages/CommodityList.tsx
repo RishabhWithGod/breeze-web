@@ -21,6 +21,7 @@ import {
   Modal,
   MoreMenu,
   Pagination,
+  RequiredFieldsNotice,
   SelectField,
   TextInput,
 } from '@/components/common'
@@ -427,6 +428,10 @@ function ItemModal({
           submit()
         }}
       >
+        <RequiredFieldsNotice
+          fields={['Category', 'Description', 'Unit', 'Material price', 'Labor hours']}
+          className="sm:col-span-2"
+        />
         <div>
           <TextInput
             id="commodity-category"

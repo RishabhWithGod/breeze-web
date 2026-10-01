@@ -2,7 +2,17 @@ import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import { ArrowLeft, HardHat } from 'lucide-react'
-import { Alert, Button, ButtonLink, Card, CardHeader, SelectField, TextArea, TextInput } from '@/components/common'
+import {
+  Alert,
+  Button,
+  ButtonLink,
+  Card,
+  CardHeader,
+  RequiredFieldsNotice,
+  SelectField,
+  TextArea,
+  TextInput,
+} from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
 import { formatUsPhone, toTitleCase } from '@/utils'
@@ -110,6 +120,7 @@ export default function ForemanCreate({ teams, roles, jobId, defaultTeamId, retu
       />
 
       <form onSubmit={submit} noValidate className="space-y-6">
+        <RequiredFieldsNotice fields={['Member Name', 'Role', 'Email', 'Password', 'Confirm Password']} />
         <AnimatePresence initial={false}>
           {hasErrors && (
             <Alert key="form-error" tone="danger" title="Check the form">

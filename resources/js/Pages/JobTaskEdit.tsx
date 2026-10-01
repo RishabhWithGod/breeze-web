@@ -7,6 +7,7 @@ import {
   ButtonLink,
   Card,
   ConfirmDialog,
+  RequiredFieldsNotice,
   SectionHeading,
   SelectField,
   TextInput,
@@ -140,6 +141,8 @@ export default function JobTaskEdit({
         }
       />
 
+      <RequiredFieldsNotice fields={['Task name']} className="mb-6" />
+
       {hasErrors && (
         <Alert tone="danger" title="Check the task" className="mb-6">
           Something below needs attention before this task can be saved.
@@ -185,7 +188,7 @@ export default function JobTaskEdit({
                 {/* Who runs it. One per task — see JobTask::foreman(). */}
                 <CrewMemberPicker
                   id="task-foreman"
-                  label="Journeyman*"
+                  label="Journeyman"
                   slot="worker"
                   people={foremen}
                   value={foremanId}
@@ -201,7 +204,7 @@ export default function JobTaskEdit({
                 {/* Who is over it — from the same crew. */}
                 <CrewMemberPicker
                   id="task-supervisor"
-                  label="Foreman*"
+                  label="Foreman"
                   slot="foreman"
                   people={supervisors}
                   value={supervisorId}

@@ -1,7 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react'
 import { ArrowRight, Pencil, Plus, RotateCw, Search, Send, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Alert, Button, Card, ConfirmDialog, Modal, TextInput } from '@/components/common'
+import { Alert, Button, Card, ConfirmDialog, Modal, RequiredFieldsNotice, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { SharedPageProps } from '@/types'
@@ -188,6 +188,8 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
         ]}
         className="mb-5"
       />
+
+      <RequiredFieldsNotice fields={['Name', 'Email', 'Team assignment']} className="mb-4" />
 
       {flash.success && (
         <Alert key={flash.success} tone="success" className="mb-4">
