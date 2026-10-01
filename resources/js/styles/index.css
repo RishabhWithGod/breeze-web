@@ -66,6 +66,8 @@
   --color-status-warning: #fb9613;
   --color-status-danger: #d10404;
   --color-status-neutral: #8faab2;
+  --color-status-purple: #a78bfa;
+  --color-status-blue: #4d9bff;
   --color-accent-violet: #7c32de;
 
   /* Pale icon-tile fills used by the dashboard list rows. */
@@ -73,16 +75,16 @@
   --color-tile-butter: #f5f5bd;
 
   /* ---- Translucent surfaces (glassmorphism) ---------------------------- */
-  --color-surface-glass: rgb(255 255 255 / 0.035);
-  --color-surface-glass-strong: rgb(255 255 255 / 0.09);
-  --color-surface-glass-hover: rgb(255 255 255 / 0.07);
+  --color-surface-glass: rgb(14 32 84 / 0.28);
+  --color-surface-glass-strong: rgb(30 58 128 / 0.36);
+  --color-surface-glass-hover: rgb(36 68 145 / 0.4);
   --color-surface-input: rgb(255 255 255 / 0.18);
   --color-surface-veil: rgb(255 255 255 / 0.35);
   --color-surface-blue: rgb(29 86 143 / 0.3);
   --color-surface-blue-strong: rgb(29 86 143 / 0.5);
 
-  --color-hairline: rgb(255 255 255 / 0.14);
-  --color-hairline-strong: rgb(255 255 255 / 0.28);
+  --color-hairline: rgb(96 140 255 / 0.2);
+  --color-hairline-strong: rgb(120 165 255 / 0.36);
 
   /* ---- Radii ------------------------------------------------------------ */
   --radius-panel: 0.625rem; /* 10px */
@@ -167,7 +169,7 @@
 
   body {
     /* Fallback tone behind the artwork — also what shows before it decodes. */
-    background-color: #071331;
+    background-color: #081733;
     color: var(--color-mist-300);
     font-family: var(--font-sans);
     font-size: var(--text-base);
@@ -209,9 +211,9 @@
       radial-gradient(45rem 38rem at 5% 5%, rgb(44 114 161 / 0.16), transparent 60%),
       linear-gradient(
         180deg,
-        rgb(4 11 28 / 0.34) 0%,
-        rgb(5 15 38 / 0.2) 40%,
-        rgb(4 11 28 / 0.46) 100%
+        rgb(4 11 28 / 0.46) 0%,
+        rgb(5 15 38 / 0.36) 40%,
+        rgb(4 11 28 / 0.56) 100%
       );
   }
 
@@ -279,8 +281,8 @@
    smears into flat colour and the cards stop reading as glass. */
 @utility glass {
   background-color: var(--color-surface-glass);
-  backdrop-filter: blur(3px) saturate(115%);
-  -webkit-backdrop-filter: blur(3px) saturate(115%);
+  backdrop-filter: blur(2px) saturate(115%);
+  -webkit-backdrop-filter: blur(2px) saturate(115%);
 }
 
 @utility glass-strong {

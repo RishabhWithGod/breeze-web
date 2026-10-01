@@ -1,6 +1,7 @@
 export * from './AppLayout'
 export * from './AuthLayout'
 export * from './BrandWordmark'
+export * from './CompanyMark'
 export * from './Footer'
 export * from './Logo'
 export * from './Navbar'

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\EstimateItem;
 use App\Models\Job;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -124,6 +125,21 @@ class JobDetailResource extends JsonResource
                     : (float) $task->actual_hours,
                 'lineCount' => $task->estimate_items_count ?? 0,
 
+                // Everyone on the task: the foreman running it, the supervisor
+                // over it, and the team members assigned to it.
+                'crew' => collect([
+                    $task->foreman ? ['name' => $task->foreman->name, 'initials' => $task->foreman->initials, 'role' => 'Foreman'] : null,
+                    $task->supervisor ? ['name' => $task->supervisor->name, 'initials' => $task->supervisor->initials, 'role' => 'Supervisor'] : null,
+                ])->filter()->concat(
+                    $task->relationLoaded('assignments')
+                        ? $task->assignments->map(fn ($assignment) => [
+                            'name' => $assignment->member?->name ?? 'Unknown',
+                            'initials' => $assignment->member?->initials,
+                            'role' => str($assignment->role)->replace('-', ' ')->title()->toString(),
+                        ])
+                        : [],
+                )->values()->all(),
+
                 // Field notes/photos — the crew's own Materials screen on the
                 // mobile app (`job_task_comments`/`job_task_attachments`),
                 // read-only here.
@@ -142,6 +158,7 @@ class JobDetailResource extends JsonResource
                         'mime' => $photo->mime_type,
                         'sizeBytes' => $photo->size_bytes,
                         'uploadedBy' => $photo->uploader?->name ?? 'Unknown',
+                        'uploadedByRole' => $photo->uploader?->role,
                         'createdAt' => $photo->created_at->toISOString(),
                         'url' => route('tasks.attachments.show', [
                             'task' => $task->id,
@@ -157,7 +174,7 @@ class JobDetailResource extends JsonResource
                 // pair above.
                 'materialLines' => $task->relationLoaded('estimateItems')
                     ? $task->estimateItems
-                        ->reject(fn ($item) => $item->category === \App\Models\EstimateItem::CATEGORY_LABOR)
+                        ->reject(fn ($item) => $item->category === EstimateItem::CATEGORY_LABOR)
                         ->map(fn ($item) => [
                             'id' => $item->id,
                             'description' => $item->description,
@@ -179,6 +196,7 @@ class JobDetailResource extends JsonResource
                                     'mime' => $photo->mime_type,
                                     'sizeBytes' => $photo->size_bytes,
                                     'uploadedBy' => $photo->uploader?->name ?? 'Unknown',
+                                    'uploadedByRole' => $photo->uploader?->role,
                                     'createdAt' => $photo->created_at->toISOString(),
                                     'url' => route('estimate-items.attachments.show', [
                                         'item' => $item->id,
@@ -203,6 +221,7 @@ class JobDetailResource extends JsonResource
                 'size' => $attachment->size,
                 'mime' => $attachment->mime,
                 'uploadedBy' => $attachment->uploader?->name ?? 'Unknown',
+                'uploadedByRole' => $attachment->uploader?->role,
                 'createdAt' => $attachment->created_at->toISOString(),
                 'downloadUrl' => route('jobs.attachments.download', [
                     'job' => $this->id,

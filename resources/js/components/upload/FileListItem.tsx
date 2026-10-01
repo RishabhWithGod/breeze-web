@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle2, RefreshCw, Trash2, TriangleAlert } from 'lucide-react'
+import { Check, RefreshCw, Trash2, TriangleAlert } from 'lucide-react'
 import { ProgressBar } from '@/components/common'
 import type { UploadFile } from '@/types'
 import { cn, formatFileSize } from '@/utils'
@@ -26,59 +26,61 @@ export function FileListItem({
   const isSuccess = file.status === 'success'
 
   const actionButton =
-    'grid size-8 place-items-center rounded-panel border border-hairline text-white/90 transition-colors ' +
+    'grid size-8 place-items-center rounded-panel border border-transparent text-white/85 transition-colors ' +
     'hover:border-brand/60 hover:bg-white/10 hover:text-brand disabled:cursor-not-allowed disabled:opacity-40'
 
   return (
     <motion.li
       layout
-      initial={{ opacity: 0, x: -12 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 12, height: 0 }}
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, height: 0 }}
       transition={{ duration: 0.22 }}
       className={cn(
-        'flex items-center gap-3 rounded-panel border px-3 py-3',
-        hasError
-          ? 'border-status-danger/50 bg-status-danger/10'
-          : 'border-hairline bg-navy-950/35',
+        'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0',
+        'sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_6rem]',
+        hasError && 'bg-status-danger/10',
       )}
     >
-      <FileTypeIcon extension={file.extension} size="sm" />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-md font-medium text-white" title={file.name}>
+      <div className="flex min-w-0 items-center gap-3">
+        <FileBadge extension={file.extension} />
+        <div className="min-w-0">
+          <p className="truncate text-md font-semibold text-white" title={file.name}>
             {file.name}
           </p>
-          {isSuccess && (
-            <CheckCircle2
-              size={15}
-              aria-label="Upload complete"
-              className="shrink-0 text-status-success"
-            />
-          )}
-          {hasError && (
-            <TriangleAlert
-              size={15}
-              aria-label="File error"
-              className="shrink-0 text-red-300"
-            />
-          )}
+          <p className="text-xs text-white/70">{formatFileSize(file.size)}</p>
         </div>
+      </div>
 
+      <div className="order-3 col-span-2 min-w-0 sm:order-none sm:col-span-1">
         {hasError ? (
-          <p className="mt-0.5 text-sm text-red-300">{file.errorMessage}</p>
+          <div className="flex items-center gap-2.5">
+            <TriangleAlert size={22} aria-label="File error" className="shrink-0 text-red-300" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-red-300">Invalid</p>
+              <p className="truncate text-xs text-red-300/90">{file.errorMessage}</p>
+            </div>
+          </div>
         ) : isUploading ? (
-          <ProgressBar value={file.progress} size="sm" className="mt-2" />
+          <ProgressBar value={file.progress} size="sm" />
         ) : (
-          <p className="mt-0.5 text-sm text-white/75">
-            {formatFileSize(file.size)}
-            {isSuccess && ' · ready for analysis'}
-          </p>
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-status-success text-brand-ink">
+              <Check size={14} strokeWidth={3} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-status-success">
+                {isSuccess ? 'Uploaded' : 'Valid'}
+              </p>
+              <p className="truncate text-xs text-white/70">
+                {file.extension.toUpperCase()} • {formatFileSize(file.size)}
+              </p>
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 items-center justify-end gap-1">
         <input
           ref={inputRef}
           type="file"
@@ -112,5 +114,16 @@ export function FileListItem({
         </button>
       </div>
     </motion.li>
+  )
+}
+
+/** Red "PDF" tile from the reference; other formats keep their own tone. */
+function FileBadge({ extension }: { extension: string }) {
+  if (extension.toUpperCase() !== 'PDF') return <FileTypeIcon extension={extension} size="sm" />
+
+  return (
+    <span className="grid size-10 shrink-0 place-items-center rounded-panel bg-red-500 text-2xs font-bold tracking-wide text-white shadow-panel">
+      PDF
+    </span>
   )
 }

@@ -15,6 +15,9 @@ class Upload extends Model
         'project_id',
         /** Set when this drawing was sent through "Upload Addendum" for an existing estimate, not a fresh takeoff. */
         'addendum_for_estimate_id',
+        /** Why the drawings were revised, and which sheets they touch — asked for on the addendum upload screen. */
+        'addendum_reason',
+        'affected_sheets',
         'name',
         'title',
         'format',

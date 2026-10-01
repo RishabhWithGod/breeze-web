@@ -18,6 +18,7 @@ use App\Services\Scheduling\ScheduleBuilder;
 use App\Services\Scheduling\ScheduleNotifier;
 use App\Services\Scheduling\ScheduleProgress;
 use App\Services\Scheduling\TaskDependencyGraph;
+use App\Support\CompanyRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -102,7 +103,15 @@ class JobTaskController extends Controller
                 'position' => (int) $schedule->tasks()->max('position') + 1,
             ]);
 
-            $this->builder->realignWindow($schedule);
+            // Dates only where none were typed — an explicit `starts_on`/
+            // `ends_on` above stands, this only fills what was left blank —
+            // plus the dependency chain and the schedule's own window.
+            $this->builder->scheduleTasks($schedule);
+
+            // And booked onto the crew calendar for those same days, so the
+            // job does not sit in the unassigned queue waiting for someone
+            // to come back and book it by hand.
+            $this->builder->bookCrew($job, $schedule);
 
             return $task;
         });
@@ -390,6 +399,11 @@ class JobTaskController extends Controller
         // Dependencies cascade, so removing a task cannot leave a dangling edge.
         $task->delete();
 
+        // The last task takes the schedule with it — nothing left to settle.
+        if ($schedule !== null && ! JobSchedule::whereKey($schedule->id)->exists()) {
+            $schedule = null;
+        }
+
         // The job is the sum of its tasks, so one fewer changes the total.
         $job?->refreshEstimatedHours();
 
@@ -406,7 +420,7 @@ class JobTaskController extends Controller
         $this->assertNotLocked($task->job);
 
         $data = $request->validate([
-            'team_member_id' => ['required', 'integer', 'exists:team_members,id'],
+            'team_member_id' => ['required', 'integer', CompanyRule::exists('team_members')],
             'role' => ['required', Rule::in(JobTask::ROLES)],
         ]);
 
@@ -578,7 +592,7 @@ class JobTaskController extends Controller
         abort_unless($attachment->job_task_id === $task->id, 404);
 
         return response()->streamDownload(
-            fn () => print(Storage::disk('local')->get($attachment->path)),
+            fn () => print (Storage::disk('local')->get($attachment->path)),
             $attachment->name,
             ['Content-Type' => $attachment->mime_type ?? 'application/octet-stream'],
             'inline',
@@ -598,7 +612,7 @@ class JobTaskController extends Controller
         abort_unless($attachment->estimate_item_id === $item->id, 404);
 
         return response()->streamDownload(
-            fn () => print(Storage::disk('local')->get($attachment->path)),
+            fn () => print (Storage::disk('local')->get($attachment->path)),
             $attachment->name,
             ['Content-Type' => $attachment->mime_type ?? 'application/octet-stream'],
             'inline',

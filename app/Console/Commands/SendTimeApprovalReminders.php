@@ -35,21 +35,36 @@ class SendTimeApprovalReminders extends Command
             return self::SUCCESS;
         }
 
-        $managers = User::query()
-            ->whereRaw('lower(trim(role)) in (?, ?, ?)', self::MANAGER_ROLES)
-            ->get();
+        $reminded = 0;
 
-        if ($managers->isEmpty()) {
+        // Each company's managers hear only about their own company's time.
+        foreach ($overdue->load('user:id,company_id')->groupBy(fn (TimeEntry $entry) => $entry->user?->company_id ?? 0) as $companyId => $entries) {
+            $managers = User::query()
+                ->whereRaw('lower(trim(role)) in (?, ?, ?)', self::MANAGER_ROLES)
+                ->when(
+                    $companyId !== 0,
+                    fn ($query) => $query->where('company_id', $companyId),
+                    fn ($query) => $query->whereNull('company_id'),
+                )
+                ->get();
+
+            if ($managers->isEmpty()) {
+                continue;
+            }
+
+            foreach ($entries as $entry) {
+                Notification::send($managers, new TimeEntryStatusChanged($entry, TimeEntryStatusChanged::SUBMITTED));
+                $reminded++;
+            }
+        }
+
+        if ($reminded === 0) {
             $this->warn('No managers to notify.');
 
             return self::SUCCESS;
         }
 
-        foreach ($overdue as $entry) {
-            Notification::send($managers, new TimeEntryStatusChanged($entry, TimeEntryStatusChanged::SUBMITTED));
-        }
-
-        $this->info("Reminded {$managers->count()} manager(s) about {$overdue->count()} overdue entry/entries.");
+        $this->info("Sent {$reminded} reminder(s) about overdue entries.");
 
         return self::SUCCESS;
     }

@@ -2,17 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Client;
+use App\Models\CompanyProfile;
 use App\Models\Foreman;
+use App\Models\Job;
+use App\Models\JobAttendance;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
 use App\Models\Team;
 use App\Models\User;
 use App\Policies\JobSchedulePolicy;
+use App\Services\Company\ManagerRegistrar;
+use App\Support\CompanyRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -88,12 +93,101 @@ class TeamController extends Controller
             'activeTechnicians' => $this->technicians(User::STATUS_ACTIVE),
             'rejectedTechnicians' => $this->technicians(User::STATUS_REJECTED),
             'canApproveTechnicians' => $this->canApproveTechnicians($request->user()),
+            // The company's managers, for the Managers tab — the owner's to see and run.
+            'canSeeManagers' => app(ManagerRegistrar::class)->canAdd($request->user()),
+            'managers' => $this->managers($request->user()),
             // Every team, unpaginated — the "assign a team" picker on a
             // pending technician's row needs the whole list regardless of
             // which page of `teams` above happens to be showing.
             'teamOptions' => Team::query()->orderBy('name')->get(['id', 'name']),
             'technicianRoleOptions' => TechnicianController::ROLES,
         ]);
+    }
+
+    /** Renames a crew. */
+    public function update(Request $request, Team $team): RedirectResponse
+    {
+        abort_unless($this->canManage($request->user()), 403);
+
+        $data = $request->validate([
+            'name' => [
+                'required', 'string', 'min:2', 'max:120',
+                CompanyRule::unique('teams', 'name')->ignore($team),
+            ],
+        ], [
+            'name.required' => 'Name this team',
+            'name.unique' => 'A team with that name already exists',
+        ]);
+
+        $team->update(['name' => $data['name']]);
+
+        return back()->with('success', "“{$team->name}” was renamed.");
+    }
+
+    /**
+     * Deletes a crew — only an empty one, so nobody is ever stripped of their team.
+     * Work it was on is kept; it just stops naming a crew.
+     */
+    public function destroy(Request $request, Team $team): RedirectResponse
+    {
+        abort_unless($this->canManage($request->user()), 403);
+
+        if ($team->members()->exists()) {
+            return back()->with('warning', "“{$team->name}” still has people on it. Move or remove them first.");
+        }
+
+        // The work this crew was on is not deleted with it: a job or a client simply
+        // stops naming a crew (the database clears it), and can be given another.
+        $clients = Client::query()->where('team_id', $team->id)->count();
+        $jobs = Job::query()->where('team_id', $team->id)->count();
+
+        $name = $team->name;
+        $team->delete();
+
+        $left = collect([
+            $jobs > 0 ? $jobs.' '.str('job')->plural($jobs) : null,
+            $clients > 0 ? $clients.' '.str('client')->plural($clients) : null,
+        ])->filter()->implode(' and ');
+
+        return back()->with('success', "“{$name}” was deleted.".($left === '' ? '' : " {$left} that had this crew now have none."));
+    }
+
+    /**
+     * Everyone who manages this person's company, the one who set it up first.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function managers(User $viewer): Collection
+    {
+        if (! app(ManagerRegistrar::class)->canAdd($viewer)) {
+            return collect();
+        }
+
+        $ownerId = CompanyProfile::query()->whereKey($viewer->company_id)->value('user_id');
+
+        $viewerIsOwner = $ownerId === $viewer->id;
+
+        return User::query()
+            ->where('company_id', $viewer->company_id)
+            ->whereRaw('lower(trim(role)) in (?, ?, ?)', ['project manager', 'admin', 'owner'])
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn (User $manager) => [
+                'id' => $manager->id,
+                'name' => $manager->name,
+                'email' => $manager->email,
+                'phone' => $manager->phone,
+                'role' => $manager->role,
+                'isOwner' => $manager->id === $ownerId,
+                'isYou' => $manager->id === $viewer->id,
+                // Only the owner sees this list, and only the owner corrects anyone on it.
+                'canEdit' => $viewerIsOwner,
+                // Someone's own sign-in email is changed from Security, not here.
+                'canEditEmail' => $viewerIsOwner && $manager->id !== $viewer->id,
+                'addedAt' => $manager->created_at?->toISOString(),
+            ])
+            ->sortByDesc('isOwner')
+            ->values();
     }
 
     /**
@@ -103,6 +197,12 @@ class TeamController extends Controller
     {
         return User::query()
             ->where('registration_source', User::SOURCE_MOBILE)
+            // Only the people who applied to this manager's company.
+            ->when(
+                request()->user()->company_id !== null,
+                fn ($query) => $query->where('company_id', request()->user()->company_id),
+                fn ($query) => $query->whereNull('company_id'),
+            )
             ->where('status', $status)
             // Once a technician has a team and a role, `TechnicianController`
             // syncs them onto the real `foremen` roster — from then on their
@@ -154,7 +254,7 @@ class TeamController extends Controller
         $data = $request->validate([
             'name' => [
                 'required', 'string', 'min:2', 'max:120',
-                Rule::unique('teams', 'name'),
+                CompanyRule::unique('teams', 'name'),
             ],
         ], [
             'name.required' => 'Name this team',
@@ -200,6 +300,10 @@ class TeamController extends Controller
             'openTasks' => (int) ($open[$member->id]->tasks ?? 0),
             'openJobs' => (int) ($open[$member->id]->jobs ?? 0),
             'openHours' => (float) ($open[$member->id]->hours ?? 0),
+            // The jobs those open tasks are on — what "assigned" means for a member.
+            'jobs' => $this->assignedJobs()[$member->id] ?? [],
+            // Checked in at a site right now, by the mobile app.
+            'onSite' => $member->user_id !== null && in_array($member->user_id, $this->onSiteUserIds(), true),
             'phone' => $member->phone,
             'email' => $member->email,
             'licenceNumber' => $member->licence_number,
@@ -219,7 +323,56 @@ class TeamController extends Controller
     {
         // Foreman, journeyman or apprentice: all are carrying the task — see
         // JobTask::workload().
-        return JobTask::workload($closed);
+        // Only the work on the signed-in manager's own jobs.
+        $owner = request()->user();
+
+        return JobTask::workload($closed, fn ($query) => $query->ownedBy($owner));
+    }
+
+    /** @var array<int, list<string>>|null */
+    private ?array $jobsByMember = null;
+
+    /** @var list<int>|null */
+    private ?array $onSite = null;
+
+    /**
+     * The jobs each member's open work is on — one query for the whole register, not
+     * one per row. A task is on its job for both the foreman running it and the
+     * supervisor over it, and a job named twice is named once.
+     *
+     * @return array<int, list<string>>
+     */
+    private function assignedJobs(): array
+    {
+        return $this->jobsByMember ??= JobTask::query()
+            ->ownedBy(request()->user())
+            ->open()
+            ->whereHas('job')
+            ->with('job:id,name')
+            ->get(['id', 'job_id', 'foreman_id', 'supervisor_id'])
+            ->flatMap(fn (JobTask $task) => collect([$task->foreman_id, $task->supervisor_id])
+                ->filter()
+                ->unique()
+                ->map(fn ($memberId) => [(int) $memberId, $task->job?->name]))
+            ->filter(fn (array $pair) => $pair[1] !== null)
+            ->groupBy(0)
+            ->map(fn ($pairs) => $pairs->pluck(1)->unique()->values()->all())
+            ->all();
+    }
+
+    /**
+     * Whoever has a check-in open today — on a site this moment.
+     *
+     * @return list<int>
+     */
+    private function onSiteUserIds(): array
+    {
+        return $this->onSite ??= JobAttendance::query()
+            ->where('status', JobAttendance::STATUS_CHECKED_IN)
+            ->whereDate('date', today())
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     private function canManage(?User $user): bool

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Scopes\PeopleScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -21,6 +22,12 @@ use Illuminate\Support\Facades\Auth;
  */
 class TimeEntry extends Model
 {
+    protected static function booted(): void
+    {
+        // Time belongs to the company of the person who logged it.
+        static::addGlobalScope(new PeopleScope);
+    }
+
     use SoftDeletes;
 
     public const STATUS_DRAFT = 'draft';

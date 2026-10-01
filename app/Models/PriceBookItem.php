@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PriceBookItem extends Model
 {
     protected $fillable = [
-        'user_id', 'match_key', 'unit', 'description', 'section', 'subsection',
+        'user_id', 'match_key', 'unit', 'description', 'item_code', 'section', 'subsection', 'markup_pct', 'archived_at',
         'unit_material_cost', 'unit_manhours',
         'sample_count', 'min_material_cost', 'max_material_cost',
         'min_manhours', 'max_manhours', 'is_pinned', 'last_seen_at',
@@ -28,7 +28,7 @@ class PriceBookItem extends Model
 
     protected function casts(): array
     {
-        return ['is_pinned' => 'boolean', 'last_seen_at' => 'datetime'];
+        return ['is_pinned' => 'boolean', 'last_seen_at' => 'datetime', 'archived_at' => 'datetime'];
     }
 
     /** The lines this rate was derived from. */
@@ -43,6 +43,12 @@ class PriceBookItem extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** Items still in use: an archived one is kept, but nothing is priced from it. */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereNull('archived_at');
     }
 
     public function scopeSearch(Builder $query, ?string $term): Builder

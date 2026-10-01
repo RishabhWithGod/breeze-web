@@ -56,6 +56,9 @@ class AiJob extends Model
         self::STATUS_CANCELLED,
     ];
 
+    /** Statuses of a job the AI is still working on — nothing has come back yet. */
+    public const IN_FLIGHT = [self::STATUS_QUEUED, self::STATUS_UPLOADING, self::STATUS_PROCESSING];
+
     protected $fillable = [
         'project_id',
         'upload_id',

@@ -5,12 +5,13 @@ namespace App\Services\Estimating;
 use App\Models\ProjectRateImport;
 use App\Models\ProjectRateItem;
 use App\Models\ProjectRateLine;
+use App\Services\Takeoff\SymbolCatalog;
 use Illuminate\Support\Collection;
 
 /**
  * Matches a symbol on a drawing to the rate this project's own uploaded
  * vendor rate list charges for it — nothing shared, nothing pooled with any
- * other project's. {@see \App\Services\Takeoff\SymbolCatalog} is what falls
+ * other project's. {@see SymbolCatalog} is what falls
  * back to the price book when this book has nothing to say; this class knows
  * only its own project.
  *

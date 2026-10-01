@@ -9,6 +9,12 @@ const VARIANTS: Record<Variant, string> = {
   /** Cyan call-to-action — inverts to white on hover, mirroring the reference. */
   primary:
     'bg-brand border-brand text-brand-ink shadow-panel hover:bg-white hover:border-brand hover:text-brand-ink hover:shadow-glow',
+  /** Solid blue call-to-action — the Add Task / Upload buttons of the dark screens. */
+  blue:
+    'bg-linear-to-b from-blue-500 to-blue-600 border-blue-400/70 text-white shadow-panel hover:brightness-110',
+  /** Purple accent — matches the Takeoffs cards on the project workspace. */
+  purple:
+    'bg-purple-500/20 border-purple-400/60 text-purple-200 hover:bg-purple-500 hover:border-purple-400 hover:text-white',
   /** Frosted secondary action. */
   secondary:
     'glass-strong border-hairline-strong text-white hover:bg-white/20 hover:border-brand/60 hover:text-white',

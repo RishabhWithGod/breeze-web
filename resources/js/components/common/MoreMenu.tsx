@@ -21,6 +21,12 @@ export interface MoreMenuProps {
   align?: 'left' | 'right'
   disabled?: boolean
   className?: string
+  /**
+   * `default` is the bordered, glass-panel trigger used everywhere today.
+   * `minimal` drops the border and background for a plain dots-only
+   * trigger, for a row already busy enough without another visible control.
+   */
+  variant?: 'default' | 'minimal'
 }
 
 /**
@@ -40,6 +46,7 @@ export function MoreMenu({
   align = 'right',
   disabled = false,
   className,
+  variant = 'default',
 }: MoreMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   // Computed from the trigger's real screen position, not CSS — the menu is
@@ -107,10 +114,11 @@ export function MoreMenu({
         disabled={disabled}
         onClick={() => (isOpen ? setIsOpen(false) : open())}
         className={cn(
-          'inline-flex w-full items-center justify-center gap-2 rounded-panel border border-hairline-strong',
-          'glass-strong px-3 py-1.5 text-sm font-medium text-white transition-colors',
-          'hover:border-brand/60 hover:bg-white/20',
+          'inline-flex w-full items-center justify-center gap-2 text-sm font-medium text-white transition-colors',
           'disabled:cursor-not-allowed disabled:opacity-50',
+          variant === 'minimal'
+            ? 'rounded-full p-1 text-white/60 hover:bg-white/10 hover:text-white'
+            : 'rounded-panel border border-hairline-strong glass-strong px-3 py-1.5 hover:border-brand/60 hover:bg-white/20',
         )}
       >
         {label ?? <MoreHorizontal size={15} aria-hidden />}

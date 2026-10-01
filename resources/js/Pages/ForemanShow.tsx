@@ -1,30 +1,36 @@
+import { useState } from 'react'
 import { Head, Link, router, usePage } from '@inertiajs/react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
+  BadgeCheck,
   Briefcase,
   CheckCheck,
   ClipboardList,
   Clock,
+  Mail,
+  Phone,
   PencilLine,
   Trash2,
+  UsersRound,
+  type LucideIcon,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import {
   Alert,
   Badge,
   Button,
   ButtonLink,
   Card,
-  CardHeader,
   ConfirmDialog,
   EmptyState,
+  Pagination,
   StatusChip,
+  Table,
 } from '@/components/common'
-import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { appLayout, PageTransition } from '@/components/layout'
 import { ROUTES, TASK_STATUS_LABEL, TASK_STATUS_TONE, routeTo } from '@/constants'
 import { useDisclosure } from '@/hooks'
-import type { SharedPageProps, TaskStatus } from '@/types'
+import type { SharedPageProps, TableColumn, TaskStatus } from '@/types'
 import { formatDate, formatHours } from '@/utils'
 
 interface ForemanDetail {
@@ -45,6 +51,8 @@ interface ForemanDetail {
   readonly openJobs: number
   readonly openHours: number
   readonly completedTasks: number
+  /** Checked in at a site right now. */
+  readonly onSite: boolean
 }
 
 interface ForemanTask {
@@ -67,195 +75,204 @@ export interface ForemanShowProps {
   canManage: boolean
 }
 
+/** Tasks per page — enough to see what they are on without a long scroll. */
+const PAGE_SIZE = 5
+
 /**
- * One foreman, and everything on record about them.
+ * One crew member, and everything on record about them.
  *
  * The register answers "who has room". This answers what you ask once you have
- * picked someone: how to reach them, what lets them sign off work, and exactly
- * which jobs their open tasks are on.
+ * picked someone: how to reach them, where they are, and exactly which jobs their
+ * open tasks are on.
  */
 export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowProps) {
   const { flash } = usePage<SharedPageProps>().props
   const deleteDialog = useDisclosure()
+  const [page, setPage] = useState(1)
   const isBusy = foreman.openTasks > 0
+  const pageCount = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE))
+  // Clamped, so a task finished elsewhere never leaves this on a page that is gone.
+  const currentPage = Math.min(page, pageCount)
+  const visibleTasks = tasks.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   /*
-   * Removing a foreman rewrites who ran their work, so the server refuses it
-   * for anyone who has ever been handed a task. Said here too, rather than only
-   * on the way back from a refused request.
+   * Removing a member rewrites who ran their work, so the server refuses it for
+   * anyone who has ever been handed a task. Said here too, rather than only on the
+   * way back from a refused request.
    */
   const hasHistory = foreman.openTasks > 0 || foreman.completedTasks > 0
+
+  const columns: TableColumn<ForemanTask>[] = [
+    {
+      key: 'task',
+      header: 'Task',
+      render: (task) => (
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="font-medium text-white">{task.title}</span>
+          {/* The list mixes work they run with work they are over, so each row says which. */}
+          {task.heldAs === 'foreman' && (
+            <Badge tone="info" size="sm">
+              Overseeing
+            </Badge>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'job',
+      header: 'Job',
+      render: (task) => (
+        <Link href={routeTo.job(task.jobId)} className="text-white transition-colors hover:text-brand">
+          {task.jobName ?? 'Untitled job'}
+        </Link>
+      ),
+    },
+    {
+      key: 'client',
+      header: 'Client',
+      render: (task) => <span className="text-white/85">{task.client ?? '—'}</span>,
+    },
+    {
+      key: 'hours',
+      header: 'Planned Hours',
+      render: (task) => (
+        <span className="whitespace-nowrap tabular-nums text-white">
+          {task.estimatedHours === null ? '—' : formatHours(task.estimatedHours)}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (task) => (
+        <StatusChip pill tone={TASK_STATUS_TONE[task.status]} label={TASK_STATUS_LABEL[task.status]} />
+      ),
+    },
+    ...(canManage
+      ? [
+          {
+            key: 'actions',
+            header: 'Actions',
+            render: (task: ForemanTask) => (
+              <ButtonLink href={routeTo.taskEdit(task.id)} variant="secondary" size="sm" leftIcon={PencilLine}>
+                Edit task
+              </ButtonLink>
+            ),
+          },
+        ]
+      : []),
+  ]
 
   return (
     <PageTransition>
       <Head title={foreman.name} />
 
-      <PageHeader
-        title={foreman.name}
-        subtitle={`${foreman.roleLabel} · ${foreman.team?.name ?? 'Not on a team'}`}
-        breadcrumbs={[
-          { label: 'Jobs', href: ROUTES.jobs },
-          { label: 'Teams', href: ROUTES.teams },
-          { label: foreman.name },
-        ]}
-        actions={
-          <>
-            {canManage && (
-              <ButtonLink
-                href={routeTo.foremanEdit(foreman.id)}
-                variant="secondary"
-                leftIcon={PencilLine}
-              >
-                Edit
-              </ButtonLink>
-            )}
-            <ButtonLink href={ROUTES.teams} variant="secondary" leftIcon={ArrowLeft}>
-              Back
+      {/* ==================================================== Header ========= */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <Link
+            href={ROUTES.teams}
+            className="inline-flex items-center gap-2 text-md font-medium text-white transition-colors hover:text-brand"
+          >
+            <ArrowLeft size={17} aria-hidden />
+            Teams
+          </Link>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <span
+              aria-hidden
+              className={
+                isBusy
+                  ? 'grid size-14 shrink-0 place-items-center rounded-full bg-brand/15 text-lg font-semibold text-brand ring-1 ring-brand/30'
+                  : 'grid size-14 shrink-0 place-items-center rounded-full bg-white/8 text-lg font-semibold text-white/75 ring-1 ring-hairline'
+              }
+            >
+              {foreman.initials}
+            </span>
+            <h1 className="text-3xl font-bold text-white sm:text-4xl">{foreman.name}</h1>
+            <span className="inline-flex rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-medium text-brand">
+              {foreman.roleLabel}
+            </span>
+            <StatusChip pill tone={isBusy ? 'brand' : 'success'} label={isBusy ? 'On work' : 'Free'} />
+            <StatusChip
+              pill
+              tone={foreman.onSite ? 'info' : 'neutral'}
+              label={foreman.onSite ? 'On site' : 'Available'}
+            />
+          </div>
+
+          <p className="mt-2 text-md text-white/85">
+            {foreman.team?.name ?? 'Not on a team'} ·{' '}
+            {foreman.joinedOn ? `Joined ${formatDate(foreman.joinedOn)}` : 'Joining date not recorded'}
+          </p>
+        </div>
+
+        {canManage && (
+          <div className="flex flex-wrap items-center gap-3">
+            <ButtonLink href={routeTo.foremanEdit(foreman.id)} variant="white" leftIcon={PencilLine}>
+              Edit
             </ButtonLink>
-          </>
-        }
-      />
+            <Button variant="secondary" leftIcon={Trash2} disabled={hasHistory} onClick={deleteDialog.open}>
+              Remove
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* The refusal to delete lands here, and it explains itself. */}
       <AnimatePresence initial={false}>
         {flash.warning && (
-          <Alert key={flash.warning} tone="warning" className="mb-6">
+          <Alert key={flash.warning} tone="warning" className="mt-4">
             {flash.warning}
           </Alert>
         )}
+        {flash.success && (
+          <Alert key={flash.success} tone="success" className="mt-4">
+            {flash.success}
+          </Alert>
+        )}
       </AnimatePresence>
+      {canManage && hasHistory && (
+        <p className="mt-2 text-xs text-white/60">
+          They have been handed work, so removing them would erase who did it.
+        </p>
+      )}
 
-      {/* ==================================================== Identity ======== */}
-      <Card accent="brand" padding="lg">
-        <div className="flex flex-wrap items-center gap-4">
-          <span
-            aria-hidden
-            className={
-              isBusy
-                ? 'grid size-14 shrink-0 place-items-center rounded-full bg-brand/15 text-lg font-semibold text-brand ring-1 ring-brand/30'
-                : 'grid size-14 shrink-0 place-items-center rounded-full bg-white/8 text-lg font-semibold text-white/70 ring-1 ring-hairline'
-            }
-          >
-            {foreman.initials}
-          </span>
+      {/* ================================================= Summary cards ===== */}
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard icon={ClipboardList} label="Open Tasks" value={String(foreman.openTasks)} />
+        <StatCard icon={Briefcase} label="Jobs" value={String(foreman.openJobs)} />
+        <StatCard
+          icon={Clock}
+          label="Planned Hours"
+          value={foreman.openHours > 0 ? formatHours(foreman.openHours) : '—'}
+        />
+        {/* Finished work says nothing about being busy, so it is stated apart. */}
+        <StatCard icon={CheckCheck} label="Completed" value={String(foreman.completedTasks)} />
+      </div>
 
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-xl font-semibold text-white">{foreman.name}</h2>
-            <p className="mt-0.5 text-sm text-white/70">
-              {foreman.joinedOn
-                ? `Joined ${formatDate(foreman.joinedOn)}`
-                : 'Joining date not recorded'}
-            </p>
-          </div>
-
-          <StatusChip
-            hideDot
-            tone={isBusy ? 'brand' : 'neutral'}
-            label={isBusy ? 'On work' : 'Free'}
-          />
-        </div>
-
-        <dl className="mt-6 grid gap-4 border-t border-hairline pt-6 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat icon={ClipboardList} label="Open tasks" value={String(foreman.openTasks)} />
-          <Stat icon={Briefcase} label="Jobs" value={String(foreman.openJobs)} />
-          <Stat
-            icon={Clock}
-            label="Hours"
-            value={foreman.openHours > 0 ? formatHours(foreman.openHours) : '—'}
-          />
-          {/* Finished work says nothing about being busy, so it is stated apart. */}
-          <Stat icon={CheckCheck} label="Completed" value={String(foreman.completedTasks)} />
-        </dl>
-      </Card>
-
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_1.4fr]">
-        {/* ================================================== Details ========= */}
-        <Card accent="success" padding="lg" className="min-w-0 self-start">
-          <CardHeader title="Details" subtitle="What is on record for this member" />
-
-          <dl className="flex flex-col gap-4">
-            {/*
-              Role and crew first: they are what the rest of the record is about.
-              "Not on a team" is a real answer, not a blank.
-            */}
-            <Detail label="Role" value={foreman.roleLabel} />
-            <Detail label="Team" value={foreman.team?.name ?? 'Not on a team'} />
-            {/*
-              Shown formatted, dialled bare: a tel: URI has no room for spaces
-              or brackets, however good they look on the page.
-            */}
-            <Detail
-              label="Phone"
-              value={foreman.phone}
-              href={`tel:${(foreman.phone ?? '').replace(/[^\d+]/g, '')}`}
-            />
-            <Detail
-              label="Email"
-              value={foreman.email}
-              href={`mailto:${foreman.email ?? ''}`}
-            />
-            <Detail label="Licence number" value={foreman.licenceNumber} />
-            <Detail
-              label="Date of joining"
-              value={foreman.joinedOn === null ? null : formatDate(foreman.joinedOn)}
-            />
-          </dl>
-
-          <div className="mt-6 border-t border-hairline pt-6">
-            <p className="text-sm text-white/60">Notes</p>
-            <p
-              className={
-                foreman.notes
-                  ? 'mt-1 text-md whitespace-pre-line text-white/90'
-                  : 'mt-1 text-md text-white/45'
-              }
-            >
-              {foreman.notes ?? 'Nothing recorded.'}
-            </p>
-          </div>
-
-          {canManage && (
-            <div className="mt-6 border-t border-hairline pt-6">
-              <Button
-                variant="danger"
-                leftIcon={Trash2}
-                disabled={hasHistory}
-                onClick={deleteDialog.open}
-              >
-                Remove from register
-              </Button>
-              {hasHistory && (
-                <p className="mt-2 text-sm text-white/60">
-                  They have run work, so removing them would erase who did it.
-                </p>
-              )}
+      <div className="mt-5 grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_19rem]">
+        {/* ================================================ Open work ======== */}
+        <Card padding="sm" className="flex min-w-0 flex-col">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Open Work</h2>
+              <p className="mt-0.5 text-xs text-white/70">
+                {tasks.length === 0
+                  ? 'Nothing outstanding'
+                  : `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'} across ${foreman.openJobs} ${foreman.openJobs === 1 ? 'job' : 'jobs'}`}
+              </p>
             </div>
-          )}
-        </Card>
-
-        {/* ============================================== Open work =========== */}
-        <Card accent="warning" padding="lg" className="min-w-0">
-          <CardHeader
-            title="Open work"
-            subtitle={
-              tasks.length === 0
-                ? 'Nothing outstanding'
-                : `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'} across ${foreman.openJobs} ${foreman.openJobs === 1 ? 'job' : 'jobs'}`
-            }
-            {...(tasks.length > 0
-              ? {
-                  actions: (
-                    <ButtonLink
-                      href={`${ROUTES.tasks}?foreman=${encodeURIComponent(foreman.name)}`}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      In the task list
-                    </ButtonLink>
-                  ),
-                }
-              : {})}
-          />
+            {tasks.length > 0 && (
+              <ButtonLink
+                href={`${ROUTES.tasks}?foreman=${encodeURIComponent(foreman.name)}`}
+                variant="secondary"
+                size="sm"
+              >
+                In the task list
+              </ButtonLink>
+            )}
+          </div>
 
           {tasks.length === 0 ? (
             <EmptyState
@@ -265,65 +282,69 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
               description="They have no open tasks, so they are free to be handed work."
             />
           ) : (
-            <ul className="space-y-3">
-              {tasks.map((task, index) => (
-                <motion.li
-                  key={task.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25, delay: Math.min(index, 6) * 0.04 }}
-                  className="rounded-panel border border-hairline bg-white/4 p-4"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-white">
-                        {task.title}
-                        {/* The list mixes work they run with work they are
-                            over, so each row says which. */}
-                        {task.heldAs === 'foreman' && (
-                          <Badge tone="info" size="sm" className="ml-2">
-                            Overseeing
-                          </Badge>
-                        )}
-                      </p>
-                      <p className="mt-0.5 truncate text-sm text-white/70">
-                        <Link
-                          href={routeTo.job(task.jobId)}
-                          className="transition-colors hover:text-brand"
-                        >
-                          {task.jobName ?? 'Untitled job'}
-                        </Link>
-                        {task.client && ` · ${task.client}`}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="whitespace-nowrap text-md font-semibold tabular-nums text-white">
-                        {task.estimatedHours === null ? '—' : formatHours(task.estimatedHours)}
-                      </span>
-                      <StatusChip
-                        hideDot
-                        tone={TASK_STATUS_TONE[task.status]}
-                        label={TASK_STATUS_LABEL[task.status]}
-                      />
-                    </div>
-                  </div>
-
-                  {canManage && (
-                    <div className="mt-3 border-t border-hairline pt-3">
-                      <ButtonLink
-                        href={routeTo.taskEdit(task.id)}
-                        variant="ghost"
-                        size="sm"
-                      >
-                        Edit task
-                      </ButtonLink>
-                    </div>
-                  )}
-                </motion.li>
-              ))}
-            </ul>
+            <div className="mt-3 overflow-x-auto">
+              <Table
+                dense
+                variant="lined"
+                headerVariant="plain"
+                className="min-w-2xl text-sm [&_th]:px-3 [&_th]:text-sm [&_td]:px-3 [&_td]:text-sm"
+                columns={columns}
+                rows={visibleTasks}
+                getRowId={(task) => task.id}
+                caption={`Open work for ${foreman.name}`}
+              />
+            </div>
           )}
+
+          {tasks.length > PAGE_SIZE && (
+            <Pagination
+              withLabels
+              className="mt-auto pt-4"
+              page={currentPage}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              summary={`Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${(currentPage - 1) * PAGE_SIZE + visibleTasks.length} of ${tasks.length} tasks`}
+            />
+          )}
+        </Card>
+
+        {/* ================================================== Details ========= */}
+        <Card padding="md" className="min-w-0">
+          <h2 className="text-lg font-semibold text-white">Details</h2>
+          <p className="mt-0.5 text-xs text-white/70">What is on record for this member</p>
+
+          <dl className="mt-4 space-y-4">
+            <Detail icon={BadgeCheck} label="Role" value={foreman.roleLabel} />
+            {/* "Not on a team" is a real answer, not a blank. */}
+            <Detail icon={UsersRound} label="Team" value={foreman.team?.name ?? 'Not on a team'} />
+            {/* Shown formatted, dialled bare: a tel: URI has no room for spaces or brackets. */}
+            <Detail
+              icon={Phone}
+              label="Phone"
+              value={foreman.phone}
+              href={`tel:${(foreman.phone ?? '').replace(/[^\d+]/g, '')}`}
+            />
+            <Detail icon={Mail} label="Email" value={foreman.email} href={`mailto:${foreman.email ?? ''}`} />
+            <Detail icon={BadgeCheck} label="Licence number" value={foreman.licenceNumber} />
+            <Detail
+              icon={Clock}
+              label="Date of joining"
+              value={foreman.joinedOn === null ? null : formatDate(foreman.joinedOn)}
+            />
+          </dl>
+
+          <div className="mt-5 border-t border-hairline pt-4">
+            <p className="text-sm text-white/70">Notes</p>
+            <p
+              className={
+                foreman.notes
+                  ? 'mt-1 text-md whitespace-pre-line text-white/90'
+                  : 'mt-1 text-md text-white/50'
+              }
+            >
+              {foreman.notes ?? 'Nothing recorded.'}
+            </p>
+          </div>
         </Card>
       </div>
 
@@ -345,46 +366,48 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
 }
 
 interface DetailProps {
+  icon: LucideIcon
   label: string
   value: string | null
   /** Makes the value actionable when there is one — a number to call, say. */
   href?: string
 }
 
-function Detail({ label, value, href }: DetailProps) {
+function Detail({ icon: Icon, label, value, href }: DetailProps) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-3">
-      <dt className="text-sm text-white/60">{label}</dt>
-      <dd className="min-w-0 text-md">
-        {value === null ? (
-          <span className="text-white/45">Not recorded</span>
-        ) : href ? (
-          <a href={href} className="truncate text-white transition-colors hover:text-brand">
-            {value}
-          </a>
-        ) : (
-          <span className="truncate text-white">{value}</span>
-        )}
-      </dd>
+    <div className="flex items-start gap-3">
+      <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+        <Icon size={16} aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <dt className="text-xs text-white/70">{label}</dt>
+        <dd className="text-md">
+          {value === null ? (
+            <span className="text-white/50">Not recorded</span>
+          ) : href ? (
+            <a href={href} className="break-words text-white transition-colors hover:text-brand">
+              {value}
+            </a>
+          ) : (
+            <span className="break-words text-white">{value}</span>
+          )}
+        </dd>
+      </div>
     </div>
   )
 }
 
-interface StatProps {
-  icon: LucideIcon
-  label: string
-  value: string
-}
-
-function Stat({ icon: Icon, label, value }: StatProps) {
+function StatCard({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <div className="min-w-0">
-      <dt className="flex items-center gap-1.5 text-2xs tracking-wide text-white/60 uppercase">
-        <Icon size={13} aria-hidden className="shrink-0" />
-        {label}
-      </dt>
-      <dd className="mt-1 truncate text-xl font-semibold tabular-nums text-white">{value}</dd>
-    </div>
+    <Card padding="md" className="flex items-center gap-4">
+      <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+        <Icon size={22} aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-white/75">{label}</p>
+        <p className="text-xl leading-tight font-bold tabular-nums text-white">{value}</p>
+      </div>
+    </Card>
   )
 }
 

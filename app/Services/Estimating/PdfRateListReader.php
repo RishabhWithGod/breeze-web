@@ -34,8 +34,12 @@ class PdfRateListReader
         return $this->workbook->fromGrids($rows, $rows);
     }
 
-    /** @return array<int, array<int, mixed>> */
-    private function rows(SplFileInfo $file): array
+    /**
+     * The page text as rows of cells, split where the page left a gap.
+     *
+     * @return array<int, array<int, mixed>>
+     */
+    public function rows(SplFileInfo $file): array
     {
         $text = (new Parser)->parseFile($file->getPathname())->getText();
 

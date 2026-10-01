@@ -26,6 +26,12 @@ class EstimateInvoiceSync
         EstimateItem::CATEGORY_LABOR => InvoiceItem::CATEGORY_LABOR,
     ];
 
+    /** The invoice line category an estimate line of this category becomes. */
+    public function categoryFor(?string $estimateCategory): ?string
+    {
+        return self::CATEGORY_MAP[$estimateCategory] ?? null;
+    }
+
     public function sync(Invoice $invoice): void
     {
         if ($invoice->status !== Invoice::STATUS_DRAFT || $invoice->estimate_id === null) {
@@ -48,6 +54,7 @@ class EstimateInvoiceSync
             $invoice->items()->create([
                 'description' => $item->description,
                 'source_category' => self::CATEGORY_MAP[$item->category] ?? null,
+                'source' => InvoiceItem::SOURCE_ESTIMATE,
                 'quantity' => $item->quantity,
                 'unit_price' => $item->unit_cost,
                 'total' => $item->total,

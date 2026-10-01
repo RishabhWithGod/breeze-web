@@ -2,9 +2,11 @@
 
 namespace App\Services\Estimating;
 
+use App\Models\PriceBookLine;
 use App\Models\ProjectRateImport;
 use App\Models\ProjectRateItem;
 use App\Models\ProjectRateLine;
+use App\Services\Company\CommodityListReader;
 use Illuminate\Support\Facades\DB;
 use SplFileInfo;
 use Throwable;
@@ -22,14 +24,53 @@ use Throwable;
  */
 class ProjectRateBookImporter
 {
-    public function __construct(private readonly RateListReader $reader) {}
+    public function __construct(
+        private readonly RateListReader $reader,
+        private readonly CommodityListReader $commodities,
+    ) {}
 
     /**
      * @return array{lines: list<array<string, mixed>>, recap: array<string, mixed>}
      */
     public function parse(SplFileInfo $file, string $fileName): array
     {
-        return $this->reader->parse($file, $fileName);
+        try {
+            $parsed = $this->reader->parse($file, $fileName);
+        } catch (Throwable) {
+            $parsed = ['lines' => [], 'recap' => []];
+        }
+
+        if ($parsed['lines'] !== []) {
+            return $parsed;
+        }
+
+        // Not an estimator's workbook: a plain price list, in whatever form it came. Its items are
+        // read by their column headings, so a list with no quantities is priced from just the same.
+        $lines = array_map(fn (array $item, int $index) => [
+            'section' => $item['category'],
+            'description' => $item['description'],
+            'unit' => $item['unit'],
+            'unit_material_cost' => $item['material_price'],
+            'unit_manhours' => $item['labor_hours'],
+            'source_row' => $index + 1,
+            'match_key' => PriceBookLine::keyFor($item['description']),
+        ], $items = $this->commodities->read($file, $fileName), array_keys($items));
+
+        return ['lines' => $this->uniformKeys($lines), 'recap' => ['project_name' => null]];
+    }
+
+    /**
+     * A bulk insert needs every row to carry the same columns.
+     *
+     * @param  list<array<string, mixed>>  $lines
+     * @return list<array<string, mixed>>
+     */
+    private function uniformKeys(array $lines): array
+    {
+        $columns = ['section', 'subsection', 'sr_no', 'dwg_no', 'detail_no', 'description', 'quantity', 'wastage', 'quantity_with_wastage', 'unit',
+            'unit_material_cost', 'material_cost', 'manhour_rate', 'unit_manhours', 'total_manhours', 'manhours_cost', 'total_cost', 'source_row', 'match_key'];
+
+        return array_map(fn (array $line) => array_merge(array_fill_keys($columns, null), $line), $lines);
     }
 
     /**

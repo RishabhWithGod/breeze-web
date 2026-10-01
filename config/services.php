@@ -49,6 +49,17 @@ return [
         'regions' => env('GOOGLE_PLACES_REGIONS', 'us,ca'),
     ],
 
+    /*
+     * Breeze.Ai's own Stripe account — where subscriptions are paid to. Not the
+     * Stripe key a company connects under Settings → Payment, which is for the
+     * company to be paid by its clients. Leave unset outside local development
+     * and subscriptions cannot be started; in local development the connected
+     * Stripe test key stands in, so the flow can be tried without a second account.
+     */
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

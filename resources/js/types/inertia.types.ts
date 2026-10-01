@@ -13,6 +13,8 @@ export interface AuthUser {
 export interface FlashMessages {
   readonly success: string | null
   readonly warning: string | null
+  /** Something this person's role does not allow — shown once, on whichever screen they are on. */
+  readonly denied: string | null
   /** Id of a just-deleted job, so any screen can offer Undo. */
   readonly restoreJobId: number | null
   /** Plaintext 2FA recovery codes, present for exactly one response. */
@@ -50,6 +52,12 @@ export interface SharedPageProps {
   /** False when no Places key is configured — the address field says so. */
   readonly addressLookupEnabled: boolean
   readonly auth: { readonly user: AuthUser | null }
+  /** The company this person works for; null when they have none. */
+  /** Features that are switched on. */
+  readonly features: { readonly estimateBuilder: boolean }
+  /** What this person's role may do; null when their role is not governed by the matrix (everything). */
+  readonly permissions: readonly string[] | null
+  readonly company: { readonly name: string; readonly logoUrl: string | null } | null
   readonly notifications: readonly AppNotification[]
   readonly unreadNotificationCount: number
   readonly activeTimer: ActiveTimer | null

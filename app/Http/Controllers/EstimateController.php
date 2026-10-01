@@ -10,6 +10,7 @@ use App\Models\Upload;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\ProjectDirectory;
 use App\Services\Takeoff\TakeoffLinkOptions;
+use App\Support\Ownership;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -29,6 +30,7 @@ class EstimateController extends Controller
             'search' => ['nullable', 'string', 'max:120'],
             'status' => ['nullable', Rule::in(['all', ...Estimate::STATUSES])],
             'client' => ['nullable', 'string', 'max:120'],
+            'project' => ['nullable', 'string', 'max:120'],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date'],
             'sort' => ['nullable', Rule::in(Estimate::SORTS)],
@@ -36,16 +38,19 @@ class EstimateController extends Controller
 
         $status = $filters['status'] ?? 'all';
         $client = $filters['client'] ?? 'all';
+        $project = $filters['project'] ?? 'all';
         $sort = $filters['sort'] ?? 'date-desc';
 
         $estimates = Estimate::query()
             ->ownedBy($request->user())
+            ->withCount('addenda')
             // An addendum is never its own row here — it belongs to, and is
             // only ever shown from, the original estimate it adds scope to.
             ->where('kind', '!=', Estimate::KIND_ADDENDUM)
             ->search($filters['search'] ?? null)
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when($client !== 'all', fn ($query) => $query->where('client', $client))
+            ->when($project !== 'all', fn ($query) => $query->where('project', $project))
             ->issuedBetween($filters['date_from'] ?? null, $filters['date_to'] ?? null)
             ->sorted($sort)
             ->paginate(config('takeoff.per_page'))
@@ -57,6 +62,7 @@ class EstimateController extends Controller
                 'search' => $filters['search'] ?? '',
                 'status' => $status,
                 'client' => $client,
+                'project' => $project,
                 'date_from' => $filters['date_from'] ?? '',
                 'date_to' => $filters['date_to'] ?? '',
                 'sort' => $sort,
@@ -68,18 +74,32 @@ class EstimateController extends Controller
                 ->distinct()
                 ->orderBy('client')
                 ->pluck('client'),
+            'projects' => Estimate::query()
+                ->ownedBy($request->user())
+                ->where('kind', '!=', Estimate::KIND_ADDENDUM)
+                ->whereNotNull('project')
+                ->distinct()
+                ->orderBy('project')
+                ->pluck('project'),
         ]);
     }
 
     /** Full-page create form. */
     public function create(Request $request): Response
     {
+        // Opened from a project's own screen, so the form fills it in and
+        // Back/Cancel return there rather than to the estimates list.
+        $defaultProjectId = $request->user()->projects()
+            ->whereKey($request->integer('project'))
+            ->value('id');
+
         return Inertia::render('EstimateCreate', [
             'nextNumber' => Estimate::nextNumber($request->user()),
             'clients' => $this->clients->options($request->user()),
             // Their projects, and their drawings — each narrows the next.
             'projects' => app(ProjectDirectory::class)->options($request->user()),
             'uploads' => $this->linkOptions->uploads(),
+            'defaultProjectId' => $defaultProjectId,
         ]);
     }
 
@@ -105,7 +125,7 @@ class EstimateController extends Controller
          * another one's project — and a project with no client record yet falls
          * back to the name it carries, because neither column may be empty.
          */
-        $project = Project::where('user_id', $request->user()->id)->with('clientRecord:id,name')->find($data['project_id']);
+        $project = Project::whereIn('user_id', Ownership::userIds($request->user()))->with('clientRecord:id,name')->find($data['project_id']);
         $data['client_id'] = $project?->client_id;
         $data['client'] = $project?->clientRecord?->name ?? $project?->client ?? 'Unassigned';
         $data['project'] = $project?->name ?? $data['client'];
@@ -118,6 +138,17 @@ class EstimateController extends Controller
 
         if ($aiResult) {
             $aiResult->update(['estimate_id' => $estimate->id]);
+        }
+
+        /*
+         * Raised from the project's own Quick Actions — landing back there
+         * shows it immediately, rather than in the estimates list it did not
+         * come from.
+         */
+        if ($project && $request->boolean('return_to_project')) {
+            return redirect()
+                ->route('projects.show', $project)
+                ->with('success', "{$estimate->number} was created.");
         }
 
         return redirect()

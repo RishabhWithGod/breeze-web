@@ -1,7 +1,7 @@
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { ArrowLeft, DollarSign, FolderKanban } from 'lucide-react'
+import { ArrowLeft, DollarSign, FolderKanban, Globe, Mail, Phone } from 'lucide-react'
 import {
   AddressListField,
   Alert,
@@ -14,16 +14,21 @@ import {
   TextInput,
   UnfinishedTakeoffNotice,
 } from '@/components/common'
+import { TeamPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { useDisclosure } from '@/hooks'
 import { ROUTES } from '@/constants'
 import type { DraftAddress, ResumableTakeoff } from '@/types'
-import { cleanAmountInput, emptyAddress, formatAmountInput, toTitleCase } from '@/utils'
+import { cleanAmountInput, emptyAddress, formatAmountInput, formatUsPhone, toTitleCase } from '@/utils'
 
 interface ClientDraft {
   name: string
+  website: string
+  contact_email: string
+  contact_phone: string
   notes: string
   labor_rate: string
+  team_id: string
   addresses: DraftAddress[]
 }
 
@@ -36,6 +41,8 @@ export interface ClientCreateProps {
   unfinishedTakeoff: ResumableTakeoff | null
   /** What the labor rate field starts at — the configured default. */
   defaultLaborRate: number
+  /** The crew register, for the "which team works this client's sites" picker. */
+  teams: readonly { readonly id: number; readonly name: string }[]
 }
 
 /**
@@ -45,14 +52,18 @@ export interface ClientCreateProps {
  * itself is a project under them, and a drawing is uploaded against one of
  * those, so neither belongs on this screen.
  */
-export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate }: ClientCreateProps) {
+export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, teams }: ClientCreateProps) {
   const confirmNew = useDisclosure()
 
   const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
     useForm<ClientDraft>({
       name: '',
+      website: '',
+      contact_email: '',
+      contact_phone: '',
       notes: '',
       labor_rate: String(defaultLaborRate),
+      team_id: '',
       addresses: [emptyAddress()],
     })
 
@@ -152,21 +163,71 @@ export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate }: Cl
               {...(errors.name ? { error: errors.name } : {})}
             />
 
-            <TextInput
-              id="client-labor-rate"
-              type="text"
-              inputMode="decimal"
-              leftIcon={DollarSign}
-              label="Labor Rate ($/hr)"
-              placeholder="e.g. 50"
-              hint="What an hour of this client's labor is billed at. Every estimate on their projects prices labor at this rate."
-              value={formatAmountInput(data.labor_rate)}
-              onChange={(event) => update('labor_rate', cleanAmountInput(event.target.value))}
-              {...(errors.labor_rate ? { error: errors.labor_rate } : {})}
+            <div className="grid gap-6 sm:grid-cols-2">
+              <TextInput
+                id="client-contact-email"
+                type="email"
+                leftIcon={Mail}
+                label="Contact Email"
+                placeholder="e.g. dana@example.com"
+                autoComplete="off"
+                value={data.contact_email}
+                onChange={(event) => update('contact_email', event.target.value)}
+                {...(errors.contact_email ? { error: errors.contact_email } : {})}
+              />
+
+              <TextInput
+                id="client-contact-phone"
+                type="tel"
+                inputMode="tel"
+                leftIcon={Phone}
+                label="Contact Phone"
+                placeholder="(415) 555-0134"
+                autoComplete="off"
+                value={data.contact_phone}
+                onChange={(event) => update('contact_phone', formatUsPhone(event.target.value))}
+                {...(errors.contact_phone ? { error: errors.contact_phone } : {})}
+              />
+            </div>
+
+            <div className="grid gap-6 sm:grid-cols-2">
+              <TextInput
+                id="client-labor-rate"
+                type="text"
+                inputMode="decimal"
+                leftIcon={DollarSign}
+                label="Labor Rate ($/hr)"
+                placeholder="e.g. 50"
+                hint="What an hour of this client's labor is billed at. Every estimate on their projects prices labor at this rate."
+                value={formatAmountInput(data.labor_rate)}
+                onChange={(event) => update('labor_rate', cleanAmountInput(event.target.value))}
+                {...(errors.labor_rate ? { error: errors.labor_rate } : {})}
+              />
+
+              <TextInput
+                id="client-website"
+                type="text"
+                leftIcon={Globe}
+                label="Website"
+                placeholder="e.g. www.coldbar.com"
+                autoComplete="off"
+                value={data.website}
+                onChange={(event) => update('website', event.target.value)}
+                {...(errors.website ? { error: errors.website } : {})}
+              />
+            </div>
+
+            <TeamPicker
+              teams={teams}
+              value={data.team_id}
+              onChange={(next) => update('team_id', next)}
+              hint="Who normally works this client's sites. Projects raised for them can be staffed from this crew."
+              disabled={processing}
+              {...(errors.team_id ? { error: errors.team_id } : {})}
             />
 
             <div className="border-t border-hairline pt-6">
-              <p className="mb-4 text-md font-medium text-white">Site Location(s)</p>
+              <p className="mb-4 text-md font-medium text-white">Addresses</p>
 
               <AddressListField
                 addresses={data.addresses}

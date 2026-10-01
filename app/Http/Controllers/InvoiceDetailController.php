@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateInvoiceRequest;
 use App\Http\Resources\InvoiceItemResource;
+use App\Models\ClientAddress;
 use App\Models\FeedItem;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
-use App\Models\Job;
 use App\Models\PaymentProcessor;
 use App\Models\PaymentTransaction;
 use App\Models\TimeEntry;
@@ -48,7 +48,8 @@ class InvoiceDetailController extends Controller
     {
         $this->authorize('view', $invoice);
 
-        $invoice->load(['job', 'estimate', 'items', 'creator']);
+        // The project is loaded whole: the cost summary reads its client's labour rate.
+        $invoice->load(['job.project', 'estimate', 'items', 'creator']);
         $abilities = app(InvoicePolicy::class);
 
         $jobCostSummary = null;
@@ -93,12 +94,11 @@ class InvoiceDetailController extends Controller
     {
         $this->authorize('update', $invoice);
 
-        $invoice->load(['job', 'estimate']);
+        $invoice->load(['job.project', 'estimate']);
 
         return Inertia::render('InvoiceEdit', [
             'invoice' => $this->present($invoice),
             'clients' => $this->clients->options($request->user()),
-            'jobs' => Job::query()->ownedBy($request->user())->orderBy('name')->get(['id', 'name', 'client']),
         ]);
     }
 
@@ -106,8 +106,15 @@ class InvoiceDetailController extends Controller
     {
         $this->authorize('update', $invoice);
 
+        $data = $request->validated();
+
+        // The client is only ever chosen once — an invoice that already has one keeps it.
+        if ($invoice->client_id !== null) {
+            unset($data['client_id']);
+        }
+
         // `client` is a snapshot of the picked client's name, never typed.
-        $invoice->update($this->clients->withClientSnapshot($request->validated(), $request->user()));
+        $invoice->update($this->clients->withClientSnapshot($data, $request->user()));
         $invoice->recalculateTotals();
 
         return redirect()
@@ -121,12 +128,14 @@ class InvoiceDetailController extends Controller
 
         $validated = $request->validate([
             'description' => ['required', 'string', 'max:200'],
+            'source_category' => ['nullable', 'in:labor,material,equipment,other'],
             'quantity' => ['required', 'numeric', 'min:0', 'max:1000000'],
             'unit_price' => ['required', 'numeric', 'min:0', 'max:1000000'],
         ]);
 
         $item = $invoice->items()->create([
             ...$validated,
+            'source' => InvoiceItem::SOURCE_MANUAL,
             'total' => round($validated['quantity'] * $validated['unit_price'], 2),
             'position' => (int) $invoice->items()->max('position') + 1,
         ]);
@@ -143,6 +152,7 @@ class InvoiceDetailController extends Controller
 
         $validated = $request->validate([
             'description' => ['required', 'string', 'max:200'],
+            'source_category' => ['nullable', 'in:labor,material,equipment,other'],
             'quantity' => ['required', 'numeric', 'min:0', 'max:1000000'],
             'unit_price' => ['required', 'numeric', 'min:0', 'max:1000000'],
         ]);
@@ -243,6 +253,21 @@ class InvoiceDetailController extends Controller
     }
 
     /** @return array<string, mixed> */
+    private function billingAddress(Invoice $invoice): ?string
+    {
+        if ($invoice->client_id === null) {
+            return null;
+        }
+
+        $addresses = ClientAddress::query()
+            ->where('client_id', $invoice->client_id)
+            ->orderByDesc('is_primary')
+            ->orderBy('id')
+            ->first();
+
+        return $addresses?->display();
+    }
+
     private function present(Invoice $invoice): array
     {
         return [
@@ -251,9 +276,14 @@ class InvoiceDetailController extends Controller
             'client' => $invoice->client,
             'projectId' => $invoice->project_id,
             'jobId' => $invoice->job_id,
+            'clientId' => $invoice->client_id,
             'jobName' => $invoice->job?->name,
+            'projectName' => $invoice->job?->project?->name,
+            // Where the client is billed: their primary site, else the first on file.
+            'billingAddress' => $this->billingAddress($invoice),
             'estimateId' => $invoice->estimate_id,
             'estimateNumber' => $invoice->estimate?->number,
+            'estimateTotal' => $invoice->estimate === null ? null : (float) $invoice->estimate->grand_total,
             'invoiceDate' => $invoice->invoice_date->toDateString(),
             'dueDate' => $invoice->due_date?->toDateString(),
             'subtotal' => (float) $invoice->subtotal,

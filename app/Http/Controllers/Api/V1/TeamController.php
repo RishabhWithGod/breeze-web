@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Rules\UsPhoneNumber;
 use App\Services\BreezeBucks\BreezeBucksLedger;
 use App\Services\TimeTracking\TeamMemberResolver;
+use App\Support\CompanyRule;
 use App\Support\UsPhone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -130,6 +131,7 @@ class TeamController extends Controller
         $done = $this->workload(closed: true)[$member->id] ?? null;
 
         $tasks = JobTask::query()
+            ->inCompanyOf($request->user())
             ->heldBy($member->id)
             ->whereHas('job')
             ->whereNotIn('status', JobTask::CLOSED_STATUSES)
@@ -254,7 +256,7 @@ class TeamController extends Controller
         abort_unless($this->canManage($request->user()), 403);
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'min:2', 'max:120', Rule::unique('teams', 'name')],
+            'name' => ['required', 'string', 'min:2', 'max:120', CompanyRule::unique('teams', 'name')],
         ], [
             'name.required' => 'Name this team',
             'name.unique' => 'A team with that name already exists',
@@ -268,7 +270,10 @@ class TeamController extends Controller
     /** @return Collection<int, object> */
     private function workload(bool $closed): Collection
     {
-        return JobTask::workload($closed);
+        $viewer = request()->user();
+
+        // Only the work on the jobs of the company they belong to.
+        return JobTask::workload($closed, fn ($query) => $query->inCompanyOf($viewer));
     }
 
     private function createMobileAccount(Foreman $member, array $data): void
@@ -280,6 +285,10 @@ class TeamController extends Controller
             'role' => ucfirst($data['role']),
             'phone' => $member->phone,
         ]);
+
+        // Their login belongs to the company that added them.
+        $user->company_id = $member->company_id;
+        $user->save();
 
         $member->user_id = $user->id;
         $member->save();
@@ -295,10 +304,10 @@ class TeamController extends Controller
         return $request->validate([
             'name' => [
                 'required', 'string', 'min:2', 'max:120',
-                Rule::unique('foremen', 'name')->ignore($member),
+                CompanyRule::unique('foremen', 'name')->ignore($member),
             ],
             'role' => ['required', Rule::in(Foreman::ROLES)],
-            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             'phone' => ['nullable', 'string', 'max:40', new UsPhoneNumber],
             'email' => $isCreate
                 ? ['required', 'email', 'max:255', Rule::unique('users', 'email')]

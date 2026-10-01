@@ -55,7 +55,7 @@ class TimerController extends Controller
             'billable' => ['nullable', 'boolean'],
         ]);
 
-        $job = Job::findOrFail($data['job_id']);
+        $job = Job::query()->inCompanyOf($request->user())->findOrFail($data['job_id']);
         abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
         abort_if($job->isLocked(), 409, 'This job is completed and locked.');
         // The crew's own clock is exactly what `prepareCompletion()`

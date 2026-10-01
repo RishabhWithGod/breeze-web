@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { router } from '@inertiajs/react'
-import { Box, Maximize, Minus, Plus, RotateCcw, StretchHorizontal } from 'lucide-react'
-import { Button, ButtonLink, Card, FilterTabs, IconButton, SectionHeading, SelectField } from '@/components/common'
+import { Box, ChevronDown, ChevronLeft, ChevronRight, Maximize, Minus, Plus, RotateCcw, Search } from 'lucide-react'
+import { Button, ButtonLink, Card, FilterTabs, IconButton } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { OccurrenceOrigin, OverlaySymbol, PageDimensions, ReviewStatus } from '@/types'
-import { categoryKey, symbolColor, UNMAPPED_COLOR } from '@/utils'
+import { categoryKey, cn, symbolColor, UNMAPPED_COLOR } from '@/utils'
 import type { SymbolColor } from '@/utils'
 
 import { ManualAddPopover } from './ManualAddPopover'
@@ -129,6 +129,7 @@ export function DrawingOverlay({
   // used for box math, which always needs the real AI-space dimensions).
   const [imageAspect, setImageAspect] = useState<number | null>(null)
   const [retryToken, setRetryToken] = useState(0)
+  const [symbolQuery, setSymbolQuery] = useState('')
 
   const imageRef = useRef<HTMLImageElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
@@ -382,11 +383,6 @@ export function DrawingOverlay({
     setScale(1)
   }
 
-  const fitToWidth = () => {
-    scrollToOrigin()
-    setScale(1)
-  }
-
   const fitToPage = () => {
     const viewport = viewportRef.current
     if (!viewport || !dims || viewportWidth <= 0) return resetZoom()
@@ -534,83 +530,72 @@ export function DrawingOverlay({
   const draftColor = symbolColor('manual')
   const zoomPercent = Math.round(scale * 100)
 
+  /** Approves or rejects every detection of one category, in one request. */
+  const reviewCategory = (name: string, action: 'approve' | 'reject' | 'reset') => {
+    const key = categoryKey(name)
+    const ids = overlaySymbols.filter((symbol) => categoryKey(symbol.name) === key).map((symbol) => symbol.id)
+    if (ids.length === 0) return
+
+    router.post(routeTo.reviewBulk(resultId), { ids, action }, { preserveScroll: true, preserveState: true })
+  }
+
+  const goToPage = (page: number) => {
+    setDraft(null)
+    onSelect(null)
+    setActivePage(Math.min(pageCount, Math.max(1, page)))
+  }
+
+  const pages = Array.from({ length: pageCount }, (_, index) => index + 1)
+
   return (
     // `animated={false}`: Card's default whileInView fade only fires once the
     // element has scrolled into view, but this card sits right at the fold on
     // load — a reviewer would see nothing until they scrolled and back up.
-    <Card accent="brand" padding="md" className="mb-6" animated={false}>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <SectionHeading
-          as="h3"
-          title="Drawing"
-          subtitle="Every detected symbol, boxed where it actually sits on the page. Click a symbol to act on it, drag it to reposition, or click empty space to mark one the AI missed."
-        />
-        {/*
-          The way in to the spatial viewer, switched off for now.
+    <div className="mb-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <Card padding="none" className="min-w-0" animated={false}>
+        {/* Toolbar: page picker, zoom, status filter. */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-3">
+          <label className="relative inline-flex items-center">
+            <span className="sr-only">Drawing page</span>
+            <select
+              id="drawing-overlay-page"
+              aria-label="Drawing page"
+              value={String(activePage)}
+              onChange={(event) => goToPage(Number(event.target.value))}
+              className="appearance-none bg-transparent pr-7 text-md font-semibold text-white focus:outline-none"
+            >
+              {pages.map((page) => (
+                <option key={page} value={page} className="bg-navy-900 text-white">
+                  Page {page}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={16} aria-hidden className="pointer-events-none absolute right-0 text-white/70" />
+          </label>
 
-          Hidden, not removed: the route, the page and every `ThreeD*` component
-          are still there and still tested, and `/reviews/{id}/3d` still opens if
-          you go to it. Flip the flag above to put the button back.
-        */}
-        {SHOW_THREE_D_ENTRY && (
-          <ButtonLink
-            href={routeTo.reviewThreeD(resultId)}
-            variant="secondary"
-            size="sm"
-            leftIcon={Box}
-          >
-            3D View
-          </ButtonLink>
-        )}
-        <SelectField
-          id="drawing-overlay-page"
-          aria-label="Drawing page"
-          className="sm:w-48"
-          value={String(activePage)}
-          onChange={(event) => {
-            setDraft(null)
-            onSelect(null)
-            setActivePage(Number(event.target.value))
-          }}
-          options={Array.from({ length: pageCount }, (_, index) => {
-            const page = index + 1
-            return { value: String(page), label: `Page ${page}` }
-          })}
-        />
-      </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <IconButton variant="secondary" size="sm" icon={Minus} label="Zoom out" onClick={() => stepZoom(-1)} disabled={scale <= MIN_SCALE} />
+            <IconButton variant="secondary" size="sm" icon={Plus} label="Zoom in" onClick={() => stepZoom(1)} disabled={scale >= MAX_SCALE} />
+            <IconButton variant="secondary" size="sm" icon={Maximize} label="Fit to page" onClick={fitToPage} />
+            <IconButton variant="secondary" size="sm" icon={RotateCcw} label="Reset zoom" onClick={resetZoom} />
+            <span className="ml-1 rounded-panel border border-hairline-strong bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+              {zoomPercent}%
+            </span>
+            {/*
+              The way in to the spatial viewer, switched off for now.
 
-      {/* Zoom + filter toolbar — every control has a visible, non-technical label. */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <IconButton
-            variant="secondary"
-            size="sm"
-            icon={Minus}
-            label="Zoom out"
-            onClick={() => stepZoom(-1)}
-            disabled={scale <= MIN_SCALE}
-          />
-          <span className="w-12 text-center text-2xs text-white/80">{zoomPercent}%</span>
-          <IconButton
-            variant="secondary"
-            size="sm"
-            icon={Plus}
-            label="Zoom in"
-            onClick={() => stepZoom(1)}
-            disabled={scale >= MAX_SCALE}
-          />
-          <IconButton variant="secondary" size="sm" icon={RotateCcw} label="Reset zoom" onClick={resetZoom} />
-          <IconButton
-            variant="secondary"
-            size="sm"
-            icon={StretchHorizontal}
-            label="Fit to width"
-            onClick={fitToWidth}
-          />
-          <IconButton variant="secondary" size="sm" icon={Maximize} label="Fit to page" onClick={fitToPage} />
+              Hidden, not removed: the route, the page and every `ThreeD*` component
+              are still there and still tested. Flip the flag above to put it back.
+            */}
+            {SHOW_THREE_D_ENTRY && (
+              <ButtonLink href={routeTo.reviewThreeD(resultId)} variant="secondary" size="sm" leftIcon={Box}>
+                3D View
+              </ButtonLink>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-2">
           <FilterTabs
             options={[
               { label: 'All', value: 'all' as const },
@@ -633,166 +618,233 @@ export function DrawingOverlay({
             </Button>
           )}
         </div>
-      </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_14rem]">
-        <div
-          ref={viewportRef}
-          className="relative grid h-105 w-full place-items-center overflow-auto rounded-panel border border-hairline bg-white/5 select-none sm:h-140"
-          onWheel={handleWheel}
-          onDoubleClick={handleDoubleClick}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-        >
-          <div
-            ref={contentRef}
-            className="relative min-h-0 min-w-0"
-            style={{
-              // Real CSS pixel size, not a `transform: scale()` — this is
-              // what makes the viewport's native scrollbars (and native
-              // wheel scrolling) work at all: a transform never changes an
-              // element's layout size, so `overflow: auto` would never see
-              // anything to scroll. `viewportWidth` is the "fit to width"
-              // baseline; `contentHeight` falls back to the loaded image's
-              // own aspect ratio when the engine's real page dimensions
-              // haven't arrived yet — box math still only ever uses `dims`.
-              width: viewportWidth > 0 ? contentWidth : '100%',
-              height: contentHeight > 0 ? contentHeight : undefined,
-              aspectRatio: contentHeight > 0 ? undefined : (dims ? `${dims.width} / ${dims.height}` : (imageAspect ?? undefined)),
-            }}
-          >
-            <img
-              ref={imageRef}
-              key={`${resultId}-${activePage}-${retryToken}`}
-              /*
-               * The retry token is in the URL, not just the key. Re-requesting
-               * the same address after a failure is answered from the browser's
-               * cache with the same failure, so a Retry that only remounts the
-               * element does nothing at all.
-               */
-              src={
-                retryToken === 0
-                  ? routeTo.reviewPage(resultId, activePage)
-                  : `${routeTo.reviewPage(resultId, activePage)}?retry=${retryToken}`
-              }
-              alt={`Drawing page ${activePage}`}
-              className="absolute inset-0 block size-full object-contain"
-              draggable={false}
-              onLoad={(event) => {
-                const { naturalWidth, naturalHeight } = event.currentTarget
-                if (naturalWidth > 0 && naturalHeight > 0) setImageAspect(naturalWidth / naturalHeight)
-                setImageStatus('loaded')
-              }}
-              onError={() => setImageStatus('error')}
-            />
-
-            {dims &&
-              filteredBoxes.map((box) => (
-                <div key={box.key} data-symbol-box>
-                  <SymbolBox
-                    resultId={resultId}
-                    reviewId={box.reviewId}
-                    name={box.name}
-                    finalCount={box.finalCount}
-                    bbox={box.bbox}
-                    page={activePage}
-                    pageDimensions={dims}
-                    status={box.status}
-                    occurrenceKey={box.occurrenceKey}
-                    occurrenceOrigin={box.occurrenceOrigin}
-                    isSelected={
-                      selected?.reviewId === box.reviewId
-                      && selected?.occurrenceKey === box.occurrenceKey
-                    }
-                    onSelect={onSelect}
-                    onHoverChange={setHoveredCategory}
-                    containerSize={containerSize}
-                    /*
-                     * One map, no fallback. A `?? symbolColor(name)` here was a
-                     * second mapping that could disagree with the legend's —
-                     * the exact bug this map exists to prevent. `colors` is
-                     * built from the drawing's own names, so a miss is not
-                     * possible; if one ever were, an uncoloured box is a
-                     * visible bug rather than a silently wrong colour.
-                     */
-                    color={colors.get(categoryKey(box.name)) ?? UNMAPPED_COLOR}
-                  />
-                </div>
-              ))}
-
-            {draft && draft.page === activePage && (
-              <>
-                <div
-                  className="pointer-events-none absolute rounded-sm border-2 border-dashed"
-                  style={{
-                    left: `${draft.xPct}%`,
-                    top: `${draft.yPct}%`,
-                    width: `${DEFAULT_BOX_FRACTION * 100}%`,
-                    height: `${DEFAULT_BOX_FRACTION * 100}%`,
-                    transform: 'translate(-50%, -50%)',
-                    // On the page, so the paper colour — see `symbolColor`.
-                    borderColor: draftColor.onPaper,
-                    backgroundColor: draftColor.fill,
-                  }}
-                />
-                <ManualAddPopover
-                  anchorStyle={{
-                    left: `${draft.xPct}%`,
-                    top: `${draft.yPct}%`,
-                    transform: 'translate(-50%, calc(-100% - 12px))',
-                  }}
-                  distinctNames={distinctNames}
-                  onCancel={() => setDraft(null)}
-                  onSave={saveDraft}
-                />
-              </>
-            )}
-
-            {imageStatus === 'loading' && (
-              <div className="absolute inset-0 grid place-items-center bg-navy-900/60 text-center text-2xs text-white/75">
-                Loading drawing…
-              </div>
-            )}
-
-            {imageStatus === 'error' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-navy-900/80 text-center text-2xs text-white/85">
-                <p>Unable to load this drawing page.</p>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setImageStatus('loading')
-                    setRetryToken((token) => token + 1)
-                  }}
+        <div className="grid gap-3 p-3 sm:grid-cols-[6.5rem_minmax(0,1fr)]">
+          {/* Page rail. */}
+          <ol className="flex gap-2 overflow-x-auto sm:max-h-150 sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden sidebar-scroll">
+            {pages.map((page) => (
+              <li key={page} className="shrink-0">
+                <button
+                  type="button"
+                  onClick={() => goToPage(page)}
+                  aria-current={page === activePage}
+                  className={cn(
+                    'block w-28 overflow-hidden rounded-panel border p-1.5 text-left transition-colors sm:w-full',
+                    page === activePage
+                      ? 'border-brand bg-brand/10 shadow-glow'
+                      : 'border-hairline bg-white/4 hover:border-brand/50',
+                  )}
                 >
-                  Retry
-                </Button>
-              </div>
-            )}
+                  <span className="grid aspect-4/3 place-items-center overflow-hidden rounded-sm bg-white">
+                    <img
+                      src={routeTo.reviewPage(resultId, page)}
+                      alt=""
+                      loading="lazy"
+                      draggable={false}
+                      className="size-full object-contain"
+                    />
+                  </span>
+                  <span className="mt-1 block px-0.5 text-2xs font-semibold text-white">Page {page}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
 
-            {imageStatus === 'loaded' && !dims && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-navy-900/85 px-3 py-1.5 text-center text-2xs text-white/80">
-                Page dimensions aren't available yet for this page, so symbols can't be positioned here. They'll appear once the takeoff finishes catching up.
-              </div>
-            )}
+          <div
+            ref={viewportRef}
+            className="relative grid h-105 w-full min-w-0 place-items-center overflow-auto rounded-panel border border-hairline bg-white select-none sm:h-150"
+            onWheel={handleWheel}
+            onDoubleClick={handleDoubleClick}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+          >
+            <div
+              ref={contentRef}
+              className="relative min-h-0 min-w-0"
+              style={{
+                // Real CSS pixel size, not a `transform: scale()` — this is
+                // what makes the viewport's native scrollbars (and native
+                // wheel scrolling) work at all: a transform never changes an
+                // element's layout size, so `overflow: auto` would never see
+                // anything to scroll. `viewportWidth` is the "fit to width"
+                // baseline; `contentHeight` falls back to the loaded image's
+                // own aspect ratio when the engine's real page dimensions
+                // haven't arrived yet — box math still only ever uses `dims`.
+                width: viewportWidth > 0 ? contentWidth : '100%',
+                height: contentHeight > 0 ? contentHeight : undefined,
+                aspectRatio: contentHeight > 0 ? undefined : (dims ? `${dims.width} / ${dims.height}` : (imageAspect ?? undefined)),
+              }}
+            >
+              <img
+                ref={imageRef}
+                key={`${resultId}-${activePage}-${retryToken}`}
+                /*
+                 * The retry token is in the URL, not just the key. Re-requesting
+                 * the same address after a failure is answered from the browser's
+                 * cache with the same failure, so a Retry that only remounts the
+                 * element does nothing at all.
+                 */
+                src={
+                  retryToken === 0
+                    ? routeTo.reviewPage(resultId, activePage)
+                    : `${routeTo.reviewPage(resultId, activePage)}?retry=${retryToken}`
+                }
+                alt={`Drawing page ${activePage}`}
+                className="absolute inset-0 block size-full object-contain"
+                draggable={false}
+                onLoad={(event) => {
+                  const { naturalWidth, naturalHeight } = event.currentTarget
+                  if (naturalWidth > 0 && naturalHeight > 0) setImageAspect(naturalWidth / naturalHeight)
+                  setImageStatus('loaded')
+                }}
+                onError={() => setImageStatus('error')}
+              />
+
+              {dims &&
+                filteredBoxes.map((box) => (
+                  <div key={box.key} data-symbol-box>
+                    <SymbolBox
+                      resultId={resultId}
+                      reviewId={box.reviewId}
+                      name={box.name}
+                      finalCount={box.finalCount}
+                      bbox={box.bbox}
+                      page={activePage}
+                      pageDimensions={dims}
+                      status={box.status}
+                      occurrenceKey={box.occurrenceKey}
+                      occurrenceOrigin={box.occurrenceOrigin}
+                      isSelected={
+                        selected?.reviewId === box.reviewId
+                        && selected?.occurrenceKey === box.occurrenceKey
+                      }
+                      onSelect={onSelect}
+                      onHoverChange={setHoveredCategory}
+                      containerSize={containerSize}
+                      /*
+                       * One map, no fallback. A `?? symbolColor(name)` here was a
+                       * second mapping that could disagree with the legend's —
+                       * the exact bug this map exists to prevent. `colors` is
+                       * built from the drawing's own names, so a miss is not
+                       * possible; if one ever were, an uncoloured box is a
+                       * visible bug rather than a silently wrong colour.
+                       */
+                      color={colors.get(categoryKey(box.name)) ?? UNMAPPED_COLOR}
+                    />
+                  </div>
+                ))}
+
+              {draft && draft.page === activePage && (
+                <>
+                  <div
+                    className="pointer-events-none absolute rounded-sm border-2 border-dashed"
+                    style={{
+                      left: `${draft.xPct}%`,
+                      top: `${draft.yPct}%`,
+                      width: `${DEFAULT_BOX_FRACTION * 100}%`,
+                      height: `${DEFAULT_BOX_FRACTION * 100}%`,
+                      transform: 'translate(-50%, -50%)',
+                      // On the page, so the paper colour — see `symbolColor`.
+                      borderColor: draftColor.onPaper,
+                      backgroundColor: draftColor.fill,
+                    }}
+                  />
+                  <ManualAddPopover
+                    anchorStyle={{
+                      left: `${draft.xPct}%`,
+                      top: `${draft.yPct}%`,
+                      transform: 'translate(-50%, calc(-100% - 12px))',
+                    }}
+                    distinctNames={distinctNames}
+                    onCancel={() => setDraft(null)}
+                    onSave={saveDraft}
+                  />
+                </>
+              )}
+
+              {imageStatus === 'loading' && (
+                <div className="absolute inset-0 grid place-items-center bg-navy-900/60 text-center text-2xs text-white/75">
+                  Loading drawing…
+                </div>
+              )}
+
+              {imageStatus === 'error' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-navy-900/80 text-center text-2xs text-white/85">
+                  <p>Unable to load this drawing page.</p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setImageStatus('loading')
+                      setRetryToken((token) => token + 1)
+                    }}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="min-h-0">
-          <p className="mb-2 text-2xs tracking-wide text-white/75 uppercase">
-            Legend ({symbolsOnPage.length})
-          </p>
-          <SymbolLegend
-            symbols={symbolsOnPage}
-            countsByName={countsByName}
-            activeCategory={activeCategory}
-            onSelectCategory={setActiveCategory}
-            hoveredCategory={hoveredCategory}
-            colors={colors}
-          />
+        {/* Pager. */}
+        <div className="flex flex-wrap items-center gap-4 border-t border-hairline px-4 py-3">
+          <div className="inline-flex items-center overflow-hidden rounded-panel border border-hairline-strong bg-white/5">
+            <button
+              type="button"
+              aria-label="Previous page"
+              disabled={activePage <= 1}
+              onClick={() => goToPage(activePage - 1)}
+              className="grid size-10 place-items-center text-white transition-colors hover:bg-white/10 disabled:opacity-40"
+            >
+              <ChevronLeft size={18} aria-hidden />
+            </button>
+            <span className="min-w-20 border-x border-hairline-strong px-3 text-center text-sm font-semibold text-white">
+              {activePage} / {pageCount}
+            </span>
+            <button
+              type="button"
+              aria-label="Next page"
+              disabled={activePage >= pageCount}
+              onClick={() => goToPage(activePage + 1)}
+              className="grid size-10 place-items-center text-white transition-colors hover:bg-white/10 disabled:opacity-40"
+            >
+              <ChevronRight size={18} aria-hidden />
+            </button>
+          </div>
+          <p className="border-l border-hairline pl-4 text-sm text-white/90">Page {activePage}</p>
         </div>
-      </div>
-    </Card>
+      </Card>
+
+      {/* Detected symbols: colour, name, count and a one-click verdict per category. */}
+      <Card padding="none" className="min-w-0" animated={false}>
+        <div className="p-4">
+          <h3 className="text-lg font-semibold text-white">Detected Symbols</h3>
+          <label className="relative mt-3 block">
+            <span className="sr-only">Search symbols</span>
+            <Search size={16} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-white/60" />
+            <input
+              type="search"
+              value={symbolQuery}
+              onChange={(event) => setSymbolQuery(event.target.value)}
+              placeholder="Search symbols…"
+              className="w-full rounded-panel border border-hairline-strong bg-white/8 py-2 pr-3 pl-9 text-sm text-white placeholder:text-white/55 focus:border-brand focus:outline-none"
+            />
+          </label>
+        </div>
+        <SymbolLegend
+          symbols={symbolsOnPage}
+          allSymbols={overlaySymbols}
+          query={symbolQuery}
+          countsByName={countsByName}
+          activeCategory={activeCategory}
+          onSelectCategory={setActiveCategory}
+          hoveredCategory={hoveredCategory}
+          colors={colors}
+          onReview={reviewCategory}
+        />
+      </Card>
+    </div>
   )
 }

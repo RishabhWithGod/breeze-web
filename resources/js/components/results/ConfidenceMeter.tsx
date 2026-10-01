@@ -7,6 +7,8 @@ const BAR_TONES: Record<Tone, string> = {
   warning: 'bg-status-warning',
   danger: 'bg-status-danger',
   info: 'bg-status-info',
+  purple: 'bg-status-purple',
+  blue: 'bg-status-blue',
   neutral: 'bg-white/50',
 }
 
@@ -16,6 +18,8 @@ const TEXT_TONES: Record<Tone, string> = {
   warning: 'text-status-warning',
   danger: 'text-red-300',
   info: 'text-status-info',
+  purple: 'text-status-purple',
+  blue: 'text-status-blue',
   neutral: 'text-white/90',
 }
 

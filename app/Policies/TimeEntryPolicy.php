@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Models\Job;
+use App\Models\JobAttendance;
 use App\Models\TimeEntry;
 use App\Models\User;
 
@@ -35,7 +36,7 @@ class TimeEntryPolicy
     }
 
     /**
-     * Matches {@see viewCrew()} exactly (no job-ownership check) — the Time
+     * Matches {@see viewCrew()} (no job-ownership check, but the same company) — the Time
      * Log Viewer and the day-detail screen already list any crew member's
      * entries under {@see viewCrew()}'s blanket grant, so requiring job
      * ownership here as well only broke opening an entry that was already
@@ -43,7 +44,9 @@ class TimeEntryPolicy
      */
     public function view(User $user, TimeEntry $entry): bool
     {
-        return $entry->user_id === $user->id || $this->viewCrew($user);
+        return $entry->user_id === $user->id
+            // A crew's time is read within the company, never across companies.
+            || ($this->viewCrew($user) && \App\Support\Ownership::worksWith($user, $entry->user_id));
     }
 
     /** Anyone signed in can log time — for themselves, against a job they can see. */
@@ -76,14 +79,42 @@ class TimeEntryPolicy
 
     public function approve(User $user, TimeEntry $entry): bool
     {
-        return $this->holds($user, self::MANAGERS) && $entry->job?->user_id === $user->id
-            && $entry->status === TimeEntry::STATUS_SUBMITTED;
+        return $this->holds($user, self::MANAGERS) && \App\Support\Ownership::owns($user, $entry->job?->user_id)
+            && $this->awaitsDecision($entry);
+    }
+
+    /**
+     * Closing a check-in nobody closed — a manager, for a job of theirs.
+     *
+     * The job is read with its deleted ones included: a check-in on a job that has
+     * since been removed is exactly the kind left open, and the record still says
+     * whose job it was.
+     */
+    public function closeAttendance(User $user, JobAttendance $attendance): bool
+    {
+        return $this->holds($user, self::MANAGERS)
+            && $attendance->isCheckedIn()
+            && \App\Support\Ownership::owns($user, $attendance->job()->withTrashed()->value('user_id'));
     }
 
     public function reject(User $user, TimeEntry $entry): bool
     {
-        return $this->holds($user, self::MANAGERS) && $entry->job?->user_id === $user->id
-            && $entry->status === TimeEntry::STATUS_SUBMITTED;
+        return $this->holds($user, self::MANAGERS) && \App\Support\Ownership::owns($user, $entry->job?->user_id)
+            && $this->awaitsDecision($entry);
+    }
+
+    /**
+     * Ready for a manager: submitted, or a draft whose session is over.
+     *
+     * An employee who has checked in and out has done their part; making them
+     * press Submit as well before a manager can act only leaves finished time
+     * sitting as a draft. A draft with no end is still running or unfinished, so
+     * it is not offered.
+     */
+    private function awaitsDecision(TimeEntry $entry): bool
+    {
+        return $entry->status === TimeEntry::STATUS_SUBMITTED
+            || ($entry->status === TimeEntry::STATUS_DRAFT && $entry->end_time !== null);
     }
 
     /**
@@ -95,13 +126,13 @@ class TimeEntryPolicy
      */
     public function reopen(User $user, TimeEntry $entry): bool
     {
-        return $this->holds($user, self::MANAGERS) && $entry->job?->user_id === $user->id
+        return $this->holds($user, self::MANAGERS) && \App\Support\Ownership::owns($user, $entry->job?->user_id)
             && $entry->status === TimeEntry::STATUS_APPROVED;
     }
 
     public function viewJobCosts(User $user, ?Job $job = null): bool
     {
-        return $this->holds($user, self::MANAGERS) && ($job === null || $job->user_id === $user->id);
+        return $this->holds($user, self::MANAGERS) && ($job === null || \App\Support\Ownership::owns($user, $job->user_id));
     }
 
     public function viewReports(User $user): bool

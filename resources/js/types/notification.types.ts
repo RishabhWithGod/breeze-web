@@ -21,7 +21,7 @@ export interface AppNotification {
   readonly unread: boolean
 }
 
-export type NotificationTab = 'all' | 'unread' | 'read'
+export type NotificationTab = 'all' | 'unread' | 'read' | 'approvals'
 
 export interface NotificationCategoryOption {
   readonly value: string
@@ -31,6 +31,7 @@ export interface NotificationCategoryOption {
 export interface NotificationFilters {
   readonly tab: NotificationTab
   readonly category: string
+  readonly search: string
 }
 
 export type NotificationTabCounts = Record<NotificationTab, number>

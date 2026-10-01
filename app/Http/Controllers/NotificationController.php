@@ -18,7 +18,7 @@ use Inertia\Response;
  */
 class NotificationController extends Controller
 {
-    private const TABS = ['all', 'unread', 'read'];
+    private const TABS = ['all', 'unread', 'read', 'approvals'];
 
     public function index(Request $request): Response
     {
@@ -27,18 +27,22 @@ class NotificationController extends Controller
         $filters = $request->validate([
             'tab' => ['nullable', Rule::in(self::TABS)],
             'category' => ['nullable', 'string', 'max:40'],
+            'search' => ['nullable', 'string', 'max:120'],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $tab = $filters['tab'] ?? 'all';
         $category = $filters['category'] ?? 'all';
+        $search = $filters['search'] ?? '';
 
         $base = fn () => $user->appNotifications()
-            ->ofCategory($category);
+            ->ofCategory($category)
+            ->matching($search);
 
         $tabQuery = match ($tab) {
             'unread' => $base()->unread(),
             'read' => $base()->read(),
+            'approvals' => $base()->approvals(),
             default => $base(),
         };
 
@@ -51,11 +55,14 @@ class NotificationController extends Controller
             'filters' => [
                 'tab' => $tab,
                 'category' => $category,
+                'search' => $search,
             ],
             'tabCounts' => [
                 'all' => $base()->count(),
                 'unread' => $base()->unread()->count(),
                 'read' => $base()->read()->count(),
+                // Unread ones only: an approval already dealt with is no longer waiting.
+                'approvals' => $base()->approvals()->unread()->count(),
             ],
             'categories' => $this->categoriesInUse($user),
         ]);

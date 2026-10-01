@@ -41,10 +41,7 @@ class ElectricianJobAccess
 
     public function canAccess(User $user, Job $job): bool
     {
-        if ($this->isUnrestricted($user)) {
-            return true;
-        }
-
+        // Seeing every job still means every job of their own company.
         return $this->assignedJobsQuery($user)->whereKey($job->id)->exists();
     }
 
@@ -52,7 +49,7 @@ class ElectricianJobAccess
     public function assignedJobsQuery(User $user): Builder
     {
         if ($this->isUnrestricted($user)) {
-            return Job::query();
+            return Job::query()->inCompanyOf($user);
         }
 
         // An apprentice's access is entirely the explicit Foreman→

@@ -34,8 +34,8 @@ class RateListReader
 
     /**
      * @param  string  $fileName  The file's own name — its extension is
-     *     what says which format this is, not whatever the upload was
-     *     temporarily stored under.
+     *                            what says which format this is, not whatever the upload was
+     *                            temporarily stored under.
      * @return array{lines: list<array<string, mixed>>, recap: array<string, mixed>}
      */
     public function parse(SplFileInfo $file, string $fileName): array

@@ -2,16 +2,7 @@ import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import { ArrowLeft, HardHat } from 'lucide-react'
-import {
-  Alert,
-  Button,
-  ButtonLink,
-  Card,
-  CardHeader,
-  SelectField,
-  TextArea,
-  TextInput,
-} from '@/components/common'
+import { Alert, Button, ButtonLink, Card, CardHeader, SelectField, TextArea, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
 import { formatUsPhone, toTitleCase } from '@/utils'
@@ -59,43 +50,36 @@ export interface ForemanCreateProps {
  * Initials are not asked for at all. "Dana Wu" gives "DW", and a field the app
  * can fill in itself is one more thing to type and one more thing to get wrong.
  */
-export default function ForemanCreate({
-  teams,
-  roles,
-  jobId,
-  defaultTeamId,
-  returnUrl,
-}: ForemanCreateProps) {
+export default function ForemanCreate({ teams, roles, jobId, defaultTeamId, returnUrl }: ForemanCreateProps) {
   const backUrl = returnUrl ?? ROUTES.teams
 
-  const { data, setData, post, processing, errors, hasErrors, clearErrors } =
-    useForm<ForemanDraft>({
-      name: '',
-      // Most of the register is journeymen; a foreman is the exception you pick.
-      role: 'journeyman',
-      team_id: defaultTeamId === null ? '' : String(defaultTeamId),
-      phone: '',
-      email: '',
-      licence_number: '',
-      // Whoever is being added is joining today unless the form says
-      // otherwise — a manager backdating a real earlier start is still
-      // free to change it, but "unset" is never the right default for
-      // someone being added right now.
-      started_on: new Date().toISOString().slice(0, 10),
-      notes: '',
-      password: '',
-      password_confirmation: '',
-    })
+  const { data, setData, post, processing, errors, hasErrors, clearErrors } = useForm<ForemanDraft>({
+    name: '',
+    // Most of the register is journeymen; a foreman is the exception you pick.
+    role: 'journeyman',
+    team_id: defaultTeamId === null ? '' : String(defaultTeamId),
+    phone: '',
+    email: '',
+    licence_number: '',
+    // Whoever is being added is joining today unless the form says
+    // otherwise — a manager backdating a real earlier start is still
+    // free to change it, but "unset" is never the right default for
+    // someone being added right now.
+    started_on: new Date().toISOString().slice(0, 10),
+    notes: '',
+    password: '',
+    password_confirmation: '',
+  })
+
+  // A manager joins the company, not a crew: no team, licence or start date to record.
+  const isManager = data.role === 'manager'
 
   /**
    * Inertia keeps server errors until the next request, which would leave
    * "Enter the member's name" sitting under a field the user has just filled
    * in, so each edit clears its own message.
    */
-  const update = <K extends FormDataKeys<ForemanDraft>>(
-    field: K,
-    value: FormDataValues<ForemanDraft, K>,
-  ) => {
+  const update = <K extends FormDataKeys<ForemanDraft>>(field: K, value: FormDataValues<ForemanDraft, K>) => {
     setData(field, value)
     if (errors[field]) clearErrors(field)
   }
@@ -162,44 +146,50 @@ export default function ForemanCreate({
                 {...(errors.role ? { error: errors.role } : {})}
               />
 
-              {/*
+              {!isManager && (
+                <>
+                  {/*
                 Optional, and blank is a real answer: somebody can be hired
                 before their crew is decided, and the register lists them under
                 "Not on a team" rather than inventing one.
               */}
-              <SelectField
-                id="foreman-team"
-                label="Team"
-                options={[
-                  { label: teams.length > 0 ? 'Not on a team' : 'No teams yet', value: '' },
-                  ...teams.map((team) => ({ label: team.name, value: String(team.id) })),
-                ]}
-                value={data.team_id}
-                onChange={(event) => update('team_id', event.target.value)}
-                {...(errors.team_id ? { error: errors.team_id } : {})}
-              />
+                  <SelectField
+                    id="foreman-team"
+                    label="Team"
+                    options={[
+                      { label: teams.length > 0 ? 'Not on a team' : 'No teams yet', value: '' },
+                      ...teams.map((team) => ({ label: team.name, value: String(team.id) })),
+                    ]}
+                    value={data.team_id}
+                    onChange={(event) => update('team_id', event.target.value)}
+                    {...(errors.team_id ? { error: errors.team_id } : {})}
+                  />
+                </>
+              )}
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2">
-              <TextInput
-                id="foreman-started"
-                label="Date of Joining"
-                type="date"
-                value={data.started_on}
-                onChange={(event) => update('started_on', event.target.value)}
-                {...(errors.started_on ? { error: errors.started_on } : {})}
-              />
+            {!isManager && (
+              <div className="grid gap-6 sm:grid-cols-2">
+                <TextInput
+                  id="foreman-started"
+                  label="Date of Joining"
+                  type="date"
+                  value={data.started_on}
+                  onChange={(event) => update('started_on', event.target.value)}
+                  {...(errors.started_on ? { error: errors.started_on } : {})}
+                />
 
-              <TextInput
-                id="foreman-licence"
-                label="Licence Number"
-                placeholder="e.g. EC-4471"
-                autoComplete="off"
-                value={data.licence_number}
-                onChange={(event) => update('licence_number', event.target.value)}
-                {...(errors.licence_number ? { error: errors.licence_number } : {})}
-              />
-            </div>
+                <TextInput
+                  id="foreman-licence"
+                  label="Licence Number"
+                  placeholder="e.g. EC-4471"
+                  autoComplete="off"
+                  value={data.licence_number}
+                  onChange={(event) => update('licence_number', event.target.value)}
+                  {...(errors.licence_number ? { error: errors.licence_number } : {})}
+                />
+              </div>
+            )}
 
             <div className="grid gap-6 sm:grid-cols-2">
               {/*
@@ -207,17 +197,19 @@ export default function ForemanCreate({
                 rather than correcting it after the fact. Whether the number is
                 a real one is still the server's answer — see UsPhoneNumber.
               */}
-              <TextInput
-                id="foreman-phone"
-                label="Phone"
-                type="tel"
-                inputMode="tel"
-                placeholder="(415) 555-0134"
-                autoComplete="off"
-                value={data.phone}
-                onChange={(event) => update('phone', formatUsPhone(event.target.value))}
-                {...(errors.phone ? { error: errors.phone } : {})}
-              />
+              {!isManager && (
+                <TextInput
+                  id="foreman-phone"
+                  label="Phone"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="(415) 555-0134"
+                  autoComplete="off"
+                  value={data.phone}
+                  onChange={(event) => update('phone', formatUsPhone(event.target.value))}
+                  {...(errors.phone ? { error: errors.phone } : {})}
+                />
+              )}
 
               <TextInput
                 id="foreman-email"
@@ -237,9 +229,11 @@ export default function ForemanCreate({
               already approved, no manager review to wait on.
             */}
             <div className="border-t border-hairline pt-6">
-              <p className="mb-1 text-md font-medium text-white">Mobile App Access</p>
+              <p className="mb-1 text-md font-medium text-white">{isManager ? 'Sign-in' : 'Mobile App Access'}</p>
               <p className="mb-4 text-sm text-white/70">
-                This member signs into the mobile app with the email above and the password below.
+                {isManager
+                  ? 'They sign in with the email above and the password below, and see everything this company has.'
+                  : 'This member signs into the mobile app with the email above and the password below.'}
               </p>
 
               <div className="grid gap-6 sm:grid-cols-2">

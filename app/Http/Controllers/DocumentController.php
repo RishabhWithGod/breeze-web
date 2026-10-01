@@ -15,6 +15,7 @@ use App\Notifications\DocumentVersionUploaded;
 use App\Policies\DocumentPolicy;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Documents\DocumentStore;
+use App\Support\Ownership;
 use App\Support\UploadLimits;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -49,7 +50,7 @@ class DocumentController extends Controller
              * anyone could name another manager's project id in the query
              * string and read their filing cabinet.
              */
-            'project' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('user_id', $user->id)],
+            'project' => ['nullable', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', Ownership::userIdList($user))],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
@@ -74,7 +75,7 @@ class DocumentController extends Controller
          * it would 403 on.
          */
         $base = fn () => Document::query()
-            ->whereHas('project', fn ($query) => $query->where('user_id', $user->id))
+            ->whereHas('project', fn ($query) => $query->whereIn('user_id', Ownership::userIds($user)))
             ->visibleTo($user, $canManageAll)
             ->forProject($projectId)
             ->versionStatus('latest');
@@ -130,6 +131,10 @@ class DocumentController extends Controller
             'projectId' => $request->user()->projects()
                 ->whereKey($request->integer('project'))
                 ->value('id'),
+            // Set only by the project's own Add Document action — see
+            // store()'s matching check — so every other way of reaching this
+            // screen keeps landing in the Documents list as it always has.
+            'returnToProject' => $request->boolean('return_to_project'),
             ...$this->uploadFormProps(),
         ]);
     }
@@ -166,6 +171,21 @@ class DocumentController extends Controller
         $document->recordActivity('uploaded', "“{$document->name}” was uploaded");
 
         $this->activity->record($request->user(), FeedItem::DASHBOARD_ACTIVITY, "Document uploaded: {$document->name}", 'file-text', 'lilac');
+
+        /*
+         * Filed from the project's own workspace — its Documents tab, or its
+         * commodity list — and belongs back there, not in the general
+         * Documents list it never came from. `return_to_project` is the
+         * marker: the standalone Upload Document screen never sends it, so
+         * that flow (and the test covering it) is untouched. `tab=documents`
+         * lands straight on the tab the file actually shows up in, rather
+         * than the workspace's own Overview.
+         */
+        if ($document->project_id && ($request->boolean('return_to_project') || $document->document_type === Document::TYPE_COMMODITY_LIST)) {
+            return redirect()
+                ->route('projects.show', ['project' => $document->project_id, 'tab' => 'documents'])
+                ->with('success', "“{$document->name}” was uploaded.");
+        }
 
         // Back to the list it was uploaded from — a takeoff's own, when it
         // was filed under one.

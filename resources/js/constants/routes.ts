@@ -24,6 +24,7 @@ export const ROUTES = {
 
   // Protected
   home: '/home',
+  getStarted: '/get-started',
   /** AI Takeoff module landing screen — the takeoff history. */
   aiTakeoff: '/ai-takeoff',
   /** Address suggestions for the Site / Location field. JSON, not a page. */
@@ -43,6 +44,10 @@ export const ROUTES = {
   projectCreate: '/projects/create',
   /** The company's own rates, imported from its estimating workbooks. */
   priceBook: '/price-book',
+  commodities: '/commodities',
+  rolesPermissions: '/roles-permissions',
+  changeOrders: '/change-orders',
+  changeOrderCreate: '/change-orders/create',
   estimates: '/estimates',
   estimateCreate: '/estimates/create',
   /** Where a project's addenda are managed, and a job raised from a selection of them. */
@@ -107,6 +112,8 @@ export const ROUTES = {
 
   profile: '/profile',
   settings: '/settings',
+  estimateBuilder: '/estimate-builder',
+  companyEdit: '/settings/company/edit',
   security: '/security',
   twoFactorChallenge: '/two-factor-challenge',
   twoFactorChallengeResend: '/two-factor-challenge/resend',
@@ -122,6 +129,10 @@ export const routeTo = {
   clientAddresses: (clientId: number) => `/clients/${clientId}/addresses`,
   clientAddress: (clientId: number, addressId: number) =>
     `/clients/${clientId}/addresses/${addressId}`,
+  /** Adds a person to a client's own book. */
+  clientContacts: (clientId: number) => `/clients/${clientId}/contacts`,
+  clientContact: (clientId: number, contactId: number) =>
+    `/clients/${clientId}/contacts/${contactId}`,
   /** The step after Create Job: laying the job out in tasks. */
   jobTaskSetup: (jobId: number) => `/jobs/${jobId}/tasks/setup`,
   /*
@@ -201,6 +212,29 @@ export const routeTo = {
   /** Create Project, opened with this client already picked. */
   projectCreateForClient: (clientId: number) => `/projects/create?client=${clientId}`,
   foreman: (foremanId: number) => `/foremen/${foremanId}`,
+  team: (teamId: number) => `/teams/${teamId}`,
+  commodityTemplate: '/commodities/template',
+  commodityImport: '/commodities/import',
+  commoditySave: '/commodities/save',
+  commoditySkip: '/commodities/skip',
+  teamSetupInvitations: '/team-setup/invitations',
+  teamSetupInvitationResend: (invitationId: number) => `/team-setup/invitations/${invitationId}/resend`,
+  changeOrder: (id: number) => `/change-orders/${id}`,
+  changeOrderEdit: (id: number) => `/change-orders/${id}/edit`,
+  changeOrderAction: (id: number, action: 'submit' | 'withdraw' | 'approve' | 'reject' | 'attachments') =>
+    `/change-orders/${id}/${action}`,
+  changeOrderFile: (id: number, fileId: number) => `/change-orders/${id}/attachments/${fileId}`,
+  changeOrderForJob: (jobId: number) => `/change-orders/create?job=${jobId}`,
+  commodityUpdate: (itemId: number) => `/commodities/${itemId}`,
+  commodityArchive: (itemId: number) => `/commodities/${itemId}/archive`,
+  teamSetupInvitationCancel: (invitationId: number) => `/team-setup/invitations/${invitationId}`,
+  estimateBuilderShow: (estimateId: number) => `/estimate-builder/${estimateId}`,
+  estimateReview: (estimateId: number) => `/estimates/${estimateId}/review`,
+  estimateApprove: (estimateId: number) => `/estimates/${estimateId}/approve`,
+  estimateReturn: (estimateId: number) => `/estimates/${estimateId}/return`,
+  estimateBuilderImport: (estimateId: number) => `/estimate-builder/${estimateId}/import`,
+  estimateBuilderRequestApproval: (estimateId: number) => `/estimate-builder/${estimateId}/request-approval`,
+  estimateBuilderPriceList: '/estimate-builder/price-list',
   foremanEdit: (foremanId: number) => `/foremen/${foremanId}/edit`,
   technicianApprove: (userId: number) => `/technicians/${userId}/approve`,
   technicianReject: (userId: number) => `/technicians/${userId}/reject`,
@@ -321,8 +355,10 @@ export const routeTo = {
   timeEntriesExport: (format: 'csv' | 'xlsx') => `/time-tracking/entries/export/${format}`,
   jobTimeEntryTasks: (jobId: number) => `/time-tracking/jobs/${jobId}/tasks`,
   attendance: (attendanceId: number) => `/time-tracking/attendance/${attendanceId}`,
+  attendanceCheckOut: (attendanceId: number) => `/time-tracking/attendance/${attendanceId}/check-out`,
   /** One technician's one day — every session behind the day-grouped list's single total. */
   timeEntryDay: (userId: number, date: string) => `/time-tracking/day/${userId}/${date}`,
+  timeEntryDayApprove: (userId: number, date: string) => `/time-tracking/day/${userId}/${date}/approve`,
   timeTrackingReportsExport: (format: 'csv' | 'xlsx') =>
     `/time-tracking/reports/export/${format}`,
 
@@ -373,9 +409,12 @@ export const routeTo = {
   paymentProcessorTest: (processorId: number) => `/settings/payment/processors/${processorId}/test`,
   paymentProcessorDisconnect: (processorId: number) => `/settings/payment/processors/${processorId}`,
   paymentMethodsStore: '/settings/payment/methods',
+  subscriptionChange: '/settings/payment/subscription',
   paymentMethodDefault: (methodId: number) => `/settings/payment/methods/${methodId}/default`,
   paymentMethodDestroy: (methodId: number) => `/settings/payment/methods/${methodId}`,
   billingSettingsUpdate: '/settings/payment/billing',
+  companyManagerUpdate: (managerId: number) => `/settings/payment/managers/${managerId}`,
+  managerEdit: (managerId: number) => `/teams/managers/${managerId}/edit`,
 
   securityTwoFactorChallenge: '/security/2fa/challenge',
   securityTwoFactorConfirm: '/security/2fa/confirm',

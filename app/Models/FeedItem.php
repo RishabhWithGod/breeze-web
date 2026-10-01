@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Ownership;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -26,11 +27,13 @@ class FeedItem extends Model
     }
 
     /**
-     * This manager's own real activity, plus the seeded reference rows every
+     * The company's own real activity, plus the seeded reference rows every
      * dashboard shows (`user_id` null — see the migration that added it).
      */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        return $query->where(fn (Builder $q) => $q->whereNull('user_id')->orWhere('user_id', $user->id));
+        return $query->where(fn (Builder $q) => $q
+            ->whereNull('user_id')
+            ->orWhereIn('user_id', Ownership::userIds($user)));
     }
 }

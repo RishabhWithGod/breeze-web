@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -9,7 +10,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TeamMember extends Model
 {
-    protected $fillable = ['user_id', 'team_id', 'name', 'initials', 'role', 'billable_rate', 'cost_rate'];
+    use BelongsToCompany;
+
+    protected $fillable = ['company_id', 'user_id', 'team_id', 'name', 'initials', 'role', 'billable_rate', 'cost_rate'];
 
     protected function casts(): array
     {

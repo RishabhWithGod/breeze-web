@@ -3,12 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\BillingSetting;
+use App\Models\CompanyProfile;
 use App\Models\PaymentMethod;
 use App\Models\PaymentProcessor;
 use App\Models\PaymentTransaction;
+use App\Models\Subscription;
+use App\Models\SubscriptionCard;
 use App\Models\User;
 use App\Notifications\PaymentProcessorStatusChanged;
 use App\Policies\PaymentSettingsPolicy;
+use App\Services\Billing\PlanPricing;
+use App\Services\Billing\SubscriptionSummary;
 use App\Services\Payments\PaymentMethodService;
 use App\Services\Payments\PaymentProcessorService;
 use Illuminate\Http\RedirectResponse;
@@ -75,6 +80,15 @@ class PaymentSettingsController extends Controller
         $billingSettings = BillingSetting::current();
 
         return Inertia::render('PaymentSettings', [
+            // The company's plan, and how much of it is used.
+            'subscription' => app(SubscriptionSummary::class)->build($request->user()),
+            // What this account pays Breeze.Ai with — from its own Stripe payment.
+            'subscriptionPayment' => $this->subscriptionPayment($request->user()),
+            // Who the company is — what was entered when it was set up.
+            'company' => $this->companyDetails($request->user()),
+            // Only the company's owner may correct its details.
+            'canEditCompany' => $request->user()->company_id !== null
+                && CompanyProfile::query()->whereKey($request->user()->company_id)->value('user_id') === $request->user()->id,
             'processors' => $processors,
             'paymentMethods' => $methods,
             'connectedProcessors' => $processors->filter(fn ($p) => $p['isConnected'])->values(),
@@ -198,6 +212,48 @@ class PaymentSettingsController extends Controller
         return back()->with('warning', "{$label} was removed.");
     }
 
+    /**
+     * Moves the company onto another plan.
+     *
+     * Nothing is charged here — the plan is what the company is on, and this changes
+     * which. It is refused while the company uses more than the new plan holds, so
+     * a downgrade never leaves it over a limit it did not choose.
+     */
+    public function changePlan(Request $request, SubscriptionSummary $summary): RedirectResponse
+    {
+        $this->authorizeManage($request);
+
+        $data = $request->validate([
+            'plan' => ['required', Rule::in(array_keys(config('subscription.plans')))],
+            'billing_cycle' => ['required', Rule::in(Subscription::CYCLES)],
+        ]);
+
+        $name = config("subscription.plans.{$data['plan']}.name");
+
+        $blockers = $summary->blockersFor($data['plan'], $request->user());
+
+        if ($blockers !== []) {
+            return back()->withErrors([
+                'plan' => "You can't move to {$name} yet: ".implode('; ', $blockers).'.',
+            ]);
+        }
+
+        $subscription = Subscription::forUser($request->user());
+        $cycleChanged = $subscription->billing_cycle !== $data['billing_cycle'];
+
+        $subscription->update([
+            'plan' => $data['plan'],
+            'billing_cycle' => $data['billing_cycle'],
+            // A different cycle length starts a fresh period from today.
+            ...($cycleChanged
+                ? ['renews_on' => $data['billing_cycle'] === 'yearly' ? now()->addYear() : now()->addMonth()]
+                : []),
+            'updated_by' => $request->user()->id,
+        ]);
+
+        return back()->with('success', "You're now on the {$name} plan.");
+    }
+
     public function updateBillingSettings(Request $request): RedirectResponse
     {
         $this->authorizeManage($request);
@@ -214,6 +270,67 @@ class PaymentSettingsController extends Controller
         BillingSetting::current()->update([...$data, 'updated_by' => $request->user()->id]);
 
         return back()->with('success', 'Billing settings saved.');
+    }
+
+    /**
+     * The card and plan this account's subscription is paid with, or null when it
+     * has not paid through Payment Setup.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function subscriptionPayment(User $user): ?array
+    {
+        $subscription = Subscription::query()->where('user_id', $user->id)->first();
+        $card = SubscriptionCard::query()->where('user_id', $user->id)->first();
+
+        if (! $subscription || ! $card) {
+            return null;
+        }
+
+        $quote = app(PlanPricing::class)->quote($subscription->plan, $subscription->billing_cycle);
+
+        return [
+            'planName' => config("subscription.plans.{$subscription->plan}.name"),
+            'billingCycle' => $subscription->billing_cycle,
+            'amount' => $quote['total'],
+            'renewsOn' => $subscription->renews_on->toDateString(),
+            'status' => $subscription->status,
+            'viaStripe' => $subscription->stripe_subscription_id !== null,
+            'card' => [
+                'brand' => $card->brand,
+                'lastFour' => $card->last_four,
+                'expiry' => $card->expiry(),
+                'holder' => $card->cardholder_name,
+                'billingAddress' => collect([
+                    $card->address_line1,
+                    $card->address_line2,
+                    collect([$card->city, trim("{$card->state} {$card->postal_code}")])->filter()->implode(', '),
+                    $card->country,
+                ])->filter()->implode(' · '),
+            ],
+        ];
+    }
+
+    /**
+     * The company this account belongs to, as entered at setup, or null when it has
+     * none (an account from before companies existed).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function companyDetails(User $user): ?array
+    {
+        $company = $user->company_id === null ? null : CompanyProfile::query()->find($user->company_id);
+
+        return $company === null ? null : [
+            'name' => $company->name,
+            'businessAddress' => $company->business_address,
+            'primaryContact' => $company->primary_contact,
+            'phone' => $company->phone,
+            'email' => $company->email,
+            'licenseNumber' => $company->license_number,
+            'timezone' => str_replace('_', ' ', $company->timezone),
+            'logoUrl' => $company->logoUrl(),
+        ];
     }
 
     private function authorizeManage(Request $request): void

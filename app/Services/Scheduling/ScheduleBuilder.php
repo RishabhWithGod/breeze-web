@@ -2,6 +2,7 @@
 
 namespace App\Services\Scheduling;
 
+use App\Models\CrewShift;
 use App\Models\Job;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
@@ -291,6 +292,152 @@ class ScheduleBuilder
         }
 
         return JobTask::whereIn('id', $ready)->update(['status' => JobTask::STATUS_READY]);
+    }
+
+    /**
+     * Lays out dates for whichever of the schedule's tasks don't have them yet —
+     * the ones just created via Task Setup or Add Task, most often — one after
+     * another on the schedule's own working calendar, chained finish-to-start in
+     * that same order, so the plan is real the moment the tasks are rather than
+     * after a separate trip to the Schedule screen.
+     *
+     * Only ever writes to undated tasks: one a planner has since moved by hand
+     * already has dates, and this leaves it exactly where it was put. Safe to
+     * call after every task creation, in that order — idempotent the same way
+     * `build()` is.
+     */
+    public function scheduleTasks(JobSchedule $schedule): void
+    {
+        $hoursPerDay = max(1.0, $schedule->hoursPerDay());
+        $cursor = $schedule->nextWorkingDay($schedule->starts_on ?? Carbon::today());
+        $previous = null;
+
+        foreach ($schedule->tasks()->get() as $task) {
+            // Already dated — either laid out by an earlier call, or set by hand
+            // (Add Task takes explicit dates). The chain continues from here.
+            if ($task->starts_on !== null) {
+                $previous = $task;
+                $cursor = $schedule->addWorkingDays($task->ends_on ?? $task->starts_on, 1);
+
+                continue;
+            }
+
+            $hours = max(1.0, (float) ($task->estimated_hours ?? 0));
+            // A milestone is a date, not a span, so it never consumes days.
+            $days = $task->is_milestone ? 0 : max(1, (int) ceil($hours / $hoursPerDay));
+
+            $startsOn = $cursor->copy();
+            $endsOn = $days <= 1 ? $startsOn->copy() : $schedule->addWorkingDays($startsOn, $days - 1);
+
+            $task->forceFill([
+                'starts_on' => $startsOn->toDateString(),
+                'ends_on' => $endsOn->toDateString(),
+                // Baselined at creation, so any later move is measurable as slippage.
+                'baseline_ends_on' => $endsOn->toDateString(),
+            ])->save();
+
+            if ($previous !== null) {
+                JobTaskDependency::firstOrCreate([
+                    'job_task_id' => $task->id,
+                    'depends_on_id' => $previous->id,
+                ], [
+                    'type' => JobTaskDependency::FINISH_TO_START,
+                    'lag_days' => 0,
+                ]);
+            }
+
+            $previous = $task;
+            $cursor = $schedule->addWorkingDays($endsOn, 1);
+        }
+
+        $this->realignWindow($schedule);
+        $this->markReady($schedule);
+    }
+
+    /**
+     * Books the job onto the crew calendar for the days its schedule now covers —
+     * the same shifts `SchedulingController::store()` books by hand, done here so a
+     * job whose tasks are already dated does not still sit in the unassigned queue
+     * waiting for someone to visit the calendar and book it themselves.
+     *
+     * Only when nothing is booked yet. A job already on the calendar has either
+     * been through this once or been booked by hand, and either way this leaves it
+     * alone rather than laying a second, conflicting set of shifts over it.
+     */
+    public function bookCrew(Job $job, JobSchedule $schedule): void
+    {
+        if ($job->crewShifts()->exists()) {
+            return;
+        }
+
+        /*
+         * The tasks' own span, not the schedule's window — a job can carry an
+         * end date far past its actual work (an estimate's best guess, or one
+         * simply left at the job's original due date), and booking every
+         * working day up to it would put a crew on the calendar for weeks
+         * nobody is actually on site.
+         */
+        $bounds = $schedule->tasks()
+            ->reorder()
+            ->selectRaw('min(starts_on) as first_day, max(ends_on) as last_day')
+            ->first();
+
+        if ($bounds?->first_day === null || $bounds->last_day === null) {
+            return;
+        }
+
+        // The same label `SchedulingController::crewLabel()` books a hand-made
+        // shift under — the job's own team, or whoever its tasks are held by.
+        $crew = $job->team?->name ?? (function () use ($job) {
+            $names = array_column($job->assignedForemen(), 'name');
+
+            return $names === [] ? null : implode(', ', $names);
+        })();
+
+        // Nobody named yet — a shift with no crew would be a name invented for
+        // the calendar rather than read off the job's own tasks.
+        if ($crew === null) {
+            return;
+        }
+
+        $hours = max(0.5, min(24, $schedule->hoursPerDay()));
+        $booked = 0;
+        $lastDay = Carbon::parse($bounds->last_day);
+
+        for ($date = Carbon::parse($bounds->first_day); $date->lte($lastDay); $date->addDay()) {
+            if (! $schedule->isWorkingDay($date)) {
+                continue;
+            }
+
+            CrewShift::create([
+                'job_id' => $job->id,
+                'created_by' => $job->user_id,
+                'crew' => $crew,
+                'scheduled_date' => $date->toDateString(),
+                'start_time' => $schedule->work_start_time,
+                'duration_hours' => $hours,
+                'status' => CrewShift::STATUS_SCHEDULED,
+            ]);
+
+            $booked++;
+        }
+
+        if ($booked === 0) {
+            return;
+        }
+
+        // A booked job is a scheduled job — same rule `SchedulingController::store()`
+        // applies, so a job planned through this flow reads the same as one booked
+        // by hand. Work already under way keeps its own status.
+        if (in_array($job->status, ['draft', 'planning'], true)) {
+            $job->changeStatus('scheduled');
+        }
+
+        $job->recordActivity(
+            'scheduled',
+            "Booked {$crew} for {$booked} ".str('day')->plural($booked).', following the schedule.',
+            ['crew' => $crew, 'days' => $booked],
+        );
     }
 
     /**

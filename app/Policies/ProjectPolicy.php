@@ -10,7 +10,7 @@ class ProjectPolicy
 {
     public function view(User $user, Project $project): bool
     {
-        return $project->user_id === $user->id;
+        return \App\Support\Ownership::owns($user, $project->user_id);
     }
 
     public function update(User $user, Project $project): bool

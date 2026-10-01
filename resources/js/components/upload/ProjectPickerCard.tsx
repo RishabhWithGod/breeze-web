@@ -9,6 +9,8 @@ export interface ProjectPickerCardProps {
   onChange: (projectId: number | null) => void
   error?: string
   index?: number
+  /** Renders without its own card, for placing inside a larger one. */
+  bare?: boolean
 }
 
 /**
@@ -26,6 +28,7 @@ export function ProjectPickerCard({
   onChange,
   error,
   index,
+  bare = false,
 }: ProjectPickerCardProps) {
   /*
    * Named with its client, because a project's name only means something
@@ -42,11 +45,10 @@ export function ProjectPickerCard({
     })),
   ]
 
-  return (
-    <Card {...(index !== undefined ? { index } : {})}>
+  const body = (
+    <>
       <CardHeader
-        title="Project"
-        subtitle="Which project's drawing this is"
+        title="Select Project"
         actions={
           <ButtonLink href={ROUTES.projectCreate} variant="secondary" size="sm" leftIcon={Plus}>
             New Project
@@ -61,6 +63,10 @@ export function ProjectPickerCard({
         onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)}
         {...(error ? { error } : {})}
       />
-    </Card>
+    </>
   )
+
+  if (bare) return body
+
+  return <Card {...(index !== undefined ? { index } : {})}>{body}</Card>
 }

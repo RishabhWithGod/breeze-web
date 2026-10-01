@@ -3,7 +3,9 @@
 namespace App\Http\Middleware;
 
 use App\Http\Resources\NotificationResource;
+use App\Models\CompanyProfile;
 use App\Models\User;
+use App\Services\Access\Permissions;
 use App\Services\Places\GooglePlaces;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Services\TimeTracking\TimerService;
@@ -62,6 +64,18 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
 
+            // What this person's role may do (see config/permissions.php) — null when the matrix does not
+            // govern them, which means everything. The menu shows nothing they cannot open.
+            'permissions' => $user ? app(Permissions::class)->for($user) : null,
+
+            // The company this person works for — its name and logo, for the header.
+            'company' => fn () => $this->company($user),
+
+            // Features that are switched on — the menu shows nothing that is off.
+            'features' => [
+                'estimateBuilder' => config('features.estimate_builder') === true,
+            ],
+
             // The bell shows a recent slice; the full, paginated, filterable
             // history lives at the Notification Center (`NotificationController::index`).
             'notifications' => fn () => $user
@@ -80,6 +94,8 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'warning' => $request->session()->get('warning'),
+                // Something the person's role does not allow: said once, wherever they are.
+                'denied' => $request->session()->get('denied'),
                 /**
                  * Id of a just-deleted job, so the destination screen can offer
                  * Undo even when the delete happened somewhere else.
@@ -122,5 +138,18 @@ class HandleInertiaRequests extends Middleware
             'elapsedSeconds' => $service->elapsedSeconds($session),
             'billable' => $session->billable,
         ];
+    }
+
+    /**
+     * The name and logo of the company this person works for; null when they have
+     * none. The logo is null too until one is uploaded — the header shows an icon then.
+     *
+     * @return array{name: string, logoUrl: ?string}|null
+     */
+    private function company(?User $user): ?array
+    {
+        $company = $user?->company_id === null ? null : CompanyProfile::query()->find($user->company_id);
+
+        return $company === null ? null : ['name' => $company->name, 'logoUrl' => $company->logoUrl()];
     }
 }

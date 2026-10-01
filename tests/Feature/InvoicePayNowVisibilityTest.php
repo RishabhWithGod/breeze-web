@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Estimate;
 use App\Models\Invoice;
 use App\Models\PaymentProcessor;
 use App\Models\User;
@@ -126,8 +127,22 @@ class InvoicePayNowVisibilityTest extends TestCase
             'name' => 'Apex Construction',
         ]);
 
+        // An invoice bills an estimate; this one only needs something to name.
+        $estimate = Estimate::create([
+            'user_id' => $owner->id,
+            'client_id' => $client->id,
+            'number' => Estimate::nextNumber($owner),
+            'client' => $client->name,
+            'project' => $client->name,
+            'issued_on' => '2026-08-01',
+            'status' => 'approved',
+            'kind' => Estimate::KIND_STANDALONE,
+            'amount' => 0,
+        ]);
+
         $this->actingAs($owner)->post('/invoices', [
             'client_id' => $client->id,
+            'estimate_id' => $estimate->id,
             'invoice_date' => '2026-08-10',
             'tax_pct' => 0,
         ])->assertSessionHasNoErrors();

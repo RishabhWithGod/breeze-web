@@ -10,20 +10,11 @@ import {
   Timer,
   Wallet,
 } from 'lucide-react'
-import {
-  Badge,
-  ButtonLink,
-  EmptyState,
-  IconBubble,
-  Table,
-} from '@/components/common'
-import {
-  DashboardPanel,
-  IconListRow,
-  StatMedallionCard,
-} from '@/components/dashboard'
+import { Badge, ButtonLink, EmptyState, IconBubble, Table } from '@/components/common'
+import { DashboardPanel, IconListRow, StatMedallionCard } from '@/components/dashboard'
 import { appLayout, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
+import { usePermissions } from '@/hooks'
 import type {
   BillingSnapshot,
   DashboardSummary,
@@ -55,10 +46,10 @@ const REVIEW_ATTENTION_LABEL: Record<ReviewAttentionRow['reviewStatus'], string>
 }
 
 const QUICK_ACTIONS = [
-  { label: 'New Takeoff', icon: Bot, href: ROUTES.upload },
-  { label: 'Create Estimate', icon: ReceiptText, href: ROUTES.estimateCreate },
-  { label: 'Create Job', icon: Briefcase, href: ROUTES.jobCreate },
-  { label: 'View Schedule', icon: CalendarDays, href: ROUTES.schedulingCalendar },
+  { label: 'New Takeoff', icon: Bot, href: ROUTES.upload, permission: 'takeoff.create' },
+  { label: 'Create Estimate', icon: ReceiptText, href: ROUTES.estimateCreate, permission: 'estimates.create' },
+  { label: 'Create Job', icon: Briefcase, href: ROUTES.jobCreate, permission: 'jobs.create' },
+  { label: 'View Schedule', icon: CalendarDays, href: ROUTES.schedulingCalendar, permission: 'schedule.view' },
 ] as const
 
 /**
@@ -75,6 +66,7 @@ export default function Home({
   draftEstimates,
   reviewsNeedingAttention,
 }: HomeProps) {
+  const { can: permitted } = usePermissions()
   const reviewColumns: readonly TableColumn<ReviewAttentionRow>[] = [
     {
       key: 'project',
@@ -82,9 +74,7 @@ export default function Home({
       render: (row) => (
         <div className="min-w-0">
           <p className="truncate font-semibold text-white">{row.projectName}</p>
-          {row.drawingName && (
-            <p className="truncate text-sm text-white/70">{row.drawingName}</p>
-          )}
+          {row.drawingName && <p className="truncate text-sm text-white/70">{row.drawingName}</p>}
         </div>
       ),
     },
@@ -92,9 +82,7 @@ export default function Home({
       key: 'status',
       header: 'Status',
       render: (row) => (
-        <Badge tone={REVIEW_ATTENTION_TONE[row.reviewStatus]}>
-          {REVIEW_ATTENTION_LABEL[row.reviewStatus]}
-        </Badge>
+        <Badge tone={REVIEW_ATTENTION_TONE[row.reviewStatus]}>{REVIEW_ATTENTION_LABEL[row.reviewStatus]}</Badge>
       ),
     },
     {
@@ -173,9 +161,11 @@ export default function Home({
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold text-white sm:text-4xl">Dashboard</h1>
 
-        <ButtonLink href={ROUTES.upload} variant="dark" leftIcon={CirclePlus}>
-          Create New Takeoff
-        </ButtonLink>
+        {permitted('takeoff.create') && (
+          <ButtonLink href={ROUTES.upload} variant="dark" leftIcon={CirclePlus}>
+            Create New Takeoff
+          </ButtonLink>
+        )}
       </div>
 
       {/* ============================================= Summary cards ========= */}
@@ -192,11 +182,20 @@ export default function Home({
         {/* --------------------------------------------- Work queues ------- */}
         <div className="flex flex-col gap-6 xl:col-span-2">
           <DashboardPanel title="Upcoming Schedule" bodyClassName="max-h-96 overflow-y-auto">
-            <ul className="space-y-4">
-              {schedule.map((row, index) => (
-                <IconListRow key={row.id} row={row} index={index} />
-              ))}
-            </ul>
+            {schedule.length === 0 ? (
+              <EmptyState
+                icon={CalendarDays}
+                title="Nothing scheduled"
+                description="Jobs and tasks with an upcoming date will show here."
+                size="sm"
+              />
+            ) : (
+              <ul className="space-y-4">
+                {schedule.map((row, index) => (
+                  <IconListRow key={row.id} row={row} index={index} />
+                ))}
+              </ul>
+            )}
           </DashboardPanel>
 
           <DashboardPanel
@@ -258,14 +257,8 @@ export default function Home({
 
           <DashboardPanel title="Quick Actions">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              {QUICK_ACTIONS.map((action) => (
-                <ButtonLink
-                  key={action.label}
-                  href={action.href}
-                  variant="secondary"
-                  leftIcon={action.icon}
-                  fullWidth
-                >
+              {QUICK_ACTIONS.filter((action) => permitted(action.permission)).map((action) => (
+                <ButtonLink key={action.label} href={action.href} variant="secondary" leftIcon={action.icon} fullWidth>
                   {action.label}
                 </ButtonLink>
               ))}

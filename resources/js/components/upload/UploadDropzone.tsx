@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useDropzone, type Accept, type FileRejection } from 'react-dropzone'
 import { motion } from 'framer-motion'
-import { CloudUpload, FileWarning, ShieldCheck, UploadCloud } from 'lucide-react'
+import { CloudUpload, FileWarning, UploadCloud } from 'lucide-react'
 import { Button } from '@/components/common'
 import {
   DROPZONE_ACCEPT,
@@ -74,7 +74,7 @@ export function UploadDropzone({
     maxFiles,
     multiple: maxFiles > 1,
     disabled,
-    noClick: true,
+    noClick: false,
     noKeyboard: true,
   })
 
@@ -87,7 +87,7 @@ export function UploadDropzone({
       data-testid="upload-dropzone"
       aria-disabled={disabled}
       className={cn(
-        'relative overflow-hidden rounded-dropzone border-2 border-dashed p-8 text-center transition-all duration-300 sm:p-10',
+        'relative overflow-hidden rounded-dropzone border border-dashed p-8 text-center transition-all duration-300 sm:px-10 sm:py-12',
         'focus-within:border-brand',
         disabled && 'cursor-not-allowed opacity-55',
         !disabled && 'cursor-copy',
@@ -97,7 +97,7 @@ export function UploadDropzone({
             ? 'scale-[1.01] border-brand-soft bg-brand/12 shadow-glow'
             : isSuccess
               ? 'border-status-success/70 bg-status-success/6'
-              : 'border-brand bg-white/4 hover:bg-white/8',
+              : 'border-brand/70 bg-brand/4 hover:bg-brand/8',
         className,
       )}
     >
@@ -114,18 +114,19 @@ export function UploadDropzone({
       <motion.div
         animate={isDragActive ? { scale: 1.06 } : { scale: 1 }}
         transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-        className="relative mx-auto mb-4 grid size-20 place-items-center"
+        className="relative mx-auto mb-3 grid size-16 place-items-center"
       >
-        <span
-          className={cn(
-            'absolute inset-0 rounded-full',
-            isRejecting ? 'bg-status-danger/20' : 'bg-brand/15',
-            isDragActive && 'animate-pulse-ring',
-          )}
-          aria-hidden
-        />
+        {(isRejecting || isDragActive) && (
+          <span
+            className={cn(
+              'absolute inset-0 rounded-full',
+              isRejecting ? 'bg-status-danger/20' : 'bg-brand/15 animate-pulse-ring',
+            )}
+            aria-hidden
+          />
+        )}
         <Icon
-          size={44}
+          size={52}
           aria-hidden
           className={cn(
             'relative transition-colors',
@@ -145,36 +146,31 @@ export function UploadDropzone({
             ? 'Resolve the message above to continue'
             : isDragActive
               ? 'Drop to add your drawings'
-              : 'Drag & drop files here'}
+              : `Drag and drop ${supportedFormats.length === 1 ? `${supportedFormats[0]} ` : ''}files here`}
       </p>
 
-      <p className="mt-1 text-md text-white/80">or</p>
+      <p className="mt-1 text-md text-white/85">or click to browse your files</p>
 
       <Button
         type="button"
         size="sm"
         variant="primary"
         disabled={disabled}
-        onClick={open}
-        className="mt-3"
+        onClick={(event) => {
+          event.stopPropagation()
+          open()
+        }}
+        className="mt-5"
       >
         Browse Files
       </Button>
 
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-        {supportedFormats.map((format) => (
-          <span
-            key={format}
-            className="rounded-panel border border-hairline bg-white/8 px-3 py-1 text-xs font-semibold tracking-wider text-white"
-          >
-            {format}
-          </span>
-        ))}
-      </div>
-
-      <p className="mt-4 flex items-center justify-center gap-2 text-sm text-white/80">
-        <ShieldCheck size={15} aria-hidden className="text-brand/80" />
+      <p className="mt-5 text-sm text-white/80">
+        Supported format: {supportedFormats.join(', ')}
+        <span className="mx-2 text-white/40">|</span>
         {maxFiles === 1 ? 'One file at a time' : `Up to ${maxFiles} files`}
+        <span className="mx-2 text-white/40">|</span>
+        Maximum file size: {maxFileSizeMb} MB per file
       </p>
     </div>
   )

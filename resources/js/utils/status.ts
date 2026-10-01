@@ -1,4 +1,12 @@
-import type { EstimateStatus, InvoiceStatus, JobStatus, JobType, TakeoffStatus, Tone } from '@/types'
+import type {
+  EstimateStatus,
+  HistoryReviewStatus,
+  InvoiceStatus,
+  JobStatus,
+  JobType,
+  TakeoffStatus,
+  Tone,
+} from '@/types'
 
 /**
  * Single source of truth for the dot/marker colour of each tone. Shared by
@@ -10,6 +18,8 @@ export const TONE_DOT_CLASS: Record<Tone, string> = {
   warning: 'bg-status-warning',
   danger: 'bg-status-danger',
   info: 'bg-status-info',
+  purple: 'bg-status-purple',
+  blue: 'bg-status-blue',
   neutral: 'bg-status-neutral',
 }
 
@@ -30,14 +40,41 @@ export const TAKEOFF_STATUS_LABEL: Record<TakeoffStatus, string> = {
   failed: 'Failed',
 }
 
+/**
+ * `status` and `review_status` read together, for the history table's own
+ * Review Status column — richer than `TAKEOFF_STATUS_TONE` alone once a
+ * review has actually started.
+ */
+export const HISTORY_STATUS_TONE: Record<HistoryReviewStatus, Tone> = {
+  draft: 'neutral',
+  processing: 'brand',
+  'ready-for-review': 'warning',
+  completed: 'success',
+  converted: 'info',
+  failed: 'danger',
+}
+
+export const HISTORY_STATUS_LABEL: Record<HistoryReviewStatus, string> = {
+  draft: 'Draft',
+  processing: 'Processing',
+  'ready-for-review': 'Ready for Review',
+  completed: 'Completed',
+  converted: 'Converted',
+  failed: 'Failed',
+}
+
+/**
+ * One colour per status, and completed is always green. Seven statuses, seven
+ * tones — no two share a colour, so a row is readable at a glance.
+ */
 export const JOB_STATUS_TONE: Record<JobStatus, Tone> = {
-  draft: 'warning',
-  planning: 'neutral',
+  draft: 'neutral',
+  planning: 'purple',
   scheduled: 'info',
-  'in-progress': 'success',
+  'in-progress': 'blue',
   'on-hold': 'warning',
   delayed: 'danger',
-  completed: 'brand',
+  completed: 'success',
 }
 
 export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
@@ -57,7 +94,7 @@ export const JOB_TYPE_LABEL: Record<JobType, string> = {
 }
 
 export const ESTIMATE_STATUS_TONE: Record<EstimateStatus, Tone> = {
-  draft: 'warning',
+  draft: 'neutral',
   sent: 'info',
   approved: 'success',
   rejected: 'danger',
@@ -65,26 +102,22 @@ export const ESTIMATE_STATUS_TONE: Record<EstimateStatus, Tone> = {
 
 export const ESTIMATE_STATUS_LABEL: Record<EstimateStatus, string> = {
   draft: 'Draft',
-  sent: 'Sent',
+  sent: 'Approval Pending',
   approved: 'Approved',
   rejected: 'Rejected',
 }
 
 export const INVOICE_STATUS_TONE: Record<InvoiceStatus, Tone> = {
   draft: 'neutral',
-  sent: 'warning',
+  sent: 'blue',
   paid: 'success',
   overdue: 'danger',
 }
 
-/**
- * `sent` reads as "Pending" to match the reference screen — the workflow
- * action really is "sent", but what it means to a client reading the list is
- * that payment is pending, so that is the word shown.
- */
+/** `sent` is called what it is: sent to the client, and not yet paid or overdue. */
 export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
   draft: 'Draft',
-  sent: 'Pending',
+  sent: 'Sent',
   paid: 'Paid',
   overdue: 'Overdue',
 }

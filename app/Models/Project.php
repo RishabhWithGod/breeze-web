@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Support\Ownership;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -12,6 +14,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Project extends Model
 {
+    protected static function booted(): void
+    {
+        // Deleting a project takes what was built under it: its AI results (and
+        // the jobs made from them), the jobs raised on it — each of which takes
+        // its own tasks and schedule — and the AI runs themselves. The drawings
+        // stay on file.
+        static::deleted(function (self $project): void {
+            $project->aiResults()->get()->each->delete();
+            $project->jobs()->get()->each->delete();
+            $project->aiJobs()->delete();
+        });
+    }
+
     use SoftDeletes;
 
     public const STATUSES = ['completed', 'converted', 'draft', 'failed', 'processing'];
@@ -26,6 +41,7 @@ class Project extends Model
         'user_id',
         'client_id',
         'name',
+        'description',
         'code',
         'client',
         'location',
@@ -110,6 +126,16 @@ class Project extends Model
     }
 
     /**
+     * Who from the client's crew is staffed to this project.
+     *
+     * @return BelongsToMany<Foreman, $this>
+     */
+    public function members(): BelongsToMany
+    {
+        return $this->belongsToMany(Foreman::class, 'project_members')->withTimestamps();
+    }
+
+    /**
      * The sites available to this project — its client's whole book.
      *
      * A project and the job on it are at the same place, so the project does
@@ -147,6 +173,18 @@ class Project extends Model
     public function estimates(): HasMany
     {
         return $this->hasMany(Estimate::class, 'project_id')->latest('issued_on');
+    }
+
+    /** @return HasMany<Document, $this> */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
+
+    /** @return HasMany<Invoice, $this> */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
     }
 
     /** This project's own uploaded vendor rate lists — see `ProjectRateImport`. */
@@ -213,7 +251,7 @@ class Project extends Model
     /** Only this user's own projects — same shape as `Estimate::scopeOwnedBy`/`Job::scopeOwnedBy`. */
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
-        return $query->where('user_id', $user->id);
+        return $query->whereIn($query->qualifyColumn('user_id'), Ownership::userIds($user));
     }
 
     /** Matches a project name, its drawing's filename, its client, its number or its site. */

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Services\Ai\ArtefactStore;
+use App\Support\DrawingOrigin;
+use App\Support\WireLengths;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -61,6 +63,9 @@ class DrawingDetailsController extends Controller
                     ->values(),
             ],
 
+            /** Where Back goes — see App\Support\DrawingOrigin. */
+            'back' => DrawingOrigin::back($project, $request->query('from')),
+
             // Null for a project that never reached the engine (or failed there).
             'engine' => $result === null ? null : [
                 'resultId' => $result->id,
@@ -95,12 +100,15 @@ class DrawingDetailsController extends Controller
                 'matchedSymbol' => $line->matched_symbol,
             ])->all() ?? [],
 
-            'wireSizes' => $result?->wireSizes->map(fn ($wire) => [
-                'page' => $wire->page,
-                'size' => $wire->size,
-                'context' => $wire->context,
-                'count' => $wire->count,
-            ])->all() ?? [],
+            'wireSizes' => WireLengths::attach(
+                $result?->wireSizes->map(fn ($wire) => [
+                    'page' => $wire->page,
+                    'size' => $wire->size,
+                    'context' => $wire->context,
+                    'count' => $wire->count,
+                ])->all() ?? [],
+                $result?->boqLines->map(fn ($line) => [$line->description ?: $line->item, $line->unit, $line->quantity]) ?? [],
+            ),
 
         ]);
     }

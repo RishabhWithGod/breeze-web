@@ -199,6 +199,9 @@ export interface WireSizeRow {
   readonly size: string
   readonly context: string
   readonly count: number
+  /** Total run length priced for this size, when a line on the takeoff carries one. */
+  readonly length?: number | null
+  readonly lengthUnit?: string | null
 }
 
 export interface PanelScheduleRow {

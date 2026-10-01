@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreJobFromEstimatesRequest;
 use App\Models\Estimate;
 use App\Services\Takeoff\EstimateMergeJobBuilder;
+use App\Support\Ownership;
 use Illuminate\Http\RedirectResponse;
 
 /**
@@ -21,7 +22,7 @@ class JobFromEstimatesController extends Controller
 {
     public function store(StoreJobFromEstimatesRequest $request, EstimateMergeJobBuilder $builder): RedirectResponse
     {
-        $userId = $request->user()->id;
+        $userId = Ownership::userIdList($request->user());
         $data = $request->validated();
 
         // Loaded and re-checked here rather than trusted from the request:
@@ -29,7 +30,7 @@ class JobFromEstimatesController extends Controller
         // merge" needs the rows in hand.
         $sources = Estimate::query()
             ->whereIn('id', $data['estimate_ids'])
-            ->where('user_id', $userId)
+            ->whereIn('user_id', $userId)
             ->where('kind', '!=', Estimate::KIND_MERGED)
             ->with('items')
             ->get();

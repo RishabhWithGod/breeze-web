@@ -57,6 +57,12 @@ class DemoDataSeeder extends Seeder
         $this->seedTeamMembers();
         $this->seedJobs();
         $this->seedEstimates();
+
+        // The demo company's work belongs to the demo manager, the way work made in
+        // the app does — otherwise nobody's dashboard would count it.
+        Job::whereNull('user_id')->update(['user_id' => $user->id]);
+        Estimate::whereNull('user_id')->update(['user_id' => $user->id]);
+
         $this->seedJobModule($user);
         $this->seedTimeEntries($user);
         $this->seedInvoices($user);

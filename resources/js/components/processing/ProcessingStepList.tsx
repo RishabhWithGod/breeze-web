@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion'
-import { Check, Loader2, X } from 'lucide-react'
 import type { ProcessingStageState } from '@/types'
 import { cn } from '@/utils'
 
@@ -8,19 +7,27 @@ export interface ProcessingStepListProps {
   className?: string
 }
 
-const BUBBLE_STYLES: Record<ProcessingStageState['status'], string> = {
-  complete: 'bg-brand-deep text-brand-ink',
-  active: 'bg-navy-950 text-brand ring-2 ring-brand',
-  failed: 'bg-status-danger text-white',
-  pending: 'bg-status-neutral text-brand-ink',
+const DOT_STYLES: Record<ProcessingStageState['status'], string> = {
+  complete: 'border-brand bg-brand',
+  active: 'border-brand bg-brand shadow-glow',
+  failed: 'border-status-danger bg-status-danger',
+  pending: 'border-white/40 bg-transparent',
 }
 
-/** Vertical checklist of pipeline stages with per-stage status indicators. */
+const STATUS_TEXT: Record<ProcessingStageState['status'], { label: string; className: string }> = {
+  complete: { label: 'Completed', className: 'text-brand/80' },
+  active: { label: 'In progress', className: 'text-brand' },
+  failed: { label: 'Failed', className: 'text-red-300' },
+  pending: { label: 'Pending', className: 'text-white/65' },
+}
+
+/** Vertical status list: a dot per stage joined by a line, state on the right. */
 export function ProcessingStepList({ stages, className }: ProcessingStepListProps) {
   return (
-    <ol className={cn('relative space-y-1 text-left', className)}>
+    <ol className={cn('text-left', className)}>
       {stages.map((stage, index) => {
         const isLast = index === stages.length - 1
+        const state = STATUS_TEXT[stage.status]
 
         return (
           <motion.li
@@ -28,13 +35,13 @@ export function ProcessingStepList({ stages, className }: ProcessingStepListProp
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.3, delay: index * 0.04 }}
-            className="relative flex gap-4 pb-5 last:pb-0"
+            className="relative flex items-center gap-4 py-2.5"
           >
             {!isLast && (
               <span
                 className={cn(
-                  'absolute top-8 bottom-0 left-[13px] w-0.5 transition-colors duration-500',
-                  stage.status === 'complete' ? 'bg-brand-deep' : 'bg-white/20',
+                  'absolute top-[calc(50%+11px)] -bottom-[calc(50%-11px)] left-[9px] w-px border-l border-dashed',
+                  stage.status === 'complete' ? 'border-brand/60' : 'border-white/25',
                 )}
                 aria-hidden
               />
@@ -42,34 +49,21 @@ export function ProcessingStepList({ stages, className }: ProcessingStepListProp
 
             <span
               className={cn(
-                'relative z-1 grid size-7 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors duration-300',
-                BUBBLE_STYLES[stage.status],
+                'relative z-1 size-5 shrink-0 rounded-full border-2 transition-colors duration-300',
+                DOT_STYLES[stage.status],
+              )}
+              aria-hidden
+            />
+
+            <p
+              className={cn(
+                'min-w-0 flex-1 truncate text-md',
+                stage.status === 'pending' ? 'text-white/80' : 'text-white',
               )}
             >
-              {stage.status === 'complete' ? (
-                <Check size={15} strokeWidth={3} aria-hidden />
-              ) : stage.status === 'failed' ? (
-                <X size={15} strokeWidth={3} aria-hidden />
-              ) : stage.status === 'active' ? (
-                <Loader2 size={15} className="animate-spin" aria-hidden />
-              ) : (
-                index + 1
-              )}
-            </span>
-
-            <div className="min-w-0 pt-0.5">
-              <p
-                className={cn(
-                  'text-md font-medium transition-colors',
-                  stage.status === 'pending' ? 'text-white/80' : 'text-white',
-                )}
-              >
-                {stage.label}
-              </p>
-              <p className="mt-0.5 text-sm text-white/75">{stage.description}</p>
-            </div>
-
-            <span className="sr-only">{stage.status}</span>
+              {stage.label}
+            </p>
+            <span className={cn('shrink-0 text-sm', state.className)}>{state.label}</span>
           </motion.li>
         )
       })}

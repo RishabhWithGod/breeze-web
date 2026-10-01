@@ -9,17 +9,26 @@ use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\BreezeBucksController;
+use App\Http\Controllers\ChangeOrderController;
 use App\Http\Controllers\ClientAddressController;
+use App\Http\Controllers\ClientContactController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CommodityListController;
+use App\Http\Controllers\CompanyManagerController;
+use App\Http\Controllers\CompanyProfileController;
+use App\Http\Controllers\CompanySetupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFolderController;
 use App\Http\Controllers\DrawingDetailsController;
+use App\Http\Controllers\EstimateBuilderController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\EstimateDetailController;
+use App\Http\Controllers\EstimateReviewController;
 use App\Http\Controllers\FinalTakeoffController;
 use App\Http\Controllers\ForemanController;
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\InvitationAcceptanceController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoiceDetailController;
 use App\Http\Controllers\InvoicePaymentController;
@@ -37,21 +46,26 @@ use App\Http\Controllers\JobTaskSetupController;
 use App\Http\Controllers\JobTeamController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentSettingsController;
+use App\Http\Controllers\PaymentSetupController;
 use App\Http\Controllers\PriceBookController;
 use App\Http\Controllers\ProcessingController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectDocumentController;
 use App\Http\Controllers\ResultsController;
+use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\SchedulingController;
 use App\Http\Controllers\SecuritySettingsController;
+use App\Http\Controllers\SetupChecklistController;
 use App\Http\Controllers\StatePageController;
 use App\Http\Controllers\SymbolReviewController;
 use App\Http\Controllers\TakeoffFlowController;
 use App\Http\Controllers\TakeoffHistoryController;
 use App\Http\Controllers\TaskListController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\TeamSetupController;
 use App\Http\Controllers\TechnicianController;
+use App\Http\Controllers\TermsConsentController;
 use App\Http\Controllers\ThreeDViewController;
 use App\Http\Controllers\TimeEntryController;
 use App\Http\Controllers\TimerController;
@@ -111,8 +125,43 @@ Route::middleware('guest')->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth')->group(function () {
+// An emailed invitation: public, since the person has no account yet.
+Route::get('invitations/{token}', [InvitationAcceptanceController::class, 'show'])->name('invitations.show');
+Route::post('invitations/{token}', [InvitationAcceptanceController::class, 'accept'])->middleware('throttle:10,1')->name('invitations.accept');
+
+Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+
+    // First-run company setup: where a new account lands before the dashboard.
+    Route::prefix('company-setup')->name('company.setup.')->group(function () {
+        Route::get('/', [CompanySetupController::class, 'create'])->name('create');
+        Route::post('/', [CompanySetupController::class, 'store'])->name('store');
+    });
+
+    // ...and then the terms, the second step.
+    Route::prefix('terms')->name('terms.')->group(function () {
+        Route::get('/', [TermsConsentController::class, 'create'])->name('create');
+        Route::post('/', [TermsConsentController::class, 'store'])->name('store');
+    });
+
+    // ...and then the plan and card, the third.
+    Route::prefix('payment-setup')->name('payment.setup.')->group(function () {
+        Route::get('/', [PaymentSetupController::class, 'create'])->name('create');
+        Route::post('/', [PaymentSetupController::class, 'store'])->name('store');
+        Route::get('complete', [PaymentSetupController::class, 'complete'])->name('complete');
+        Route::get('confirmed', [PaymentSetupController::class, 'confirmed'])->name('confirmed');
+    });
+
+    // Team Setup: invite the crew and put them on teams, while the company is getting started.
+    Route::get('team-setup', [TeamSetupController::class, 'show'])->name('team-setup.show');
+    Route::post('team-setup/invitations', [TeamSetupController::class, 'store'])->name('team-setup.invitations.store');
+    Route::post('team-setup/invitations/{invitation}/resend', [TeamSetupController::class, 'resend'])->name('team-setup.invitations.resend');
+    Route::delete('team-setup/invitations/{invitation}', [TeamSetupController::class, 'cancel'])->name('team-setup.invitations.cancel');
+
+    // Get Started: the checklist after subscribing.
+    Route::get('get-started', [SetupChecklistController::class, 'show'])->name('get-started.show');
+    Route::post('get-started/skip/{step}', [SetupChecklistController::class, 'skip'])->name('get-started.skip');
+    Route::post('get-started/finish', [SetupChecklistController::class, 'finish'])->name('get-started.finish');
 
     // `/` and `/home` both open the dashboard.
     Route::get('/', [DashboardController::class, 'index']);
@@ -244,6 +293,14 @@ Route::middleware('auth')->group(function () {
         ->name('clients.addresses.update');
     Route::delete('clients/{client}/addresses/{address}', [ClientAddressController::class, 'destroy'])
         ->name('clients.addresses.destroy');
+    // The client's own people — as many as they have, added from their own
+    // screen.
+    Route::post('clients/{client}/contacts', [ClientContactController::class, 'store'])
+        ->name('clients.contacts.store');
+    Route::put('clients/{client}/contacts/{contact}', [ClientContactController::class, 'update'])
+        ->name('clients.contacts.update');
+    Route::delete('clients/{client}/contacts/{contact}', [ClientContactController::class, 'destroy'])
+        ->name('clients.contacts.destroy');
     Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 
     // Starts the first AI takeoff run against the project's drawing already on
@@ -271,7 +328,50 @@ Route::middleware('auth')->group(function () {
      * anyone can check one without opening the database.
      */
     Route::get('price-book', [PriceBookController::class, 'index'])->name('price-book.index');
+
+    // Roles & Permissions: what each role can open and do, per company.
+    Route::get('roles-permissions', [RolePermissionController::class, 'show'])->name('roles.show');
+    Route::put('roles-permissions', [RolePermissionController::class, 'update'])->name('roles.update');
+
+    // Change orders: added work documented after a job begins, approved by a manager.
+    Route::prefix('change-orders')->name('change-orders.')->whereNumber(['changeOrder', 'attachment'])->group(function () {
+        Route::get('/', [ChangeOrderController::class, 'index'])->name('index');
+        Route::get('create', [ChangeOrderController::class, 'create'])->name('create');
+        Route::post('/', [ChangeOrderController::class, 'store'])->name('store');
+        Route::get('{changeOrder}', [ChangeOrderController::class, 'show'])->name('show');
+        Route::get('{changeOrder}/edit', [ChangeOrderController::class, 'edit'])->name('edit');
+        Route::put('{changeOrder}', [ChangeOrderController::class, 'update'])->name('update');
+        Route::delete('{changeOrder}', [ChangeOrderController::class, 'destroy'])->name('destroy');
+        Route::post('{changeOrder}/submit', [ChangeOrderController::class, 'submit'])->name('submit');
+        Route::post('{changeOrder}/withdraw', [ChangeOrderController::class, 'withdraw'])->name('withdraw');
+        Route::post('{changeOrder}/approve', [ChangeOrderController::class, 'approve'])->name('approve');
+        Route::post('{changeOrder}/reject', [ChangeOrderController::class, 'reject'])->name('reject');
+        Route::post('{changeOrder}/attachments', [ChangeOrderController::class, 'attach'])->name('attach');
+        Route::get('{changeOrder}/attachments/{attachment}', [ChangeOrderController::class, 'download'])->name('download');
+        Route::delete('{changeOrder}/attachments/{attachment}', [ChangeOrderController::class, 'detach'])->name('detach');
+    });
+
+    // Commodity List Setup: the company's default materials and labor items.
+    Route::get('commodities', [CommodityListController::class, 'index'])->name('commodities.index');
+    Route::post('commodities', [CommodityListController::class, 'store'])->name('commodities.store');
+    Route::post('commodities/import', [CommodityListController::class, 'import'])->name('commodities.import');
+    Route::get('commodities/template', [CommodityListController::class, 'template'])->name('commodities.template');
+    Route::post('commodities/save', [CommodityListController::class, 'save'])->name('commodities.save');
+    Route::post('commodities/skip', [CommodityListController::class, 'skip'])->name('commodities.skip');
+    Route::put('commodities/{item}', [CommodityListController::class, 'update'])->name('commodities.update');
+    Route::post('commodities/{item}/archive', [CommodityListController::class, 'archive'])->name('commodities.archive');
     Route::get('price-book/{priceBookItem}', [PriceBookController::class, 'show'])->name('price-book.show');
+
+    // The Estimate Builder: quantities into priced labor and material lines.
+    Route::middleware('feature:estimate_builder')->group(function () {
+        Route::get('estimate-builder', [EstimateBuilderController::class, 'index'])->name('estimate-builder.index');
+        Route::post('estimate-builder', [EstimateBuilderController::class, 'store'])->name('estimate-builder.store');
+        Route::get('estimate-builder/price-list', [EstimateBuilderController::class, 'priceList'])->name('estimate-builder.price-list');
+        Route::get('estimate-builder/{estimate}', [EstimateBuilderController::class, 'show'])->name('estimate-builder.show');
+        Route::put('estimate-builder/{estimate}', [EstimateBuilderController::class, 'save'])->name('estimate-builder.save');
+        Route::post('estimate-builder/{estimate}/request-approval', [EstimateBuilderController::class, 'requestApproval'])->name('estimate-builder.request-approval');
+        Route::post('estimate-builder/{estimate}/import', [EstimateBuilderController::class, 'import'])->name('estimate-builder.import');
+    });
 
     Route::get('estimates', [EstimateController::class, 'index'])->name('estimates.index');
     Route::get('estimates/create', [EstimateController::class, 'create'])->name('estimates.create');
@@ -282,6 +382,12 @@ Route::middleware('auth')->group(function () {
     Route::post('estimates/{estimate}/restore', [EstimateController::class, 'restore'])->name('estimates.restore');
 
     // Estimate detail: header fields, editable line items and exports.
+    // Estimate Review and Approval — the builder's next step, hidden with it.
+    Route::middleware('feature:estimate_builder')->group(function () {
+        Route::get('estimates/{estimate}/review', [EstimateReviewController::class, 'show'])->name('estimates.review');
+        Route::post('estimates/{estimate}/approve', [EstimateReviewController::class, 'approve'])->name('estimates.approve');
+        Route::post('estimates/{estimate}/return', [EstimateReviewController::class, 'returnForEdits'])->name('estimates.return');
+    });
     Route::get('estimates/{estimate}', [EstimateDetailController::class, 'show'])->name('estimates.show');
     Route::get('estimates/{estimate}/edit', [EstimateDetailController::class, 'edit'])->name('estimates.edit');
     Route::put('estimates/{estimate}', [EstimateDetailController::class, 'update'])->name('estimates.update');
@@ -297,6 +403,8 @@ Route::middleware('auth')->group(function () {
     Route::get('billing', [InvoiceController::class, 'index'])->name('billing.index');
     Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
     Route::get('invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+    // Before `invoices/{invoice}`, which would otherwise take "export" for an id.
+    Route::get('invoices/export', [InvoiceController::class, 'export'])->name('invoices.export');
     Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
     Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
     Route::post('invoices/{invoice}/restore', [InvoiceController::class, 'restore'])->name('invoices.restore');
@@ -342,6 +450,9 @@ Route::middleware('auth')->group(function () {
     Route::get('teams', [TeamController::class, 'index'])->name('teams.index');
     Route::get('teams/create', [TeamController::class, 'create'])->name('teams.create');
     Route::post('teams', [TeamController::class, 'store'])->name('teams.store');
+    Route::put('teams/{team}', [TeamController::class, 'update'])->name('teams.update');
+    Route::delete('teams/{team}', [TeamController::class, 'destroy'])->name('teams.destroy');
+    Route::get('teams/managers/{manager}/edit', [CompanyManagerController::class, 'edit'])->name('managers.edit');
 
     // The old address, kept so a bookmark or an old link still lands somewhere.
     // GET only, deliberately -- `Route::redirect()` registers every HTTP verb,
@@ -529,9 +640,12 @@ Route::middleware('auth')->group(function () {
         // One technician's one day — every session behind the single total
         // the day-grouped list above shows for them on that date.
         Route::get('day/{user}/{date}', [TimeEntryController::class, 'showDay'])->name('time-entries.day');
+        Route::post('day/{user}/{date}/approve', [TimeEntryController::class, 'approveDay'])->name('time-entries.day.approve');
 
         Route::get('attendance/{attendance}', [TimeEntryController::class, 'showAttendance'])->name('attendance.show');
         Route::get('attendance/{attendance}/photo', [TimeEntryController::class, 'attendancePhoto'])->name('attendance.photo');
+        // A manager closing a check-in the technician never closed.
+        Route::post('attendance/{attendance}/check-out', [TimeEntryController::class, 'checkOutAttendance'])->name('attendance.check-out');
 
         Route::post('timer/start', [TimerController::class, 'start'])->name('timer.start');
         Route::post('timer/pause', [TimerController::class, 'pause'])->name('timer.pause');
@@ -545,6 +659,9 @@ Route::middleware('auth')->group(function () {
 
     // Payment Settings: processors, saved methods, billing defaults and the real transaction history.
     Route::get('settings', [PaymentSettingsController::class, 'index'])->name('settings.payment.index');
+    // The company's own details: read in Settings, corrected here by its owner.
+    Route::get('settings/company/edit', [CompanyProfileController::class, 'edit'])->name('settings.company.edit');
+    Route::put('settings/company', [CompanyProfileController::class, 'update'])->name('settings.company.update');
     Route::prefix('settings/payment')->name('settings.payment.')->group(function () {
         Route::post('processors/{processor}/connect', [PaymentSettingsController::class, 'connectProcessor'])->name('processors.connect');
         Route::post('processors/{processor}/test', [PaymentSettingsController::class, 'testProcessor'])->name('processors.test');
@@ -553,6 +670,8 @@ Route::middleware('auth')->group(function () {
         Route::patch('methods/{method}/default', [PaymentSettingsController::class, 'setDefaultPaymentMethod'])->name('methods.default');
         Route::delete('methods/{method}', [PaymentSettingsController::class, 'destroyPaymentMethod'])->name('methods.destroy');
         Route::put('billing', [PaymentSettingsController::class, 'updateBillingSettings'])->name('billing.update');
+        Route::put('managers/{manager}', [CompanyManagerController::class, 'update'])->name('managers.update');
+        Route::put('subscription', [PaymentSettingsController::class, 'changePlan'])->name('subscription.change');
     });
 
     // Profile: the user's own name. Email/phone/password live on Security

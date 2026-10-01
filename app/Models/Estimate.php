@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Ownership;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -62,6 +63,13 @@ class Estimate extends Model
         'tax_total',
         'grand_total',
         'notes',
+        'scope_of_work',
+        'exclusions',
+        'review_notes',
+        'builder_managed',
+        'takeoff_source_estimate_id',
+        'commodity_version',
+        'builder_labor_rate',
     ];
 
     protected function casts(): array
@@ -79,6 +87,11 @@ class Estimate extends Model
             'tax_total' => 'decimal:2',
             'grand_total' => 'decimal:2',
             'converted_at' => 'datetime',
+            'exclusions' => 'array',
+            'approved_at' => 'datetime',
+            'reviewed_at' => 'datetime',
+            'builder_managed' => 'boolean',
+            'builder_labor_rate' => 'decimal:2',
         ];
     }
 
@@ -194,7 +207,7 @@ class Estimate extends Model
     /** Only this manager's own estimates. */
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
-        return $query->where('user_id', $user->id);
+        return $query->whereIn($query->qualifyColumn('user_id'), Ownership::userIds($user));
     }
 
     /** @return BelongsTo<AiResult, $this> */
@@ -251,7 +264,15 @@ class Estimate extends Model
         $equipment = $byCategory(EstimateItem::CATEGORY_EQUIPMENT);
 
         $subtotal = round($material + $labor + $equipment, 2);
-        $markup = round($subtotal * ((float) $this->markup_pct / 100), 2);
+        // One markup over the whole estimate — unless a line carries a markup of its
+        // own, in which case each line is marked up by its own and the rest by the
+        // estimate's.
+        $markup = $items->contains(fn (EstimateItem $item) => $item->markup_pct !== null)
+            ? round((float) $items->sum(fn (EstimateItem $item) => round(
+                (float) $item->total * ((float) ($item->markup_pct ?? $this->markup_pct) / 100),
+                2,
+            )), 2)
+            : round($subtotal * ((float) $this->markup_pct / 100), 2);
         $tax = round(($subtotal + $markup) * ((float) $this->tax_pct / 100), 2);
         $grand = round($subtotal + $markup + $tax, 2);
 
@@ -265,6 +286,36 @@ class Estimate extends Model
             'grand_total' => $grand,
             'amount' => $grand,
         ]);
+    }
+
+    /** @return HasMany<EstimateRevision, $this> */
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(EstimateRevision::class)->orderByDesc('version');
+    }
+
+    /** Who approved it. */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /** Who made the last decision on it. */
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    /** The takeoff this estimate's builder lines were copied from, when they were. */
+    public function takeoffSource(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'takeoff_source_estimate_id');
+    }
+
+    /** @return HasMany<EstimateBuilderLine, $this> */
+    public function builderLines(): HasMany
+    {
+        return $this->hasMany(EstimateBuilderLine::class)->orderBy('position')->orderBy('id');
     }
 
     /** The takeoff project this estimate was converted into, if any. */
@@ -331,7 +382,7 @@ class Estimate extends Model
         // otherwise the number itself said how many estimates every other
         // manager in the system had ever written.
         $highest = (int) static::withTrashed()
-            ->where('user_id', $user->id)
+            ->whereIn('user_id', Ownership::userIds($user))
             ->selectRaw("MAX(CAST(SUBSTR(number, 5) AS {$integerType})) AS seq")
             ->value('seq');
 

@@ -36,7 +36,7 @@ export interface SchedulingUnassignedProps {
 }
 
 /**
- * Unassigned Jobs — everything still waiting for a crew.
+ * Unassigned Jobs — everything raised but not yet broken into tasks.
  *
  * "Unassigned" is the absence of a booking on the calendar, not a status, so
  * scheduling a job here is what removes it from this list. Search, tabs, sorting
@@ -148,7 +148,7 @@ export default function SchedulingUnassigned({
           description={
             isFiltered
               ? 'Try a different search or clear the type filter.'
-              : 'Every active job has a crew booked on the calendar.'
+              : 'Every active job has tasks and is on the calendar.'
           }
           actions={
             isFiltered ? (

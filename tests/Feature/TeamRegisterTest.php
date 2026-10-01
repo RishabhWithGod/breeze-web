@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Foreman;
+use App\Models\Job;
+use App\Models\JobAttendance;
+use App\Models\JobSchedule;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -214,5 +217,105 @@ class TeamRegisterTest extends TestCase
         $this->actingAs($this->planner)
             ->get('/foremen')
             ->assertRedirect('/teams');
+    }
+
+    /* --------------------------------------------- assigned work, and where they are */
+
+    private function task(Foreman $foreman, string $jobName, string $status = 'pending', ?Foreman $supervisor = null): void
+    {
+        $job = Job::create(['user_id' => $this->planner->id, 'name' => $jobName, 'status' => 'in-progress']);
+        $schedule = JobSchedule::firstOrCreate(['job_id' => $job->id], ['working_days' => [1, 2, 3, 4, 5]]);
+
+        $job->tasks()->create([
+            'job_schedule_id' => $schedule->id,
+            'title' => "Work at {$jobName}",
+            'position' => 0,
+            'status' => $status,
+            'foreman_id' => $foreman->id,
+            'supervisor_id' => $supervisor?->id,
+        ]);
+    }
+
+    public function test_each_member_names_the_jobs_their_open_work_is_on(): void
+    {
+        $team = Team::create(['name' => 'North Crew']);
+        $dana = Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW', 'team_id' => $team->id, 'role' => 'foreman']);
+        $luis = Foreman::create(['name' => 'Luis Ortega', 'initials' => 'LO', 'team_id' => $team->id, 'role' => 'journeyman']);
+        $robin = Foreman::create(['name' => 'Robin Ashby', 'initials' => 'RA', 'team_id' => $team->id, 'role' => 'apprentice']);
+
+        $this->task($luis, 'Riverside Office', 'in-progress', $dana);
+        $this->task($luis, 'Lakeside Medical');
+        // Finished work is not what anyone is carrying.
+        $this->task($luis, 'Old Warehouse', 'completed');
+
+        $this->actingAs($this->planner)
+            ->get(route('teams.index'))
+            ->assertInertia(function (Assert $page) {
+                $members = collect($page->toArray()['props']['teams']['data'][0]['members'])->keyBy('name');
+
+                $this->assertEqualsCanonicalizing(['Riverside Office', 'Lakeside Medical'], $members['Luis Ortega']['jobs']);
+                // A supervisor is on the job their crew is working.
+                $this->assertSame(['Riverside Office'], $members['Dana Wu']['jobs']);
+                $this->assertSame([], $members['Robin Ashby']['jobs']);
+                $this->assertSame(2, $members['Luis Ortega']['openTasks']);
+            });
+    }
+
+    public function test_a_member_with_a_check_in_open_today_is_on_site(): void
+    {
+        $team = Team::create(['name' => 'North Crew']);
+        $on = User::factory()->create(['role' => 'Journeyman']);
+        $off = User::factory()->create(['role' => 'Journeyman']);
+        // `user_id` is only ever set by approving a technician, never mass-assigned.
+        Foreman::make(['name' => 'Luis Ortega', 'initials' => 'LO', 'team_id' => $team->id, 'role' => 'journeyman'])
+            ->forceFill(['user_id' => $on->id])->save();
+        Foreman::make(['name' => 'Sam Okafor', 'initials' => 'SO', 'team_id' => $team->id, 'role' => 'journeyman'])
+            ->forceFill(['user_id' => $off->id])->save();
+        Foreman::create(['name' => 'No Account', 'initials' => 'NA', 'team_id' => $team->id, 'role' => 'apprentice']);
+
+        $job = Job::create(['user_id' => $this->planner->id, 'name' => 'Main Hall', 'status' => 'in-progress']);
+        JobAttendance::create([
+            'job_id' => $job->id, 'user_id' => $on->id, 'date' => today(), 'status' => 'checkedIn',
+            'check_in_at' => now(), 'check_in_method' => 'manual', 'client_id' => 'att-'.uniqid(),
+        ]);
+        // Checked in yesterday and never out: not on site today.
+        JobAttendance::create([
+            'job_id' => $job->id, 'user_id' => $off->id, 'date' => today()->subDay(), 'status' => 'checkedIn',
+            'check_in_at' => now()->subDay(), 'check_in_method' => 'manual', 'client_id' => 'att-'.uniqid(),
+        ]);
+
+        $this->actingAs($this->planner)
+            ->get(route('teams.index'))
+            ->assertInertia(function (Assert $page) {
+                $members = collect($page->toArray()['props']['teams']['data'][0]['members'])->keyBy('name');
+
+                $this->assertTrue($members['Luis Ortega']['onSite']);
+                $this->assertFalse($members['Sam Okafor']['onSite']);
+                $this->assertFalse($members['No Account']['onSite']);
+            });
+    }
+
+    public function test_a_members_own_screen_says_whether_they_are_on_site(): void
+    {
+        $team = Team::create(['name' => 'North Crew']);
+        $on = User::factory()->create(['role' => 'Journeyman']);
+        $member = Foreman::make(['name' => 'Luis Ortega', 'initials' => 'LO', 'team_id' => $team->id, 'role' => 'journeyman'])
+            ->forceFill(['user_id' => $on->id]);
+        $member->save();
+        $solo = Foreman::create(['name' => 'No Account', 'initials' => 'NA', 'team_id' => $team->id, 'role' => 'apprentice']);
+
+        $job = Job::create(['user_id' => $this->planner->id, 'name' => 'Main Hall', 'status' => 'in-progress']);
+        JobAttendance::create([
+            'job_id' => $job->id, 'user_id' => $on->id, 'date' => today(), 'status' => 'checkedIn',
+            'check_in_at' => now(), 'check_in_method' => 'manual', 'client_id' => 'att-'.uniqid(),
+        ]);
+
+        $this->actingAs($this->planner)
+            ->get(route('foremen.show', $member))
+            ->assertInertia(fn (Assert $page) => $page->component('ForemanShow')->where('foreman.onSite', true));
+
+        $this->actingAs($this->planner)
+            ->get(route('foremen.show', $solo))
+            ->assertInertia(fn (Assert $page) => $page->where('foreman.onSite', false));
     }
 }

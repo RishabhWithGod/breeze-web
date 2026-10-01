@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -17,6 +18,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Foreman extends Model
 {
+    use BelongsToCompany;
+
     /** Senior tier: oversees and approves the crew's work. Was 'supervisor'. */
     public const ROLE_FOREMAN = 'foreman';
 

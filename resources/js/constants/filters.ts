@@ -5,8 +5,9 @@ import type { EstimateStatus, JobStatus, SelectOption } from '@/types'
 /* -------------------------------------------------------------------------- */
 
 export const HISTORY_FILTERS = [
-  { label: 'All Clients', value: 'all' },
-  { label: 'Drafts', value: 'draft' },
+  { label: 'All Statuses', value: 'all' },
+  { label: 'Processing', value: 'processing' },
+  { label: 'Ready for Review', value: 'ready-for-review' },
   { label: 'Completed', value: 'completed' },
   { label: 'Converted', value: 'converted' },
 ] as const
@@ -111,14 +112,8 @@ export const PROJECT_TYPE_OPTIONS: readonly SelectOption[] = JOB_TYPE_OPTIONS
  * The same taxonomy again, for the site an address describes — with a blank
  * first, because a site can be on the book before anyone has been to it. A job
  * raised there starts from whatever was answered here.
- *
- * Industrial is left out here on purpose: not offered as a site type, even
- * though it still is one for a job or a project.
  */
-export const SITE_TYPE_OPTIONS: readonly SelectOption[] = [
-  { label: 'Not set', value: '' },
-  ...JOB_TYPE_OPTIONS.filter((option) => option.value !== 'industrial'),
-]
+export const SITE_TYPE_OPTIONS: readonly SelectOption[] = [{ label: 'Not set', value: '' }, ...JOB_TYPE_OPTIONS]
 
 export type JobStatusFilter = (typeof JOB_STATUS_FILTERS)[number]['value']
 
@@ -139,7 +134,7 @@ export const JOB_STATUSES: readonly JobStatus[] = JOB_STATUS_OPTIONS.map(
 export const ESTIMATE_STATUS_FILTERS = [
   { label: 'All Statuses', value: 'all' },
   { label: 'Draft', value: 'draft' },
-  { label: 'Sent', value: 'sent' },
+  { label: 'Approval Pending', value: 'sent' },
   { label: 'Approved', value: 'approved' },
   { label: 'Rejected', value: 'rejected' },
 ] as const

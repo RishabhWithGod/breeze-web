@@ -177,7 +177,7 @@ class TimeEntryController extends Controller
 
         $data = $this->validated($request);
 
-        $job = Job::findOrFail($data['job_id']);
+        $job = Job::query()->inCompanyOf($request->user())->findOrFail($data['job_id']);
         abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
 
         $entry = $this->writer->save($data, $request->user(), new TimeEntry);
@@ -191,7 +191,7 @@ class TimeEntryController extends Controller
 
         $data = $this->validated($request);
 
-        $job = Job::findOrFail($data['job_id']);
+        $job = Job::query()->inCompanyOf($request->user())->findOrFail($data['job_id']);
         abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
 
         $entry = $this->writer->save($data, $request->user(), $entry);

@@ -39,6 +39,14 @@ export interface Job {
   readonly budget: number | null
   readonly isArchived: boolean
   readonly teamCount: number
+  /** Distinct people assigned to any of the job's tasks. */
+  readonly crewCount: number
+  /** The project the job was raised from, when there is one. */
+  readonly projectName: string | null
+  /** Tasks not yet completed or cancelled. */
+  readonly openTasks: number
+  /** Percent of the job's tasks completed — null when it has none. */
+  readonly progress: number | null
   readonly estimateCount: number
   /** Whether an invoice has already been raised for this job — see `invoiceId`. */
   readonly hasInvoice: boolean
@@ -86,6 +94,8 @@ export interface TaskFieldPhoto {
   readonly mime: string | null
   readonly sizeBytes: number
   readonly uploadedBy: string
+  /** The uploader's role on their account — "Foreman", "Journeyman"… */
+  readonly uploadedByRole?: string | null
   readonly createdAt: string
   readonly url: string
 }
@@ -107,6 +117,13 @@ export interface JobTaskMaterialLine {
   readonly attachments: readonly TaskFieldPhoto[]
 }
 
+/** A person on a task, and the part they play on it. */
+export interface TaskCrewMember {
+  readonly name: string
+  readonly initials: string | null
+  readonly role: string
+}
+
 /** One task on a job, as the detail screen lists it. */
 export interface JobTaskSummary {
   readonly id: number
@@ -119,6 +136,8 @@ export interface JobTaskSummary {
   readonly actualHours: number | null
   /** How much of the estimate this task covers. */
   readonly lineCount: number
+  /** Everyone on the task — foreman, supervisor and assigned members. */
+  readonly crew: readonly TaskCrewMember[]
   /**
    * Left from the field, via the mobile app — read-only here. Legacy:
    * mobile now writes per-material instead (see `materialLines`), so this
@@ -143,6 +162,7 @@ export interface JobAttachment {
   readonly size: number
   readonly mime: string | null
   readonly uploadedBy: string
+  readonly uploadedByRole?: string | null
   readonly createdAt: string
   readonly downloadUrl: string
 }

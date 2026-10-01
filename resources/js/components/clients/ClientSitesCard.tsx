@@ -5,7 +5,6 @@ import {
   AddressField,
   Button,
   Card,
-  cardAccent,
   CardHeader,
   ConfirmDialog,
   IconButton,
@@ -162,10 +161,16 @@ export interface ClientSitesCardProps {
 /** `ClientSitesList` in its own standalone card — the client's own screen. */
 export function ClientSitesCard({ clientId, addresses }: ClientSitesCardProps) {
   return (
-    <Card padding="lg" className={cardAccent('success', 'min-w-0')}>
+    <Card padding="md" className="min-w-0">
       <CardHeader
-        title="Site Location(s)"
-        subtitle="One book, shared by every project of theirs"
+        title={
+          <span className="flex items-center gap-2">
+            <MapPin size={18} aria-hidden className="text-white/70" />
+            Addresses
+          </span>
+        }
+        className="border-b border-hairline pb-4"
+        titleClassName="text-lg font-semibold"
       />
       <ClientSitesList clientId={clientId} addresses={addresses} />
     </Card>

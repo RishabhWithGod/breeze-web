@@ -182,7 +182,7 @@ export default function EstimateShow({
       subtitle: 'Conductor sizes read off the drawing — priced by length',
       icon: Cable,
       tone: 'warning' as const,
-      count: drawingData.wireSizes.length,
+      count: new Set(drawingData.wireSizes.map((wire) => wire.size.trim().toLowerCase())).size,
       node: <WireSizesPanel wireSizes={drawingData.wireSizes} bare />,
     },
     drawingData.equipment.length > 0 && {

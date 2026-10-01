@@ -13,6 +13,7 @@ use App\Notifications\TaskScheduleChanged;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Scheduling\ScheduleBuilder;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Support\CompanyRule;
 use App\Support\JobOrigin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -109,12 +110,14 @@ class JobTaskSetupController extends Controller
     /**
      * Who a task on this job can be given to.
      *
-     * Narrowed to the job's own crew: the whole point of handing a job to a
-     * team is that the work on it goes to that team. A job with no crew falls
-     * back to the whole register for `foremen` — otherwise a job raised
-     * before teams existed could not be staffed at all, which would be a
-     * worse answer than a long list. `supervisors` stays role-filtered even
-     * then: oversight is a role, not a team membership question.
+     * Narrowed to whoever was staffed to the job's own project: the whole
+     * point of picking Project Members is that the work on the project goes
+     * to them, not to the client's whole crew. A project with nobody staffed
+     * yet — raised before Project Members existed, or simply left blank —
+     * falls back to the job's team instead, and a job with no team either
+     * falls back to the whole register for `foremen`, otherwise it could not
+     * be staffed at all. `supervisors` stays role-filtered even then:
+     * oversight is a role, not a team membership question.
      *
      * `foremen` (the `job_tasks.foreman_id` slot) is who actually runs the
      * task — a journeyman, per the crew hierarchy — and `supervisors`
@@ -130,21 +133,58 @@ class JobTaskSetupController extends Controller
     private function staffing(Job $job): array
     {
         $team = $job->team;
+        $projectMemberIds = $this->projectMemberIds($job);
+
+        $journeymen = $team === null
+            ? Foreman::where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name')
+            : $team->journeymen();
+
+        $supervisors = $team === null
+            ? Foreman::where('role', Foreman::ROLE_FOREMAN)->orderBy('name')
+            : $team->foremen();
+
+        if ($projectMemberIds !== null) {
+            $journeymen->whereIn('id', $projectMemberIds);
+            $supervisors->whereIn('id', $projectMemberIds);
+        }
 
         return [
-            'foremen' => $team === null
-                ? Foreman::where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name')->get(['id', 'name', 'initials', 'role'])
-                : $team->journeymen()->get(['id', 'name', 'initials', 'role']),
-            'supervisors' => $team === null
-                ? Foreman::where('role', Foreman::ROLE_FOREMAN)
-                    ->orderBy('name')->get(['id', 'name', 'initials', 'role'])
-                : $team->foremen()->get(['id', 'name', 'initials', 'role']),
+            'foremen' => $journeymen->get(['id', 'name', 'initials', 'role']),
+            'supervisors' => $supervisors->get(['id', 'name', 'initials', 'role']),
             /*
              * Said on the screen, because "why is this list so short" is the
              * first question a narrowed picker raises.
              */
             'team' => $team === null ? null : ['id' => $team->id, 'name' => $team->name],
         ];
+    }
+
+    /**
+     * This job's own Project Members, when its project has any picked —
+     * null otherwise, which tells {@see staffing()} and {@see refuseOffCrew()}
+     * to fall back to the team rather than narrow to an empty list.
+     *
+     * @return ?Collection<int, int>
+     */
+    private function projectMemberIds(Job $job): ?Collection
+    {
+        $members = $job->project?->members;
+
+        if ($members === null || $members->isEmpty()) {
+            return null;
+        }
+
+        /*
+         * Anyone added to the job's crew since the job was raised was added for this work — from its
+         * task screen, or the register — so they are offered too, not left out for not being among
+         * the people picked when the project was made.
+         */
+        $joinedSince = Foreman::query()
+            ->where('created_at', '>=', $job->created_at)
+            ->when($job->team_id !== null, fn ($query) => $query->where('team_id', $job->team_id))
+            ->pluck('id');
+
+        return $members->pluck('id')->merge($joinedSince)->unique()->values();
     }
 
     /**
@@ -168,10 +208,10 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'tasks' => ['required', 'array', 'min:1', 'max:50'],
             'tasks.*.title' => ['required', 'string', 'max:200'],
-            'tasks.*.foreman_id' => ['required', 'integer', 'exists:foremen,id'],
+            'tasks.*.foreman_id' => ['required', 'integer', CompanyRule::exists('foremen')],
             // Who is over the task — required alongside the foreman, so every
             // task always has both someone running it and someone above them.
-            'tasks.*.supervisor_id' => ['required', 'integer', 'exists:foremen,id'],
+            'tasks.*.supervisor_id' => ['required', 'integer', CompanyRule::exists('foremen')],
             /*
              * No `distinct`: with a nested wildcard it compares across every
              * task, not within one, and would report the right refusal under an
@@ -261,7 +301,15 @@ class JobTaskSetupController extends Controller
                 $createdTasks[] = $task;
             }
 
-            $this->builder->realignWindow($schedule->refresh());
+            // Dates, dependency chain and the schedule's own window, all laid
+            // out from what was just created — the plan is real the moment
+            // the tasks are, not after a separate trip to the Schedule screen.
+            $this->builder->scheduleTasks($schedule->refresh());
+
+            // And booked onto the crew calendar for those same days, so the
+            // job does not sit in the unassigned queue waiting for someone
+            // to come back and book it by hand.
+            $this->builder->bookCrew($job, $schedule);
 
             $job->refreshEstimatedHours();
         });
@@ -364,21 +412,40 @@ class JobTaskSetupController extends Controller
      * is worse than one that disagrees outright.
      */
     /**
-     * Refuses anyone who is not on the job's crew.
+     * Refuses anyone who is not offered by {@see staffing()} — the project's
+     * own members when it has any, the job's crew otherwise.
      *
-     * The pickers only offer the crew, so this catches a hand-made request
-     * rather than a mistake at the screen — but the rule has to live on the
-     * server or the narrowing is decoration. A job with no crew is not
-     * narrowed: it has nobody to be off.
+     * The pickers only offer that same narrowed list, so this catches a
+     * hand-made request rather than a mistake at the screen — but the rule
+     * has to live on the server or the narrowing is decoration. A job with
+     * no crew and a project with nobody staffed is not narrowed: there is
+     * nobody to be off.
      *
      * @param  array<int, int|null>  $ids
      */
     private function refuseOffCrew(Job $job, array $ids): void
     {
-        $team = $job->team;
         $given = array_values(array_filter($ids));
 
-        if ($team === null || $given === []) {
+        if ($given === []) {
+            return;
+        }
+
+        $projectMemberIds = $this->projectMemberIds($job);
+
+        if ($projectMemberIds !== null) {
+            if (array_diff($given, $projectMemberIds->all()) !== []) {
+                throw ValidationException::withMessages([
+                    'foreman_id' => 'That person is not staffed to this project.',
+                ]);
+            }
+
+            return;
+        }
+
+        $team = $job->team;
+
+        if ($team === null) {
             return;
         }
 
@@ -404,8 +471,8 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'status' => ['required', Rule::in(JobTask::STATUSES)],
-            'foreman_id' => ['required', 'integer', 'exists:foremen,id'],
-            'supervisor_id' => ['required', 'integer', 'exists:foremen,id'],
+            'foreman_id' => ['required', 'integer', CompanyRule::exists('foremen')],
+            'supervisor_id' => ['required', 'integer', CompanyRule::exists('foremen')],
             'estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],

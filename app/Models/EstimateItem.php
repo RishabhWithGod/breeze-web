@@ -59,6 +59,8 @@ class EstimateItem extends Model
         'project_rate_item_id',
         'pricing_confidence',
         'position',
+        'markup_pct',
+        'builder_line_id',
     ];
 
     protected function casts(): array
@@ -69,6 +71,7 @@ class EstimateItem extends Model
             'quantity' => 'decimal:4',
             'unit_cost' => 'decimal:4',
             'total' => 'decimal:2',
+            'markup_pct' => 'decimal:2',
             'position' => 'integer',
             'completed_at' => 'datetime',
         ];
@@ -91,6 +94,12 @@ class EstimateItem extends Model
     public function estimate(): BelongsTo
     {
         return $this->belongsTo(Estimate::class);
+    }
+
+    /** The price list row this line was priced from, when it was. */
+    public function priceBookItem(): BelongsTo
+    {
+        return $this->belongsTo(PriceBookItem::class);
     }
 
     /** The project rate list row this line was quoted at, when it was matched. */

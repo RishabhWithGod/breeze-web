@@ -13,7 +13,7 @@ class AiResultPolicy
 {
     public function view(User $user, AiResult $result): bool
     {
-        return $result->project->user_id === $user->id;
+        return \App\Support\Ownership::owns($user, $result->project->user_id);
     }
 
     /** Symbol-level edits: approve, reject, rename, recount, merge, split. */

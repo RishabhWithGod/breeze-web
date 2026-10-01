@@ -23,6 +23,7 @@ class ProjectListResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'description' => $this->description,
             'code' => $this->code,
             'clientId' => $this->client_id,
             // The name snapshot, which is what lists and printed sheets read.

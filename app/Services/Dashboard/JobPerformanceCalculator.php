@@ -4,6 +4,7 @@ namespace App\Services\Dashboard;
 
 use App\Models\Job;
 use App\Models\JobStatusChange;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 
 /**
@@ -21,12 +22,14 @@ class JobPerformanceCalculator
     /**
      * @return list<array{month: string, value: int|null, count: int}>
      */
-    public function series(?Carbon $through = null): array
+    public function series(User $user, ?Carbon $through = null): array
     {
         $through = ($through ?? now())->copy()->startOfMonth();
         $months = collect(range(11, 0))->map(fn (int $offset) => $through->copy()->subMonths($offset));
 
         $completions = JobStatusChange::query()
+            // Only jobs of the company asking.
+            ->whereIn('job_id', Job::query()->ownedBy($user)->select('id'))
             ->where('to_status', 'completed')
             ->whereBetween('created_at', [$months->first(), $through->copy()->endOfMonth()])
             ->orderBy('job_id')
@@ -36,7 +39,7 @@ class JobPerformanceCalculator
             // once, on its most recent completion.
             ->unique('job_id');
 
-        $jobs = Job::query()->whereIn('id', $completions->pluck('job_id'))->get(['id', 'end_date'])->keyBy('id');
+        $jobs = Job::query()->ownedBy($user)->whereIn('id', $completions->pluck('job_id'))->get(['id', 'end_date'])->keyBy('id');
 
         return $months->map(function (Carbon $month) use ($completions, $jobs) {
             $inMonth = $completions->filter(

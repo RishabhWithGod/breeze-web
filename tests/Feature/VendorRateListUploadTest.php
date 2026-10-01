@@ -31,6 +31,23 @@ class VendorRateListUploadTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_a_plain_commodity_list_in_any_format_becomes_the_projects_own_rates(): void
+    {
+        $user = User::factory()->create();
+        $client = $user->clients()->create(['name' => 'Harborview Electric']);
+
+        $csv = UploadedFile::fake()->createWithContent('commodity.csv', "Item,UOM,Unit Price,Man Hours\nRomex 12/2 wire,lf,0.52,0.02\nJunction Box,EA,3.60,0.10\n");
+        $this->actingAs($user)->post('/projects', ['client_id' => $client->id, 'name' => 'Plain list', 'vendor_rate_list' => [$csv]])
+            ->assertSessionHas('success')->assertSessionMissing('warning');
+
+        $project = $user->projects()->sole();
+        $item = ProjectRateItem::where('project_id', $project->id)->where('match_key', WorkbookReader::keyFor('Romex 12/2 wire'))->sole();
+        $this->assertEquals(0.52, $item->unit_material_cost);
+        $this->assertEquals(0.02, $item->unit_manhours);
+        $this->assertSame('LF', $item->unit);
+        $this->assertSame(2, ProjectRateItem::where('project_id', $project->id)->count());
+    }
+
     public function test_uploading_a_rate_list_on_project_create_prices_that_projects_estimates(): void
     {
         $user = User::factory()->create();

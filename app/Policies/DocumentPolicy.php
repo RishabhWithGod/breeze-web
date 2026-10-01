@@ -94,7 +94,7 @@ class DocumentPolicy
 
     private function onOwnProject(User $user, Document $document): bool
     {
-        return $document->project?->user_id === $user->id;
+        return \App\Support\Ownership::owns($user, $document->project?->user_id);
     }
 
     /** @param  list<string>  $roles */

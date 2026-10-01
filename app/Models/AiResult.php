@@ -18,6 +18,15 @@ use Illuminate\Support\Str;
  */
 class AiResult extends Model
 {
+    protected static function booted(): void
+    {
+        // The jobs built from this result go with it — and so, through each job,
+        // do their tasks and schedule.
+        static::deleted(function (self $result): void {
+            Job::where('ai_result_id', $result->id)->get()->each->delete();
+        });
+    }
+
     public const REVIEW_PENDING = 'pending';
 
     public const REVIEW_IN_PROGRESS = 'in-review';

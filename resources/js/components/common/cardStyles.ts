@@ -17,6 +17,8 @@ const ACCENTS: Record<Tone, string> = {
   warning: 'border-status-warning/60 border-l-status-warning',
   danger: 'border-status-danger/60 border-l-status-danger',
   info: 'border-status-info/60 border-l-status-info',
+  purple: 'border-status-purple/60 border-l-status-purple',
+  blue: 'border-status-blue/60 border-l-status-blue',
   neutral: 'border-white/35 border-l-white/50',
 }
 

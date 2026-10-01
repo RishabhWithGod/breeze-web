@@ -2,16 +2,7 @@ import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Save } from 'lucide-react'
-import {
-  Alert,
-  Button,
-  ButtonLink,
-  Card,
-  CardHeader,
-  SelectField,
-  TextArea,
-  TextInput,
-} from '@/components/common'
+import { Alert, Button, ButtonLink, Card, CardHeader, SelectField, TextArea, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import { formatUsPhone, toTitleCase } from '@/utils'
@@ -45,6 +36,13 @@ export interface ForemanEditProps {
     readonly joinedOn: string | null
     readonly notes: string | null
   }
+  /** Set when the person being edited is a manager rather than crew. */
+  manager?: {
+    readonly saveUrl: string
+    readonly backUrl: string
+    /** False for someone's own sign-in email — that is changed from Security. */
+    readonly canEditEmail: boolean
+  }
 }
 
 /**
@@ -59,34 +57,45 @@ export interface ForemanEditProps {
  * can fill in itself is one more thing to type and one more thing to get wrong
  * — a rename re-derives them rather than leaving the old ones behind.
  */
-export default function ForemanEdit({ foreman, teams, roles }: ForemanEditProps) {
-  const { data, setData, put, processing, errors, hasErrors, clearErrors } =
-    useForm<ForemanDraft>({
-      name: foreman.name,
-      role: foreman.role,
-      team_id: foreman.teamId === null ? '' : String(foreman.teamId),
-      phone: foreman.phone ?? '',
-      email: foreman.email ?? '',
-      licence_number: foreman.licenceNumber ?? '',
-      started_on: foreman.joinedOn ?? '',
-      notes: foreman.notes ?? '',
-    })
+export default function ForemanEdit({ foreman, teams, roles, manager }: ForemanEditProps) {
+  const isManager = manager !== undefined
+  const backUrl = manager?.backUrl ?? routeTo.foreman(foreman.id)
+
+  const { data, setData, put, transform, processing, errors, hasErrors, clearErrors } = useForm<ForemanDraft>({
+    name: foreman.name,
+    role: foreman.role,
+    team_id: foreman.teamId === null ? '' : String(foreman.teamId),
+    phone: foreman.phone ?? '',
+    email: foreman.email ?? '',
+    licence_number: foreman.licenceNumber ?? '',
+    started_on: foreman.joinedOn ?? '',
+    notes: foreman.notes ?? '',
+  })
 
   /**
    * Inertia keeps server errors until the next request, which would leave
    * "Enter the foreman's name" sitting under a field the user has just filled
    * in, so each edit clears its own message.
    */
-  const update = <K extends FormDataKeys<ForemanDraft>>(
-    field: K,
-    value: FormDataValues<ForemanDraft, K>,
-  ) => {
+  const update = <K extends FormDataKeys<ForemanDraft>>(field: K, value: FormDataValues<ForemanDraft, K>) => {
     setData(field, value)
     if (errors[field]) clearErrors(field)
   }
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
+    if (manager) {
+      // A manager has a name, a phone and a sign-in email; the crew fields do not apply.
+      transform((form) => ({
+        name: form.name,
+        phone: form.phone,
+        ...(manager.canEditEmail ? { email: form.email } : {}),
+      }))
+      put(manager.saveUrl)
+
+      return
+    }
+
     put(routeTo.foreman(foreman.id))
   }
 
@@ -99,15 +108,11 @@ export default function ForemanEdit({ foreman, teams, roles }: ForemanEditProps)
         breadcrumbs={[
           { label: 'Jobs', href: ROUTES.jobs },
           { label: 'Teams', href: ROUTES.teams },
-          { label: foreman.name, href: routeTo.foreman(foreman.id) },
+          isManager ? { label: 'Managers', href: backUrl } : { label: foreman.name, href: routeTo.foreman(foreman.id) },
           { label: 'Edit' },
         ]}
         actions={
-          <ButtonLink
-            href={routeTo.foreman(foreman.id)}
-            variant="secondary"
-            leftIcon={ArrowLeft}
-          >
+          <ButtonLink href={backUrl} variant="secondary" leftIcon={ArrowLeft}>
             Back
           </ButtonLink>
         }
@@ -123,7 +128,7 @@ export default function ForemanEdit({ foreman, teams, roles }: ForemanEditProps)
         </AnimatePresence>
 
         <Card padding="lg">
-          <CardHeader title="Member details" />
+          <CardHeader title={isManager ? 'Manager details' : 'Member details'} />
 
           <div className="space-y-6">
             <TextInput
@@ -145,47 +150,54 @@ export default function ForemanEdit({ foreman, teams, roles }: ForemanEditProps)
                 label="Role*"
                 options={roles.map((role) => ({ label: role.label, value: role.value }))}
                 value={data.role}
+                disabled={isManager}
                 onChange={(event) => update('role', event.target.value)}
                 {...(errors.role ? { error: errors.role } : {})}
               />
 
-              {/*
+              {!isManager && (
+                <>
+                  {/*
                 Blank is a real answer, and moving somebody between crews is
                 just changing it — the work they are carrying stays with them.
               */}
-              <SelectField
-                id="foreman-team"
-                label="Team"
-                options={[
-                  { label: teams.length > 0 ? 'Not on a team' : 'No teams yet', value: '' },
-                  ...teams.map((team) => ({ label: team.name, value: String(team.id) })),
-                ]}
-                value={data.team_id}
-                onChange={(event) => update('team_id', event.target.value)}
-                {...(errors.team_id ? { error: errors.team_id } : {})}
-              />
+                  <SelectField
+                    id="foreman-team"
+                    label="Team"
+                    options={[
+                      { label: teams.length > 0 ? 'Not on a team' : 'No teams yet', value: '' },
+                      ...teams.map((team) => ({ label: team.name, value: String(team.id) })),
+                    ]}
+                    value={data.team_id}
+                    onChange={(event) => update('team_id', event.target.value)}
+                    {...(errors.team_id ? { error: errors.team_id } : {})}
+                  />
+                </>
+              )}
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2">
-              <TextInput
-                id="foreman-started"
-                label="Date of Joining"
-                type="date"
-                value={data.started_on}
-                onChange={(event) => update('started_on', event.target.value)}
-                {...(errors.started_on ? { error: errors.started_on } : {})}
-              />
+            {!isManager && (
+              <div className="grid gap-6 sm:grid-cols-2">
+                <TextInput
+                  id="foreman-started"
+                  label="Date of Joining"
+                  type="date"
+                  value={data.started_on}
+                  onChange={(event) => update('started_on', event.target.value)}
+                  {...(errors.started_on ? { error: errors.started_on } : {})}
+                />
 
-              <TextInput
-                id="foreman-licence"
-                label="Licence Number"
-                placeholder="e.g. EC-4471"
-                autoComplete="off"
-                value={data.licence_number}
-                onChange={(event) => update('licence_number', event.target.value)}
-                {...(errors.licence_number ? { error: errors.licence_number } : {})}
-              />
-            </div>
+                <TextInput
+                  id="foreman-licence"
+                  label="Licence Number"
+                  placeholder="e.g. EC-4471"
+                  autoComplete="off"
+                  value={data.licence_number}
+                  onChange={(event) => update('licence_number', event.target.value)}
+                  {...(errors.licence_number ? { error: errors.licence_number } : {})}
+                />
+              </div>
+            )}
 
             <div className="grid gap-6 sm:grid-cols-2">
               {/*
@@ -212,27 +224,33 @@ export default function ForemanEdit({ foreman, teams, roles }: ForemanEditProps)
                 placeholder="e.g. dana@example.com"
                 autoComplete="off"
                 value={data.email}
+                disabled={isManager && !manager.canEditEmail}
+                {...(isManager && !manager.canEditEmail
+                  ? { hint: 'Their sign-in email is changed from Security.' }
+                  : {})}
                 onChange={(event) => update('email', event.target.value)}
                 {...(errors.email ? { error: errors.email } : {})}
               />
             </div>
 
-            <TextArea
-              id="foreman-notes"
-              label="Notes"
-              rows={4}
-              maxLength={2000}
-              placeholder="Certifications, what they specialise in, who to call instead."
-              value={data.notes}
-              onChange={(event) => update('notes', event.target.value)}
-              addon={`${data.notes.length}/2000`}
-              {...(errors.notes ? { error: errors.notes } : {})}
-            />
+            {!isManager && (
+              <TextArea
+                id="foreman-notes"
+                label="Notes"
+                rows={4}
+                maxLength={2000}
+                placeholder="Certifications, what they specialise in, who to call instead."
+                value={data.notes}
+                onChange={(event) => update('notes', event.target.value)}
+                addon={`${data.notes.length}/2000`}
+                {...(errors.notes ? { error: errors.notes } : {})}
+              />
+            )}
           </div>
         </Card>
 
         <div className="flex flex-wrap items-center justify-end gap-3">
-          <ButtonLink href={routeTo.foreman(foreman.id)} variant="white">
+          <ButtonLink href={backUrl} variant="white">
             Cancel
           </ButtonLink>
           <Button type="submit" leftIcon={Save} isLoading={processing}>

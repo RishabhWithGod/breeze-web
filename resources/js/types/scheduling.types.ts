@@ -11,7 +11,61 @@ export type JobPriority = 'high' | 'medium' | 'low'
 
 export type ScheduleStatus = 'scheduled' | 'confirmed' | 'completed'
 
-export type CalendarView = 'month' | 'week'
+export type CalendarView = 'month' | 'week' | 'day'
+
+/** How a job reads on the crew calendar. */
+export type BoardState = 'scheduled' | 'in-progress' | 'completed' | 'conflict' | 'attention'
+
+export interface BoardDay {
+  readonly date: string
+  readonly weekday: string
+  readonly monthDay: string
+  readonly dayOfMonth: number
+  readonly isToday: boolean
+  readonly isWeekend: boolean
+  readonly isCurrentPeriod: boolean
+}
+
+export interface BoardCrew {
+  readonly id: number
+  readonly name: string
+  readonly memberCount: number
+}
+
+/** One job, on one crew's row, on one day. */
+export interface BoardBlock {
+  readonly key: string
+  readonly jobId: number
+  readonly name: string
+  readonly location: string | null
+  readonly crewId: number
+  readonly date: string
+  readonly time: string | null
+  readonly state: BoardState
+}
+
+export interface BoardUnassignedJob {
+  readonly id: number
+  readonly name: string
+  readonly client: string | null
+  readonly location: string | null
+  readonly type: string | null
+  readonly priority: string
+  readonly hours: number | null
+}
+
+/** The crew calendar as the server works it out from the jobs. */
+export interface CrewBoardData {
+  readonly view: CalendarView
+  readonly label: string
+  readonly from: string
+  readonly to: string
+  readonly days: readonly BoardDay[]
+  readonly crews: readonly BoardCrew[]
+  readonly blocks: readonly BoardBlock[]
+  readonly unassigned: readonly BoardUnassignedJob[]
+  readonly unassignedTotal: number
+}
 
 /** A crew member who can lead a shift. */
 export interface CrewMember {

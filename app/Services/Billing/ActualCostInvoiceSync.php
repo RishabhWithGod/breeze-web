@@ -5,6 +5,7 @@ namespace App\Services\Billing;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Job;
+use App\Services\ChangeOrders\ChangeOrderBilling;
 use App\Services\JobCosting\JobCostSummary;
 use App\Services\Takeoff\EstimateBuilder;
 
@@ -100,6 +101,9 @@ class ActualCostInvoiceSync
                 'position' => $position++,
             ]);
         }
+
+        // Approved change orders are billed on top of the job's actual costs.
+        app(ChangeOrderBilling::class)->attachApprovedTo($invoice);
 
         $invoice->recalculateTotals();
     }

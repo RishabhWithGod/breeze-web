@@ -1,16 +1,26 @@
 import { useState } from 'react'
-import { Head, router, usePage } from '@inertiajs/react'
+import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
+import type { LucideIcon } from 'lucide-react'
 import {
   ArrowLeft,
-  Briefcase,
+  Building2,
+  Calculator,
+  CalendarDays,
   Check,
   ChevronDown,
   CreditCard,
   Download,
+  FileText,
+  Hourglass,
+  MapPin,
+  MessageSquare,
   Pencil,
+  Receipt,
   Send,
   Trash2,
+  UserRound,
+  Wallet,
   X,
 } from 'lucide-react'
 import {
@@ -18,13 +28,14 @@ import {
   Button,
   ButtonLink,
   Card,
+  CollapsibleCard,
   ConfirmDialog,
-  SectionHeading,
   StatusChip,
   TextInput,
+  buttonStyles,
 } from '@/components/common'
-import { InvoiceItemsTable } from '@/components/billing'
-import { appLayout, PageHeader, PageTransition } from '@/components/layout'
+import { InvoiceItemsTable, MetricCard } from '@/components/billing'
+import { appLayout, PageTransition } from '@/components/layout'
 import { MOTION, ROUTES, routeTo } from '@/constants'
 import { useDisclosure } from '@/hooks'
 import type {
@@ -35,7 +46,15 @@ import type {
   JourneymanHoursRow,
   SharedPageProps,
 } from '@/types'
-import { INVOICE_STATUS_LABEL, INVOICE_STATUS_TONE, formatCurrency, formatDate, formatHours } from '@/utils'
+import {
+  INVOICE_STATUS_LABEL,
+  INVOICE_STATUS_TONE,
+  cn,
+  formatCalendarDate,
+  formatCurrency,
+  formatDate,
+  formatHours,
+} from '@/utils'
 
 export interface InvoiceShowProps {
   invoice: InvoiceDetail
@@ -69,6 +88,8 @@ export default function InvoiceShow({
   const [dismissed, setDismissed] = useState<string | null>(null)
   const deleteDialog = useDisclosure()
   const costDetails = useDisclosure()
+  // Open to begin with — the lines are what the invoice is — and folds away on request.
+  const [linesOpen, setLinesOpen] = useState(true)
 
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
@@ -95,53 +116,81 @@ export default function InvoiceShow({
     deleteDialog.close()
   }
 
+  const status = INVOICE_STATUS_TONE[invoice.status]
+  const shareOfEstimate =
+    invoice.estimateTotal !== null && invoice.estimateTotal > 0
+      ? `${Math.round((invoice.total / invoice.estimateTotal) * 100)}% of the estimate`
+      : undefined
+
   return (
     <PageTransition>
       <Head title={`Invoice ${invoice.invoiceNumber}`} />
 
-      <PageHeader
-        title={`Invoice ${invoice.invoiceNumber}`}
-        subtitle={`${invoice.client}${invoice.jobName ? ` · ${invoice.jobName}` : ''}`}
-        breadcrumbs={[
-          { label: 'Billing', href: ROUTES.billing },
-          { label: 'Invoices', href: ROUTES.invoices },
-          { label: invoice.invoiceNumber },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <ButtonLink href={ROUTES.invoices} variant="secondary" size="sm" leftIcon={ArrowLeft}>
-              Back to Invoices
-            </ButtonLink>
-            {/* A real file download, not an Inertia page — an Inertia <Link>
-                here would send an XHR visit and never actually download it. */}
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={Download}
-              onClick={() => window.open(routeTo.invoicePdf(invoice.id), '_blank')}
-            >
-              Download PDF
-            </Button>
-            {can.update && (
-              <ButtonLink href={routeTo.invoiceEdit(invoice.id)} size="sm" leftIcon={Pencil}>
-                Edit
-              </ButtonLink>
-            )}
-            {can.delete && (
-              <Button size="sm" variant="danger" leftIcon={Trash2} onClick={deleteDialog.open}>
-                Delete
-              </Button>
-            )}
+      {/* ==================================================== Header ========= */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <Link
+            href={ROUTES.invoices}
+            className="inline-flex items-center gap-2 text-md font-medium text-white transition-colors hover:text-brand"
+          >
+            <ArrowLeft size={17} aria-hidden />
+            Billing Overview
+          </Link>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-bold text-white sm:text-4xl">Invoice {invoice.invoiceNumber}</h1>
+            <StatusChip pill hideDot tone={status} label={INVOICE_STATUS_LABEL[invoice.status]} />
           </div>
-        }
-      />
+
+          <p className="mt-2 text-md text-white/85">
+            {invoice.client}
+            {invoice.projectName || invoice.jobName ? ` · ${invoice.projectName ?? invoice.jobName}` : ''} · Created{' '}
+            {formatDate(invoice.createdAt)}
+            {invoice.createdBy ? ` by ${invoice.createdBy}` : ''}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {can.send && (
+            <Button leftIcon={Send} onClick={send}>
+              Send Invoice
+            </Button>
+          )}
+          {can.markPaid && stripeConnected && (
+            <Button leftIcon={CreditCard} onClick={payOnline}>
+              Pay Now
+            </Button>
+          )}
+          {can.markPaid && (
+            <Button variant={stripeConnected ? 'secondary' : 'primary'} leftIcon={Check} onClick={markPaid}>
+              Mark as Paid
+            </Button>
+          )}
+          {/* A real file download, not an Inertia page — an Inertia <Link> here
+              would send an XHR visit and never actually download it. */}
+          <a href={routeTo.invoicePdf(invoice.id)} target="_blank" rel="noreferrer" className={buttonStyles({ variant: 'white' })}>
+            <Download size={18} aria-hidden />
+            Download PDF
+          </a>
+          {can.update && (
+            <ButtonLink href={routeTo.invoiceEdit(invoice.id)} variant="secondary" leftIcon={Pencil}>
+              Edit
+            </ButtonLink>
+          )}
+          {can.delete && (
+            <Button variant="secondary" leftIcon={Trash2} onClick={deleteDialog.open}>
+              Delete
+            </Button>
+          )}
+        </div>
+      </div>
 
       <AnimatePresence initial={false}>
         {notice && (
           <Alert
             key={notice}
             tone={flash.warning ? 'warning' : 'success'}
-            className="mb-6"
+            className="mt-4"
             onDismiss={() => setDismissed(notice)}
           >
             {notice}
@@ -149,79 +198,112 @@ export default function InvoiceShow({
         )}
       </AnimatePresence>
 
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <StatusChip tone={INVOICE_STATUS_TONE[invoice.status]} label={INVOICE_STATUS_LABEL[invoice.status]} />
-        <span className="text-sm text-white/70">
-          Created {formatDate(invoice.createdAt)}
-          {invoice.createdBy ? ` by ${invoice.createdBy}` : ''}
-        </span>
+      {/* ============================================ Who, what, when ======== */}
+      <Card padding="md" className="mt-5">
+        <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
+          <InfoItem icon={Building2} label="Project" value={invoice.projectName ?? invoice.jobName ?? '—'}>
+            {invoice.jobId !== null && (
+              <Link href={routeTo.job(invoice.jobId)} className="text-xs font-medium text-brand hover:underline">
+                Open job{invoice.jobName && invoice.projectName ? ` · ${invoice.jobName}` : ''}
+              </Link>
+            )}
+          </InfoItem>
+          <InfoItem icon={UserRound} label="Client" value={invoice.client} />
+          <InfoItem icon={MapPin} label="Billing To" value={invoice.billingAddress ?? 'No address on file'} />
+          <InfoItem icon={FileText} label="Invoice Number" value={invoice.invoiceNumber}>
+            {invoice.estimateId !== null && invoice.estimateNumber && (
+              <Link href={routeTo.estimate(invoice.estimateId)} className="text-xs font-medium text-brand hover:underline">
+                From estimate {invoice.estimateNumber}
+              </Link>
+            )}
+          </InfoItem>
+          <InfoItem icon={CalendarDays} label="Invoice Date" value={formatCalendarDate(invoice.invoiceDate, 'MM/dd/yyyy')} />
+          <InfoItem
+            icon={CalendarDays}
+            label="Due Date"
+            value={invoice.dueDate ? formatCalendarDate(invoice.dueDate, 'MM/dd/yyyy') : '—'}
+          />
+          <InfoItem icon={Send} label="Sent" value={invoice.sentAt ? formatDate(invoice.sentAt) : 'Not sent'} />
+          <InfoItem icon={Check} label="Paid" value={invoice.paidAt ? formatDate(invoice.paidAt) : 'Not paid'} />
+        </dl>
+      </Card>
+
+      {/* ============================================== Summary cards ======== */}
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          icon={FileText}
+          label="Approved Estimate"
+          value={invoice.estimateTotal !== null ? formatCurrency(invoice.estimateTotal, 2) : '—'}
+          note={invoice.estimateNumber ?? undefined}
+          tone="cyan"
+        />
+        <MetricCard icon={Calculator} label="This Invoice" value={formatCurrency(invoice.total, 2)} note={shareOfEstimate} tone="blue" />
+        <MetricCard icon={Wallet} label="Paid" value={formatCurrency(invoice.paidAmount, 2)} tone="green" />
+        <MetricCard
+          icon={Hourglass}
+          label="Balance Due"
+          value={formatCurrency(invoice.outstanding, 2)}
+          tone={invoice.status === 'overdue' ? 'red' : 'cyan'}
+          note={invoice.status === 'overdue' ? 'Past its due date' : undefined}
+        />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card accent="brand" padding="lg">
-          <SectionHeading as="h3" title="Invoice Information" />
-          <dl className="grid grid-cols-2 gap-4">
-            <Field label="Client" value={invoice.client} />
-            <Field label="Job" value={invoice.jobName ?? '—'} />
-            <Field label="Invoice Date" value={formatDate(invoice.invoiceDate)} />
-            <Field label="Due Date" value={invoice.dueDate ? formatDate(invoice.dueDate) : '—'} />
-            {invoice.estimateNumber && <Field label="From Estimate" value={invoice.estimateNumber} />}
-            <Field label="Sent" value={invoice.sentAt ? formatDate(invoice.sentAt) : 'Not sent'} />
-            <Field label="Paid" value={invoice.paidAt ? formatDate(invoice.paidAt) : 'Not paid'} />
-          </dl>
-          {invoice.jobId && (
-            <div className="mt-4 border-t border-hairline pt-4">
-              <ButtonLink href={routeTo.job(invoice.jobId)} variant="secondary" size="sm" leftIcon={Briefcase}>
-                Open job
-              </ButtonLink>
-            </div>
-          )}
+      {/* ================================================ Invoice lines ====== */}
+      <CollapsibleCard
+        className="mt-5"
+        title="Invoice Lines"
+        subtitle={invoice.estimateNumber ? `Billed against estimate ${invoice.estimateNumber}` : 'Lines on this invoice'}
+        icon={Receipt}
+        tone="blue"
+        plain
+        summary={
+          <span className="tabular-nums">
+            {items.length} {items.length === 1 ? 'line' : 'lines'} · {formatCurrency(invoice.subtotal, 2)}
+          </span>
+        }
+        isOpen={linesOpen}
+        onToggle={() => setLinesOpen((open) => !open)}
+      >
+        <InvoiceItemsTable
+          invoiceId={invoice.id}
+          items={items}
+          editable={can.update}
+          estimateNumber={invoice.estimateNumber}
+        />
+      </CollapsibleCard>
+
+      {/* ================================================ Notes + totals ===== */}
+      <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <Card padding="md">
+          <div className="flex items-center gap-3">
+            <MessageSquare size={20} aria-hidden className="text-white/85" />
+            <h2 className="text-md font-semibold text-white">Notes</h2>
+          </div>
+          <p className={cn('mt-3 text-md whitespace-pre-line', invoice.notes ? 'text-white/90' : 'text-white/60')}>
+            {invoice.notes ?? 'No note on this invoice.'}
+          </p>
         </Card>
 
-        <Card accent="success" padding="lg">
-          <SectionHeading as="h3" title="Totals & Tax" />
-          <dl className="flex flex-col gap-2">
+        <Card padding="md">
+          <dl className="space-y-3 text-md">
             <TotalRow label="Subtotal" value={formatCurrency(invoice.subtotal, 2)} />
-            <TotalRow label={`Tax (${invoice.taxPct}%)`} value={formatCurrency(invoice.taxTotal, 2)} />
-            <TotalRow label="Total" value={formatCurrency(invoice.total, 2)} strong />
+            <TotalRow label={`Sales Tax (${invoice.taxPct}%)`} value={formatCurrency(invoice.taxTotal, 2)} />
+            <div className="flex items-center justify-between gap-3 border-t border-hairline-strong pt-3">
+              <dt className="text-lg font-semibold text-white">Total</dt>
+              <dd className="text-2xl font-bold tabular-nums text-white">{formatCurrency(invoice.total, 2)}</dd>
+            </div>
             <TotalRow label="Paid" value={formatCurrency(invoice.paidAmount, 2)} />
             <TotalRow label="Balance Due" value={formatCurrency(invoice.outstanding, 2)} strong />
           </dl>
-
-          {(can.send || can.markPaid) && (
-            <div className="mt-4 flex flex-wrap gap-3 border-t border-hairline pt-4">
-              {can.send && (
-                <Button leftIcon={Send} onClick={send}>
-                  Send Invoice
-                </Button>
-              )}
-              {can.markPaid && stripeConnected && (
-                <Button leftIcon={CreditCard} onClick={payOnline}>
-                  Pay Now
-                </Button>
-              )}
-              {can.markPaid && (
-                <Button variant={stripeConnected ? 'secondary' : 'primary'} leftIcon={Check} onClick={markPaid}>
-                  Mark as Paid
-                </Button>
-              )}
-            </div>
-          )}
         </Card>
       </div>
 
-      <Card accent="warning" padding="lg" className="mt-6">
-        <SectionHeading as="h3" title="Line Items" />
-        <InvoiceItemsTable invoiceId={invoice.id} items={items} editable={can.update} />
-      </Card>
-
       {invoice.jobId !== null && (
-        <Card accent="info" padding="lg" className="mt-6">
-          <SectionHeading
-            as="h3"
-            title="Journeyman Labor Hours"
-            subtitle="Every person's total hours on this job — counted the moment they're logged, no approval wait"
-          />
+        <Card padding="md" className="mt-5">
+          <h2 className="text-lg font-semibold text-white">Journeyman Labor Hours</h2>
+          <p className="mt-0.5 text-xs text-white/70">
+            Every person&apos;s total hours on this job — counted the moment they&apos;re logged, no approval wait
+          </p>
           <div className="mt-4 flex flex-col gap-2">
             {journeymanHours.length === 0 ? (
               <p className="text-md text-white/70">No time logged on this job yet.</p>
@@ -240,14 +322,14 @@ export default function InvoiceShow({
       )}
 
       {jobCostSummary && (
-        <Card accent="brand" padding="lg" className="mt-6">
+        <Card padding="md" className="mt-5">
           <button
             type="button"
             className="flex w-full items-center justify-between gap-3 text-left"
             aria-expanded={costDetails.isOpen}
             onClick={costDetails.toggle}
           >
-            <SectionHeading as="h3" title="Job Cost Details" className="mb-0" />
+            <h2 className="text-lg font-semibold text-white">Job Cost Details</h2>
             <ChevronDown
               size={18}
               className={`shrink-0 text-white/70 transition-transform ${costDetails.isOpen ? 'rotate-180' : ''}`}
@@ -289,13 +371,6 @@ export default function InvoiceShow({
         </Card>
       )}
 
-      {invoice.notes && (
-        <Card accent="neutral" padding="lg" className="mt-6">
-          <SectionHeading as="h3" title="Notes" />
-          <p className="text-md text-white/90">{invoice.notes}</p>
-        </Card>
-      )}
-
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}
         tone="danger"
@@ -310,13 +385,27 @@ export default function InvoiceShow({
   )
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function InfoItem({
+  icon: Icon,
+  label,
+  value,
+  children,
+}: {
+  icon: LucideIcon
+  label: string
+  value: string
+  children?: React.ReactNode
+}) {
   return (
-    <div className="min-w-0">
-      <dt className="text-2xs tracking-wide text-white/80 uppercase">{label}</dt>
-      <dd className="mt-1 truncate text-md text-white" title={value}>
-        {value}
-      </dd>
+    <div className="flex items-start gap-3">
+      <span className="grid size-10 shrink-0 place-items-center rounded-panel bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+        <Icon size={18} aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <dt className="text-xs text-white/70">{label}</dt>
+        <dd className="text-md font-medium text-white">{value}</dd>
+        {children}
+      </div>
     </div>
   )
 }

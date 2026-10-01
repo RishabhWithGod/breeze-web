@@ -73,8 +73,8 @@ export const SCHEDULE_STATUS_LABEL: Record<ScheduleStatus, string> = {
 
 export const SCHEDULE_STATUS_TONE: Record<ScheduleStatus, Tone> = {
   scheduled: 'info',
-  confirmed: 'success',
-  completed: 'neutral',
+  confirmed: 'blue',
+  completed: 'success',
 }
 
 /** Start times offered by the assign form — the working day in half-hours. */
@@ -124,7 +124,7 @@ export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
 export const TASK_STATUS_TONE: Record<TaskStatus, Tone> = {
   pending: 'neutral',
   ready: 'info',
-  'in-progress': 'brand',
+  'in-progress': 'blue',
   blocked: 'danger',
   completed: 'success',
   cancelled: 'neutral',

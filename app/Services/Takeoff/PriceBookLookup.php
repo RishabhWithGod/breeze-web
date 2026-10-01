@@ -57,7 +57,8 @@ class PriceBookLookup
     public function forUser(?int $userId): self
     {
         $scoped = clone $this;
-        $scoped->userId = $userId;
+        // The company's book, whichever of its managers is asking.
+        $scoped->userId = \App\Support\Ownership::bookOwnerId($userId);
         $scoped->items = null;
 
         return $scoped;
@@ -231,11 +232,11 @@ class PriceBookLookup
         $columns = ['id', 'match_key', 'unit', 'description', 'section', 'subsection',
             'unit_material_cost', 'unit_manhours', 'sample_count'];
 
-        $hasOwn = $this->userId !== null && PriceBookItem::query()->where('user_id', $this->userId)->exists();
+        $hasOwn = $this->userId !== null && PriceBookItem::query()->active()->where('user_id', $this->userId)->exists();
 
         $query = $hasOwn
-            ? PriceBookItem::query()->where('user_id', $this->userId)
-            : PriceBookItem::query()->whereNull('user_id');
+            ? PriceBookItem::query()->active()->where('user_id', $this->userId)
+            : PriceBookItem::query()->active()->whereNull('user_id');
 
         return $this->items = $query->get($columns);
     }

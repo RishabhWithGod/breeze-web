@@ -4,13 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\Foreman;
 use App\Models\Job;
+use App\Models\JobAttendance;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
 use App\Models\Team;
 use App\Models\User;
 use App\Policies\JobSchedulePolicy;
 use App\Rules\UsPhoneNumber;
+use App\Services\Company\ManagerRegistrar;
 use App\Services\TimeTracking\TeamMemberResolver;
+use App\Support\CompanyRule;
 use App\Support\UsPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +35,9 @@ use Inertia\Response;
  */
 class ForemanController extends Controller
 {
+    /** The one role on the Add Member form that is not a crew role. */
+    private const MANAGER_ROLE = 'manager';
+
     public function __construct(private readonly JobSchedulePolicy $policy) {}
 
     public function index(Request $request): Response
@@ -87,6 +93,7 @@ class ForemanController extends Controller
         $done = $this->load(closed: true)[$foreman->id] ?? null;
 
         $tasks = JobTask::query()
+            ->ownedBy(request()->user())
             // Work they are running and work they are over: the register row
             // above counts both, so the list below has to show both.
             ->heldBy($foreman->id)
@@ -117,6 +124,13 @@ class ForemanController extends Controller
                 'openJobs' => (int) ($open->jobs ?? 0),
                 'openHours' => (float) ($open->hours ?? 0),
                 'completedTasks' => (int) ($done->tasks ?? 0),
+                // Checked in at a site right now, by the mobile app.
+                'onSite' => $foreman->user_id !== null
+                    && JobAttendance::query()
+                        ->where('user_id', $foreman->user_id)
+                        ->where('status', JobAttendance::STATUS_CHECKED_IN)
+                        ->whereDate('date', today())
+                        ->exists(),
             ],
             /*
              * Open work only, and listed rather than counted: the count is on
@@ -157,7 +171,10 @@ class ForemanController extends Controller
     {
         // Foreman, journeyman or apprentice: all are carrying the task — see
         // JobTask::workload().
-        return JobTask::workload($closed);
+        // Only the work on the signed-in manager's own jobs.
+        $owner = request()->user();
+
+        return JobTask::workload($closed, fn ($query) => $query->ownedBy($owner));
     }
 
     public function create(Request $request): Response
@@ -190,10 +207,17 @@ class ForemanController extends Controller
     {
         return [
             'teams' => Team::orderBy('name')->get(['id', 'name']),
-            'roles' => array_map(
-                fn (string $role) => ['value' => $role, 'label' => ucfirst($role)],
-                Foreman::ROLES,
-            ),
+            'roles' => [
+                ...array_map(
+                    fn (string $role) => ['value' => $role, 'label' => ucfirst($role)],
+                    Foreman::ROLES,
+                ),
+                // A manager joins the company rather than a crew — offered only to
+                // someone who has a company to add them to.
+                ...(app(ManagerRegistrar::class)->canAdd(request()->user())
+                    ? [['value' => self::MANAGER_ROLE, 'label' => 'Manager']]
+                    : []),
+            ],
         ];
     }
 
@@ -288,6 +312,15 @@ class ForemanController extends Controller
         abort_unless($this->canManage($request->user()), 403);
 
         $data = $this->validated($request);
+
+        // A manager is not crew: they get a login into the company, and no place
+        // on the crew register.
+        if (($data['role'] ?? null) === self::MANAGER_ROLE) {
+            $manager = app(ManagerRegistrar::class)->add($request->user(), $data, 'email');
+
+            return redirect()->route('teams.index')->with('success', "“{$manager->name}” was added as a manager.");
+        }
+
         // Left blank, this defaults to the day they're actually being
         // added — a manager correcting it to an earlier real start date is
         // still free to, but "unset" is never the answer for someone being
@@ -324,6 +357,16 @@ class ForemanController extends Controller
         // are exactly where they were left.
         $job = $this->jobFor($request);
 
+        /*
+         * The task screen offers only the people staffed to the job's project. Someone added from
+         * there, to that job's own crew, is staffed to it too — otherwise they would be on the crew
+         * and still missing from the very dropdowns they were added for.
+         */
+        $project = $job?->project;
+        if ($project !== null && $project->members()->exists() && ($job->team_id === null || $job->team_id === $foreman->team_id)) {
+            $project->members()->syncWithoutDetaching([$foreman->id]);
+        }
+
         return redirect()
             ->to($job === null ? route('teams.index') : route('jobs.tasks.setup', $job))
             ->with('success', "“{$foreman->name}” was added.");
@@ -356,6 +399,10 @@ class ForemanController extends Controller
             'phone' => $foreman->phone,
         ]);
 
+        // Their login belongs to the company that added them.
+        $user->company_id = $foreman->company_id;
+        $user->save();
+
         // `user_id` is deliberately not in `Foreman::$fillable` — see
         // `TechnicianController::syncForemanRoster()` for why direct
         // property assignment is used everywhere this link is made.
@@ -385,7 +432,7 @@ class ForemanController extends Controller
             'name' => [
                 'required', 'string', 'min:2', 'max:120',
                 // A foreman renaming themselves is not a clash with themselves.
-                Rule::unique('foremen', 'name')->ignore($foreman),
+                CompanyRule::unique('foremen', 'name')->ignore($foreman),
             ],
             /*
              * Everything below is optional. A foreman exists to be handed work,
@@ -399,13 +446,15 @@ class ForemanController extends Controller
              * job — the whole point of the register is knowing who supervises
              * and who runs the work.
              */
-            'role' => ['required', Rule::in(Foreman::ROLES)],
+            'role' => ['required', Rule::in($isCreate && app(ManagerRegistrar::class)->canAdd($request->user())
+                ? [...Foreman::ROLES, self::MANAGER_ROLE]
+                : Foreman::ROLES)],
             /*
              * Which crew they are on. Optional: somebody can be hired before
              * their team is decided, and the register shows them as exactly
              * that rather than inventing one.
              */
-            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
+            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             'phone' => ['nullable', 'string', 'max:40', new UsPhoneNumber],
             /*
              * Every member added here is also a mobile-app login — the same

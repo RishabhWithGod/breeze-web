@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\TechnicianController;
 use App\Models\Foreman;
 use App\Models\Team;
+use App\Models\CompanyProfile;
 use App\Models\User;
 use App\Notifications\TechnicianApplicationStatusChanged;
 use App\Notifications\TechnicianSignupReceived;
@@ -51,11 +52,26 @@ class TechnicianOnboardingTest extends TestCase
         ]);
     }
 
+    /** A company with a manager who belongs to it. */
+    private function makeCompany(string $name = 'Volt & Co'): array
+    {
+        $manager = $this->makeManager();
+        $company = CompanyProfile::create([
+            'user_id' => $manager->id, 'name' => $name, 'business_address' => '12 Main St',
+            'primary_contact' => 'Alex', 'phone' => '(512) 555-0142', 'email' => 'o@x.test', 'timezone' => 'America/Chicago',
+        ]);
+        $manager->forceFill(['company_id' => $company->id])->save();
+
+        return [$company, $manager->fresh()];
+    }
+
     public function test_registering_creates_a_pending_technician_and_returns_a_token(): void
     {
         Notification::fake();
+        [$company] = $this->makeCompany();
 
         $response = $this->postJson('/api/v1/auth/register', [
+            'company_id' => $company->id,
             'name' => 'Jamie Rivera',
             'email' => 'jamie@example.com',
             'phone' => '2125551234',
@@ -72,6 +88,8 @@ class TechnicianOnboardingTest extends TestCase
         $this->assertSame('Journeyman', $user->role);
         $this->assertTrue($user->isPending());
         $this->assertTrue($user->isFromMobile());
+        // They applied to that company, and to no other.
+        $this->assertSame($company->id, $user->company_id);
         $this->assertTrue(Hash::check('correct-password', $user->password));
         $this->assertDatabaseHas('personal_access_tokens', ['tokenable_id' => $user->id]);
         // Stored formatted, same as every other phone column — see `UsPhone`.
@@ -88,13 +106,15 @@ class TechnicianOnboardingTest extends TestCase
         $this->assertSame('web', $user->registration_source);
     }
 
-    public function test_registering_notifies_every_manager(): void
+    public function test_registering_notifies_the_managers_of_the_company_applied_to(): void
     {
         Notification::fake();
-        $manager = $this->makeManager();
-        $other = User::factory()->create(['role' => 'Electrician']);
+        [$company, $manager] = $this->makeCompany();
+        [, $rivalManager] = $this->makeCompany('Rival Co');
+        $other = User::factory()->create(['role' => 'Electrician', 'company_id' => $company->id]);
 
         $this->postJson('/api/v1/auth/register', [
+            'company_id' => $company->id,
             'name' => 'Jamie Rivera',
             'email' => 'jamie@example.com',
             'password' => 'correct-password',
@@ -103,6 +123,8 @@ class TechnicianOnboardingTest extends TestCase
 
         Notification::assertSentTo($manager, TechnicianSignupReceived::class);
         Notification::assertNotSentTo($other, TechnicianSignupReceived::class);
+        // Another company's manager is not told about someone who did not apply to them.
+        Notification::assertNotSentTo($rivalManager, TechnicianSignupReceived::class);
     }
 
     public function test_a_duplicate_email_is_rejected(): void

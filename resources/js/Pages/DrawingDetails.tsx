@@ -83,6 +83,8 @@ export interface DrawingDetailsProps {
   engine: EngineSummary | null
   boq: readonly EngineBoqLine[]
   wireSizes: readonly WireSizeRow[]
+  /** Where Back goes — the screen this was actually opened from. */
+  back: { label: string; url: string }
 }
 
 type DocumentView = 'original' | 'annotated'
@@ -99,6 +101,7 @@ export default function DrawingDetails({
   engine,
   boq,
   wireSizes,
+  back,
 }: DrawingDetailsProps) {
   const [view, setView] = useState<DocumentView>('original')
 
@@ -149,8 +152,8 @@ export default function DrawingDetails({
         title="Drawing details"
         subtitle={drawing.projectName}
         breadcrumbs={[
-          { label: 'AI Takeoff', href: ROUTES.aiTakeoff },
-          { label: drawing.projectName },
+          { label: 'Projects', href: ROUTES.projects },
+          { label: drawing.projectName, href: routeTo.project(drawing.projectId) },
           { label: 'Drawing' },
         ]}
         actions={
@@ -174,8 +177,8 @@ export default function DrawingDetails({
                 Annotated PDF
               </ButtonLink>
             )}
-          <ButtonLink href={ROUTES.aiTakeoff} variant="secondary" leftIcon={ArrowLeft}>
-            Back
+          <ButtonLink href={back.url} variant="secondary" leftIcon={ArrowLeft}>
+            {back.label}
           </ButtonLink>
           </>
         }

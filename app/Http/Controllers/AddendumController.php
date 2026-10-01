@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Estimate;
 use App\Models\Team;
 use App\Services\Clients\ClientDirectory;
+use App\Support\Ownership;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,7 +26,7 @@ class AddendumController extends Controller
 
     public function index(Request $request): Response
     {
-        $userId = $request->user()->id;
+        $userId = Ownership::userIdList($request->user());
 
         $projects = $request->user()->projects()
             ->with('clientRecord:id,name')
@@ -44,10 +45,10 @@ class AddendumController extends Controller
 
         if ($selectedProjectId !== null && $projects->contains('id', $selectedProjectId)) {
             $originals = Estimate::query()
-                ->where('user_id', $userId)
+                ->whereIn('user_id', $userId)
                 ->where('project_id', $selectedProjectId)
                 ->where('kind', Estimate::KIND_STANDALONE)
-                ->with(['addenda' => fn ($query) => $query->where('user_id', $userId)])
+                ->with(['addenda' => fn ($query) => $query->whereIn('user_id', $userId)])
                 ->orderByDesc('issued_on')
                 ->get()
                 ->map(fn (Estimate $estimate) => $this->present($estimate, $estimate->addenda))

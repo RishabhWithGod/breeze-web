@@ -7,11 +7,13 @@ use App\Http\Requests\UpdateJobRequest;
 use App\Http\Resources\FeedItemResource;
 use App\Http\Resources\JobDetailResource;
 use App\Http\Resources\JobResource;
+use App\Models\ChangeOrder;
 use App\Models\Estimate;
 use App\Models\FeedItem;
 use App\Models\Job;
 use App\Models\JobApprenticeAssignment;
 use App\Models\JobSchedule;
+use App\Models\JobTask;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\TimeEntry;
@@ -20,13 +22,16 @@ use App\Models\User;
 use App\Policies\InvoicePolicy;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Activity\FeedItemRecorder;
+use App\Services\ChangeOrders\ChangeOrderAccess;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\JobSites;
 use App\Services\Clients\ProjectDirectory;
 use App\Services\JobCosting\JobCostSummary;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Services\Takeoff\TakeoffLinkOptions;
+use App\Support\JobCrew;
 use App\Support\JobOrigin;
+use App\Support\Ownership;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -72,8 +77,15 @@ class JobController extends Controller
 
         $jobs = Job::query()
             ->ownedBy($request->user())
-            ->with(['foreman', 'team:id,name', 'activeAssignments.assigner', 'invoices:id,job_id'])
-            ->withCount(['teamMembers', 'estimates'])
+            ->with(['foreman', 'team:id,name', 'project:id,name', 'activeAssignments.assigner', 'invoices:id,job_id'])
+            ->withCount([
+                'teamMembers',
+                'estimates',
+                'tasks',
+                // Done work, and work still to do: cancelled tasks are neither.
+                'tasks as tasks_done_count' => fn ($query) => $query->where('status', JobTask::STATUS_COMPLETED),
+                'tasks as tasks_open_count' => fn ($query) => $query->whereNotIn('status', [JobTask::STATUS_COMPLETED, JobTask::STATUS_CANCELLED]),
+            ])
             ->search($filters['search'] ?? null)
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when($type !== 'all', fn ($query) => $query->where('job_type', $type))
@@ -86,6 +98,10 @@ class JobController extends Controller
             ->sorted($sort)
             ->paginate(config('takeoff.per_page'))
             ->withQueryString();
+
+        // The crew on each job: everyone on any of its tasks, counted once.
+        $crew = JobCrew::countsFor($jobs->pluck('id')->all());
+        $jobs->getCollection()->each(fn (Job $job) => $job->setAttribute('crew_count', $crew[$job->id] ?? 0));
 
         return Inertia::render('Jobs', [
             'jobs' => JobResource::collection($jobs),
@@ -112,6 +128,12 @@ class JobController extends Controller
     /** Full-page create form. */
     public function create(Request $request): Response
     {
+        // Opened from a project's own screen, so the form fills it in and
+        // Back/Cancel return there rather than to the jobs list.
+        $defaultProjectId = $request->user()->projects()
+            ->whereKey($request->integer('project'))
+            ->value('id');
+
         return Inertia::render('JobCreate', [
             'clients' => $this->clients->options($request->user()),
             // Their projects, each carrying its sites and its default drawing.
@@ -123,6 +145,7 @@ class JobController extends Controller
             // Raising a job by hand forks a takeoff mid-flow: its own job is
             // raised from its review summary, not here.
             'unfinishedTakeoff' => app(TakeoffFlow::class)->inProgress($request),
+            'defaultProjectId' => $defaultProjectId,
         ]);
     }
 
@@ -221,18 +244,19 @@ class JobController extends Controller
             // each covers — the detail the panel states without the lines.
             'tasks' => fn ($query) => $query
                 ->with(
-                    'foreman:id,name',
-                    'supervisor:id,name',
+                    'foreman:id,name,initials',
+                    'supervisor:id,name,initials',
+                    'assignments.member:id,name,initials',
                     // Field notes/photos — the crew's own Materials screen on
                     // the mobile app, read-only here. The task-level pair is
                     // legacy (mobile writes per-material now, below); kept
                     // loaded only because nothing has migrated off it.
                     'comments.author:id,name',
-                    'attachments.uploader:id,name',
+                    'attachments.uploader:id,name,role',
                     // Per-material notes/photos — what the Materials screen
                     // actually writes to now, one line at a time.
                     'estimateItems.comments.author:id,name',
-                    'estimateItems.attachments.uploader:id,name',
+                    'estimateItems.attachments.uploader:id,name,role',
                 )
                 ->withCount('estimateItems')
                 ->orderBy('position')
@@ -272,6 +296,7 @@ class JobController extends Controller
             // just gates the manager's "remove" action on the list below.
             'canManageApprentices' => $schedulePolicy->assignApprentice($request->user(), $job),
             'canCreateInvoice' => app(InvoicePolicy::class)->create($request->user()),
+            'changeOrders' => $this->changeOrdersFor($request, $job),
             'apprenticeAssignments' => $job->apprenticeAssignments()
                 ->with(['journeyman:id,name', 'apprentice:id,name'])
                 ->get()
@@ -288,6 +313,35 @@ class JobController extends Controller
             // and the job someone returns to still knows the way out.
             'from' => $this->originName($request),
         ]);
+    }
+
+    /**
+     * This job's change orders, for the tab on its page — null for anyone who has no change orders
+     * screen, so the tab is not offered at all.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function changeOrdersFor(Request $request, Job $job): ?array
+    {
+        $access = app(ChangeOrderAccess::class);
+        $user = $request->user();
+
+        if (! $access->canUse($user)) {
+            return null;
+        }
+
+        return [
+            'canRaise' => $access->canRaiseFor($user, $job),
+            'items' => $access->visible(ChangeOrder::query(), $user)->where('job_id', $job->id)->orderByDesc('number')->get()
+                ->map(fn (ChangeOrder $co) => [
+                    'id' => $co->id,
+                    'label' => $co->label(),
+                    'description' => $co->description,
+                    'source' => $co->source,
+                    'status' => $co->status,
+                    'amount' => (float) $co->sell_total,
+                ])->all(),
+        ];
     }
 
     public function edit(Request $request, Job $job): Response|RedirectResponse
@@ -495,7 +549,7 @@ class JobController extends Controller
     {
         $validated = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
-            'ids.*' => ['integer', Rule::exists('work_jobs', 'id')->where('user_id', $request->user()->id)],
+            'ids.*' => ['integer', Rule::exists('work_jobs', 'id')->whereIn('user_id', Ownership::userIdList($request->user()))],
             'action' => ['required', Rule::in(['archive', 'unarchive', 'delete', 'status'])],
             'status' => ['nullable', Rule::in(Job::STATUSES), 'required_if:action,status'],
         ]);
