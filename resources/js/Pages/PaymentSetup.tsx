@@ -48,7 +48,10 @@ export default function PaymentSetup({
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
     transform((form) => ({ ...form, plan: planKey }))
-    post('/payment-setup', { preserveScroll: true })
+    // Keep scroll only on a validation-error re-render of this same page —
+    // a successful subscription moves on to the next screen, which should
+    // open at the top.
+    post('/payment-setup', { preserveScroll: (page) => Object.keys(page.props.errors ?? {}).length > 0 })
   }
 
   const planError = (errors as Record<string, string | undefined>)['plan']

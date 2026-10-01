@@ -70,7 +70,10 @@ export default function TermsConsent({ terms, privacy, signedOn, signerName }: T
       <form
         onSubmit={(event) => {
           event.preventDefault()
-          post('/terms', { preserveScroll: true })
+          // Keep the scroll position only when the submit comes back to this
+          // same page with validation errors — a real success moves on to
+          // Payment Setup, which should open at the top like any other page.
+          post('/terms', { preserveScroll: (page) => Object.keys(page.props.errors ?? {}).length > 0 })
         }}
         noValidate
         className="rounded-card border border-hairline glass"

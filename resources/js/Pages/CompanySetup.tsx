@@ -104,7 +104,12 @@ export default function CompanySetup({ company, defaults, timezones, editing }: 
       return
     }
 
-    post('/company-setup', { forceFormData: true, preserveScroll: true })
+    // Keep scroll only on a validation-error re-render of this same page —
+    // success moves on to Terms, which should open at the top.
+    post('/company-setup', {
+      forceFormData: true,
+      preserveScroll: (page) => Object.keys(page.props.errors ?? {}).length > 0,
+    })
   }
 
   return (
