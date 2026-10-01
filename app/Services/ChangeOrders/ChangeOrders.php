@@ -123,7 +123,7 @@ class ChangeOrders
     private function details(User $user, array $data): array
     {
         return [
-            'description' => trim($data['description']),
+            'description' => filled($data['description'] ?? null) ? trim($data['description']) : null,
             'reason' => filled($data['reason'] ?? null) ? trim($data['reason']) : null,
             // A foreman's is always raised from the field; a manager says which it is.
             'source' => $this->access->isManager($user) ? ($data['source'] ?? ChangeOrder::SOURCE_OFFICE) : ChangeOrder::SOURCE_FIELD,
