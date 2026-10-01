@@ -48,7 +48,7 @@ export default function SubscriptionConfirmed({
       <header className="mb-6">
         <h1 className="text-3xl font-bold text-white">Subscription Confirmed</h1>
         <p className="mt-2 text-lg font-semibold text-white">Welcome to Breeze.Ai!</p>
-        <p className="text-sm text-white/80">
+        <p className="mt-1 text-sm text-white/80">
           Your subscription is active and you&apos;re all set to start managing your takeoffs, estimates, and projects.
         </p>
       </header>
