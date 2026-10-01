@@ -130,7 +130,7 @@ export default function PaymentSetup({
                   </button>
                 ))}
               </div>
-              <SavePill>Save {annualDiscountPercent}%</SavePill>
+              {annualDiscountPercent > 0 && <SavePill>Save {annualDiscountPercent}%</SavePill>}
             </div>
           </Panel>
 
@@ -178,7 +178,9 @@ export default function PaymentSetup({
                   value={
                     <span className="flex items-center gap-2">
                       <strong className="text-white">{data.billing_cycle === 'yearly' ? 'Annual' : 'Monthly'}</strong>
-                      {data.billing_cycle === 'yearly' && <SavePill>Save {annualDiscountPercent}%</SavePill>}
+                      {data.billing_cycle === 'yearly' && annualDiscountPercent > 0 && (
+                        <SavePill>Save {annualDiscountPercent}%</SavePill>
+                      )}
                     </span>
                   }
                 />

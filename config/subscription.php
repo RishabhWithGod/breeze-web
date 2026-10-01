@@ -7,9 +7,14 @@
 |
 | What each plan costs and allows. Every plan has one fixed monthly `price`
 | and a `max_users` — how many people can hold an active account on it (`null`
-| is no limit). Enterprise's price is advertised like the others.
+| is no limit). Enterprise-style unlimited tiers are advertised like the others.
 |
-| PRICES BELOW ARE PLACEHOLDERS TO BE CONFIRMED before launch.
+| Prices below come from the official "Breeze Pricing Tiers" sheet (per-user
+| license prices). Billed here as one flat company-wide price with a seat
+| cap, not true per-seat billing — building real per-seat billing (a seat
+| count collected at Payment Setup, Stripe quantity wired to it) is a
+| follow-up, not done here. `max_users` below is a placeholder entitlement
+| chosen to keep today's team-invite flow usable, not taken from the sheet.
 |
 | `storage_gb` is what the drawings on file may add up to.
 */
@@ -17,58 +22,72 @@
 return [
     'default_plan' => 'growth',
 
-    /** Off the price when a company pays for a year at once. */
-    'annual_discount_percent' => 20,
+    /*
+    | The sheet's Annual column is the monthly price × 12 (no extra discount
+    | baked in) — annual just lets a company pay the year in one go.
+    */
+    'annual_discount_percent' => 0,
 
     'plans' => [
-        'starter' => [
-            'name' => 'Starter',
-            'tagline' => 'For small teams getting started',
-            'description' => 'For a small crew getting its first jobs takeoff and estimated.',
-            'price' => 49,
-            'max_users' => 2,
-            'users_label' => 'Up to 2 users',
+        'basic' => [
+            'name' => 'Breeze Basic',
+            'tagline' => 'For employees — time tracking & job photos',
+            'description' => 'CompanyCam- and Exaktime-style features for every employee: GPS time tracking, job photos, and daily logs.',
+            'price' => 62.50,
+            'max_users' => 5,
+            'users_label' => 'Up to 5 users',
             'popular' => false,
-            'limits' => ['ai_takeoffs' => 50, 'estimates' => 50, 'projects' => 25, 'storage_gb' => 10],
-            'highlights' => ['Core takeoff features', 'Email support'],
-            'features' => ['AI-Powered Takeoffs', 'Estimates', 'Project Management', 'Email Support'],
+            'limits' => ['ai_takeoffs' => 10, 'estimates' => 25, 'projects' => 15, 'storage_gb' => 10],
+            'highlights' => ['GPS time tracking', 'Job photos & daily logs', 'Email support'],
+            'features' => ['GPS Time Tracking', 'Job Site Photos', 'Daily Logs', 'Email Support'],
         ],
         'growth' => [
-            'name' => 'Growth',
-            'tagline' => 'For growing construction teams',
-            'description' => 'Everything you need to takeoff, estimate, and manage projects with AI.',
-            'price' => 149,
+            'name' => 'Breeze Growth',
+            'tagline' => 'For foremen & project managers',
+            'description' => 'Everything in Breeze Basic, plus Jobber-style job and crew management for the people running the work.',
+            'price' => 141.67,
             'max_users' => 10,
             'users_label' => 'Up to 10 users',
             'popular' => true,
-            'limits' => ['ai_takeoffs' => 500, 'estimates' => 200, 'projects' => 100, 'storage_gb' => 50],
-            'highlights' => ['Advanced takeoff tools', 'Integrations', 'Priority support'],
+            'limits' => ['ai_takeoffs' => 100, 'estimates' => 100, 'projects' => 60, 'storage_gb' => 50],
+            'highlights' => ['Everything in Breeze Basic', 'Job & crew management', 'Priority support'],
             'features' => [
-                'Advanced takeoff tools',
-                'Project collaboration',
-                'Integrations',
-                'Priority support',
-                'Regular feature updates',
+                'Everything in Breeze Basic',
+                'Job & Crew Management',
+                'Scheduling',
+                'Priority Support',
+                'Regular Feature Updates',
             ],
         ],
-        'enterprise' => [
-            'name' => 'Enterprise',
-            'tagline' => 'For large organizations',
-            'description' => 'For larger companies running many crews and jobs at once.',
-            'price' => 249,
+        'platinum' => [
+            'name' => 'Breeze Platinum',
+            'tagline' => 'Breeze Growth, plus AI Estimating',
+            'description' => 'Everything in Breeze Growth, plus the full AI-powered takeoff and estimating engine.',
+            'price' => 458.33,
             'max_users' => null,
             'users_label' => 'Unlimited users',
             'popular' => false,
-            'limits' => ['ai_takeoffs' => 2000, 'estimates' => 1000, 'projects' => 500, 'storage_gb' => 250],
-            'highlights' => ['Custom integrations', 'Dedicated support', 'Advanced security'],
+            'limits' => ['ai_takeoffs' => 1000, 'estimates' => 500, 'projects' => 300, 'storage_gb' => 250],
+            'highlights' => ['Everything in Breeze Growth', 'AI-powered takeoffs & estimating', 'Dedicated support'],
             'features' => [
-                'Advanced takeoff tools',
-                'Project collaboration',
-                'Custom integrations',
-                'Dedicated support',
-                'Advanced security',
-                'Regular feature updates',
+                'Everything in Breeze Growth',
+                'AI-Powered Takeoffs',
+                'AI-Powered Estimating',
+                'Dedicated Support',
+                'Advanced Security',
             ],
+        ],
+        'electric_ai_estimating' => [
+            'name' => 'Breeze Electric AI Estimating',
+            'tagline' => 'AI-powered takeoffs and estimating, standalone',
+            'description' => 'Just the AI Estimating engine — electrical takeoffs and estimates, without the job and crew management tools.',
+            'price' => 375.00,
+            'max_users' => 10,
+            'users_label' => 'Up to 10 users',
+            'popular' => false,
+            'limits' => ['ai_takeoffs' => 500, 'estimates' => 200, 'projects' => 100, 'storage_gb' => 100],
+            'highlights' => ['AI-powered takeoffs', 'AI-powered estimating', 'Standalone — no crew tools'],
+            'features' => ['AI-Powered Takeoffs', 'AI-Powered Estimating', 'Bill of Quantities', 'Email Support'],
         ],
     ],
 ];

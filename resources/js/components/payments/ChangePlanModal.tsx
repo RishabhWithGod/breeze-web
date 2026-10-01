@@ -82,7 +82,11 @@ function PlanForm({ subscription, onClose }: { subscription: SubscriptionSummary
               cycle === option ? 'bg-blue-600 text-white' : 'bg-white/6 text-white/85 hover:bg-white/12',
             )}
           >
-            {option === 'yearly' ? `Annual · save ${subscription.annualDiscountPercent}%` : 'Monthly'}
+            {option === 'yearly'
+              ? subscription.annualDiscountPercent > 0
+                ? `Annual · save ${subscription.annualDiscountPercent}%`
+                : 'Annual'
+              : 'Monthly'}
           </button>
         ))}
       </div>
