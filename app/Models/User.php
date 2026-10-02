@@ -215,6 +215,28 @@ class User extends Authenticatable
         return $this->hasOne(Foreman::class);
     }
 
+    /**
+     * Whether this account carries a foreman's authority on the mobile app:
+     * the crew register's Foreman, or a manager-level account (which has no
+     * register row at all). The mobile Foreman screens — whole-job task board,
+     * crew time, approving a crew member's work, assigning apprentices,
+     * closing a job out — are exactly what a manager needs too, so both read
+     * true here rather than each gate asking `foreman?->role` and silently
+     * locking managers out.
+     */
+    public function hasForemanAuthority(): bool
+    {
+        if ($this->foreman?->role === Foreman::ROLE_FOREMAN) {
+            return true;
+        }
+
+        return in_array(
+            mb_strtolower(trim((string) $this->role)),
+            ['project manager', 'manager', 'admin', 'owner'],
+            true,
+        );
+    }
+
     /** @return HasMany<TimeEntry, $this> */
     public function timeEntries(): HasMany
     {

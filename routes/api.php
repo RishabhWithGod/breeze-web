@@ -15,7 +15,13 @@ use App\Http\Controllers\Api\V1\EstimateItemNoteController;
 use App\Http\Controllers\Api\V1\InvoiceController;
 use App\Http\Controllers\Api\V1\InvoicePaymentController;
 use App\Http\Controllers\Api\V1\JobApprenticeAssignmentController;
+use App\Http\Controllers\Api\V1\JobChangeOrderController;
 use App\Http\Controllers\Api\V1\JobController;
+use App\Http\Controllers\Api\V1\JobDocumentController;
+use App\Http\Controllers\Api\V1\JobMaterialController;
+use App\Http\Controllers\Api\V1\JobMessageController;
+use App\Http\Controllers\Api\V1\JobPhotoController;
+use App\Http\Controllers\Api\V1\CommodityController;
 use App\Http\Controllers\Api\V1\JobTaskAttachmentController;
 use App\Http\Controllers\Api\V1\JobTaskController;
 use App\Http\Controllers\Api\V1\JobTaskNoteController;
@@ -249,6 +255,25 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 // Putting an apprentice under a journeyman on this job — a
                 // foreman's own call, from their Job Detail screen.
                 Route::post('jobs/{job}/apprentices', [JobApprenticeAssignmentController::class, 'store'])->name('jobs.apprentices.store');
+
+                // The job workspace's own Messages, Additional Work and
+                // Documents — all scoped to a job the caller can access.
+                Route::get('jobs/{job}/messages', [JobMessageController::class, 'index'])->name('jobs.messages.index');
+                Route::post('jobs/{job}/messages', [JobMessageController::class, 'store'])->name('jobs.messages.store');
+                Route::get('jobs/{job}/change-orders', [JobChangeOrderController::class, 'index'])->name('jobs.change-orders.index');
+                Route::post('jobs/{job}/change-orders', [JobChangeOrderController::class, 'store'])->name('jobs.change-orders.store');
+                // Material and Work Changes: actual use against the plan, what the
+                // crew added, the commodity list to pick from, and evidence photos.
+                Route::get('jobs/{job}/materials', [JobMaterialController::class, 'index'])->name('jobs.materials.index');
+                Route::post('jobs/{job}/materials', [JobMaterialController::class, 'submit'])->name('jobs.materials.submit');
+                Route::delete('jobs/{job}/materials/{material}', [JobMaterialController::class, 'destroy'])->name('jobs.materials.destroy');
+                Route::get('commodities', [CommodityController::class, 'index'])->name('commodities.index');
+                Route::get('jobs/{job}/photos', [JobPhotoController::class, 'index'])->name('jobs.photos.index');
+                Route::post('jobs/{job}/photos', [JobPhotoController::class, 'store'])->name('jobs.photos.store');
+                Route::get('jobs/{job}/photos/{attachment}', [JobPhotoController::class, 'show'])->name('jobs.photos.show');
+                Route::delete('jobs/{job}/photos/{attachment}', [JobPhotoController::class, 'destroy'])->name('jobs.photos.destroy');
+                Route::get('jobs/{job}/documents', [JobDocumentController::class, 'index'])->name('jobs.documents.index');
+                Route::get('jobs/{job}/documents/{document}/download', [JobDocumentController::class, 'download'])->name('jobs.documents.download');
 
                 Route::get('jobs/{job}/tasks', [JobTaskController::class, 'index'])->name('jobs.tasks.index');
                 // Cross-job "My Tasks" feed — every task on every job this

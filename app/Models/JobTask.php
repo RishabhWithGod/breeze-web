@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Scheduling\JobCrewProjectSync;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,25 @@ class JobTask extends Model
 {
     protected static function booted(): void
     {
+        // A task being created or handed to someone is what makes the job's
+        // crew real, so the client and project pick it up if they had none.
+        // Never allowed to fail the save it rides on.
+        static::saved(function (self $task): void {
+            if ($task->job_id === null || ! ($task->wasRecentlyCreated || $task->wasChanged(['foreman_id', 'supervisor_id']))) {
+                return;
+            }
+
+            try {
+                $job = Job::find($task->job_id);
+
+                if ($job !== null) {
+                    app(JobCrewProjectSync::class)->sync($job);
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        });
+
         // The last task off a job takes its schedule with it, and the job is
         // unassigned again — the calendar draws from tasks, so nothing is left
         // to draw. While any task remains the schedule stays.

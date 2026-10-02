@@ -9,7 +9,6 @@ use App\Models\JobAttendance;
 use App\Models\TimeEntry;
 use App\Models\TimeTrackingSetting;
 use App\Services\Mobile\ElectricianJobAccess;
-use App\Support\UploadLimits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response as ResponseFactory;
@@ -243,9 +242,7 @@ class AttendanceController extends Controller
             'point.accuracy' => ['required', 'numeric'],
             'method' => ['required', 'in:manual,automatic,photo'],
             'client_id' => ['nullable', 'string', 'max:191'],
-            // TEMPORARY: was a flat 20MB; raised to the app-wide upload
-            // ceiling at the requester's ask.
-            'photo' => ['nullable', 'image', 'max:'.(UploadLimits::effectiveMb() * 1024)],
+            'photo' => ['nullable', 'image', 'max:20480'],
         ]);
 
         return [

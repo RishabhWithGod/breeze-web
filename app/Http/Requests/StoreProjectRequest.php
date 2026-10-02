@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use App\Models\Project;
 use App\Support\CompanyRule;
-use App\Support\UploadLimits;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -68,10 +67,7 @@ class StoreProjectRequest extends FormRequest
              * pooled into this project's one rate book.
              */
             'vendor_rate_list' => ['nullable', 'array', 'max:20'],
-            // TEMPORARY: was a flat 10MB; raised to the app-wide upload
-            // ceiling at the requester's ask, while the real per-feature
-            // limits get revisited.
-            'vendor_rate_list.*' => ['file', 'mimes:xlsx,ods,csv,txt,pdf,doc,docx,rtf,odt', 'max:'.(UploadLimits::effectiveMb() * 1024)],
+            'vendor_rate_list.*' => ['file', 'mimes:xlsx,ods,csv,txt,pdf,doc,docx,rtf,odt', 'max:10240'],
         ];
     }
 
@@ -87,7 +83,7 @@ class StoreProjectRequest extends FormRequest
             'estimate_target_total.min' => 'Amount cannot be negative',
             'vendor_rate_list.max' => 'Upload up to 20 files at a time',
             'vendor_rate_list.*.mimes' => 'Upload an Excel, CSV, PDF, or Word (.doc/.docx) commodity list',
-            'vendor_rate_list.*.max' => 'Each file must be under '.UploadLimits::effectiveMb().' MB',
+            'vendor_rate_list.*.max' => 'Each file must be smaller than 10MB',
         ];
     }
 }

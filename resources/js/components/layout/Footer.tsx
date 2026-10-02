@@ -24,7 +24,7 @@ export function Footer({ className }: { className?: string }) {
 
       <div className="mt-3 flex items-center justify-between gap-4 border-t border-hairline pt-3">
         <nav aria-label="Footer" className="min-w-0">
-          <ul className="flex flex-nowrap items-center gap-x-5 overflow-x-auto">
+          <ul className="flex flex-wrap items-center gap-x-5 gap-y-1">
             {FOOTER_LINKS.map((link) => (
               <li key={link.label}>
                 <a

@@ -105,4 +105,5 @@ export const FOOTER_LINKS: readonly { label: string; href: string }[] = [
   { label: 'Release notes', href: '#' },
   { label: 'Privacy', href: '#' },
   { label: 'Terms', href: '#' },
+  { label: 'Status', href: '#' },
 ]

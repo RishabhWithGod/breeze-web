@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Job;
 use App\Models\JobAttachment;
-use App\Support\UploadLimits;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,21 +18,18 @@ class JobAttachmentController extends Controller
     {
         abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
 
-        // TEMPORARY: the size cap below was a flat 20MB; raised to the
-        // app-wide upload ceiling at the requester's ask, while the real
-        // per-feature limits get revisited.
         $validated = $request->validate([
             // Same allowlist Documents uses (content-sniffed by
             // `Rule::file()->extensions()`, not the client-supplied
             // filename) — a job attachment is exactly the same kind of
             // business file, so it gets the same restriction rather than
             // accepting anything under a size cap alone.
-            'file' => ['required', Rule::file()->extensions(config('documents.extensions')), 'max:'.(UploadLimits::effectiveMb() * 1024)],
+            'file' => ['required', Rule::file()->extensions(config('documents.extensions')), 'max:20480'],
         ], [
             'file.required' => 'Choose a file to upload',
             'file.extensions' => 'Unsupported file type — accepted types are '
                 .implode(', ', array_map(fn (string $ext) => ".{$ext}", config('documents.extensions'))),
-            'file.max' => 'Files must be '.UploadLimits::effectiveMb().' MB or smaller',
+            'file.max' => 'Files must be 20 MB or smaller',
         ]);
 
         $file = $validated['file'];

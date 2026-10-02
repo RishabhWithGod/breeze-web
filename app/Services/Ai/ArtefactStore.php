@@ -151,4 +151,97 @@ class ArtefactStore
 
         return $result;
     }
+
+    /**
+     * Renders page previews of a marked PDF into a directory of its own, so the
+     * upload's plain previews (and its `preview_paths`) are left untouched.
+     *
+     * @return list<string> Disk paths, in page order; empty when rendering fails.
+     */
+    public function renderMarkedPreviews(Upload $upload, string $markedAbsolutePath): array
+    {
+        $directory = $this->directoryFor($upload->project)."/previews/{$upload->id}-marked";
+
+        $this->disk()->deleteDirectory($directory);
+        $this->disk()->makeDirectory($directory);
+
+        $render = Process::timeout(120)->run([
+            (string) config('ai.storage.pdftoppm'),
+            '-png',
+            '-r', (string) config('ai.storage.preview_dpi'),
+            '-l', (string) config('ai.storage.max_preview_pages'),
+            $markedAbsolutePath,
+            $this->absolutePath($directory).'/page',
+        ]);
+
+        if ($render->failed()) {
+            Log::warning('Marked page previews could not be rendered', [
+                'upload_id' => $upload->id,
+                'error' => str($render->errorOutput())->limit(300)->value(),
+            ]);
+
+            return [];
+        }
+
+        return collect($this->disk()->files($directory))
+            ->filter(fn (string $file) => str_ends_with($file, '.png'))
+            ->sortBy(fn (string $file) => (int) preg_replace('/\D/', '', basename($file)) ?: 0)
+            ->values()
+            ->all();
+    }
+
+    /** Existing marked previews for an upload, in page order. */
+    public function markedPreviews(Upload $upload): array
+    {
+        $directory = $this->directoryFor($upload->project)."/previews/{$upload->id}-marked";
+
+        return collect($this->disk()->files($directory))
+            ->filter(fn (string $file) => str_ends_with($file, '.png'))
+            ->sortBy(fn (string $file) => (int) preg_replace('/\D/', '', basename($file)) ?: 0)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Renders one page on demand — for pages past the preview cap
+     * (`ai.storage.max_preview_pages`), which the bulk render never produces.
+     * Without this, every page after the cap answered 404 and sat on the
+     * review screen's loading state forever.
+     *
+     * @return string|null Disk path of the PNG, or null if rendering failed.
+     */
+    public function renderSinglePage(Upload $upload, string $sourceAbsolutePath, int $page, bool $marked = false): ?string
+    {
+        $directory = $this->directoryFor($upload->project)."/previews/{$upload->id}".($marked ? '-marked' : '').'/extra';
+        $path = "{$directory}/page-{$page}.png";
+
+        if ($this->exists($path)) {
+            return $path;
+        }
+
+        $this->disk()->makeDirectory($directory);
+
+        $render = Process::timeout(120)->run([
+            (string) config('ai.storage.pdftoppm'),
+            '-png',
+            '-singlefile',
+            '-r', (string) config('ai.storage.preview_dpi'),
+            '-f', (string) $page,
+            '-l', (string) $page,
+            $sourceAbsolutePath,
+            $this->absolutePath($directory)."/page-{$page}",
+        ]);
+
+        if ($render->failed() || ! $this->exists($path)) {
+            Log::warning('A single page preview could not be rendered', [
+                'upload_id' => $upload->id,
+                'page' => $page,
+                'error' => str($render->errorOutput())->limit(300)->value(),
+            ]);
+
+            return null;
+        }
+
+        return $path;
+    }
 }

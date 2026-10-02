@@ -45,11 +45,13 @@ class JobTaskResource extends JsonResource
                 'id' => $this->foreman->id,
                 'name' => $this->foreman->name,
                 'initials' => $this->foreman->initials,
+                'role' => $this->foreman->roleLabel(),
             ] : null),
             'supervisor' => $this->whenLoaded('supervisor', fn () => $this->supervisor ? [
                 'id' => $this->supervisor->id,
                 'name' => $this->supervisor->name,
                 'initials' => $this->supervisor->initials,
+                'role' => $this->supervisor->roleLabel(),
             ] : null),
             'isOverdue' => $this->isOverdue(),
             'daysLate' => $this->daysLate(),
