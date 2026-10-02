@@ -35,7 +35,11 @@ class ChangeOrderStatusChanged extends Notification
             'title' => 'Change Order '.ucfirst($this->status),
             'detail' => $this->sentence(),
             'link' => $this->url(false),
-            'data' => ['actions' => [['label' => 'View Change Order', 'href' => $this->url(false)]]],
+            'data' => [
+                'changeOrderId' => $this->changeOrder->id,
+                'jobId' => $this->changeOrder->job_id,
+                'actions' => [['label' => 'View Change Order', 'href' => $this->url(false)]],
+            ],
         ];
     }
 

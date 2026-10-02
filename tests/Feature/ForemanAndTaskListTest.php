@@ -249,6 +249,9 @@ class ForemanAndTaskListTest extends TestCase
                 'licence_number' => 'EC-4471',
                 'started_on' => '2024-03-04',
                 'notes' => 'Runs service work.',
+                // Every member added is also a mobile-app login.
+                'password' => 'Str0ng-Passw0rd!',
+                'password_confirmation' => 'Str0ng-Passw0rd!',
             ])
             ->assertRedirect(route('teams.index'));
 
@@ -265,17 +268,26 @@ class ForemanAndTaskListTest extends TestCase
 
     public function test_an_untyped_detail_is_stored_as_nothing_rather_than_an_empty_string(): void
     {
-        // Only the name is required, so "has a phone number" has to be one
-        // check everywhere rather than two.
+        // Phone is optional, so "has a phone number" has to be one check
+        // everywhere rather than two. (Email and password are required on
+        // create since every member gets a mobile login.)
         $this->actingAs($this->planner)
-            ->post(route('foremen.store'), ['name' => 'Dana Wu', 'role' => 'foreman', 'phone' => '  '])
+            ->post(route('foremen.store'), [
+                'name' => 'Dana Wu',
+                'role' => 'foreman',
+                'phone' => '  ',
+                'email' => 'dana@example.com',
+                'password' => 'Str0ng-Passw0rd!',
+                'password_confirmation' => 'Str0ng-Passw0rd!',
+            ])
             ->assertSessionHasNoErrors();
 
         $foreman = Foreman::sole();
 
         $this->assertNull($foreman->phone);
-        $this->assertNull($foreman->email);
-        $this->assertNull($foreman->started_on);
+        $this->assertNull($foreman->licence_number);
+        // A joining date left blank on create defaults to today.
+        $this->assertSame(now()->toDateString(), $foreman->started_on->toDateString());
     }
 
     public function test_an_address_that_is_not_one_is_refused(): void
@@ -316,6 +328,9 @@ class ForemanAndTaskListTest extends TestCase
                 // The form has no initials field, and a request that sends one
                 // anyway does not get to override what the name says.
                 'initials' => 'ZZ',
+                'email' => 'dana@example.com',
+                'password' => 'Str0ng-Passw0rd!',
+                'password_confirmation' => 'Str0ng-Passw0rd!',
             ])
             ->assertRedirect(route('teams.index'))
             ->assertSessionHas('success');
@@ -532,6 +547,7 @@ class ForemanAndTaskListTest extends TestCase
                 'title' => '  Rough-in second floor  ',
                 'status' => JobTask::STATUS_IN_PROGRESS,
                 'foreman_id' => $dana->id,
+                'supervisor_id' => $dana->id,
                 'estimate_item_ids' => [],
             ])
             ->assertRedirect(route('tasks.index'))
@@ -555,6 +571,7 @@ class ForemanAndTaskListTest extends TestCase
                 'title' => 'second fix',
                 'status' => $task->status,
                 'foreman_id' => $dana->id,
+                'supervisor_id' => $dana->id,
                 'estimate_item_ids' => [],
             ])
             ->assertSessionHasErrors('title');

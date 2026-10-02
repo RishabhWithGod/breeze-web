@@ -677,8 +677,9 @@ class MobileJobsAndTasksTest extends TestCase
     public function test_a_planner_can_uncheck_a_line_on_an_already_completed_task_reopening_it(): void
     {
         $manager = User::factory()->create(['role' => 'Project Manager']);
-        $job = $this->makeJob();
-        $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
+        // Planners act only on jobs they (or their company) own.
+        $job = $this->makeJob(['user_id' => $manager->id]);
+        $schedule = app(ScheduleBuilder::class)->build($job, $manager, withTasks: true);
         $task = $schedule->tasks()->first();
         $itemA = $this->makeEstimateItemOnTask($task);
         $itemB = $this->makeEstimateItemOnTask($task);
@@ -996,6 +997,8 @@ class MobileJobsAndTasksTest extends TestCase
         $job = $this->makeJob(['status' => 'scheduled', 'start_date' => now()->toDateString()]);
         $this->staffOnTask($job, $member);
 
+        $this->checkInAt($job, $user);
+
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
             ->assertOk();
@@ -1009,6 +1012,8 @@ class MobileJobsAndTasksTest extends TestCase
         $job = $this->makeJob(['status' => 'scheduled', 'start_date' => now()->subDays(2)->toDateString()]);
         $this->staffOnTask($job, $member);
 
+        $this->checkInAt($job, $user);
+
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
             ->assertOk();
@@ -1021,6 +1026,8 @@ class MobileJobsAndTasksTest extends TestCase
         [$user, $member] = $this->makeElectrician();
         $job = $this->makeJob(['status' => 'scheduled', 'start_date' => null]);
         $this->staffOnTask($job, $member);
+
+        $this->checkInAt($job, $user);
 
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
@@ -1132,6 +1139,8 @@ class MobileJobsAndTasksTest extends TestCase
         [$user, $foreman] = $this->makeMobileJourneyman();
         $job = $this->makeJob(['foreman_id' => $foreman->id, 'status' => 'scheduled', 'start_date' => now()->toDateString()]);
 
+        $this->checkInAt($job, $user);
+
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
             ->assertOk();
@@ -1177,6 +1186,47 @@ class MobileJobsAndTasksTest extends TestCase
         $this->assertSame('scheduled', $job->fresh()->status);
     }
 
+    /**
+     * An apprentice reads the tasks of the journeyman they are under, and nothing else about
+     * the job's work: other people's tasks stay hidden and every task write is refused.
+     */
+    public function test_an_apprentice_reads_their_journeymans_tasks_but_cannot_change_them(): void
+    {
+        $apprenticeUser = User::factory()->create([
+            'name' => 'Robin', 'role' => 'Apprentice',
+            'registration_source' => User::SOURCE_MOBILE, 'status' => User::STATUS_ACTIVE,
+        ]);
+        $apprentice = new Foreman(['name' => 'Robin', 'initials' => 'RO', 'role' => 'apprentice']);
+        $apprentice->user_id = $apprenticeUser->id;
+        $apprentice->save();
+        $mine = new Foreman(['name' => 'Priya', 'initials' => 'PR', 'role' => 'journeyman']);
+        $mine->save();
+        $other = new Foreman(['name' => 'Omar', 'initials' => 'OM', 'role' => 'journeyman']);
+        $other->save();
+
+        $job = $this->makeJob(['foreman_id' => $mine->id, 'status' => 'in-progress', 'start_date' => now()->toDateString()]);
+        app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
+        \App\Models\JobApprenticeAssignment::create(['job_id' => $job->id, 'journeyman_id' => $mine->id, 'apprentice_id' => $apprentice->id]);
+
+        $tasks = \App\Models\JobTask::where('job_id', $job->id)->orderBy('id')->get();
+        $this->assertGreaterThanOrEqual(2, $tasks->count());
+        $tasks[0]->forceFill(['foreman_id' => $mine->id])->save();
+        $tasks[1]->forceFill(['foreman_id' => $other->id])->save();
+
+        $auth = ['Authorization' => 'Bearer '.$this->tokenFor($apprenticeUser)];
+        $r = $this->withHeaders($auth)->getJson("/api/v1/jobs/{$job->id}/schedule")->assertOk();
+        $ids = collect($r->json('data.myTasks'))->pluck('id')->all();
+        $this->assertContains($tasks[0]->id, $ids);
+        $this->assertNotContains($tasks[1]->id, $ids);
+        $this->assertTrue($r->json('data.readOnly'));
+
+        $this->withHeaders($auth)->patchJson("/api/v1/tasks/{$tasks[0]->id}/progress", ['completion_pct' => 50])->assertStatus(403);
+        $this->withHeaders($auth)->postJson("/api/v1/tasks/{$tasks[0]->id}/complete")->assertStatus(403);
+        $this->withHeaders($auth)->postJson("/api/v1/jobs/{$job->id}/materials", ['added' => []])->assertStatus(403);
+        $this->withHeaders($auth)->putJson('/api/v1/profile', ['name' => 'Changed'])->assertStatus(403);
+        $this->assertSame('Robin', $apprenticeUser->fresh()->name);
+    }
+
     /** Stamps `$foreman` as the foreman on every task `ScheduleBuilder` seeded for this job. */
     private function assignForemanToAllTasks(Job $job, Foreman $foreman): void
     {
@@ -1200,13 +1250,72 @@ class MobileJobsAndTasksTest extends TestCase
             'billable' => true,
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor(User::factory()->create(['role' => 'Project Manager'])))
             ->getJson("/api/v1/jobs/{$job->id}")
             ->assertOk();
 
         $response->assertJsonPath('data.crewTime.0.foremanName', 'Chris');
         $response->assertJsonPath('data.crewTime.0.status', 'running');
         $this->assertGreaterThanOrEqual(1795, $response->json('data.crewTime.0.liveElapsedSeconds'));
+    }
+
+    public function test_starting_a_job_needs_the_starter_to_have_checked_in_first(): void
+    {
+        [$user, $foreman] = $this->makeMobileJourneyman();
+        $job = $this->makeJob(['foreman_id' => $foreman->id, 'status' => 'scheduled', 'start_date' => now()->toDateString()]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.code', 'check_in_required');
+        $this->assertSame('scheduled', $job->fresh()->status);
+
+        $this->checkInAt($job, $user);
+        auth()->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
+            ->assertOk();
+    }
+
+    public function test_crew_on_site_counts_checked_in_journeymen_and_their_apprentices_on_the_foremans_tasks(): void
+    {
+        [$journeymanUser, $journeyman] = $this->makeMobileJourneyman('Jay');
+        [$otherUser, $other] = $this->makeMobileJourneyman('Olly');
+        $apprenticeUser = User::factory()->create(['role' => 'Apprentice', 'registration_source' => User::SOURCE_MOBILE, 'status' => User::STATUS_ACTIVE]);
+        $apprentice = new Foreman(['name' => 'Ann', 'initials' => 'AN', 'role' => 'apprentice']);
+        $apprentice->user_id = $apprenticeUser->id;
+        $apprentice->save();
+        $foremanUser = User::factory()->create(['role' => 'Foreman', 'registration_source' => User::SOURCE_MOBILE, 'status' => User::STATUS_ACTIVE]);
+        $foreman = new Foreman(['name' => 'Fay', 'initials' => 'FA', 'role' => 'foreman']);
+        $foreman->user_id = $foremanUser->id;
+        $foreman->save();
+
+        $job = $this->makeJob(['status' => 'in-progress']);
+        app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
+        $tasks = \App\Models\JobTask::where('job_id', $job->id)->orderBy('id')->get();
+        $this->assertGreaterThanOrEqual(2, $tasks->count());
+        // Jay's task is supervised by Fay; Olly's is not hers.
+        $tasks[0]->forceFill(['foreman_id' => $journeyman->id, 'supervisor_id' => $foreman->id])->save();
+        $tasks[1]->forceFill(['foreman_id' => $other->id, 'supervisor_id' => null])->save();
+        \App\Models\JobApprenticeAssignment::create(['job_id' => $job->id, 'journeyman_id' => $journeyman->id, 'apprentice_id' => $apprentice->id]);
+
+        // Jay and Olly are on site, Ann has not checked in.
+        $this->checkInAt($job, $journeymanUser);
+        $this->checkInAt($job, $otherUser);
+
+        $crew = fn () => collect($this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanUser))
+            ->getJson("/api/v1/jobs/{$job->id}")->assertOk()->json('data.crewTime'))->keyBy('foremanName');
+        auth()->forgetGuards();
+
+        $seen = $crew();
+        $this->assertSame(['Ann', 'Jay'], $seen->keys()->sort()->values()->all(), 'only the foreman\'s own people');
+        $this->assertTrue($seen['Jay']['checkedIn']);
+        $this->assertFalse($seen['Ann']['checkedIn']);
+        $this->assertSame('apprentice', $seen['Ann']['role']);
+
+        $this->checkInAt($job, $apprenticeUser);
+        auth()->forgetGuards();
+        $this->assertTrue($crew()['Ann']['checkedIn']);
     }
 
     public function test_a_jobs_show_response_carries_its_real_budget(): void
@@ -1346,7 +1455,8 @@ class MobileJobsAndTasksTest extends TestCase
             'billable' => true,
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanAUser))
+        // Who is on site is for the people running the crew, so a manager reads it.
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor(User::factory()->create(['role' => 'Project Manager'])))
             ->getJson("/api/v1/jobs/{$job->id}")
             ->assertOk();
 
@@ -1510,5 +1620,40 @@ class MobileJobsAndTasksTest extends TestCase
             ->getJson("/api/v1/jobs/{$job->id}")
             ->assertOk()
             ->assertJsonPath('data.myTasksComplete', null);
+    }
+
+    public function test_crew_time_is_only_sent_to_a_foreman_or_manager(): void
+    {
+        [$user, $foreman] = $this->makeMobileJourneyman();
+        $job = $this->makeJob();
+        $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: true);
+        $schedule->tasks()->first()->forceFill(['foreman_id' => $foreman->id])->save();
+        \App\Models\TimerSession::create([
+            'user_id' => $user->id, 'job_id' => $job->id, 'started_at' => now()->subMinutes(5),
+            'accumulated_seconds' => 0, 'status' => 'running', 'billable' => true,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->getJson("/api/v1/jobs/{$job->id}")->assertOk()->assertJsonPath('data.crewTime', []);
+
+        $this->app['auth']->forgetGuards();
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $this->assertNotEmpty(
+            $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($manager))
+                ->getJson("/api/v1/jobs/{$job->id}")->assertOk()->json('data.crewTime'),
+        );
+    }
+
+    /** Starting a job needs the starter checked in at it today; this files that check-in. */
+    private function checkInAt(\App\Models\Job $job, \App\Models\User $user): void
+    {
+        \App\Models\JobAttendance::forceCreate([
+            'job_id' => $job->id,
+            'user_id' => $user->id,
+            'date' => now()->timezone(\App\Models\TimeTrackingSetting::current()->timezone)->toDateString(),
+            'status' => \App\Models\JobAttendance::STATUS_CHECKED_IN,
+            'check_in_at' => now(),
+            'check_in_method' => 'manual',
+        ]);
     }
 }

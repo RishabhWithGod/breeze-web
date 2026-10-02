@@ -5,6 +5,10 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Models\Foreman;
+use App\Models\JobApprenticeAssignment;
+use App\Models\JobAttendance;
+use App\Models\TimeTrackingSetting;
+use App\Models\User;
 use App\Models\Job;
 use App\Models\TimerSession;
 use App\Services\Clients\JobSites;
@@ -96,7 +100,8 @@ class JobController extends Controller
             'jobTypes' => Job::TYPES,
             'documentsCount' => $job->documentsFor($request->user())->count(),
             'changeOrdersCount' => \App\Models\ChangeOrder::where('job_id', $job->id)->count(),
-            'crewTime' => $this->crewTime($job),
+            // Who is clocked in is for the people running the crew; a journeyman does not get it.
+            'crewTime' => $request->user()->hasForemanAuthority() ? $this->crewTime($job, $request->user()) : [],
             'myTasksComplete' => $this->myTasksComplete($request, $job),
             // Who is assigned as an apprentice on this job right now —
             // meaningful to a journeyman wondering who they've got, and to
@@ -392,28 +397,54 @@ class JobController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private function crewTime(Job $job): array
+    /**
+     * The crew the viewer answers for on this job: the journeymen on their tasks and the
+     * apprentices put under those journeymen, each with whether they are checked in on site now.
+     * A manager sees everyone on the job; a foreman only the people on tasks they oversee or run.
+     */
+    private function crewTime(Job $job, User $viewer): array
     {
+        $me = $viewer->foreman;
+        $tasks = $job->tasks()->whereNotNull('foreman_id');
+        if ($me?->role === Foreman::ROLE_FOREMAN) {
+            $tasks->where(fn ($q) => $q->where('supervisor_id', $me->id)->orWhere('foreman_id', $me->id));
+        }
         // Deduped in PHP, not `->distinct()`: `Job::tasks()` orders by
         // `position, id`, and MySQL refuses `DISTINCT` alongside an `ORDER
         // BY` column that isn't in the selected column itself.
-        $foremanIds = $job->tasks()->whereNotNull('foreman_id')->pluck('foreman_id')->unique();
+        $foremanIds = $tasks->pluck('foreman_id')->unique();
         if ($foremanIds->isEmpty()) {
             return [];
         }
 
-        $foremen = Foreman::whereKey($foremanIds)
+        $apprenticeIds = JobApprenticeAssignment::query()
+            ->where('job_id', $job->id)
+            ->whereIn('journeyman_id', $foremanIds)
+            ->pluck('apprentice_id');
+        $allIds = $foremanIds->merge($apprenticeIds)->unique();
+
+        $foremen = Foreman::whereKey($allIds)
             ->whereIn('role', Foreman::WORKER_ROLES)
             ->whereNotNull('user_id')
             ->orderBy('name')
             ->get();
 
         $completions = $job->foremanCompletions()
-            ->whereIn('foreman_id', $foremanIds)
+            ->whereIn('foreman_id', $allIds)
             ->get()
             ->keyBy('foreman_id');
 
-        return $foremen->map(function (Foreman $foreman) use ($job, $completions) {
+        // Checked in on this job right now, by the business day the check-in was filed under.
+        $today = now()->timezone(TimeTrackingSetting::current()->timezone)->toDateString();
+        $onSite = JobAttendance::query()
+            ->where('job_id', $job->id)
+            ->where('date', $today)
+            ->where('status', JobAttendance::STATUS_CHECKED_IN)
+            ->whereIn('user_id', $foremen->pluck('user_id'))
+            ->get()
+            ->keyBy('user_id');
+
+        return $foremen->map(function (Foreman $foreman) use ($job, $completions, $onSite) {
             $totalSeconds = (int) round(
                 (float) $job->timeEntries()->where('user_id', $foreman->user_id)->sum('hours') * 3600
             );
@@ -423,6 +454,9 @@ class JobController extends Controller
             return [
                 'foremanId' => $foreman->id,
                 'foremanName' => $foreman->name,
+                'role' => $foreman->role,
+                'checkedIn' => $onSite->has($foreman->user_id),
+                'checkedInAt' => $onSite->get($foreman->user_id)?->check_in_at?->toISOString(),
                 'totalSeconds' => $totalSeconds,
                 'status' => $session?->status,
                 'startedAt' => $session?->started_at?->toISOString(),
@@ -484,6 +518,23 @@ class JobController extends Controller
                 return $this->fail(
                     "This job isn't scheduled to start until {$job->start_date->toFormattedDateString()}.",
                     422,
+                );
+            }
+
+            // Nobody starts work they have not clocked in for: attendance is how the office
+            // knows who is on site, so the start waits for the person's check-in at this job.
+            $businessDay = now()->timezone(TimeTrackingSetting::current()->timezone)->toDateString();
+            $checkedIn = JobAttendance::query()
+                ->where('job_id', $job->id)
+                ->where('user_id', $request->user()->id)
+                ->where('date', $businessDay)
+                ->whereNotNull('check_in_at')
+                ->exists();
+            if (! $checkedIn) {
+                return $this->fail(
+                    'Check in at the job site first, then start the job.',
+                    422,
+                    ['code' => 'check_in_required'],
                 );
             }
 

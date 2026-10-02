@@ -62,7 +62,10 @@ class ProjectController extends Controller
         $narrowed = $search !== '' || $status !== 'all';
 
         $matching = fn ($query) => $query
-            ->when($search !== '', fn ($inner) => $inner->where('name', 'like', "%{$search}%"))
+            // Name or project number: the list shows the number, so it is searchable.
+            ->when($search !== '', fn ($inner) => $inner->where(fn ($match) => $match
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('code', 'like', "%{$search}%")))
             ->when($status !== 'all', fn ($inner) => $inner->where('status', $status));
 
         $clients = $request->user()->clients()

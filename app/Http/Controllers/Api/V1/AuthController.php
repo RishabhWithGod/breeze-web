@@ -243,7 +243,44 @@ class AuthController extends Controller
             'role' => $user->role,
             'initials' => $user->initials,
             'status' => $user->status,
+            // Read-only on the phone: changing either goes through the web's verified flow.
+            'phone' => $user->maskedPhone(),
+            'twoFactorEnabled' => (bool) UserSecuritySetting::forUser($user)->two_factor_enabled,
+            // What the crew register holds for this person — shown, never edited here.
+            'work' => ($foreman = $user->foreman) === null ? null : [
+                'crewRole' => $foreman->roleLabel(),
+                'team' => $foreman->team?->name,
+                'licenceNumber' => $foreman->licence_number,
+                'startedOn' => $foreman->started_on?->toDateString(),
+            ],
         ]);
+    }
+
+    /** The phones and tablets signed in to this account, and which one is asking. */
+    public function sessions(Request $request): JsonResponse
+    {
+        $current = $request->user()->currentAccessToken()?->id;
+
+        return $this->ok(
+            $request->user()->tokens()->latest('last_used_at')->latest('id')->get()->map(fn ($token) => [
+                'id' => $token->id,
+                'name' => $token->name,
+                'lastUsedAt' => $token->last_used_at?->toISOString(),
+                'createdAt' => $token->created_at?->toISOString(),
+                'current' => $token->id === $current,
+            ])->all(),
+        );
+    }
+
+    /** Signs every other device out, keeping this one. */
+    public function revokeOtherSessions(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $count = $user->tokens()->where('id', '!=', data_get($user->currentAccessToken(), 'id', 0))->delete();
+
+        app(SecurityEventLogger::class)->log($user, SecurityEvent::OTHER_DEVICES_SIGNED_OUT, 'Signed out other devices from the mobile app.', $request);
+
+        return $this->ok(['signedOut' => $count], $count === 0 ? 'No other devices were signed in.' : 'Other devices were signed out.');
     }
 
     /**

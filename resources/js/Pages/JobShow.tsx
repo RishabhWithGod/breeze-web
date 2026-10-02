@@ -531,7 +531,7 @@ export default function JobShow({
 
           {hasFieldMaterials && (
             <div className="mt-8 border-t border-hairline pt-6">
-              <JobFieldMaterialsPanel fieldMaterials={fieldMaterials} />
+              <JobFieldMaterialsPanel jobId={job.id} fieldMaterials={fieldMaterials} />
             </div>
           )}
 

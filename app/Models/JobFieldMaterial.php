@@ -13,14 +13,38 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class JobFieldMaterial extends Model
 {
+    public const MATERIAL = 'material';
+
+    public const LABOR = 'labor';
+
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_APPROVED = 'approved';
+
     protected $fillable = [
-        'job_id', 'job_task_id', 'estimate_item_id', 'price_book_item_id', 'client_key',
-        'description', 'unit', 'actual_quantity', 'reason', 'user_id',
+        'job_id', 'job_task_id', 'kind', 'estimate_item_id', 'price_book_item_id', 'client_key',
+        'description', 'unit', 'actual_quantity', 'unit_price', 'total', 'status',
+        'added_estimate_item_id', 'approved_by', 'approved_at', 'reason', 'user_id',
     ];
 
     protected function casts(): array
     {
-        return ['actual_quantity' => 'decimal:4'];
+        return [
+            'actual_quantity' => 'decimal:4',
+            'unit_price' => 'decimal:2',
+            'total' => 'decimal:2',
+            'approved_at' => 'datetime',
+        ];
+    }
+
+    public function isLabor(): bool
+    {
+        return $this->kind === self::LABOR;
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->status === self::STATUS_APPROVED;
     }
 
     public function isAdded(): bool

@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Client;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\Foreman;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Job;
-use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -22,9 +22,9 @@ use Tests\TestCase;
  * it server-side, the same guarantee `TimeEntryTest` and `Estimate` already
  * hold their own totals to.
  *
- * The client is picked from the client register rather than typed: clients are
- * projects, so an invoice posts `project_id` and its `client` column is a
- * snapshot the server writes from it.
+ * The client is picked from the client register rather than typed: an invoice
+ * posts `client_id` and the estimate it bills, and its `client` column is a
+ * snapshot the server writes from the client.
  */
 class InvoiceTest extends TestCase
 {
@@ -62,9 +62,10 @@ class InvoiceTest extends TestCase
     public function test_client_is_required_to_create_an_invoice(): void
     {
         $this->actingAs($this->manager)->post('/invoices', [
+            'estimate_id' => $this->makeEstimate($this->makeClient())->id,
             'invoice_date' => '2026-08-10',
             'tax_pct' => 0,
-        ])->assertSessionHasErrors('project_id');
+        ])->assertSessionHasErrors('client_id');
 
         $this->assertSame(0, Invoice::count());
     }
@@ -72,7 +73,7 @@ class InvoiceTest extends TestCase
     public function test_an_electrician_cannot_create_an_invoice(): void
     {
         $this->actingAs($this->electrician)->post('/invoices', [
-            'project_id' => $this->makeClient()->id,
+            'client_id' => $this->makeClient()->id,
             'invoice_date' => '2026-08-10',
             'tax_pct' => 0,
         ])->assertForbidden();
@@ -182,16 +183,9 @@ class InvoiceTest extends TestCase
 
     public function test_generating_an_invoice_from_an_estimate_copies_its_line_items(): void
     {
-        $job = $this->makeJob();
-        $estimate = Estimate::create([
-            'job_id' => $job->id,
-            'number' => 'EST-1001',
-            'client' => 'Apex Construction',
-            'project' => 'Panel upgrade',
-            'issued_on' => '2026-08-01',
-            'amount' => 500,
-            'status' => 'approved',
-        ]);
+        $client = $this->makeClient();
+        $job = $this->makeJob(['user_id' => $this->manager->id, 'client_id' => $client->id, 'status' => Job::STATUS_COMPLETED]);
+        $estimate = $this->makeEstimate($client, ['job_id' => $job->id, 'project' => 'Panel upgrade', 'amount' => 500]);
         EstimateItem::create([
             'estimate_id' => $estimate->id,
             'category' => 'labor',
@@ -204,7 +198,7 @@ class InvoiceTest extends TestCase
         ]);
 
         $this->actingAs($this->manager)->post('/invoices', [
-            'project_id' => $this->makeClient($estimate->client)->id,
+            'client_id' => $client->id,
             'job_id' => $job->id,
             'estimate_id' => $estimate->id,
             'invoice_date' => '2026-08-10',
@@ -224,7 +218,8 @@ class InvoiceTest extends TestCase
         $client = $this->makeClient($overrides['client'] ?? 'Apex Construction');
 
         $this->actingAs($this->manager)->post('/invoices', [
-            'project_id' => $client->id,
+            'client_id' => $client->id,
+            'estimate_id' => $this->makeEstimate($client)->id,
             'invoice_date' => '2026-08-10',
             'due_date' => $overrides['due_date'] ?? null,
             'tax_pct' => $overrides['tax_pct'] ?? 0,
@@ -233,14 +228,26 @@ class InvoiceTest extends TestCase
         return Invoice::latest('id')->first();
     }
 
-    /** A client to raise an invoice for. Clients are projects. */
-    private function makeClient(string $name = 'Apex Construction'): Project
+    /** A client to raise an invoice for. */
+    private function makeClient(string $name = 'Apex Construction'): Client
     {
-        return Project::create([
+        return Client::create(['user_id' => $this->manager->id, 'name' => $name]);
+    }
+
+    /** An (empty) estimate for the client — every invoice bills one. */
+    private function makeEstimate(Client $client, array $attributes = []): Estimate
+    {
+        return Estimate::create([
             'user_id' => $this->manager->id,
-            'name' => $name,
-            'client' => $name,
-            'status' => 'draft',
+            'client_id' => $client->id,
+            'number' => Estimate::nextNumber($this->manager),
+            'client' => $client->name,
+            'project' => $client->name,
+            'issued_on' => '2026-08-01',
+            'status' => 'approved',
+            'kind' => Estimate::KIND_STANDALONE,
+            'amount' => 0,
+            ...$attributes,
         ]);
     }
 

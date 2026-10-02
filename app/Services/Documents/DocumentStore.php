@@ -56,6 +56,9 @@ class DocumentStore
             'file_size' => $file->getSize(),
             'document_type' => $original->document_type,
             'job_id' => $original->job_id,
+            // Filed under the same takeoff: the Documents list and the policy
+            // both go by the project, so a version without one would vanish.
+            'project_id' => $original->project_id,
             'estimate_id' => $original->estimate_id,
             'folder_id' => $original->folder_id,
             'visibility' => $original->visibility,

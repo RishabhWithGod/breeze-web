@@ -17,7 +17,7 @@ use App\Models\JobFieldMaterial;
 class JobFieldMaterialsSummary
 {
     /**
-     * @return array{planned: list<array<string, mixed>>, added: list<array<string, mixed>>, needsReviewCount: int}
+     * @return array{planned: list<array<string, mixed>>, added: list<array<string, mixed>>, needsReviewCount: int, addedTotal: float}
      */
     public function for(Job $job): array
     {
@@ -60,9 +60,13 @@ class JobFieldMaterialsSummary
 
         $added = $reports->whereNull('estimate_item_id')->map(fn (JobFieldMaterial $row) => [
             'id' => $row->id,
+            'kind' => $row->kind,
             'description' => $row->description,
             'unit' => $row->unit,
             'qty' => (float) $row->actual_quantity,
+            'unitPrice' => (float) $row->unit_price,
+            'total' => (float) $row->total,
+            'status' => $row->status,
             'reason' => $row->reason,
             'taskTitle' => $row->task?->title,
             'addedBy' => $row->reporter?->name,
@@ -72,7 +76,9 @@ class JobFieldMaterialsSummary
         return [
             'planned' => $planned,
             'added' => $added,
-            'needsReviewCount' => count($added) + count(array_filter($planned, fn ($p) => $p['exception'] === 'over')),
+            'needsReviewCount' => count(array_filter($added, fn ($a) => $a['status'] === 'pending'))
+                + count(array_filter($planned, fn ($p) => $p['exception'] === 'over')),
+            'addedTotal' => round((float) array_sum(array_column($added, 'total')), 2),
         ];
     }
 }

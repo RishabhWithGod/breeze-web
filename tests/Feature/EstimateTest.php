@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\AiJob;
 use App\Models\AiResult;
+use App\Models\Client;
 use App\Models\Estimate;
 use App\Models\Job;
 use App\Models\Project;
+use App\Models\Team;
 use App\Models\Upload;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -76,8 +78,8 @@ class EstimateTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('EstimateCreate')
                 ->has('clients', 1)
-                ->where('clients.0.id', $project->id)
-                ->where('clients.0.name', $project->name)
+                ->where('clients.0.id', $project->client_id)
+                ->where('clients.0.name', 'Northgate Retail')
                 ->has('uploads', 1)
                 ->where('uploads.0.id', $upload->id)
                 ->where('uploads.0.estimate', null));
@@ -139,8 +141,10 @@ class EstimateTest extends TestCase
      */
     private function makeTakeoffDrawing(): array
     {
+        $client = Client::create(['user_id' => $this->user->id, 'name' => 'Northgate Retail']);
         $project = Project::create([
             'user_id' => $this->user->id,
+            'client_id' => $client->id,
             'name' => 'Northgate Fit-out',
             'client' => 'Northgate Retail',
             'status' => 'completed',
@@ -221,12 +225,14 @@ class EstimateTest extends TestCase
     public function test_back_from_an_estimate_returns_to_the_job_it_was_opened_from(): void
     {
         $job = Job::create([
+            'user_id' => $this->user->id,
             'name' => 'Harborview Fit-out',
             'client' => 'Harborview',
             'location' => '41 Harbor Way',
             'status' => 'planning',
         ]);
         $estimate = Estimate::create([
+            'user_id' => $this->user->id,
             'job_id' => $job->id,
             'number' => 'EST-6001',
             'client' => 'Harborview',
@@ -252,6 +258,7 @@ class EstimateTest extends TestCase
     public function test_editing_from_the_roadmap_returns_to_the_roadmap(): void
     {
         $estimate = Estimate::create([
+            'user_id' => $this->user->id,
             'number' => 'EST-6003',
             'client' => 'Harborview',
             'project' => 'Harborview',
@@ -293,6 +300,7 @@ class EstimateTest extends TestCase
     public function test_editing_an_estimate_opened_on_its_own_returns_to_it_plainly(): void
     {
         $estimate = Estimate::create([
+            'user_id' => $this->user->id,
             'number' => 'EST-6004',
             'client' => 'Harborview',
             'project' => 'Harborview',
@@ -326,10 +334,12 @@ class EstimateTest extends TestCase
     public function test_a_job_that_does_not_own_the_estimate_is_not_believed(): void
     {
         $theirJob = Job::create([
+            'user_id' => $this->user->id,
             'name' => 'Someone Else', 'client' => 'Someone Else',
             'location' => 'Elsewhere', 'status' => 'planning',
         ]);
         $estimate = Estimate::create([
+            'user_id' => $this->user->id,
             'number' => 'EST-6002', 'client' => 'Harborview', 'project' => 'Harborview',
             'issued_on' => now()->toDateString(), 'amount' => 500, 'status' => 'draft',
         ]);
@@ -385,7 +395,7 @@ class EstimateTest extends TestCase
     public function test_an_estimate_raised_against_a_job_is_not_a_draft(): void
     {
         [$project, $upload] = $this->makeTakeoffDrawing();
-        $site = $project->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
+        $site = $project->clientRecord->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
 
         $existing = Estimate::create([
             'ai_result_id' => $project->latestAiResult->id,
@@ -401,8 +411,12 @@ class EstimateTest extends TestCase
 
         $this->actingAs($this->user)->post('/jobs', [
             'name' => 'Harborview Fit-out',
+            'client_id' => $project->client_id,
             'project_id' => $project->id,
             'address_ids' => [$site->id],
+            'team_id' => Team::create(['name' => 'Harbor Crew'])->id,
+            'start_date' => '2026-09-07',
+            'end_date' => '2026-09-21',
             'upload_id' => $upload->id,
         ])->assertSessionHas('success');
 

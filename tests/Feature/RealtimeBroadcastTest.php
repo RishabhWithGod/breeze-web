@@ -211,7 +211,8 @@ class RealtimeBroadcastTest extends TestCase
     {
         $employee = User::factory()->create(['role' => 'Electrician']);
         $manager = User::factory()->create(['role' => 'Project Manager']);
-        $job = $this->makeJob();
+        // Only the manager who owns the job may decide its time.
+        $job = $this->makeJob(['user_id' => $manager->id]);
 
         $entry = TimeEntry::create([
             'job_id' => $job->id,
@@ -255,7 +256,7 @@ class RealtimeBroadcastTest extends TestCase
         Event::fake([ScheduleChanged::class]);
 
         $planner = User::factory()->create(['role' => 'Project Manager']);
-        $job = $this->makeJob();
+        $job = $this->makeJob(['user_id' => $planner->id]);
 
         $this->actingAs($planner)->post("/jobs/{$job->id}/schedule/tasks", [
             'title' => 'Rough-in wiring',

@@ -133,4 +133,37 @@ class JobShowFieldMaterialsTest extends TestCase
                 ->where('fieldMaterials.needsReviewCount', 0)
             );
     }
+
+    public function test_a_manager_edits_then_approves_an_added_entry_onto_the_estimate(): void
+    {
+        [$user, $job, $task] = $this->makeJobWithTask();
+        $estimate = Estimate::create([
+            'job_id' => $job->id, 'number' => 'EST-7001', 'client' => 'Harborview', 'project' => 'Data Hall',
+            'issued_on' => now()->toDateString(), 'amount' => 0, 'status' => 'approved', 'kind' => 'standalone',
+        ]);
+        $entry = JobFieldMaterial::create([
+            'job_id' => $job->id, 'job_task_id' => $task->id, 'kind' => 'labor', 'client_key' => 'k1',
+            'description' => 'Panel install', 'unit' => 'hr', 'actual_quantity' => 6, 'unit_price' => 0, 'total' => 0,
+            'user_id' => $user->id,
+        ]);
+
+        $this->actingAs($user)
+            ->put("/jobs/{$job->id}/field-materials/{$entry->id}", [
+                'kind' => 'labor', 'description' => 'Panel install', 'quantity' => 6, 'unit_price' => 85,
+            ])->assertRedirect();
+        $this->assertSame('510.00', $entry->fresh()->total);
+
+        $this->actingAs($user)->post("/jobs/{$job->id}/field-materials/{$entry->id}/approve")->assertRedirect();
+
+        $entry->refresh();
+        $this->assertSame(JobFieldMaterial::STATUS_APPROVED, $entry->status);
+        $item = EstimateItem::findOrFail($entry->added_estimate_item_id);
+        $this->assertSame($estimate->id, $item->estimate_id);
+        $this->assertSame(EstimateItem::CATEGORY_LABOR, $item->category);
+        $this->assertSame('510.00', $item->total);
+        $this->assertEquals(510.0, (float) $estimate->fresh()->labor_total);
+
+        // Approved entries are on the estimate and are not changed again here.
+        $this->actingAs($user)->delete("/jobs/{$job->id}/field-materials/{$entry->id}")->assertStatus(409);
+    }
 }

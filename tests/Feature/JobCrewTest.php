@@ -136,8 +136,8 @@ class JobCrewTest extends TestCase
         $this->assertSame($this->torres->id, $task->supervisor_id);
     }
 
-    /** A supervisor is optional: plenty of work has nobody above the foreman. */
-    public function test_a_task_may_have_no_supervisor(): void
+    /** A supervisor is required: every task has somebody over the person running it. */
+    public function test_a_task_needs_a_supervisor(): void
     {
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
@@ -147,9 +147,9 @@ class JobCrewTest extends TestCase
                     'estimate_item_ids' => [],
                 ]],
             ])
-            ->assertSessionHasNoErrors();
+            ->assertSessionHasErrors('tasks.0.supervisor_id');
 
-        $this->assertNull(JobTask::sole()->supervisor_id);
+        $this->assertSame(0, JobTask::count());
     }
 
     /**
@@ -163,6 +163,7 @@ class JobCrewTest extends TestCase
                 'tasks' => [[
                     'title' => 'Rough-in',
                     'foreman_id' => $this->stranger->id,
+                    'supervisor_id' => $this->torres->id,
                     'estimate_item_ids' => [],
                 ]],
             ])
@@ -206,6 +207,7 @@ class JobCrewTest extends TestCase
                 'title' => 'Rough-in',
                 'status' => JobTask::STATUS_PENDING,
                 'foreman_id' => $this->stranger->id,
+                'supervisor_id' => $this->torres->id,
                 'estimate_item_ids' => [],
             ])
             ->assertSessionHasErrors('foreman_id');
@@ -295,6 +297,9 @@ class JobCrewTest extends TestCase
                 'name' => 'Alex Mercer',
                 'role' => 'foreman',
                 'team_id' => $this->north->id,
+                'email' => 'alex.mercer@example.test',
+                'password' => 'a-strong-Passw0rd!',
+                'password_confirmation' => 'a-strong-Passw0rd!',
                 'inline' => true,
             ])
             ->assertSessionHasNoErrors()
@@ -317,6 +322,9 @@ class JobCrewTest extends TestCase
                 'name' => 'Alex Mercer',
                 'role' => 'foreman',
                 'team_id' => $this->north->id,
+                'email' => 'alex.mercer@example.test',
+                'password' => 'a-strong-Passw0rd!',
+                'password_confirmation' => 'a-strong-Passw0rd!',
                 'inline' => true,
             ]);
 
@@ -342,6 +350,9 @@ class JobCrewTest extends TestCase
                 'name' => 'Alex Mercer',
                 'role' => 'foreman',
                 'team_id' => null,
+                'email' => 'alex.mercer@example.test',
+                'password' => 'a-strong-Passw0rd!',
+                'password_confirmation' => 'a-strong-Passw0rd!',
                 'inline' => true,
             ])
             ->assertSessionHasNoErrors();

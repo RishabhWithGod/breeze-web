@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Events\JobStatusChanged;
 use App\Models\Invoice;
+use App\Services\ChangeOrders\ChangeOrderBilling;
 use App\Services\JobCosting\JobCostSummary;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
 
@@ -92,5 +93,8 @@ class GenerateInvoiceOnJobCompletion implements ShouldHandleEventsAfterCommit
         }
 
         $invoice->recalculateTotals();
+
+        // Added work the client already approved is billed with the rest of the job.
+        app(ChangeOrderBilling::class)->attachApprovedTo($invoice);
     }
 }

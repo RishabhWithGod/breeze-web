@@ -1,6 +1,6 @@
-import { Head } from '@inertiajs/react'
+import { Head, router } from '@inertiajs/react'
 import { Camera, MapPin } from 'lucide-react'
-import { Badge, ButtonLink, Card, SectionHeading } from '@/components/common'
+import { Badge, Button, ButtonLink, Card, SectionHeading } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { AttendanceDetail, AttendanceEventDetail } from '@/types'
@@ -55,10 +55,18 @@ export default function AttendanceShow({ attendance }: AttendanceShowProps) {
         ) : (
           <Badge tone="neutral">Checked out</Badge>
         )}
+        {attendance.recordedOffline && <Badge tone="info">Recorded offline</Badge>}
+        {attendance.reviewFlag && <Badge tone="warning">Needs review</Badge>}
         <span className="text-sm text-white/70">
           {formatDate(attendance.date)} · {formatHours(attendance.hours)} on site
         </span>
       </div>
+
+      {attendance.reviewReason && (
+        <p className="mb-6 rounded-panel border border-hairline bg-white/6 p-3 text-md text-white">
+          {attendance.reviewReason}
+        </p>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card accent="brand" padding="lg">
@@ -135,6 +143,45 @@ export default function AttendanceShow({ attendance }: AttendanceShowProps) {
           )}
         </Card>
       </div>
+
+      {attendance.corrections.length > 0 && (
+        <Card accent="neutral" padding="lg" className="mt-6">
+          <SectionHeading as="h3" title="Notes and reports from the technician" />
+          <ul className="space-y-3">
+            {attendance.corrections.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-start justify-between gap-3 text-md text-white">
+                <div className="min-w-0">
+                  <p className="font-semibold">
+                    {c.by ?? 'Technician'} ·{' '}
+                    {c.kind === 'ack' ? 'Acknowledged' : c.kind === 'correction' ? 'Reported a problem' : 'Note'}
+                    <span className="ml-2 font-normal text-white/70">{formatTime(c.at)}</span>
+                  </p>
+                  {c.message && <p className="mt-1 text-white/85">{c.message}</p>}
+                  {c.resolutionNote && <p className="mt-1 text-white/70">Resolved: {c.resolutionNote}</p>}
+                </div>
+                {c.kind === 'correction' &&
+                  (c.status === 'open' ? (
+                    attendance.canResolve ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() =>
+                          router.post(routeTo.attendanceCorrectionResolve(attendance.id, c.id), {}, { preserveScroll: true })
+                        }
+                      >
+                        Mark resolved
+                      </Button>
+                    ) : (
+                      <Badge tone="warning">Open</Badge>
+                    )
+                  ) : (
+                    <Badge tone="success">Resolved</Badge>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {attendance.checkIn.method === 'automatic' && (
         <p className="mt-6 flex items-center gap-2 text-sm text-white/60">

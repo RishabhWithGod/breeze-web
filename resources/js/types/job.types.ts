@@ -330,9 +330,16 @@ export interface FieldMaterialPlanned {
 /** A material the crew added on site that was never planned. */
 export interface FieldMaterialAdded {
   readonly id: number
+  readonly kind: 'material' | 'labor'
   readonly description: string
   readonly unit: string | null
+  /** Quantity, or hours for labor. */
   readonly qty: number
+  /** Unit price, or hourly rate for labor. */
+  readonly unitPrice: number
+  readonly total: number
+  /** Pending until the office approves it onto the estimate. */
+  readonly status: 'pending' | 'approved'
   readonly reason: string | null
   readonly taskTitle: string | null
   readonly addedBy: string | null
@@ -342,6 +349,9 @@ export interface FieldMaterialAdded {
 export interface JobFieldMaterials {
   readonly planned: readonly FieldMaterialPlanned[]
   readonly added: readonly FieldMaterialAdded[]
-  /** Over-plan lines plus every added material. */
+  /** Over-plan lines plus every added entry not yet approved. */
   readonly needsReviewCount: number
+  readonly addedTotal: number
+  /** A manager may edit, approve or remove pending entries. */
+  readonly canManage: boolean
 }

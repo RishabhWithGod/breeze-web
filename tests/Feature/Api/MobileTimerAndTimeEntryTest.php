@@ -229,7 +229,8 @@ class MobileTimerAndTimeEntryTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'Electrician']);
         $manager = User::factory()->create(['role' => 'Project Manager']);
-        $job = $this->makeJob();
+        // Only the manager who owns the job may decide its time.
+        $job = $this->makeJob(['user_id' => $manager->id]);
 
         $entry = TimeEntry::create([
             'job_id' => $job->id,

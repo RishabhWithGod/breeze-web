@@ -23,6 +23,8 @@ class NotificationResource extends JsonResource
             // Structured, labelled destinations — falls back to the single
             // legacy `link` for notification classes that never set `data`.
             'actions' => $this->actions(),
+            // Ids of what it is about (jobId, taskId, changeOrderId, shiftId) — what the app opens.
+            'data' => (object) \Illuminate\Support\Arr::except($this->data ?? [], ['actions']),
             'timestamp' => $this->created_at->toISOString(),
             'readAt' => $this->read_at?->toISOString(),
             'unread' => $this->read_at === null,

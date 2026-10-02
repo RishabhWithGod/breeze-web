@@ -153,6 +153,7 @@ class MobileJobCompletionWorkflowTest extends TestCase
 
     private function startAsRequest(Job $job, User $user): \Illuminate\Testing\TestResponse
     {
+        $this->checkInAt($job, $user);
         $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress']);
         auth()->forgetGuards();
@@ -615,5 +616,18 @@ class MobileJobCompletionWorkflowTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanUser))
             ->postJson('/api/v1/timer/start', ['job_id' => $job->id])
             ->assertStatus(409);
+    }
+
+    /** Starting a job needs the starter checked in at it today; this files that check-in. */
+    private function checkInAt(\App\Models\Job $job, \App\Models\User $user): void
+    {
+        \App\Models\JobAttendance::forceCreate([
+            'job_id' => $job->id,
+            'user_id' => $user->id,
+            'date' => now()->timezone(\App\Models\TimeTrackingSetting::current()->timezone)->toDateString(),
+            'status' => \App\Models\JobAttendance::STATUS_CHECKED_IN,
+            'check_in_at' => now(),
+            'check_in_method' => 'manual',
+        ]);
     }
 }
