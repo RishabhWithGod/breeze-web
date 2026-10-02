@@ -49,14 +49,14 @@ class SetupChecklistController extends Controller
         return back();
     }
 
-    /** Calls setup finished — once the steps that cannot be skipped are done. */
+    /** Calls setup finished — once every step is either done or skipped. */
     public function finish(Request $request): RedirectResponse
     {
         $company = $this->company($request);
         $checklist = $this->checklist->for($request->user());
 
         if (! $checklist['canFinish']) {
-            return back()->with('warning', 'Finish the company, client and project steps first — those cannot be skipped.');
+            return back()->with('warning', 'Finish or skip the remaining steps first.');
         }
 
         $company->forceFill(['onboarding_finished_at' => now()])->save();

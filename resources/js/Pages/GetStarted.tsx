@@ -34,6 +34,8 @@ interface Step {
   readonly href: string
   readonly action: string
   readonly skippable: boolean
+  /** False when this step's "Skipped" status was borrowed from another step's, with nothing of its own to undo. */
+  readonly undoable: boolean
   readonly lockedBecause: string | null
 }
 
@@ -46,7 +48,7 @@ export interface GetStartedProps {
     /** The first step still to do; null when there is none. */
     readonly next: string | null
     readonly finished: boolean
-    /** True once the steps that cannot be skipped are done. */
+    /** True once every step is either done or skipped — nothing pending, nothing locked. */
     readonly canFinish: boolean
   }
   /** Where the Need Help links go; only those that are set. */
@@ -65,8 +67,8 @@ const STEP_ICON: Record<string, LucideIcon> = {
  * Get Started — the setup checklist a company works through after it subscribes.
  *
  * Progress is read from what exists, so it follows the work wherever it is done. Continue
- * Setup goes to the first step still to do; two steps can be skipped; Finish Setup
- * closes the checklist once the ones that cannot be are done.
+ * Setup goes to the first step still to do; Team, Client and Project can be left for
+ * later; Complete Setup closes the checklist once every step is done or skipped.
  */
 export default function GetStarted({ checklist, help }: GetStartedProps) {
   const { flash } = usePage<SharedPageProps>().props
@@ -230,7 +232,7 @@ export default function GetStarted({ checklist, help }: GetStartedProps) {
             disabled={!checklist.canFinish}
             onClick={finish}
           >
-            Finish Setup
+            Complete Setup
           </Button>
         )}
         {next && (
@@ -312,7 +314,7 @@ function StepRow({ step, onSkip, onUndo }: { step: Step; onSkip: () => void; onU
             Skip
           </button>
         )}
-        {step.status === 'skipped' && (
+        {step.status === 'skipped' && step.undoable && (
           <button
             type="button"
             onClick={onUndo}
