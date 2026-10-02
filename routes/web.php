@@ -455,7 +455,9 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
     Route::get('teams/managers/{manager}/edit', [CompanyManagerController::class, 'edit'])->name('managers.edit');
 
     // The old address, kept so a bookmark or an old link still lands somewhere.
-    Route::redirect('foremen', '/teams')->name('foremen.index');
+    // Route::get, not Route::redirect: the latter registers every HTTP verb
+    // on this URI, which shadows foremen.store's POST just below.
+    Route::get('foremen', fn () => redirect()->route('teams.index'))->name('foremen.index');
     Route::get('foremen/create', [ForemanController::class, 'create'])->name('foremen.create');
     // After `create`, so the literal segment is not read as a foreman's id.
     Route::get('foremen/{foreman}', [ForemanController::class, 'show'])->name('foremen.show');

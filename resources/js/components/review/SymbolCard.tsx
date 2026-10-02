@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { router } from '@inertiajs/react'
 import {
   Check,
@@ -88,7 +88,7 @@ export function SymbolCard({
 
   // Only ever shown when there is neither a real crop nor a matched
   // reference icon — a plain, category-shaped stand-in either way.
-  const GenericIcon = genericSymbolIcon(row.name)
+  const GenericIcon = useMemo(() => genericSymbolIcon(row.name), [row.name])
 
   const post = useCallback(
     (url: string, data: Record<string, string | number | null> = {}, onDone?: () => void) => {
@@ -187,6 +187,7 @@ export function SymbolCard({
           </div>
         ) : !row.cropUrl ? (
           <div className="flex size-full flex-col items-center justify-center gap-1 p-3">
+            {/* eslint-disable-next-line react-hooks/static-components -- memoised above on row.name, not re-created each render */}
             <GenericIcon size={36} strokeWidth={1.5} style={{ color: color.solid }} aria-hidden />
             <span className="text-2xs text-navy-900/50">No image on file</span>
           </div>

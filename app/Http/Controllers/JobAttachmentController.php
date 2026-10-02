@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Job;
 use App\Models\JobAttachment;
+use App\Support\UploadLimits;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,7 +25,7 @@ class JobAttachmentController extends Controller
             // filename) — a job attachment is exactly the same kind of
             // business file, so it gets the same restriction rather than
             // accepting anything under a size cap alone.
-            'file' => ['required', Rule::file()->extensions(config('documents.extensions')), 'max:20480'],
+            'file' => ['required', Rule::file()->extensions(config('documents.extensions')), 'max:'.(UploadLimits::effectiveMb() * 1024)],
         ], [
             'file.required' => 'Choose a file to upload',
             'file.extensions' => 'Unsupported file type — accepted types are '

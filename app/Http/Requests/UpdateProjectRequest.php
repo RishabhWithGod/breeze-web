@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Project;
 use App\Support\CompanyRule;
+use App\Support\UploadLimits;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -49,7 +50,7 @@ class UpdateProjectRequest extends FormRequest
              * see StoreProjectRequest for why these formats and this limit.
              */
             'vendor_rate_list' => ['nullable', 'array', 'max:20'],
-            'vendor_rate_list.*' => ['file', 'mimes:xlsx,ods,csv,txt,pdf,doc,docx,rtf,odt', 'max:10240'],
+            'vendor_rate_list.*' => ['file', 'mimes:xlsx,ods,csv,txt,pdf,doc,docx,rtf,odt', 'max:'.(UploadLimits::effectiveMb() * 1024)],
         ];
     }
 
@@ -65,7 +66,7 @@ class UpdateProjectRequest extends FormRequest
             'estimate_target_total.min' => 'Amount cannot be negative',
             'vendor_rate_list.max' => 'Upload up to 20 files at a time',
             'vendor_rate_list.*.mimes' => 'Upload an Excel, CSV, PDF, or Word (.doc/.docx) commodity list',
-            'vendor_rate_list.*.max' => 'Each file must be smaller than 10MB',
+            'vendor_rate_list.*.max' => 'Each file must be under '.UploadLimits::effectiveMb().' MB',
         ];
     }
 }
