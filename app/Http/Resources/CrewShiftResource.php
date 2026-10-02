@@ -42,6 +42,11 @@ class CrewShiftResource extends JsonResource
             'durationHours' => (float) $this->duration_hours,
             'status' => $this->status,
             'notes' => $this->notes,
+            // Moved after it was booked, and who on the crew has seen it — what the field app shows as "Changed".
+            'changedAt' => $this->changed_at?->toISOString(),
+            'acknowledgedBy' => $this->relationLoaded('acknowledgements')
+                ? $this->acknowledgements->map(fn ($ack) => ['name' => $ack->user?->name, 'at' => $ack->acknowledged_at?->toISOString()])->filter(fn ($row) => $row['name'])->values()->all()
+                : [],
             'member' => $this->teamMember ? [
                 'id' => $this->teamMember->id,
                 'name' => $this->teamMember->name,

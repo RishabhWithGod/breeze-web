@@ -39,6 +39,7 @@ class ChangeOrders
                 'job_id' => $job->id,
                 'number' => $next,
                 'created_by' => $user->id,
+                'client_key' => $data['client_key'] ?? null,
             ]);
 
             $this->writeLines($co, $lines);
@@ -125,6 +126,8 @@ class ChangeOrders
         return [
             'description' => trim($data['description']),
             'reason' => filled($data['reason'] ?? null) ? trim($data['reason']) : null,
+            'reason_code' => $data['reason_code'] ?? null,
+            'customer_requested' => (bool) ($data['customer_requested'] ?? false),
             // A foreman's is always raised from the field; a manager says which it is.
             'source' => $this->access->isManager($user) ? ($data['source'] ?? ChangeOrder::SOURCE_OFFICE) : ChangeOrder::SOURCE_FIELD,
             'markup_pct' => $data['markup_pct'] ?? 0,

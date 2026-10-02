@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AiJob;
 use App\Models\AiResult;
+use App\Models\Client;
 use App\Models\ClientAddress;
 use App\Models\Estimate;
 use App\Models\Foreman;
@@ -26,6 +27,8 @@ class JobTest extends TestCase
 
     /** The client site a job is raised against. Set by `makeTakeoffDrawing`. */
     private ClientAddress $site;
+
+    private Client $client;
 
     protected function setUp(): void
     {
@@ -84,6 +87,7 @@ class JobTest extends TestCase
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Northgate Retail Fit-out',
+                'client_id' => $this->client->id,
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
@@ -102,7 +106,8 @@ class JobTest extends TestCase
             'id' => $job->id,
             'name' => 'Northgate Retail Fit-out',
             // Both are snapshots of what was picked, never typed.
-            'client' => $project->name,
+            'client' => $this->client->name,
+            'client_id' => $this->client->id,
             'location' => 'Northgate, Seattle',
             'project_id' => $project->id,
             'team_id' => $team->id,
@@ -122,6 +127,7 @@ class JobTest extends TestCase
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Exploratory Warehouse Retrofit',
+                'client_id' => $this->client->id,
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
@@ -148,14 +154,15 @@ class JobTest extends TestCase
                 'end_date' => '2026-05-11',
             ])
             /*
-             * `project_id` is the Client field and `address_ids` the sites —
-             * neither a client name nor an address is ever typed here. No
+             * `client_id` and `project_id` pick the client and its project, and
+             * `address_ids` the sites — neither a client name nor an address is
+             * ever typed here. No
              * foreman either: they are assigned per task, not per job. No
              * budget either: it is never typed, only ever read from the
              * drawing's own estimate.
              */
             ->assertSessionHasErrors([
-                'name', 'project_id', 'address_ids', 'upload_id', 'team_id', 'end_date',
+                'name', 'client_id', 'project_id', 'address_ids', 'upload_id', 'team_id', 'end_date',
             ]);
 
         $this->assertDatabaseCount('work_jobs', 0);
@@ -170,8 +177,8 @@ class JobTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('JobCreate')
                 ->has('clients', 1)
-                ->where('clients.0.id', $project->id)
-                ->where('clients.0.name', $project->name)
+                ->where('clients.0.id', $this->client->id)
+                ->where('clients.0.name', $this->client->name)
                 /*
                  * The form fills the sites, Schedule and Job Type from these the
                  * moment the client is picked, so they ship with the options
@@ -180,7 +187,11 @@ class JobTest extends TestCase
                 ->has('clients.0.addresses', 1)
                 ->where('clients.0.addresses.0.address', 'Northgate, Seattle')
                 ->where('clients.0.addresses.0.isPrimary', true)
-                ->where('clients.0.projectType', 'commercial')
+                // The type now rides on the project option, not the client.
+                ->has('projects', 1)
+                ->where('projects.0.id', $project->id)
+                ->where('projects.0.clientId', $this->client->id)
+                ->where('projects.0.projectType', 'commercial')
                 ->has('uploads', 1)
                 ->where('uploads.0.id', $upload->id)
                 ->where('uploads.0.projectId', $project->id)
@@ -195,6 +206,7 @@ class JobTest extends TestCase
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Northgate Retail Fit-out',
+                'client_id' => $this->client->id,
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
@@ -228,6 +240,7 @@ class JobTest extends TestCase
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Northgate Retail Fit-out',
+                'client_id' => $this->client->id,
                 'project_id' => $project->id,
                 'address_ids' => [$this->site->id],
                 'upload_id' => $upload->id,
@@ -291,17 +304,19 @@ class JobTest extends TestCase
      */
     private function makeTakeoffDrawing(): array
     {
+        $this->client = $this->user->clients()->create(['name' => 'Northgate Retail']);
         $project = Project::create([
             'user_id' => $this->user->id,
+            'client_id' => $this->client->id,
             'name' => 'Northgate Fit-out',
-            'client' => 'Northgate Fit-out',
+            'client' => 'Northgate Retail',
             // Mirrors the primary site below, as the client screen writes it.
             'location' => 'Northgate, Seattle',
             'due_date' => '2026-05-11',
             'project_type' => 'commercial',
             'status' => 'completed',
         ]);
-        $this->site = $project->addresses()->create([
+        $this->site = $this->client->addresses()->create([
             'address' => 'Northgate, Seattle',
             'is_primary' => true,
             'position' => 0,

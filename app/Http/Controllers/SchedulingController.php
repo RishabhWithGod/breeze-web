@@ -68,6 +68,7 @@ class SchedulingController extends Controller
                 'job.team:id,name',
                 'job.tasks.foreman:id,name,initials',
                 'job.tasks.supervisor:id,name,initials',
+                'acknowledgements.user:id,name',
                 'teamMember:id,name,initials,role',
             ])
             ->between($from, $to)

@@ -8,6 +8,7 @@ use App\Http\Resources\JobTaskResource;
 use App\Models\EstimateItem;
 use App\Models\Job;
 use App\Models\JobTask;
+use App\Services\Sync\TaskConflicts;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Mobile\ElectricianJobAccess;
 use App\Services\Scheduling\JobTaskWorkflowService;
@@ -32,6 +33,7 @@ class JobTaskController extends Controller
     use ApiResponses;
 
     public function __construct(
+        private readonly TaskConflicts $conflicts,
         private readonly ElectricianJobAccess $access,
         private readonly JobSchedulePolicy $policy,
         private readonly JobTaskWorkflowService $workflow,
@@ -93,6 +95,10 @@ class JobTaskController extends Controller
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
 
+        if ($clash = $this->guardConflict($request, $task, ['status' => JobTask::STATUS_COMPLETED, 'notes' => $data['notes'] ?? null])) {
+            return $clash;
+        }
+
         ['task' => $task, 'unblocked' => $unblocked] = $this->workflow->complete($task, $request->user(), $data);
 
         return $this->ok([
@@ -118,6 +124,10 @@ class JobTaskController extends Controller
             'actual_hours' => ['nullable', 'numeric', 'min:0', 'max:9999'],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
+
+        if ($clash = $this->guardConflict($request, $task, ['notes' => $data['notes'] ?? null])) {
+            return $clash;
+        }
 
         $task = $this->workflow->updateProgress($task, $data);
 
@@ -148,9 +158,60 @@ class JobTaskController extends Controller
             return $this->fail($blocker, 422);
         }
 
+        if ($clash = $this->guardConflict($request, $task, ['status' => $data['status']])) {
+            return $clash;
+        }
+
         $task = $this->workflow->setStatus($task, $data['status']);
 
         return $this->ok((new JobTaskResource($task))->resolve($request), 'Status updated.');
+    }
+
+    /**
+     * A change the phone made offline can clash with what the office did to the task meanwhile.
+     * The phone says what it last saw (`base_status`, `base_notes`); if the task has since moved
+     * somewhere else, the change is not applied and the phone gets both versions to choose from.
+     * `resolution=field` is the technician choosing their own — allowed only to someone with the
+     * authority to override the office.
+     *
+     * @param  array<string, mixed>  $incoming
+     */
+    private function guardConflict(Request $request, JobTask $task, array $incoming): ?JsonResponse
+    {
+        $request->validate([
+            'base_status' => ['nullable', Rule::in(JobTask::STATUSES)],
+            'base_notes' => ['nullable', 'string', 'max:5000'],
+            'occurred_at' => ['nullable', 'date'],
+            'resolution' => ['nullable', Rule::in(['field'])],
+        ]);
+
+        $canOverride = $this->policy->reopenTask($request->user(), $task);
+
+        if ($request->input('resolution') === 'field') {
+            abort_unless($canOverride, 403, 'Only a foreman can keep the field version over the office’s.');
+
+            return null;
+        }
+
+        $base = $request->only(['base_status', 'base_notes']);
+        if ($base === []) {
+            return null; // an older phone, or an online change: nothing to compare against
+        }
+
+        $fields = $this->conflicts->detect(
+            $task,
+            $incoming,
+            $base,
+            $request->filled('occurred_at') ? \Illuminate\Support\Carbon::parse($request->input('occurred_at')) : null,
+        );
+
+        return $fields === []
+            ? null
+            : $this->fail(
+                'This task was changed in the office while you were away.',
+                409,
+                $this->conflicts->payload($task, $fields, $canOverride),
+            );
     }
 
     /**

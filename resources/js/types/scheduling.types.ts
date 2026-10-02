@@ -101,6 +101,10 @@ export interface JobShift {
   readonly durationHours: number
   readonly status: ScheduleStatus
   readonly notes: string | null
+  /** Set when the shift was moved after it was booked. */
+  readonly changedAt?: string | null
+  /** Crew who have acknowledged the field app's "Changed" notice. */
+  readonly acknowledgedBy?: readonly { readonly name: string; readonly at: string | null }[]
   readonly member: CrewMember | null
 }
 

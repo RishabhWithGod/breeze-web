@@ -79,7 +79,17 @@ class TimeTrackingJobIntegrationTest extends TestCase
                 ->component('JobShow')
                 ->where('canViewTimeCosts', true));
 
-        $this->actingAs($this->employee)
+        // Someone in the manager's company who may open jobs, but is no
+        // manager, reads the job without its costs.
+        $this->grantPermissions($this->manager, []);
+        $apprentice = User::factory()->create([
+            'role' => 'Apprentice',
+            'company_id' => $this->manager->fresh()->company_id,
+        ]);
+        $this->grantPermissions($apprentice, ['jobs.view']);
+        $this->app['auth']->forgetGuards();
+
+        $this->actingAs($apprentice)
             ->get("/jobs/{$job->id}")
             ->assertInertia(fn (Assert $page) => $page
                 ->where('canViewTimeCosts', false));
@@ -116,6 +126,8 @@ class TimeTrackingJobIntegrationTest extends TestCase
     private function makeJob(array $attributes = []): Job
     {
         return Job::create([
+            // Approving (and reading costs) is limited to the manager who owns the job.
+            'user_id' => $this->manager->id,
             'foreman_id' => Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW'])->id,
             'name' => 'Riverside Office Renovation',
             'client' => 'Riverside Properties LLC',

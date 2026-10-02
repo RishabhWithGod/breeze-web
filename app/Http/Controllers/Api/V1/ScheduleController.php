@@ -6,13 +6,17 @@ use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\JobTaskResource;
 use App\Models\CrewShift;
+use App\Models\CrewShiftAcknowledgement;
+use App\Models\Foreman;
 use App\Models\Job;
+use App\Models\JobApprenticeAssignment;
 use App\Models\JobTask;
 use App\Services\Mobile\ElectricianJobAccess;
 use App\Services\Scheduling\JobTaskWorkflowService;
 use App\Services\TimeTracking\TeamMemberResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 /**
  * A job's schedule, read-only, as the mobile app needs it — the plan's
@@ -50,27 +54,41 @@ class ScheduleController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $range = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
+        $ranged = isset($range['from']);
+        $teamMemberId = $this->resolver->resolveFor($user)->id;
+
+        // What this person works: the jobs they are staffed on (a manager's is every job), and any
+        // shift booked to them by name.
         $shifts = CrewShift::query()
-            ->whereIn('job_id', $this->access->assignedJobsQuery($request->user())->select('id'))
+            ->where(fn ($query) => $query
+                ->whereIn('job_id', $this->access->listedJobsQuery($user)->select('id'))
+                ->orWhere('team_member_id', $teamMemberId))
             ->with(['job:id,name,client,location', 'teamMember:id,name,initials,role'])
-            ->where('scheduled_date', '>=', now()->toDateString())
+            ->when(
+                $ranged,
+                fn ($q) => $q->whereBetween('scheduled_date', [$range['from'], $range['to'] ?? $range['from']]),
+                fn ($q) => $q->where('scheduled_date', '>=', now()->toDateString()),
+            )
             ->orderBy('scheduled_date')
             ->orderBy('start_time')
             ->orderBy('id')
-            ->paginate(min((int) $request->integer('per_page', 20), 50));
+            ->paginate(min((int) $request->integer('per_page', $ranged ? 200 : 20), 200));
+
+        $acknowledged = CrewShiftAcknowledgement::query()
+            ->where('user_id', $user->id)
+            ->whereIn('crew_shift_id', $shifts->getCollection()->pluck('id'))
+            ->get()
+            ->mapWithKeys(fn (CrewShiftAcknowledgement $ack) => [$ack->crew_shift_id => $ack->acknowledged_at]);
 
         return $this->ok([
-            'shifts' => $shifts->getCollection()->map(fn (CrewShift $shift) => [
-                'id' => $shift->id,
-                'jobId' => $shift->job_id,
-                'jobName' => $shift->job?->name ?? '',
-                'address' => $shift->job?->location ?? '',
-                'crewName' => $shift->crew ?: ($shift->teamMember?->name ?? ''),
-                'scheduledDate' => $shift->scheduled_date->toDateString(),
-                'startTime' => $shift->start_time,
-                'durationHours' => (float) $shift->duration_hours,
-                'status' => $shift->status,
-            ])->all(),
+            // When this list was read — what the app shows as "last updated" and keeps for offline.
+            'generatedAt' => now()->toISOString(),
+            'shifts' => $shifts->getCollection()->map(fn (CrewShift $shift) => $this->present($shift, $acknowledged[$shift->id] ?? null))->all(),
             'meta' => [
                 'currentPage' => $shifts->currentPage(),
                 'lastPage' => $shifts->lastPage(),
@@ -78,6 +96,50 @@ class ScheduleController extends Controller
                 'total' => $shifts->total(),
             ],
         ]);
+    }
+
+    /** "Got it" on a changed shift: it stops reading Changed for this person. */
+    public function acknowledge(Request $request, CrewShift $shift): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(
+            $this->access->canAccess($user, $shift->job) || $shift->team_member_id === $this->resolver->resolveFor($user)->id,
+            403,
+            'That shift is not on your schedule.',
+        );
+
+        $ack = CrewShiftAcknowledgement::updateOrCreate(
+            ['crew_shift_id' => $shift->id, 'user_id' => $user->id],
+            ['acknowledged_at' => now()],
+        );
+
+        return $this->ok($this->present($shift->load(['job:id,name,client,location', 'teamMember:id,name,initials,role']), $ack->acknowledged_at), 'Schedule change acknowledged.');
+    }
+
+    /** @return array<string, mixed> */
+    private function present(CrewShift $shift, mixed $acknowledgedAt): array
+    {
+        $changed = $shift->changed_at !== null
+            && ($acknowledgedAt === null || $acknowledgedAt->lt($shift->changed_at));
+
+        return [
+            'id' => $shift->id,
+            'jobId' => $shift->job_id,
+            'jobName' => $shift->job?->name ?? '',
+            'client' => $shift->job?->client,
+            'address' => $shift->job?->location ?? '',
+            'crewName' => $shift->crew ?: ($shift->teamMember?->name ?? ''),
+            'scheduledDate' => $shift->scheduled_date->toDateString(),
+            'startTime' => $shift->start_time,
+            'endTime' => Carbon::parse($shift->start_time)->addMinutes((int) round(((float) $shift->duration_hours) * 60))->format('H:i:s'),
+            'durationHours' => (float) $shift->duration_hours,
+            'status' => $shift->status,
+            'notes' => $shift->notes,
+            'changed' => $changed,
+            'changedAt' => $shift->changed_at?->toISOString(),
+            'acknowledgedAt' => $acknowledgedAt?->toISOString(),
+            'updatedAt' => $shift->updated_at?->toISOString(),
+        ];
     }
 
     public function show(Request $request, Job $job): JsonResponse
@@ -93,9 +155,19 @@ class ScheduleController extends Controller
         $teamMemberId = $this->resolver->resolveFor($request->user())->id;
         $foremanId = $request->user()->foreman?->id;
 
+        // An apprentice reads the work of the journeyman they were put under on this job —
+        // to see it, never to change it (every write route stays behind `block.apprentice`).
+        $journeymanIds = $request->user()->foreman?->role === Foreman::ROLE_APPRENTICE
+            ? JobApprenticeAssignment::query()->where('job_id', $job->id)->where('apprentice_id', $foremanId)->pluck('journeyman_id')
+            : collect();
+
         $myTasks = $job->tasks()
-            ->where(function ($query) use ($teamMemberId, $foremanId) {
-                $query->whereHas('members', fn ($q) => $q->where('team_members.id', $teamMemberId));
+            ->where(function ($query) use ($teamMemberId, $foremanId, $journeymanIds) {
+                if ($journeymanIds->isNotEmpty()) {
+                    $query->whereIn('foreman_id', $journeymanIds)->orWhereIn('supervisor_id', $journeymanIds);
+                }
+
+                $query->orWhereHas('members', fn ($q) => $q->where('team_members.id', $teamMemberId));
 
                 // Named as the task's foreman/supervisor — the same signal
                 // `ElectricianJobAccess` treats as real staffing, so a
@@ -123,6 +195,7 @@ class ScheduleController extends Controller
                 'workEndTime' => substr((string) $schedule->work_end_time, 0, 5),
             ],
             'myTasks' => JobTaskResource::collection($myTasks)->resolve($request),
+            'readOnly' => $request->user()->foreman?->role === Foreman::ROLE_APPRENTICE,
         ]);
     }
 }

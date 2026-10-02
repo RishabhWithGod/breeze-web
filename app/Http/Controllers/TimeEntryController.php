@@ -8,6 +8,7 @@ use App\Events\TimeEntrySubmitted;
 use App\Http\Resources\TimeEntryActivityResource;
 use App\Http\Resources\TimeEntryResource;
 use App\Models\Job;
+use App\Models\AttendanceCorrection;
 use App\Models\JobAttendance;
 use App\Models\JobTask;
 use App\Models\TeamMember;
@@ -239,7 +240,7 @@ class TimeEntryController extends Controller
         $canViewCrew = (bool) $request->user()->can('viewCrew', TimeEntry::class);
         abort_unless($canViewCrew || $attendance->user_id === $request->user()->id, 403);
 
-        $attendance->load(['job', 'user']);
+        $attendance->load(['job', 'user', 'corrections.user:id,name']);
         $job = $attendance->job;
 
         return Inertia::render('AttendanceShow', [
@@ -256,6 +257,20 @@ class TimeEntryController extends Controller
                 ] : null,
                 'hours' => round($attendance->workingSeconds() / 3600, 2),
                 'bankedSeconds' => $attendance->banked_seconds,
+                // Saved on the phone and sent later, and anything a person should look at.
+                'recordedOffline' => $attendance->checkInWasOffline() || $attendance->checkOutWasOffline(),
+                'reviewFlag' => $attendance->review_flag,
+                'reviewReason' => $attendance->review_reason,
+                'canResolve' => app(TimeEntryPolicy::class)->resolveCorrection($request->user(), $attendance),
+                'corrections' => $attendance->corrections->map(fn ($c) => [
+                    'id' => $c->id,
+                    'kind' => $c->kind,
+                    'message' => $c->message,
+                    'status' => $c->status,
+                    'by' => $c->user?->name,
+                    'at' => $c->created_at?->toISOString(),
+                    'resolutionNote' => $c->resolution_note,
+                ])->all(),
                 'checkIn' => [
                     'at' => $attendance->check_in_at?->toISOString(),
                     'method' => $attendance->check_in_method,
@@ -680,6 +695,24 @@ class TimeEntryController extends Controller
         ]);
 
         return back()->with('success', 'Checked out.');
+    }
+
+    /** A manager closing out a technician's reported problem with a check-in or checkout. */
+    public function resolveCorrection(Request $request, JobAttendance $attendance, AttendanceCorrection $correction): RedirectResponse
+    {
+        abort_unless(app(TimeEntryPolicy::class)->resolveCorrection($request->user(), $attendance), 403);
+        abort_unless($correction->job_attendance_id === $attendance->id && $correction->kind === AttendanceCorrection::CORRECTION, 404);
+
+        $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
+
+        $correction->update([
+            'status' => 'resolved',
+            'resolved_by' => $request->user()->id,
+            'resolved_at' => now(),
+            'resolution_note' => filled($data['note'] ?? null) ? trim($data['note']) : null,
+        ]);
+
+        return back()->with('success', 'Marked resolved.');
     }
 
     public function reject(Request $request, TimeEntry $entry): RedirectResponse

@@ -136,6 +136,10 @@ class SessionLogBuilder
             'hours' => $open ? null : round($session->workingSeconds() / 3600, 2),
             'source' => $this->attendanceSource($session->check_in_method),
             'sourceKind' => $session->check_in_method === JobAttendance::METHOD_AUTOMATIC ? 'geofence' : 'manual',
+            // Saved on the phone and sent later; something a person should look at; a reported problem.
+            'recordedOffline' => $session->checkInWasOffline() || $session->checkOutWasOffline(),
+            'reviewFlag' => $session->review_flag,
+            'openReports' => $session->corrections()->where('kind', 'correction')->where('status', 'open')->count(),
             'status' => $missing ? 'missing-checkout' : ($open ? 'on-site' : 'completed'),
         ];
     }

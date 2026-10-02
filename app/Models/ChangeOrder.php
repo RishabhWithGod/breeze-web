@@ -29,12 +29,23 @@ class ChangeOrder extends Model
 
     public const SOURCES = [self::SOURCE_FIELD, self::SOURCE_OFFICE];
 
-    protected $fillable = ['owner_id', 'job_id', 'number', 'created_by', 'description', 'reason', 'source', 'markup_pct'];
+    /** Why added work was raised: the value stored, and what people read. */
+    public const REASONS = [
+        'scope_change' => 'Scope change',
+        'field_condition' => 'Unforeseen field condition',
+        'code_requirement' => 'Code or inspection requirement',
+        'design_change' => 'Design change',
+        'material_issue' => 'Damaged or missing material',
+        'other' => 'Other',
+    ];
+
+    protected $fillable = ['owner_id', 'job_id', 'number', 'created_by', 'description', 'reason', 'reason_code', 'customer_requested', 'client_key', 'source', 'markup_pct'];
 
     protected function casts(): array
     {
         return [
             'markup_pct' => 'decimal:2',
+            'customer_requested' => 'boolean',
             'labor_hours' => 'decimal:2',
             'labor_cost' => 'decimal:2',
             'material_cost' => 'decimal:2',
@@ -43,6 +54,11 @@ class ChangeOrder extends Model
             'submitted_at' => 'datetime',
             'decided_at' => 'datetime',
         ];
+    }
+
+    public function reasonLabel(): ?string
+    {
+        return self::REASONS[$this->reason_code] ?? null;
     }
 
     /** "CO-003" */

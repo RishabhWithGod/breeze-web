@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AppNotification;
 use App\Models\Client;
+use App\Models\CompanyProfile;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\Foreman;
@@ -424,7 +425,17 @@ class JobCostingTest extends TestCase
         $job = $this->makeJob();
         $this->makeTimeEntry($job, $this->electrician, 5, TimeEntry::STATUS_APPROVED, 500);
 
-        $this->actingAs($this->electrician)
+        // A job is only viewable by its company, so the electrician has to be
+        // on the manager's team to reach the page at all — the point of the
+        // test is that being on it still shows them no dollar figures.
+        $company = CompanyProfile::create([
+            'user_id' => $this->manager->id, 'name' => 'Volt & Co', 'business_address' => '1 Main St',
+            'primary_contact' => 'A', 'phone' => '(512) 555-0142', 'email' => 'co@x.test', 'timezone' => 'America/Chicago',
+        ]);
+        $this->manager->forceFill(['company_id' => $company->id])->save();
+        $this->electrician->forceFill(['company_id' => $company->id])->save();
+
+        $this->actingAs($this->electrician->fresh())
             ->get("/jobs/{$job->id}")
             ->assertInertia(fn (Assert $page) => $page
                 ->where('canViewTimeCosts', false)

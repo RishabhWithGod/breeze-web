@@ -31,7 +31,7 @@ class UploadClientPreselectTest extends TestCase
     public function test_creating_a_client_preselects_it_on_the_upload_screen(): void
     {
         $this->actingAs($this->user)
-            ->post('/projects', ['name' => 'Harborview Data Hall'])
+            ->post('/projects', ['name' => 'Harborview Data Hall', 'client_id' => $this->user->clients()->create(['name' => 'Vertex'])->id])
             ->assertSessionHasNoErrors();
 
         $client = Project::sole();
@@ -45,7 +45,7 @@ class UploadClientPreselectTest extends TestCase
 
     public function test_the_preselect_is_used_once_and_not_again(): void
     {
-        $this->actingAs($this->user)->post('/projects', ['name' => 'Harborview Data Hall']);
+        $this->actingAs($this->user)->post('/projects', ['name' => 'Harborview Data Hall', 'client_id' => $this->user->clients()->create(['name' => 'Vertex'])->id]);
 
         // It answers "the client you just created", not "the client you always
         // want" — a later visit must not keep steering the picker.

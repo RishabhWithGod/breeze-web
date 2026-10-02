@@ -67,6 +67,9 @@ class JobMaterialController extends Controller
             'added.*.actual_quantity' => ['required', 'numeric', 'gt:0', 'max:99999999'],
             'added.*.reason' => ['nullable', 'string', 'max:1000'],
             'added.*.price_book_item_id' => ['nullable', 'integer'],
+            'added.*.type' => ['nullable', Rule::in([JobFieldMaterial::MATERIAL, JobFieldMaterial::LABOR])],
+            // Unit price (material) or hourly rate (labor). Only a foreman or manager prices.
+            'added.*.price' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'added.*.job_task_id' => ['nullable', 'integer', Rule::exists('job_tasks', 'id')->where('job_id', $job->id)],
         ], [
             'added.*.description.required' => 'Name every material you add.',
@@ -116,15 +119,25 @@ class JobMaterialController extends Controller
                 );
             }
 
+            $canPrice = $user->hasForemanAuthority();
+
             foreach ($data['added'] ?? [] as $row) {
+                $kind = $row['type'] ?? JobFieldMaterial::MATERIAL;
+                $price = $canPrice ? (float) ($row['price'] ?? 0) : 0.0;
+                $isLabor = $kind === JobFieldMaterial::LABOR;
+
                 JobFieldMaterial::firstOrCreate(
                     ['job_id' => $job->id, 'client_key' => $row['client_key']],
                     [
                         'job_task_id' => $row['job_task_id'] ?? null,
                         'price_book_item_id' => $row['price_book_item_id'] ?? null,
                         'description' => trim($row['description']),
-                        'unit' => filled($row['unit'] ?? null) ? trim($row['unit']) : null,
+                        'kind' => $kind,
+                        'unit' => $isLabor ? 'hr' : (filled($row['unit'] ?? null) ? trim($row['unit']) : null),
                         'actual_quantity' => $row['actual_quantity'],
+                        'unit_price' => $price,
+                        // Worked out here, never trusted from the phone.
+                        'total' => round((float) $row['actual_quantity'] * $price, 2),
                         'reason' => filled($row['reason'] ?? null) ? trim($row['reason']) : null,
                         'user_id' => $user->id,
                     ],
@@ -145,6 +158,7 @@ class JobMaterialController extends Controller
         $this->authorizeJob($request, $job);
         abort_unless($material->job_id === $job->id && $material->isAdded(), 404);
         abort_if($job->isLocked(), 409, 'This job is completed and locked.');
+        abort_if($material->isApproved(), 409, 'This is already on the estimate.');
         abort_unless(
             $material->user_id === $request->user()->id || $request->user()->hasForemanAuthority(),
             403,
@@ -200,9 +214,15 @@ class JobMaterialController extends Controller
             ->map(fn (JobFieldMaterial $m) => [
                 'id' => $m->id,
                 'clientKey' => $m->client_key,
+                'type' => $m->kind,
                 'description' => $m->description,
                 'unit' => $m->unit,
                 'actualQty' => (float) $m->actual_quantity,
+                'status' => $m->status,
+                ...($user->hasForemanAuthority() ? [
+                    'price' => (float) $m->unit_price,
+                    'total' => (float) $m->total,
+                ] : []),
                 'reason' => $m->reason,
                 'taskId' => $m->job_task_id,
                 'addedBy' => $m->reporter?->name,
@@ -216,6 +236,7 @@ class JobMaterialController extends Controller
         return [
             'materials' => $planned,
             'added' => $added,
+            'canPrice' => $user->hasForemanAuthority(),
             'canEdit' => ! $locked,
             'lockedReason' => $job->isLocked()
                 ? 'This job is completed and locked.'

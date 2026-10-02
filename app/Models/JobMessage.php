@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** One message in a job's conversation. */
 class JobMessage extends Model
 {
-    protected $fillable = ['job_id', 'user_id', 'body'];
+    protected $fillable = ['job_id', 'user_id', 'body', 'client_key'];
 
     /** @return BelongsTo<Job, $this> */
     public function job(): BelongsTo

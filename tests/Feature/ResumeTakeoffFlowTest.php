@@ -58,11 +58,14 @@ class ResumeTakeoffFlowTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('takeoffFlow', null));
     }
 
-    public function test_the_flow_starts_when_the_client_is_created(): void
+    public function test_the_flow_starts_when_the_project_is_created(): void
     {
+        $depot = $this->user->clients()->create(['name' => 'Northgate Holdings']);
+        $depot->addresses()->create(['label' => 'Depot', 'address' => '9 Depot Road', 'is_primary' => true]);
+
         $this->actingAs($this->user)->post('/projects', [
+            'client_id' => $depot->id,
             'name' => 'Northgate Depot',
-            'addresses' => [['label' => 'Depot', 'address' => '9 Depot Road']],
         ]);
 
         // The takeoff starts at the client, not at the review: its drawing is
@@ -133,13 +136,16 @@ class ResumeTakeoffFlowTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('unfinishedTakeoff', null));
     }
 
-    public function test_creating_the_second_client_moves_the_flow_onto_it(): void
+    public function test_creating_the_second_project_moves_the_flow_onto_it(): void
     {
         $this->actingAs($this->user)->get(route('reviews.show', $this->result));
 
+        $depot = $this->user->clients()->create(['name' => 'Northgate Holdings']);
+        $depot->addresses()->create(['label' => 'Depot', 'address' => '9 Depot Road', 'is_primary' => true]);
+
         $this->actingAs($this->user)->post('/projects', [
+            'client_id' => $depot->id,
             'name' => 'Northgate Depot',
-            'addresses' => [['label' => 'Depot', 'address' => '9 Depot Road']],
         ]);
 
         // The first one is untouched — it just is not the one being resumed.
@@ -253,8 +259,10 @@ class ResumeTakeoffFlowTest extends TestCase
             'tasks' => [[
                 'title' => 'Rough-in',
                 'foreman_id' => Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW'])->id,
+                // Every task has both someone running it and someone over them.
+                'supervisor_id' => Foreman::create(['name' => 'Sam Ortiz', 'initials' => 'SO'])->id,
             ]],
-        ]);
+        ])->assertSessionHasNoErrors();
 
         // The takeoff has become a job with its work laid out: nothing to resume.
         $this->actingAs($this->user)

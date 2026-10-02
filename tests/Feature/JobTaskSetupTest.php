@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\AiJob;
 use App\Models\AiResult;
+use App\Models\Client;
+use App\Models\CompanyProfile;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\FinalSymbol;
@@ -33,6 +35,8 @@ class JobTaskSetupTest extends TestCase
 
     private Job $job;
 
+    private Client $clientRecord;
+
     private Foreman $foreman;
 
     private Foreman $supervisor;
@@ -47,7 +51,10 @@ class JobTaskSetupTest extends TestCase
             'name' => 'Robin Ashby', 'initials' => 'RA', 'role' => Foreman::ROLE_FOREMAN,
         ]);
 
+        $this->clientRecord = $this->user->clients()->create(['name' => 'Harborview']);
+
         $client = $this->user->projects()->create([
+            'client_id' => $this->clientRecord->id,
             'name' => 'Harborview', 'client' => 'Harborview', 'status' => 'draft',
         ]);
 
@@ -218,16 +225,18 @@ class JobTaskSetupTest extends TestCase
     public function test_coming_back_to_the_job_step_shows_the_form_as_it_was_filled(): void
     {
         $client = Project::sole();
-        $site = $client->addresses()->create(['label' => 'Main', 'address' => '41 Harbor Way', 'is_primary' => true]);
+        $site = $client->clientRecord->addresses()->create(['label' => 'Main', 'address' => '41 Harbor Way', 'is_primary' => true]);
         $result = $this->takeoffFor($client);
 
         $this->actingAs($this->user)->post(route('finals.job', $result), [
             'name' => 'Harborview Fit-out',
             'project_id' => $client->id,
             'address_ids' => [$site->id],
+            'team_id' => Team::create(['name' => 'Harbor Crew'])->id,
+            'start_date' => '2026-09-07',
+            'end_date' => '2026-09-21',
             'description' => 'Rough-in on floors 1 to 3.',
             'job_type' => 'commercial',
-            'budget' => '12000',
         ]);
 
         // Back on the job step, the same form, filled — not a card about it.
@@ -238,20 +247,24 @@ class JobTaskSetupTest extends TestCase
                 ->where('result.job.name', 'Harborview Fit-out')
                 ->where('result.job.description', 'Rough-in on floors 1 to 3.')
                 ->where('result.job.jobType', 'commercial')
-                ->where('result.job.budget', 12000)
+                // Never typed: it is read off the job's estimate, and this takeoff has none priced.
+                ->where('result.job.budget', null)
                 ->where('result.job.addressIds', [$site->id]));
     }
 
     public function test_saving_the_job_step_again_updates_the_job_rather_than_doing_nothing(): void
     {
         $client = Project::sole();
-        $site = $client->addresses()->create(['label' => 'Main', 'address' => '41 Harbor Way', 'is_primary' => true]);
+        $site = $client->clientRecord->addresses()->create(['label' => 'Main', 'address' => '41 Harbor Way', 'is_primary' => true]);
         $result = $this->takeoffFor($client);
 
         $this->actingAs($this->user)->post(route('finals.job', $result), [
             'name' => 'Harborview Fit-out',
             'project_id' => $client->id,
             'address_ids' => [$site->id],
+            'team_id' => Team::create(['name' => 'Harbor Crew'])->id,
+            'start_date' => '2026-09-07',
+            'end_date' => '2026-09-21',
             'job_type' => 'commercial',
         ]);
 
@@ -262,6 +275,9 @@ class JobTaskSetupTest extends TestCase
             'name' => 'Harborview Fit-out, phase 2',
             'project_id' => $client->id,
             'address_ids' => [$site->id],
+            'team_id' => Team::create(['name' => 'Harbor Crew'])->id,
+            'start_date' => '2026-09-07',
+            'end_date' => '2026-09-21',
             'job_type' => 'industrial',
             'description' => 'Added after the fact.',
         ]);
@@ -345,7 +361,16 @@ class JobTaskSetupTest extends TestCase
             'tasks' => [['title' => 'Rough-in', 'foreman_id' => $this->foreman->id, 'supervisor_id' => $this->supervisor->id]],
         ]);
 
-        $electrician = User::factory()->create(['role' => 'Electrician']);
+        // Jobs are company-wide: the electrician reads this one as a colleague.
+        $company = CompanyProfile::create([
+            'user_id' => $this->user->id, 'name' => 'Harbor Electric', 'business_address' => '1 Main St',
+            'primary_contact' => 'A', 'phone' => '(512) 555-0142', 'email' => uniqid().'@x.test',
+            'timezone' => 'America/Chicago',
+        ]);
+        $this->user->forceFill(['company_id' => $company->id])->save();
+        $electrician = User::factory()->create([
+            'role' => 'Electrician', 'status' => User::STATUS_ACTIVE, 'company_id' => $company->id,
+        ]);
 
         $this->actingAs($electrician)
             ->get(route('jobs.show', $this->job))
@@ -580,13 +605,17 @@ class JobTaskSetupTest extends TestCase
     public function test_creating_a_job_lands_on_the_task_step(): void
     {
         $client = Project::sole();
-        $site = $client->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
+        $site = $client->clientRecord->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
 
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Northgate Fit-out',
+                'client_id' => $client->client_id,
                 'project_id' => $client->id,
                 'address_ids' => [$site->id],
+                'team_id' => Team::create(['name' => 'Harbor Crew'])->id,
+                'start_date' => '2026-09-07',
+                'end_date' => '2026-09-21',
                 'upload_id' => $this->makeDrawing($client)->id,
             ])
             ->assertRedirect(route('jobs.tasks.setup', Job::latest('id')->first()));
@@ -595,14 +624,18 @@ class JobTaskSetupTest extends TestCase
     public function test_a_draft_is_not_sent_to_be_planned(): void
     {
         $client = Project::sole();
-        $site = $client->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
+        $site = $client->clientRecord->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
 
         // A draft is not ready for a plan, so it opens on the job itself.
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Exploratory Retrofit',
+                'client_id' => $client->client_id,
                 'project_id' => $client->id,
                 'address_ids' => [$site->id],
+                'team_id' => Team::create(['name' => 'Harbor Crew'])->id,
+                'start_date' => '2026-09-07',
+                'end_date' => '2026-09-21',
                 'upload_id' => $this->makeDrawing($client)->id,
                 'save_as_draft' => true,
             ])
@@ -951,7 +984,7 @@ class JobTaskSetupTest extends TestCase
          * step opens with the priced work already there to plan.
          */
         $client = Project::sole();
-        $site = $client->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
+        $site = $client->clientRecord->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
 
         $upload = $client->uploads()->create([
             'user_id' => $this->user->id,
@@ -992,8 +1025,12 @@ class JobTaskSetupTest extends TestCase
 
         $this->actingAs($this->user)->post('/jobs', [
             'name' => 'Harborview Fit-out',
+            'client_id' => $client->client_id,
             'project_id' => $client->id,
             'address_ids' => [$site->id],
+            'team_id' => Team::create(['name' => 'Harbor Crew'])->id,
+            'start_date' => '2026-09-07',
+            'end_date' => '2026-09-21',
             'upload_id' => $upload->id,
         ])->assertSessionHas('success');
 
@@ -1016,13 +1053,17 @@ class JobTaskSetupTest extends TestCase
         // A job is the work on a drawing. Without one there is no takeoff, no
         // estimate, and nothing for the task step to plan from.
         $client = Project::sole();
-        $site = $client->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
+        $site = $client->clientRecord->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
 
         $this->actingAs($this->user)
             ->post('/jobs', [
                 'name' => 'Northgate Fit-out',
+                'client_id' => $client->client_id,
                 'project_id' => $client->id,
                 'address_ids' => [$site->id],
+                'team_id' => Team::create(['name' => 'Harbor Crew'])->id,
+                'start_date' => '2026-09-07',
+                'end_date' => '2026-09-21',
             ])
             ->assertSessionHasErrors('upload_id');
     }
@@ -1033,12 +1074,16 @@ class JobTaskSetupTest extends TestCase
         // the step has no lines and does not pretend otherwise. Naming the task
         // and its foreman is still enough.
         $client = Project::sole();
-        $site = $client->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
+        $site = $client->clientRecord->addresses()->create(['address' => '41 Harbor Way', 'is_primary' => true]);
 
         $this->actingAs($this->user)->post('/jobs', [
             'name' => 'Northgate Fit-out',
+            'client_id' => $client->client_id,
             'project_id' => $client->id,
             'address_ids' => [$site->id],
+            'team_id' => Team::create(['name' => 'Harbor Crew'])->id,
+            'start_date' => '2026-09-07',
+            'end_date' => '2026-09-21',
             'upload_id' => $this->makeDrawing($client)->id,
         ])->assertSessionHas('success');
 

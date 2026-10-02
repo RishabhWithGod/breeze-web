@@ -3,11 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\BillingSetting;
+use App\Models\Client;
+use App\Models\Estimate;
 use App\Models\Invoice;
 use App\Models\PaymentMethod;
 use App\Models\PaymentProcessor;
 use App\Models\PaymentTransaction;
-use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -179,19 +180,20 @@ class PaymentSettingsTest extends TestCase
             'include_payment_instructions' => true,
             'send_payment_reminders' => false,
             'apply_late_fees_automatically' => false,
-            'default_payment_terms' => 'net-30',
-            'default_currency' => 'CAD',
-        ])->assertRedirect();
+            'default_payment_terms' => 'net-45',
+            'default_currency' => 'USD',
+        ])->assertSessionHasNoErrors()->assertRedirect();
 
+        // USD is the only currency the app bills in, so terms are what varies.
         $settings = BillingSetting::current();
         $this->assertTrue($settings->auto_send_invoices);
-        $this->assertSame('net-30', $settings->default_payment_terms);
-        $this->assertSame('CAD', $settings->default_currency);
+        $this->assertSame('net-45', $settings->default_payment_terms);
+        $this->assertSame('USD', $settings->default_currency);
 
         $this->actingAs($this->manager)->get('/settings')
             ->assertInertia(fn (Assert $page) => $page
-                ->where('billingSettings.defaultPaymentTerms', 'net-30')
-                ->where('billingSettings.defaultCurrency', 'CAD'));
+                ->where('billingSettings.defaultPaymentTerms', 'net-45')
+                ->where('billingSettings.defaultCurrency', 'USD'));
     }
 
     public function test_a_non_manager_cannot_view_or_mutate_payment_settings(): void
@@ -210,16 +212,23 @@ class PaymentSettingsTest extends TestCase
 
     public function test_marking_an_invoice_paid_records_a_real_transaction_that_appears_in_payment_history(): void
     {
-        // Clients are projects, so an invoice picks one rather than naming it.
-        $client = Project::create([
+        // An invoice picks a client from the register and bills an estimate.
+        $client = Client::create(['user_id' => $this->manager->id, 'name' => 'Apex Construction']);
+        $estimate = Estimate::create([
             'user_id' => $this->manager->id,
-            'name' => 'Apex Construction',
-            'client' => 'Apex Construction',
-            'status' => 'draft',
+            'client_id' => $client->id,
+            'number' => Estimate::nextNumber($this->manager),
+            'client' => $client->name,
+            'project' => $client->name,
+            'issued_on' => '2026-08-01',
+            'status' => 'approved',
+            'kind' => Estimate::KIND_STANDALONE,
+            'amount' => 0,
         ]);
 
         $this->actingAs($this->manager)->post('/invoices', [
-            'project_id' => $client->id,
+            'client_id' => $client->id,
+            'estimate_id' => $estimate->id,
             'invoice_date' => now()->toDateString(),
             'due_date' => null,
             'tax_pct' => 0,

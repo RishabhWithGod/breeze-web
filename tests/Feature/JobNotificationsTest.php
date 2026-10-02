@@ -37,7 +37,12 @@ class JobNotificationsTest extends TestCase
 
     private function makeJob(array $attributes = []): Job
     {
+        // Jobs belong to the company that raised the project they are on, which
+        // is what lets the planner reach (and plan) them.
         return Job::create([
+            'project_id' => $this->planner->projects()->create([
+                'name' => 'Riverside', 'client' => 'Riverside Properties LLC', 'status' => 'draft',
+            ])->id,
             'foreman_id' => Foreman::create(['name' => 'Header Foreman', 'initials' => 'HF'])->id,
             'name' => 'Riverside Office Renovation',
             'client' => 'Riverside Properties LLC',
@@ -75,15 +80,28 @@ class JobNotificationsTest extends TestCase
         return $schedule->tasks()->create(['job_id' => $job->id, ...$attributes]);
     }
 
+    /**
+     * Completing is the final close-out: every assigned foreman has submitted
+     * their own tasks and a supervisor has approved each one.
+     */
+    private function crewSignedOffAndApproved(Job $job): void
+    {
+        foreach ($job->assignedForemanIds() as $foremanId) {
+            $job->markForemanReadyForReview($foremanId);
+            $job->approveForeman($foremanId);
+        }
+    }
+
     /* ------------------------------------------------------ task assignment */
 
     public function test_assigning_a_foreman_to_a_new_task_notifies_them(): void
     {
         [$foremanUser, $foreman] = $this->makeForeman('Robert');
+        [, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_FOREMAN);
         $job = $this->makeJob(['status' => 'planning']);
 
         $this->actingAs($this->planner)->post(route('jobs.tasks.setup.store', $job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $foreman->id]],
+            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $foreman->id, 'supervisor_id' => $supervisor->id]],
         ]);
 
         $task = JobTask::sole();
@@ -117,10 +135,11 @@ class JobNotificationsTest extends TestCase
     {
         [, $foremanA] = $this->makeForeman('Robert');
         [$foremanBUser, $foremanB] = $this->makeForeman('Priya');
+        [, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_FOREMAN);
         $job = $this->makeJob(['status' => 'planning']);
 
         $this->actingAs($this->planner)->post(route('jobs.tasks.setup.store', $job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $foremanA->id]],
+            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $foremanA->id, 'supervisor_id' => $supervisor->id]],
         ]);
         Notification::fake(); // Clear the assignment notification from creation.
 
@@ -130,6 +149,7 @@ class JobNotificationsTest extends TestCase
             'title' => $task->title,
             'status' => $task->status,
             'foreman_id' => $foremanB->id,
+            'supervisor_id' => $supervisor->id,
             'estimate_item_ids' => [],
         ]);
 
@@ -139,10 +159,11 @@ class JobNotificationsTest extends TestCase
     public function test_editing_a_task_without_changing_its_assignment_does_not_renotify(): void
     {
         [$foremanUser, $foreman] = $this->makeForeman('Robert');
+        [, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_FOREMAN);
         $job = $this->makeJob(['status' => 'planning']);
 
         $this->actingAs($this->planner)->post(route('jobs.tasks.setup.store', $job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $foreman->id]],
+            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $foreman->id, 'supervisor_id' => $supervisor->id]],
         ]);
         Notification::fake(); // Clear the assignment notification from creation.
 
@@ -152,6 +173,7 @@ class JobNotificationsTest extends TestCase
             'title' => 'Rough-in, revised',
             'status' => $task->status,
             'foreman_id' => $foreman->id,
+            'supervisor_id' => $supervisor->id,
             'estimate_item_ids' => [],
         ]);
 
@@ -169,6 +191,8 @@ class JobNotificationsTest extends TestCase
             'title' => 'Rough-in', 'foreman_id' => $foreman->id,
             'supervisor_id' => $supervisor->id, 'status' => JobTask::STATUS_READY, 'priority' => 'medium',
         ]);
+
+        $this->checkInAt($job, $foremanUser);
 
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanUser))
             ->postJson("/api/v1/jobs/{$job->id}/status", ['status' => 'in-progress'])
@@ -213,7 +237,7 @@ class JobNotificationsTest extends TestCase
             'title' => 'Rough-in', 'foreman_id' => $foreman->id, 'supervisor_id' => $supervisor->id,
             'status' => JobTask::STATUS_COMPLETED, 'completed_at' => now(), 'priority' => 'medium',
         ]);
-        $job->markReadyForReview();
+        $this->crewSignedOffAndApproved($job);
         Notification::fake(); // Clear the ready-for-review notification.
 
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($supervisorUser))
@@ -241,7 +265,7 @@ class JobNotificationsTest extends TestCase
             'title' => 'Second fix', 'foreman_id' => $foreman->id, 'supervisor_id' => $otherSupervisor->id,
             'status' => JobTask::STATUS_COMPLETED, 'completed_at' => now(), 'priority' => 'medium',
         ]);
-        $job->markReadyForReview();
+        $this->crewSignedOffAndApproved($job);
         Notification::fake();
 
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($actingSupervisorUser))
@@ -250,5 +274,18 @@ class JobNotificationsTest extends TestCase
 
         Notification::assertSentTo($otherSupervisorUser, JobCompleted::class);
         Notification::assertNotSentTo($actingSupervisorUser, JobCompleted::class);
+    }
+
+    /** Starting a job needs the starter checked in at it today; this files that check-in. */
+    private function checkInAt(\App\Models\Job $job, \App\Models\User $user): void
+    {
+        \App\Models\JobAttendance::forceCreate([
+            'job_id' => $job->id,
+            'user_id' => $user->id,
+            'date' => now()->timezone(\App\Models\TimeTrackingSetting::current()->timezone)->toDateString(),
+            'status' => \App\Models\JobAttendance::STATUS_CHECKED_IN,
+            'check_in_at' => now(),
+            'check_in_method' => 'manual',
+        ]);
     }
 }

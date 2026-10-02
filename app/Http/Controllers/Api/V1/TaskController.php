@@ -4,7 +4,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
+use App\Models\Foreman;
+use App\Models\JobApprenticeAssignment;
+use App\Models\JobForemanCompletion;
 use App\Models\JobTask;
+use App\Models\User;
 use App\Services\Mobile\ElectricianJobAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,13 +43,29 @@ class TaskController extends Controller
 
         $tasks = JobTask::query()
             ->whereIn('job_id', $this->access->assignedJobsQuery($request->user())->select('id'))
+            ->tap(fn ($query) => $this->limitToCrew($query, $user))
             ->with(['job:id,name', 'foreman:id,name,initials,role', 'supervisor:id,name,initials,role', 'assignments.member'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate(min((int) $request->integer('per_page', 50), 100));
 
+        // Each assignee's own sign-off on a job: submitted for review, or approved.
+        $completions = JobForemanCompletion::query()
+            ->whereIn('job_id', $tasks->getCollection()->pluck('job_id')->unique())
+            ->whereIn('foreman_id', $tasks->getCollection()->pluck('foreman_id')->filter()->unique())
+            ->get()
+            ->keyBy(fn (JobForemanCompletion $c) => $c->job_id.':'.$c->foreman_id);
+
         return $this->ok([
             'tasks' => $tasks->getCollection()->map(fn (JobTask $task) => [
+                // The crew member the task is on, and where their own work on this job stands:
+                // a foreman approves a journeyman's work once it is submitted.
+                'assigneeId' => $task->foreman_id,
+                // A foreman who oversees a task still approves its worker; never their own work.
+                'assigneeIsMe' => $myForemanId !== null && $task->foreman_id === $myForemanId,
+                'assigneeReady' => (bool) $completions->get($task->job_id.':'.$task->foreman_id)?->isReadyForReview()
+                    && ! $completions->get($task->job_id.':'.$task->foreman_id)?->isApproved(),
+                'assigneeApproved' => (bool) $completions->get($task->job_id.':'.$task->foreman_id)?->isApproved(),
                 // Whether this task is the signed-in user's own — what splits
                 // "My Tasks" from "Crew Tasks" on the app's task list.
                 'isMine' => $this->isMine($task, $user->id, $myForemanId),
@@ -70,6 +90,50 @@ class TaskController extends Controller
                 'total' => $tasks->total(),
             ],
         ]);
+    }
+
+    /**
+     * Whose tasks the "Crew Tasks" list may show. A manager reads everyone's. A foreman reads their
+     * own and their crew's — the journeymen and apprentices on their team, and the apprentices
+     * assigned under those journeymen. A journeyman reads their own and those of the apprentices
+     * assigned under them. Nobody else's task appears.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<JobTask>  $query
+     */
+    private function limitToCrew($query, User $user): void
+    {
+        $me = $user->foreman;
+
+        if ($user->hasForemanAuthority() && $me?->role !== Foreman::ROLE_FOREMAN) {
+            return; // a manager
+        }
+
+        if ($me === null) {
+            return;
+        }
+
+        $crewIds = collect([$me->id]);
+
+        if ($me->role === Foreman::ROLE_FOREMAN) {
+            $crew = Foreman::query()->whereIn('role', Foreman::WORKER_ROLES)
+                ->when($me->team_id !== null, fn ($q) => $q->where('team_id', $me->team_id), fn ($q) => $q->whereRaw('1 = 0'))
+                ->pluck('id');
+            $journeymen = Foreman::query()->whereIn('id', $crew)->where('role', Foreman::ROLE_JOURNEYMAN)->pluck('id');
+            $crewIds = $crewIds->merge($crew)->merge(
+                JobApprenticeAssignment::query()->whereIn('journeyman_id', $journeymen)->pluck('apprentice_id'),
+            );
+        } elseif ($me->role === Foreman::ROLE_JOURNEYMAN) {
+            $crewIds = $crewIds->merge(
+                JobApprenticeAssignment::query()->where('journeyman_id', $me->id)->pluck('apprentice_id'),
+            );
+        }
+
+        $crewIds = $crewIds->unique()->values();
+        $crewUserIds = Foreman::query()->whereIn('id', $crewIds)->whereNotNull('user_id')->pluck('user_id')->push($user->id);
+
+        $query->where(fn ($q) => $q
+            ->where(fn ($held) => $held->whereIn('foreman_id', $crewIds)->orWhereIn('supervisor_id', $crewIds))
+            ->orWhereHas('assignments.member', fn ($m) => $m->whereIn('user_id', $crewUserIds)));
     }
 
     private function isMine(JobTask $task, int $userId, ?int $foremanId): bool

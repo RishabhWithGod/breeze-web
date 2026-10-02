@@ -21,6 +21,13 @@ class ProfileController extends Controller
 
     public function update(Request $request): JsonResponse
     {
+        // An apprentice's profile is the office's to keep; they only read it.
+        abort_if(
+            $request->user()->foreman?->role === \App\Models\Foreman::ROLE_APPRENTICE,
+            403,
+            'Your profile is managed by your foreman. You can view it but not change it.',
+        );
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
         ]);

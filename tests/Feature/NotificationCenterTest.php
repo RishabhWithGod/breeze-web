@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\AppNotification;
+use App\Models\Client;
+use App\Models\CompanyProfile;
 use App\Models\Estimate;
 use App\Models\Foreman;
 use App\Models\Invoice;
@@ -63,10 +65,14 @@ class NotificationCenterTest extends TestCase
             'job_id' => $job->id, 'team_member_id' => $pmMember->id, 'user_id' => $this->manager->id,
             'role' => JobAssignment::ROLE_PROJECT_MANAGER, 'name' => 'Pat PM', 'assigned_at' => now(),
         ]);
-        $estimate = $this->makeEstimate($job);
 
-        $this->actingAs($this->other)->put("/estimates/{$estimate->id}", [
-            'project_id' => $this->makeClient($estimate->client)->id,
+        // Someone other than the job's project manager owns the estimate and approves it.
+        $approver = User::factory()->create(['role' => 'Project Manager']);
+        $estimate = $this->makeEstimate($job, $approver);
+        $project = Project::create(['user_id' => $approver->id, 'name' => 'Panel upgrade', 'client' => 'Apex Construction', 'status' => 'draft']);
+
+        $this->actingAs($approver)->put("/estimates/{$estimate->id}", [
+            'project_id' => $project->id,
             'status' => 'approved',
             'issued_on' => now()->toDateString(),
             'markup_pct' => 0,
@@ -80,8 +86,10 @@ class NotificationCenterTest extends TestCase
 
     public function test_marking_an_invoice_paid_notifies_its_creator(): void
     {
+        $client = $this->makeClient();
         $this->actingAs($this->manager)->post('/invoices', [
-            'project_id' => $this->makeClient()->id,
+            'client_id' => $client->id,
+            'estimate_id' => $this->makeEstimate($this->makeJob(), $this->manager, $client)->id,
             'invoice_date' => now()->toDateString(),
             'due_date' => null,
             'tax_pct' => 0,
@@ -94,7 +102,13 @@ class NotificationCenterTest extends TestCase
         $this->actingAs($this->manager)->post("/invoices/{$invoice->id}/send")->assertRedirect();
 
         // A different manager marks it paid — the creator should hear about it.
-        $secondManager = User::factory()->create(['role' => 'Admin']);
+        // Managers act on each other's invoices when they share a company.
+        $company = CompanyProfile::create([
+            'user_id' => $this->manager->id, 'name' => 'Volt & Co', 'business_address' => '1 Main St',
+            'primary_contact' => 'A', 'phone' => '(512) 555-0142', 'email' => 'co@x.test', 'timezone' => 'America/Chicago',
+        ]);
+        $this->manager->forceFill(['company_id' => $company->id])->save();
+        $secondManager = User::factory()->create(['role' => 'Admin', 'company_id' => $company->id]);
         $this->actingAs($secondManager)->post("/invoices/{$invoice->id}/mark-paid")->assertRedirect();
 
         $this->assertDatabaseHas('app_notifications', [
@@ -205,20 +219,17 @@ class NotificationCenterTest extends TestCase
         ]);
     }
 
-    /** A client to raise an estimate or invoice for. Clients are projects. */
-    private function makeClient(string $name = 'Apex Construction'): Project
+    /** A client to raise an estimate or invoice for. */
+    private function makeClient(string $name = 'Apex Construction'): Client
     {
-        return Project::create([
-            'user_id' => $this->manager->id,
-            'name' => $name,
-            'client' => $name,
-            'status' => 'draft',
-        ]);
+        return Client::create(['user_id' => $this->manager->id, 'name' => $name]);
     }
 
-    private function makeEstimate(Job $job): Estimate
+    private function makeEstimate(Job $job, ?User $owner = null, ?Client $client = null): Estimate
     {
         return Estimate::create([
+            'user_id' => ($owner ?? $this->manager)->id,
+            'client_id' => $client?->id,
             'job_id' => $job->id,
             'number' => 'EST-3001',
             'client' => $job->client,

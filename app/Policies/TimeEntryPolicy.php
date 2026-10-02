@@ -97,6 +97,13 @@ class TimeEntryPolicy
             && \App\Support\Ownership::owns($user, $attendance->job()->withTrashed()->value('user_id'));
     }
 
+    /** Closing out a reported problem with a check-in or checkout: a manager, on a job they manage. */
+    public function resolveCorrection(User $user, JobAttendance $attendance): bool
+    {
+        return $this->holds($user, self::MANAGERS)
+            && \App\Support\Ownership::owns($user, $attendance->job()->withTrashed()->value('user_id'));
+    }
+
     public function reject(User $user, TimeEntry $entry): bool
     {
         return $this->holds($user, self::MANAGERS) && \App\Support\Ownership::owns($user, $entry->job?->user_id)

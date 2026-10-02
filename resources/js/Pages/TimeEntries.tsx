@@ -15,7 +15,7 @@ import {
   TriangleAlert,
   type LucideIcon,
 } from 'lucide-react'
-import { Alert, Button, ButtonLink, EmptyState, Pagination, SelectField, Table, TextInput } from '@/components/common'
+import { Alert, Badge, Button, ButtonLink, EmptyState, Pagination, SelectField, Table, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { CheckOutDialog, SessionStatus, type CheckOutTarget } from '@/components/timeTracking'
 import { BILLABLE_FILTERS, ROUTES, TIME_ENTRY_STATUS_FILTERS, routeTo } from '@/constants'
@@ -221,7 +221,14 @@ export default function TimeEntries({
     {
       key: 'status',
       header: 'Status',
-      render: (row) => <SessionStatus status={row.status} />,
+      render: (row) => (
+        <span className="flex flex-wrap items-center gap-2">
+          <SessionStatus status={row.status} />
+          {row.recordedOffline && <Badge tone="info" size="sm">Offline</Badge>}
+          {row.reviewFlag && <Badge tone="warning" size="sm">Review</Badge>}
+          {(row.openReports ?? 0) > 0 && <Badge tone="danger" size="sm">Reported</Badge>}
+        </span>
+      ),
     },
     {
       key: 'actions',

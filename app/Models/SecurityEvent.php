@@ -35,6 +35,8 @@ class SecurityEvent extends Model
 
     public const NOTIFICATION_PREFERENCE_CHANGED = 'notification_preference_changed';
 
+    public const OTHER_DEVICES_SIGNED_OUT = 'other_devices_signed_out';
+
     public const LABELS = [
         self::LOGIN_SUCCESS => 'Successful login',
         self::LOGIN_FAILED => 'Failed login attempt',
@@ -48,6 +50,7 @@ class SecurityEvent extends Model
         self::RECOVERY_CODE_USED => 'Recovery code used',
         self::AUTH_METHOD_CHANGED => 'Authentication method changed',
         self::NOTIFICATION_PREFERENCE_CHANGED => 'Notification preference changed',
+        self::OTHER_DEVICES_SIGNED_OUT => 'Other devices signed out',
     ];
 
     protected $fillable = [

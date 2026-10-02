@@ -221,4 +221,98 @@ class MobileTasksAndScheduleTest extends TestCase
         $this->assertSame([$soon->id, $later->id], $ids->all());
         $this->assertNotContains($past->id, $ids->all());
     }
+
+    public function test_the_task_feed_shows_each_role_only_the_crew_it_is_meant_to(): void
+    {
+        $team = \App\Models\Team::create(['name' => 'Crew A']);
+        $other = \App\Models\Team::create(['name' => 'Crew B']);
+        $person = function (string $name, string $role, $teamId) {
+            $user = User::factory()->create(['name' => $name, 'role' => ucfirst($role), 'registration_source' => User::SOURCE_MOBILE]);
+            $row = Foreman::create(['name' => $name, 'initials' => 'XX', 'role' => $role, 'team_id' => $teamId]);
+            $row->forceFill(['user_id' => $user->id])->save();
+
+            return [$user, $row];
+        };
+        [$foremanUser, $foreman] = $person('Fran', 'foreman', $team->id);
+        [$journeymanUser, $journeyman] = $person('Joe', 'journeyman', $team->id);
+        [, $apprentice] = $person('Amy', 'apprentice', null);
+        [, $outsider] = $person('Oz', 'journeyman', $other->id);
+        $managerUser = User::factory()->create(['role' => 'Project Manager']);
+
+        \App\Models\JobApprenticeAssignment::create([
+            'job_id' => ($job = $this->makeJob())->id, 'journeyman_id' => $journeyman->id, 'apprentice_id' => $apprentice->id,
+        ]);
+
+        $schedule = app(ScheduleBuilder::class)->build($job, $managerUser, withTasks: false);
+        $task = fn (string $title, Foreman $who) => $schedule->tasks()->create(['job_id' => $job->id, 'title' => $title, 'foreman_id' => $who->id])->id;
+        $ids = [
+            'foreman' => $task('F', $foreman), 'journeyman' => $task('J', $journeyman),
+            'apprentice' => $task('A', $apprentice), 'outsider' => $task('O', $outsider),
+        ];
+
+        $seen = function (User $user) use ($ids) {
+            // A fresh guard per request, or the first token's user is reused for the next.
+            $this->app['auth']->forgetGuards();
+            $rows = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+                ->getJson('/api/v1/tasks')->assertOk()->json('data.tasks');
+
+            return collect($rows)->pluck('id')->intersect($ids)->sort()->values()->all();
+        };
+        $pick = fn (string ...$keys) => collect($keys)->map(fn ($k) => $ids[$k])->sort()->values()->all();
+
+        $this->assertSame($pick('foreman', 'journeyman', 'apprentice', 'outsider'), $seen($managerUser));
+        $this->assertSame($pick('foreman', 'journeyman', 'apprentice'), $seen($foremanUser));
+        $this->assertSame($pick('journeyman', 'apprentice'), $seen($journeymanUser));
+    }
+
+    public function test_a_shift_read_by_date_range_reads_changed_until_it_is_acknowledged(): void
+    {
+        [$user, $member] = $this->makeMobileJourneyman();
+        $job = $this->makeJob(['name' => 'Range Job', 'location' => '1 Main St']);
+        $this->staffOnTask($job, $member);
+
+        $day = now()->addDays(2)->toDateString();
+        $shift = CrewShift::create(['job_id' => $job->id, 'scheduled_date' => $day, 'start_time' => '08:00:00', 'duration_hours' => 1.5]);
+        $outside = CrewShift::create(['job_id' => $job->id, 'scheduled_date' => now()->addDays(20)->toDateString()]);
+
+        $read = function (string $query = '') use ($user) {
+            $this->app['auth']->forgetGuards();
+
+            return $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))->getJson('/api/v1/schedule'.$query)->assertOk();
+        };
+
+        $first = $read("?from={$day}&to={$day}");
+        $this->assertSame([$shift->id], collect($first->json('data.shifts'))->pluck('id')->all());
+        $first->assertJsonPath('data.shifts.0.endTime', '09:30:00')
+            ->assertJsonPath('data.shifts.0.address', '1 Main St')
+            ->assertJsonPath('data.shifts.0.changed', false);
+        $this->assertNotNull($first->json('data.generatedAt'));
+
+        // The office moves it: it now reads Changed, and the crew is told.
+        $this->app['auth']->forgetGuards(); // the office is a different person from the crew member
+        $this->actingAs($office ??= User::factory()->create(['role' => 'Project Manager']), 'web');
+        $shift->update(['start_time' => '10:00:00']);
+        $read("?from={$day}&to={$day}")->assertJsonPath('data.shifts.0.changed', true);
+        $this->assertTrue(\App\Models\AppNotification::where('user_id', $user->id)->where('type', 'schedule-changed')->exists());
+
+        $this->travel(5)->seconds(); // timestamps are whole seconds
+        $this->app['auth']->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->postJson("/api/v1/schedule/{$shift->id}/acknowledge")->assertOk()->assertJsonPath('data.changed', false);
+        $read("?from={$day}&to={$day}")->assertJsonPath('data.shifts.0.changed', false);
+        $this->assertNotContains($outside->id, collect($read("?from={$day}&to={$day}")->json('data.shifts'))->pluck('id')->all());
+
+        // Moved again after being acknowledged: Changed once more.
+        $this->travel(5)->seconds();
+        $this->app['auth']->forgetGuards();
+        $this->actingAs($office ??= User::factory()->create(['role' => 'Project Manager']), 'web');
+        $shift->update(['scheduled_date' => now()->addDays(3)->toDateString()]);
+        $read('?from='.now()->addDays(3)->toDateString().'&to='.now()->addDays(3)->toDateString())->assertJsonPath('data.shifts.0.changed', true);
+    }
+
+    public function test_an_apprentice_can_read_their_schedule(): void
+    {
+        $apprentice = User::factory()->create(['role' => 'Apprentice', 'registration_source' => User::SOURCE_MOBILE]);
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($apprentice))->getJson('/api/v1/schedule')->assertOk();
+    }
 }

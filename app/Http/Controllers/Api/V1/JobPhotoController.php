@@ -75,22 +75,6 @@ class JobPhotoController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Job $job, JobAttachment $attachment): JsonResponse
-    {
-        abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
-        abort_unless($attachment->job_id === $job->id, 404);
-        abort_if($job->isLocked(), 409, 'This job is completed and locked.');
-        abort_unless(
-            $attachment->user_id === $request->user()->id || $request->user()->hasForemanAuthority(),
-            403,
-            'Only whoever added a photo, or a foreman, can remove it.',
-        );
-
-        $attachment->deleteWithFile();
-
-        return $this->ok(null, 'Photo removed.');
-    }
-
     /** @return array<string, mixed> */
     private function present(Request $request, Job $job, JobAttachment $a): array
     {

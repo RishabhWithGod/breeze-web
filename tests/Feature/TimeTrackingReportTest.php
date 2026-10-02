@@ -92,6 +92,8 @@ class TimeTrackingReportTest extends TestCase
     private function makeJob(array $attributes = []): Job
     {
         return Job::create([
+            // Approving (and reading costs) is limited to the manager who owns the job.
+            'user_id' => $this->manager->id,
             'foreman_id' => Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW'])->id,
             'name' => 'Riverside Office Renovation',
             'client' => 'Riverside Properties LLC',

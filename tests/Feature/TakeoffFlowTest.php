@@ -278,14 +278,21 @@ class TakeoffFlowTest extends TestCase
 
     public function test_a_drawing_cannot_be_submitted_while_the_engine_is_unconfigured(): void
     {
-        config(['ai.base_url' => null]);
+        // The live engine, not the synced-drawing stand-in (which is always "configured").
+        config(['static_takeoff.enabled' => false, 'ai.base_url' => null]);
+
+        $project = $this->user->projects()->create([
+            'name' => 'Harborview', 'client' => 'Harborview', 'status' => 'draft', 'review_status' => 'none',
+        ]);
 
         $this->actingAs($this->user)
             ->from('/ai-takeoff/upload')
-            ->post('/ai-takeoff/upload', ['files' => [$this->fixtureUpload()]])
+            ->post('/ai-takeoff/upload', ['project_id' => $project->id, 'files' => [$this->fixtureUpload()]])
             ->assertSessionHasErrors('files');
 
-        $this->assertDatabaseCount('projects', 0);
+        // Nothing was recorded against the project: no drawing, no run.
+        $this->assertSame(0, $project->uploads()->count());
+        $this->assertSame('draft', $project->refresh()->status);
     }
 
     public function test_uploading_a_drawing_queues_the_analysis(): void

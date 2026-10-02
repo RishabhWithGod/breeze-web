@@ -118,35 +118,50 @@ class MobileJobWorkspaceTest extends TestCase
 
     /* ------------------------------------------------------ additional work */
 
-    public function test_a_foreman_raises_additional_work_without_seeing_or_setting_prices(): void
+    public function test_a_foreman_raises_priced_additional_work_and_opens_its_detail(): void
     {
         $response = $this->as($this->foreman)->postJson("/api/v1/jobs/{$this->job->id}/change-orders", [
             'description' => 'Extra conduit run',
             'reason' => 'Client moved the panel',
             'submit' => true,
             'lines' => [
-                ['kind' => 'material', 'description' => 'EMT conduit', 'quantity' => 40, 'unit' => 'ft', 'unit_cost' => 999],
-                ['kind' => 'labor', 'description' => 'Pull wire', 'quantity' => 3, 'unit' => 'hr'],
+                ['kind' => 'material', 'description' => 'EMT conduit', 'quantity' => 40, 'unit_cost' => 2.5],
+                ['kind' => 'labor', 'description' => 'Pull wire', 'quantity' => 3, 'unit' => 'hr', 'unit_cost' => 80],
             ],
         ])->assertCreated();
 
         $response->assertJsonPath('data.status', 'submitted');
         $response->assertJsonPath('data.source', 'field');
         $response->assertJsonPath('data.lineCount', 2);
-        $response->assertJsonMissingPath('data.amount');
+        $response->assertJsonPath('data.amount', 340);
 
-        // A foreman cannot price it, whatever they send.
-        $this->assertSame('0.00', (string) \App\Models\ChangeOrder::sole()->sell_total);
+        $co = \App\Models\ChangeOrder::sole();
+        $this->assertSame('340.00', (string) $co->sell_total);
+
+        $this->as($this->foreman)->getJson("/api/v1/jobs/{$this->job->id}/change-orders/{$co->id}")
+            ->assertOk()
+            ->assertJsonPath('data.laborCost', 240)
+            ->assertJsonPath('data.materialCost', 100)
+            ->assertJsonCount(2, 'data.lines')
+            ->assertJsonPath('data.lines.0.total', 100)
+            ->assertJsonPath('data.history.0.type', 'submitted')
+            ->assertJsonPath('data.canAttach', true);
+
+        $file = \Illuminate\Http\UploadedFile::fake()->image('panel.jpg');
+        $this->as($this->foreman)->post("/api/v1/jobs/{$this->job->id}/change-orders/{$co->id}/attachments", ['attachments' => [$file]], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonCount(1, 'data.attachments');
 
         $this->as($this->foreman)->getJson("/api/v1/jobs/{$this->job->id}/change-orders")
             ->assertJsonPath('data.canCreate', true)
-            ->assertJsonCount(1, 'data.changeOrders')
-            ->assertJsonMissingPath('data.changeOrders.0.amount');
+            ->assertJsonCount(1, 'data.changeOrders');
 
-        // A manager sees the money.
-        $this->as($this->manager)->getJson("/api/v1/jobs/{$this->job->id}/change-orders")
-            ->assertJsonPath('data.changeOrders.0.label', 'CO-001')
-            ->assertJsonStructure(['data' => ['changeOrders' => [['amount', 'materialCost']]]]);
+        // The crew read it but never see money.
+        $this->as($this->journeyman)->getJson("/api/v1/jobs/{$this->job->id}/change-orders/{$co->id}")
+            ->assertOk()
+            ->assertJsonMissingPath('data.amount')
+            ->assertJsonMissingPath('data.lines.0.unitCost')
+            ->assertJsonPath('data.canAttach', false);
     }
 
     public function test_a_journeyman_can_read_but_not_raise_additional_work(): void
@@ -222,5 +237,49 @@ class MobileJobWorkspaceTest extends TestCase
             'document_type' => 'Blueprint', 'job_id' => $this->job->id, 'uploaded_by' => $this->manager->id,
             'version' => 1, 'is_latest' => true, 'is_archived' => false, 'visibility' => $visibility,
         ]);
+    }
+
+    public function test_a_change_order_carries_its_reason_and_customer_request_and_is_saved_once_per_client_key(): void
+    {
+        $payload = [
+            'description' => 'Move the panel', 'reason_code' => 'scope_change', 'customer_requested' => true,
+            'client_key' => 'co-123', 'submit' => true,
+            'lines' => [['kind' => 'labor', 'description' => 'Labor', 'quantity' => 4, 'unit' => 'hr', 'unit_cost' => 70]],
+        ];
+
+        $first = $this->as($this->foreman)->postJson("/api/v1/jobs/{$this->job->id}/change-orders", $payload)->assertCreated();
+        $first->assertJsonPath('data.reasonCode', 'scope_change')->assertJsonPath('data.reasonLabel', 'Scope change')->assertJsonPath('data.customerRequested', true);
+
+        // The same request replayed (it was queued offline) does not make a second one.
+        $this->app['auth']->forgetGuards();
+        $this->as($this->foreman)->postJson("/api/v1/jobs/{$this->job->id}/change-orders", $payload)->assertOk();
+        $this->assertSame(1, \App\Models\ChangeOrder::count());
+
+        // Evidence that arrives later finds it by that key.
+        $this->app['auth']->forgetGuards();
+        $this->as($this->foreman)->post('/api/v1/change-orders/by-key/co-123/attachments', ['attachments' => [\Illuminate\Http\UploadedFile::fake()->image('a.jpg')]], ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonCount(1, 'data.attachments');
+
+        $this->app['auth']->forgetGuards();
+        $this->as($this->foreman)->getJson('/api/v1/change-orders')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.changeOrders')
+            ->assertJsonPath('data.changeOrders.0.jobName', $this->job->name)
+            ->assertJsonPath('data.canCreate', true)
+            ->assertJsonStructure(['data' => ['jobs' => [['id', 'name']], 'reasons' => [['value', 'label']]]]);
+
+        $this->app['auth']->forgetGuards();
+        $this->as($this->journeyman)->getJson('/api/v1/change-orders')->assertForbidden();
+    }
+
+    public function test_a_message_written_offline_lands_once_however_often_it_is_sent(): void
+    {
+        $body = ['body' => 'On my way', 'client_key' => 'msg-1'];
+
+        $this->as($this->journeyman)->postJson("/api/v1/jobs/{$this->job->id}/messages", $body)->assertCreated();
+        $this->app['auth']->forgetGuards();
+        $this->as($this->journeyman)->postJson("/api/v1/jobs/{$this->job->id}/messages", $body)->assertOk();
+
+        $this->assertSame(1, \App\Models\JobMessage::count());
     }
 }

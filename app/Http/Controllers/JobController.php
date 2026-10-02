@@ -299,7 +299,10 @@ class JobController extends Controller
             'canCreateInvoice' => app(InvoicePolicy::class)->create($request->user()),
             'changeOrders' => $this->changeOrdersFor($request, $job),
             // Planned vs actual materials and on-site additions from the mobile app.
-            'fieldMaterials' => app(JobFieldMaterialsSummary::class)->for($job),
+            'fieldMaterials' => [
+                ...app(JobFieldMaterialsSummary::class)->for($job),
+                'canManage' => app(ChangeOrderAccess::class)->isManager($request->user()) && ! $job->isLocked(),
+            ],
             'apprenticeAssignments' => $job->apprenticeAssignments()
                 ->with(['journeyman:id,name', 'apprentice:id,name'])
                 ->get()

@@ -71,7 +71,8 @@ class ProjectTakeoffTest extends TestCase
     public function test_it_refuses_to_start_when_the_engine_is_not_configured(): void
     {
         Queue::fake();
-        config(['ai.base_url' => null]);
+        // The live engine, not the synced-drawing stand-in (which is always "configured").
+        config(['static_takeoff.enabled' => false, 'ai.base_url' => null]);
 
         $project = $this->projectWithDrawing();
 

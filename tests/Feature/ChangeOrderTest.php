@@ -147,7 +147,7 @@ class ChangeOrderTest extends TestCase
         $this->assertSame('draft', $co->fresh()->status);
         $this->assertEquals(2365, $co->fresh()->sell_total);
         $this->actingAs($this->foremanUser)->post(route('change-orders.submit', $co));
-        $this->actingAs($this->manager)->post(route('change-orders.approve', $co), ['note' => 'Go ahead.'])->assertSessionHasNoErrors();
+        $this->actingAs($this->manager)->post(route('change-orders.approve', $co), ['note' => 'Go ahead.'])->assertRedirect(route('change-orders.index'));
 
         $co->refresh();
         $this->assertSame('approved', $co->status);

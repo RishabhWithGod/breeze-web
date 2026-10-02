@@ -54,11 +54,24 @@ class JobMessageController extends Controller
     {
         abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
 
-        $data = $request->validate(['body' => ['required', 'string', 'max:2000']]);
+        $data = $request->validate([
+            'body' => ['required', 'string', 'max:2000'],
+            // Set by the phone when the message was written offline.
+            'client_key' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        // Sent again by the queue after it already landed: the same message, not a second.
+        if (isset($data['client_key'])) {
+            $existing = $job->messages()->where('user_id', $request->user()->id)->where('client_key', $data['client_key'])->first();
+            if ($existing !== null) {
+                return $this->ok($this->present($existing->load('sender:id,name,role'), $request->user()));
+            }
+        }
 
         $message = $job->messages()->create([
             'user_id' => $request->user()->id,
             'body' => trim($data['body']),
+            'client_key' => $data['client_key'] ?? null,
         ]);
         $message->load('sender:id,name,role');
 

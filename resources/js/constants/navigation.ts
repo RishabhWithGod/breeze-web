@@ -7,6 +7,7 @@ import {
   Clock,
   Contact,
   FilePen,
+  GitMerge,
   FileStack,
   FileText,
   FolderKanban,
@@ -92,6 +93,14 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
         icon: FilePen,
         permission: 'change_orders.view',
         roles: ['project manager', 'foreman', 'admin', 'owner'],
+      },
+      // Field edits that clashed with an office edit, sent up from a phone for a manager to decide.
+      {
+        label: 'Sync Conflicts',
+        href: ROUTES.syncConflicts,
+        icon: GitMerge,
+        permission: 'jobs.view',
+        roles: ['project manager', 'admin', 'owner'],
       },
     ],
   },

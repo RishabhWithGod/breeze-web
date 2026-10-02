@@ -113,6 +113,17 @@ export function ShiftDetailModal({ shift, onClose, onRemove }: ShiftDetailModalP
             )}
           </dl>
 
+          {shift.changedAt && (
+            <div>
+              <p className="text-sm text-white/75">Schedule change</p>
+              <p className="mt-1 text-md text-white">
+                {shift.acknowledgedBy && shift.acknowledgedBy.length > 0
+                  ? `Acknowledged by ${shift.acknowledgedBy.map((ack) => ack.name).join(', ')}`
+                  : 'Crew notified — not acknowledged yet'}
+              </p>
+            </div>
+          )}
+
           {shift.notes && (
             <div>
               <p className="text-sm text-white/75">Notes</p>
