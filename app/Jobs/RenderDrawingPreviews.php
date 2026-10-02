@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Upload;
 use App\Services\Ai\ArtefactStore;
+use App\Services\StaticTakeoff\StaticTakeoffResolver;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -31,7 +32,7 @@ class RenderDrawingPreviews implements ShouldQueue
 
     public function __construct(public readonly int $uploadId) {}
 
-    public function handle(ArtefactStore $store): void
+    public function handle(ArtefactStore $store, StaticTakeoffResolver $static): void
     {
         $upload = Upload::find($this->uploadId);
 
@@ -48,6 +49,15 @@ class RenderDrawingPreviews implements ShouldQueue
                 'pages' => $rendered['pages'],
                 'render_ms' => round((microtime(true) - $began) * 1000, 1),
             ]);
+
+            // A drawing with a marked copy is reviewed from that copy; render
+            // it here, on the worker, so the review screen's first page
+            // request is not left rendering it while holding up the server.
+            $marked = $static->markedPdfFor($upload);
+
+            if ($marked !== null && $store->markedPreviews($upload) === []) {
+                $store->renderMarkedPreviews($upload, $marked);
+            }
         } catch (Throwable $e) {
             // Previews are a convenience; the screens fall back to a placeholder.
             Log::warning('Drawing previews could not be rendered', [

@@ -21,6 +21,10 @@ class StaticTakeoffDataset extends Model
         'file_size',
         'mime_type',
         'pdf_path',
+        'marked_pdf_path',
+        'marked_original_filename',
+        'marked_file_size',
+        'marked_page_count',
         'takeoff_payload',
         'metadata',
         'is_active',
@@ -33,6 +37,7 @@ class StaticTakeoffDataset extends Model
             'metadata' => 'array',
             'is_active' => 'boolean',
             'file_size' => 'integer',
+            'marked_file_size' => 'integer',
         ];
     }
 }

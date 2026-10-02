@@ -22,6 +22,7 @@ class ImportStaticTakeoffDataset extends Command
         {pdf : Path to the reference PDF}
         {payload : Path to the takeoff/AI response JSON (AnalysisResult shape)}
         {--estimate= : Path to a separate estimate/BOQ JSON, merged into the payload}
+        {--marked= : Path to the marked (annotated) PDF shown on the review screen instead of the plain upload}
         {--name= : Friendly name for this dataset}
         {--inactive : Import as inactive (not matched until activated)}';
 
@@ -94,13 +95,33 @@ class ImportStaticTakeoffDataset extends Command
             $metadata['imported_estimate_source'] = $estimate;
         }
 
+        $markedPath = $this->option('marked');
+
+        if ($markedPath && (! is_file($markedPath) || ! str_ends_with(strtolower($markedPath), '.pdf'))) {
+            $this->error("Marked PDF not found or not a .pdf: {$markedPath}");
+
+            return self::FAILURE;
+        }
+
         $hash = hash_file('sha256', $pdfPath);
         $storedPath = "static-takeoffs/{$hash}.pdf";
         Storage::disk('local')->put($storedPath, (string) file_get_contents($pdfPath));
 
+        $marked = [];
+
+        if ($markedPath) {
+            $storedMarked = "static-takeoffs/{$hash}-marked.pdf";
+            Storage::disk('local')->put($storedMarked, (string) file_get_contents($markedPath));
+            $marked = [
+                'marked_pdf_path' => $storedMarked,
+                'marked_original_filename' => basename($markedPath),
+                'marked_file_size' => filesize($markedPath),
+            ];
+        }
+
         $dataset = StaticTakeoffDataset::updateOrCreate(
             ['file_hash' => $hash],
-            [
+            $marked + [
                 'name' => $this->option('name') ?: basename($pdfPath),
                 'original_filename' => basename($pdfPath),
                 'file_size' => filesize($pdfPath),
