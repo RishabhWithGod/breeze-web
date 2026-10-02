@@ -81,8 +81,11 @@ class SetupChecklist
 
             // Project's own "Undo skip" would be a no-op when its skipped status
             // is only borrowed from Client's — nothing was ever recorded against
-            // Project itself to undo. Point the person at Client instead.
-            $borrowedSkip = $key === self::PROJECT && $clientSkipped;
+            // Project itself to undo. Point the person at Client instead. Only
+            // when Project is actually showing as skipped for that reason, not
+            // whenever Client happens to be skipped regardless of Project's own
+            // state (a real project already made is still 'completed').
+            $borrowedSkip = $status === 'skipped' && $key === self::PROJECT && $clientSkipped;
 
             $steps[] = [
                 'key' => $key,
