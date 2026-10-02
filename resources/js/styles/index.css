@@ -163,6 +163,11 @@
   }
 
   html {
+    /* Matches what people were doing by hand with browser zoom at 80% —
+       `zoom` scales everything (icons, borders, images) uniformly, unlike
+       shrinking the root font-size, which would leave fixed-pixel icon
+       sizes looking oversized next to the now-smaller rem-based text. */
+    zoom: 80%;
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
   }
