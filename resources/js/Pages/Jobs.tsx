@@ -292,6 +292,7 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
           pill
           tone={JOB_STATUS_TONE[job.status]}
           label={JOB_STATUS_LABEL[job.status]}
+          className="whitespace-nowrap"
         />
       ),
     },

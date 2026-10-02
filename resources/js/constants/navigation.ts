@@ -7,7 +7,6 @@ import {
   Clock,
   Contact,
   FilePen,
-  GitMerge,
   FileStack,
   FileText,
   FolderKanban,
@@ -94,14 +93,15 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
         permission: 'change_orders.view',
         roles: ['project manager', 'foreman', 'admin', 'owner'],
       },
+      // Hidden from the sidebar for now; the page itself is still routed.
       // Field edits that clashed with an office edit, sent up from a phone for a manager to decide.
-      {
-        label: 'Sync Conflicts',
-        href: ROUTES.syncConflicts,
-        icon: GitMerge,
-        permission: 'jobs.view',
-        roles: ['project manager', 'admin', 'owner'],
-      },
+      // {
+      //   label: 'Sync Conflicts',
+      //   href: ROUTES.syncConflicts,
+      //   icon: GitMerge,
+      //   permission: 'jobs.view',
+      //   roles: ['project manager', 'admin', 'owner'],
+      // },
     ],
   },
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock, permission: 'time_tracking.view' },

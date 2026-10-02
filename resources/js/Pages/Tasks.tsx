@@ -223,7 +223,7 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
 
       <PageHeader
         title="Tasks"
-        subtitle="Every task across every job — what is outstanding, and who has it."
+        subtitle="Manage tasks across every job, track progress, and maintain clear accountability from assignment through completion."
         breadcrumbs={[{ label: 'Jobs', href: ROUTES.jobs }, { label: 'Tasks' }]}
         actions={
           /*
