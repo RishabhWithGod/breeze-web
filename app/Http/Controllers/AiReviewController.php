@@ -11,6 +11,7 @@ use App\Models\Estimate;
 use App\Models\SymbolReview;
 use App\Models\Upload;
 use App\Services\Ai\ArtefactStore;
+use App\Services\StaticTakeoff\StaticTakeoffResolver;
 use App\Services\Takeoff\CompleteReview;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\EstimatingComponents;
@@ -37,7 +38,7 @@ use Throwable;
  */
 class AiReviewController extends Controller
 {
-    public function show(Request $request, AiResult $result, EstimatingComponents $components): Response
+    public function show(Request $request, AiResult $result, EstimatingComponents $components, StaticTakeoffResolver $static): Response
     {
         $this->authorize('view', $result);
 
@@ -81,7 +82,7 @@ class AiReviewController extends Controller
                 'projectName' => $result->project->name,
                 'drawingName' => $result->project->drawing_name,
                 'modelVersion' => $result->model_version,
-                'pageCount' => $result->page_count,
+                'pageCount' => $this->visiblePageCount($result, $static),
                 'detectionCount' => $result->detection_count,
                 'overallConfidence' => $result->overall_confidence,
                 'reviewStatus' => $result->review_status,
@@ -250,7 +251,7 @@ class AiReviewController extends Controller
         abort_unless($review->ai_result_id === $result->id, 404);
 
         if ($store->exists($review->crop_path)) {
-            return $store->disk()->response($review->crop_path);
+            return $this->cacheable($store->disk()->response($review->crop_path));
         }
 
         if (filled($review->image_path) || filled($result->run_id)) {
@@ -262,12 +263,27 @@ class AiReviewController extends Controller
     }
 
     /** Serves a rendered page preview. */
-    public function pagePreview(AiResult $result, int $page, ArtefactStore $store): StreamedResponse
+    public function pagePreview(AiResult $result, int $page, ArtefactStore $store, StaticTakeoffResolver $static): StreamedResponse
     {
         $this->authorize('view', $result);
 
         $upload = $result->upload;
         abort_unless($upload !== null, 404);
+
+        // A drawing with a marked copy shows that on review, and only the
+        // pages that copy has. Any other drawing (or a marked page that
+        // cannot be rendered) falls through to the plain upload below.
+        $markedPdf = $static->markedFor($upload);
+
+        if ($markedPdf !== null) {
+            abort_if($markedPdf['pages'] > 0 && $page > $markedPdf['pages'], 404);
+
+            $marked = $this->markedPreview($upload, $page, $markedPdf['path'], $store);
+
+            if ($marked !== null) {
+                return $this->cacheable($store->disk()->response($marked));
+            }
+        }
 
         $path = $upload->previewFor($page);
 
@@ -282,12 +298,22 @@ class AiReviewController extends Controller
          * end; every request after it is served straight off the disk.
          */
         if (! $store->exists($path)) {
-            $path = $this->renderOnDemand($upload, $page, $store);
+            $rendered = count($upload->preview_paths ?? []);
+
+            // Past the bulk render's page cap: render just this page, rather
+            // than re-rendering the set and still not having it.
+            $path = $rendered > 0 && $page > $rendered
+                ? $store->renderSinglePage($upload, $store->absolutePath($upload->path), $page)
+                : $this->renderOnDemand($upload, $page, $store);
+
+            if (! $store->exists($path) && $page > (int) config('ai.storage.max_preview_pages')) {
+                $path = $store->renderSinglePage($upload, $store->absolutePath($upload->path), $page);
+            }
         }
 
         abort_unless($store->exists($path), 404);
 
-        return $store->disk()->response($path);
+        return $this->cacheable($store->disk()->response($path));
     }
 
     /**
@@ -323,5 +349,42 @@ class AiReviewController extends Controller
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * Lets the browser keep a rendered page or crop for an hour.
+     *
+     * These images are large (a page preview is commonly 1–3 MB) and are
+     * requested on every visit to the review screen; with the default
+     * `no-cache` header each visit re-downloaded all of them. They only change
+     * when the previews are re-rendered, so an hour of private caching is safe.
+     */
+    private function cacheable(StreamedResponse|BinaryFileResponse $response): StreamedResponse|BinaryFileResponse
+    {
+        $response->headers->set('Cache-Control', 'private, max-age=3600');
+
+        return $response;
+    }
+
+    /** A marked copy with fewer pages than the drawing limits the pages the review shows. */
+    private function visiblePageCount(AiResult $result, StaticTakeoffResolver $static): int
+    {
+        $count = (int) $result->page_count;
+        $marked = $result->upload ? $static->markedFor($result->upload) : null;
+
+        return $marked !== null && $marked['pages'] > 0 ? min($count ?: $marked['pages'], $marked['pages']) : $count;
+    }
+
+    /**
+     * Path of the marked preview for this page.
+     *
+     * Only the requested page is rendered here (about a second); the whole
+     * set is rendered ahead of time by `RenderDrawingPreviews`, so a request
+     * never sits through a 12-page bulk render while holding up the server.
+     */
+    private function markedPreview(Upload $upload, int $page, string $markedPdf, ArtefactStore $store): ?string
+    {
+        return $store->markedPreviews($upload)[$page - 1]
+            ?? $store->renderSinglePage($upload, $markedPdf, $page, marked: true);
     }
 }

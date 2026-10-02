@@ -34,15 +34,24 @@ class TaskController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $myForemanId = $user->foreman?->id;
+
         $tasks = JobTask::query()
             ->whereIn('job_id', $this->access->assignedJobsQuery($request->user())->select('id'))
-            ->with(['job:id,name', 'foreman:id,name,initials', 'supervisor:id,name,initials', 'assignments.member'])
+            ->with(['job:id,name', 'foreman:id,name,initials,role', 'supervisor:id,name,initials,role', 'assignments.member'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate(min((int) $request->integer('per_page', 50), 100));
 
         return $this->ok([
             'tasks' => $tasks->getCollection()->map(fn (JobTask $task) => [
+                // Whether this task is the signed-in user's own — what splits
+                // "My Tasks" from "Crew Tasks" on the app's task list.
+                'isMine' => $this->isMine($task, $user->id, $myForemanId),
+                'startsOn' => $task->starts_on?->toDateString(),
+                'completionPct' => $task->completion_pct,
+                'assigneeRole' => $task->foreman?->roleLabel() ?? $task->supervisor?->roleLabel(),
                 'id' => $task->id,
                 'jobId' => $task->job_id,
                 'jobName' => $task->job?->name ?? '',
@@ -61,6 +70,15 @@ class TaskController extends Controller
                 'total' => $tasks->total(),
             ],
         ]);
+    }
+
+    private function isMine(JobTask $task, int $userId, ?int $foremanId): bool
+    {
+        if ($foremanId !== null && ($task->foreman_id === $foremanId || $task->supervisor_id === $foremanId)) {
+            return true;
+        }
+
+        return $task->assignments->contains(fn ($a) => $a->member?->user_id === $userId);
     }
 
     private function assigneeName(JobTask $task): ?string

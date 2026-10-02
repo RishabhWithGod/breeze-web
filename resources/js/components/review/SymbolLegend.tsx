@@ -1,5 +1,5 @@
 import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { OverlaySymbol } from '@/types'
 import { categoryKey, cn, symbolLabel } from '@/utils'
 import type { SymbolColor } from '@/utils'
@@ -82,14 +82,10 @@ export function SymbolLegend({
 
   // Back to page 1 whenever the underlying list changes shape — paging the
   // drawing, or switching a filter, must never leave this stranded on a page
-  // that no longer exists. Reset during render (React's own pattern for
-  // "adjusting state when a prop changes") rather than in an effect, so it
-  // takes effect in the same render instead of triggering an extra one.
-  const [prevNames, setPrevNames] = useState(names)
-  if (names !== prevNames) {
-    setPrevNames(names)
+  // that no longer exists.
+  useEffect(() => {
     setPage(1)
-  }
+  }, [names])
 
   if (names.length === 0) {
     return (

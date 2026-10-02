@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { router } from '@inertiajs/react'
 import {
   Check,
@@ -87,13 +87,8 @@ export function SymbolCard({
   }
 
   // Only ever shown when there is neither a real crop nor a matched
-  // reference icon — a plain, category-shaped stand-in either way. Memoized
-  // for a stable reference across renders where `row.name` is unchanged.
-  // `genericSymbolIcon` only ever returns one of a handful of module-level
-  // icon constants (never a freshly-defined component), so this data-driven
-  // choice of icon isn't the render-created-component bug this lint rule
-  // otherwise catches.
-  const GenericIcon = useMemo(() => genericSymbolIcon(row.name), [row.name])
+  // reference icon — a plain, category-shaped stand-in either way.
+  const GenericIcon = genericSymbolIcon(row.name)
 
   const post = useCallback(
     (url: string, data: Record<string, string | number | null> = {}, onDone?: () => void) => {
@@ -192,10 +187,6 @@ export function SymbolCard({
           </div>
         ) : !row.cropUrl ? (
           <div className="flex size-full flex-col items-center justify-center gap-1 p-3">
-            {/* eslint-disable-next-line react-hooks/static-components --
-                data-driven choice among a handful of module-level icon
-                constants, not a component defined inline; see the comment
-                above `GenericIcon`. */}
             <GenericIcon size={36} strokeWidth={1.5} style={{ color: color.solid }} aria-hidden />
             <span className="text-2xs text-navy-900/50">No image on file</span>
           </div>

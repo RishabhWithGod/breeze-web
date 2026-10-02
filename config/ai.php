@@ -190,6 +190,8 @@ return [
         'directory' => 'takeoffs',
         /* `pdftoppm` renders page previews; runs are unaffected when absent. */
         'pdftoppm' => env('PDFTOPPM_BINARY', 'pdftoppm'),
+        /* `pdfinfo` (same poppler package) reads a marked PDF's page count. */
+        'pdfinfo' => env('PDFINFO_BINARY', 'pdfinfo'),
         'preview_dpi' => (int) env('AI_PREVIEW_DPI', 110),
         'max_preview_pages' => (int) env('AI_MAX_PREVIEW_PAGES', 12),
     ],

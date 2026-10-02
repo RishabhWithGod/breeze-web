@@ -6,6 +6,7 @@ use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\JobApprenticeAssignment;
 use App\Models\JobSchedule;
+use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -101,6 +102,54 @@ class ApprenticeHierarchyTest extends TestCase
         $response->assertJsonCount(1, 'data.assignableJourneymen');
         $response->assertJsonPath('data.assignableJourneymen.0.id', $this->journeyman->id);
         $response->assertJsonCount(1, "data.apprenticesByJourneyman.{$this->journeyman->id}");
+    }
+
+    public function test_the_apprentice_list_is_only_the_ones_picked_as_project_members_and_follows_later_changes(): void
+    {
+        $foreman = Foreman::create(['name' => 'Dana', 'initials' => 'DW', 'team_id' => $this->north->id, 'role' => 'foreman']);
+        $foremanUser = $this->makeMobileAccount($foreman, 'Foreman');
+        $this->job->tasks()->first()->update(['supervisor_id' => $foreman->id]);
+
+        // The team has three apprentices; the manager only picked one of them.
+        $picked = $this->apprentice;
+        $notPicked = Foreman::create(['name' => 'Left Out', 'initials' => 'LO', 'team_id' => $this->north->id, 'role' => 'apprentice']);
+        $alsoLeftOut = Foreman::create(['name' => 'Also Out', 'initials' => 'AO', 'team_id' => $this->north->id, 'role' => 'apprentice']);
+        // Both were already on the team before this job was raised.
+        Foreman::whereKey([$notPicked->id, $alsoLeftOut->id])->update(['created_at' => $this->job->created_at->subDay()]);
+
+        $client = $this->planner->clients()->create(['name' => 'Harborview']);
+        $project = Project::create([
+            'user_id' => $this->planner->id, 'client_id' => $client->id,
+            'name' => 'Riser', 'client' => 'Harborview', 'status' => 'draft',
+        ]);
+        $project->members()->sync([$this->journeyman->id, $picked->id]);
+        $this->job->update(['project_id' => $project->id]);
+
+        $listed = fn () => collect(
+            $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanUser))
+                ->getJson("/api/v1/jobs/{$this->job->id}")
+                ->assertOk()
+                ->json("data.apprenticesByJourneyman.{$this->journeyman->id}")
+        )->pluck('id')->all();
+
+        $this->assertSame([$picked->id], $listed());
+
+        // The manager adds one more member to the project later: it shows up on its own.
+        $project->members()->attach($notPicked->id);
+        $this->assertEqualsCanonicalizing([$picked->id, $notPicked->id], $listed());
+
+        // Someone who joins the team after the job was raised is offered automatically too.
+        $this->travel(1)->minute();
+        $newcomer = Foreman::create(['name' => 'New Hire', 'initials' => 'NH', 'team_id' => $this->north->id, 'role' => 'apprentice']);
+        $this->assertContains($newcomer->id, $listed());
+
+        // And the server enforces it: an apprentice outside the pick cannot be assigned.
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($foremanUser))
+            ->postJson("/api/v1/jobs/{$this->job->id}/apprentices", [
+                'journeyman_id' => $this->journeyman->id,
+                'apprentice_id' => $alsoLeftOut->id,
+            ])
+            ->assertStatus(422);
     }
 
     public function test_a_foreman_assigns_an_apprentice_under_a_staffed_journeyman(): void

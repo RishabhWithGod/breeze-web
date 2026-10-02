@@ -66,7 +66,7 @@ class TimerController extends Controller
         // them the button), so there is nothing this should ever block them
         // from doing in practice.
         if ($job->isReadyForReview()
-            && $request->user()->foreman?->role !== Foreman::ROLE_FOREMAN) {
+            && ! $request->user()->hasForemanAuthority()) {
             return $this->fail(
                 'This job has been submitted for review — wait for your foreman to act on it.',
                 409,
