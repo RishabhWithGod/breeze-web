@@ -198,6 +198,9 @@ export interface TimeLogRow {
   readonly hours: number | null
   readonly source: string
   readonly sourceKind: 'geofence' | 'manual' | 'timer'
+  readonly recordedOffline?: boolean
+  readonly reviewFlag?: string | null
+  readonly openReports?: number
   readonly status:
     | 'approved'
     | 'pending'
@@ -252,6 +255,19 @@ export interface AttendanceDetail {
   readonly job: { readonly id: number; readonly name: string; readonly client: string | null; readonly status: string } | null
   readonly hours: number
   readonly bankedSeconds: number
+  readonly recordedOffline: boolean
+  readonly reviewFlag: string | null
+  readonly reviewReason: string | null
+  readonly canResolve: boolean
+  readonly corrections: readonly {
+    readonly id: number
+    readonly kind: 'note' | 'correction' | 'ack'
+    readonly message: string | null
+    readonly status: 'open' | 'resolved'
+    readonly by: string | null
+    readonly at: string | null
+    readonly resolutionNote: string | null
+  }[]
   readonly checkIn: AttendanceEventDetail & { readonly photoUrl: string | null }
   readonly checkOut: AttendanceEventDetail
 }

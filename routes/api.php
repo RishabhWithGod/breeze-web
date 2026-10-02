@@ -39,7 +39,9 @@ use App\Http\Controllers\Api\V1\TaskController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\TechnicianController;
+use App\Http\Controllers\Api\V1\SyncConflictController;
 use App\Http\Controllers\Api\V1\TimeEntryController;
+use App\Http\Controllers\Api\V1\TimeLogController;
 use App\Http\Controllers\Api\V1\TimerController;
 use App\Http\Controllers\Api\V1\TimeTrackingController;
 use App\Http\Controllers\Api\V1\TimeTrackingReportController;
@@ -85,6 +87,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         // sign out. Everything else sits behind `account.active` below.
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
         Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');
+        Route::get('auth/sessions', [AuthController::class, 'sessions'])->name('auth.sessions');
+        Route::post('auth/sessions/revoke-others', [AuthController::class, 'revokeOtherSessions'])->name('auth.sessions.revoke-others');
         Route::put('auth/password', [AuthController::class, 'updatePassword'])->name('auth.password.update');
         Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
 
@@ -249,6 +253,20 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::post('technicians/{user}/approve', [TechnicianController::class, 'approve'])->name('technicians.approve');
             Route::post('technicians/{user}/reject', [TechnicianController::class, 'reject'])->name('technicians.reject');
 
+            // The Time Log — every check-in cycle and timer/manual entry, one row each. Open to
+            // every crew role (an apprentice reads their own), so outside the apprentice block.
+            Route::get('time-log', [TimeLogController::class, 'index'])->name('time-log.index');
+
+            // "My Schedule" — where and when to work. Open to every crew role, an apprentice
+            // included, so it sits outside the apprentice block below.
+            Route::get('schedule', [ScheduleController::class, 'index'])->name('schedule.index');
+            // A change that clashed with an office edit, sent up for a manager to decide.
+            Route::post('sync-conflicts', [SyncConflictController::class, 'store'])->name('sync-conflicts.store');
+            Route::post('schedule/{shift}/acknowledge', [ScheduleController::class, 'acknowledge'])->whereNumber('shift')->name('schedule.acknowledge');
+
+            // An apprentice reads their journeyman's tasks here — read-only; every task write is below.
+            Route::get('jobs/{job}/schedule', [ScheduleController::class, 'show'])->name('jobs.schedule.show');
+
             Route::middleware('block.apprentice')->group(function () {
                 Route::post('jobs/{job}/status', [JobController::class, 'changeStatus'])->name('jobs.status');
                 Route::post('jobs/{job}/foremen/{foreman}/approve', [JobController::class, 'approveForeman'])->name('jobs.foremen.approve');
@@ -260,8 +278,13 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 // Documents — all scoped to a job the caller can access.
                 Route::get('jobs/{job}/messages', [JobMessageController::class, 'index'])->name('jobs.messages.index');
                 Route::post('jobs/{job}/messages', [JobMessageController::class, 'store'])->name('jobs.messages.store');
+                Route::get('change-orders', [JobChangeOrderController::class, 'hub'])->name('change-orders.hub');
+                Route::post('change-orders/by-key/{key}/attachments', [JobChangeOrderController::class, 'attachByKey'])->name('change-orders.attach-by-key');
                 Route::get('jobs/{job}/change-orders', [JobChangeOrderController::class, 'index'])->name('jobs.change-orders.index');
                 Route::post('jobs/{job}/change-orders', [JobChangeOrderController::class, 'store'])->name('jobs.change-orders.store');
+                Route::get('jobs/{job}/change-orders/{changeOrder}', [JobChangeOrderController::class, 'show'])->whereNumber('changeOrder')->name('jobs.change-orders.show');
+                Route::post('jobs/{job}/change-orders/{changeOrder}/attachments', [JobChangeOrderController::class, 'attach'])->whereNumber('changeOrder')->name('jobs.change-orders.attach');
+                Route::get('jobs/{job}/change-orders/{changeOrder}/attachments/{attachment}', [JobChangeOrderController::class, 'download'])->whereNumber(['changeOrder', 'attachment'])->name('jobs.change-orders.download');
                 // Material and Work Changes: actual use against the plan, what the
                 // crew added, the commodity list to pick from, and evidence photos.
                 Route::get('jobs/{job}/materials', [JobMaterialController::class, 'index'])->name('jobs.materials.index');
@@ -271,7 +294,6 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 Route::get('jobs/{job}/photos', [JobPhotoController::class, 'index'])->name('jobs.photos.index');
                 Route::post('jobs/{job}/photos', [JobPhotoController::class, 'store'])->name('jobs.photos.store');
                 Route::get('jobs/{job}/photos/{attachment}', [JobPhotoController::class, 'show'])->name('jobs.photos.show');
-                Route::delete('jobs/{job}/photos/{attachment}', [JobPhotoController::class, 'destroy'])->name('jobs.photos.destroy');
                 Route::get('jobs/{job}/documents', [JobDocumentController::class, 'index'])->name('jobs.documents.index');
                 Route::get('jobs/{job}/documents/{document}/download', [JobDocumentController::class, 'download'])->name('jobs.documents.download');
 
@@ -303,10 +325,6 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 Route::post('estimate-items/{item}/attachments', [EstimateItemAttachmentController::class, 'store'])->name('estimate-items.attachments.store');
                 Route::get('estimate-items/attachments/{attachment}', [EstimateItemAttachmentController::class, 'show'])->name('estimate-items.attachments.show');
 
-                Route::get('jobs/{job}/schedule', [ScheduleController::class, 'show'])->name('jobs.schedule.show');
-                // Cross-job "My Schedule" feed — upcoming crew shifts across
-                // every job this user can access.
-                Route::get('schedule', [ScheduleController::class, 'index'])->name('schedule.index');
 
                 // Unassigned Queue → "Book crew" — mobile's counterpart to
                 // web's own Scheduling calendar's booking action.
@@ -352,6 +370,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('jobs/{job}/attendance', [AttendanceController::class, 'index'])->name('jobs.attendance.index');
             Route::post('jobs/{job}/attendance/check-in', [AttendanceController::class, 'checkIn'])->name('jobs.attendance.check-in');
             Route::post('jobs/{job}/attendance/check-out', [AttendanceController::class, 'checkOut'])->name('jobs.attendance.check-out');
+            Route::post('jobs/{job}/attendance/undo', [AttendanceController::class, 'undo'])->name('jobs.attendance.undo');
+            Route::post('jobs/{job}/attendance/corrections', [AttendanceController::class, 'correct'])->name('jobs.attendance.correct');
             Route::get('attendance/today', [AttendanceController::class, 'today'])->name('attendance.today');
             // Read-only detail — the Time Log Viewer's day screen drills
             // into one GPS check-in/out record. Same crew-visibility rule

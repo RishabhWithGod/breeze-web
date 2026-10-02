@@ -71,6 +71,8 @@ class ChangeOrderController extends Controller
                 'label' => $co->label(),
                 'job' => ['id' => $co->job_id, 'name' => $co->job?->name ?? '—'],
                 'description' => $co->description,
+                'reasonLabel' => $co->reasonLabel(),
+                'customerRequested' => (bool) $co->customer_requested,
                 'source' => $co->source,
                 'laborHours' => (float) $co->labor_hours,
                 'materialCost' => (float) $co->material_cost,
@@ -96,7 +98,14 @@ class ChangeOrderController extends Controller
             'jobs' => $this->jobOptions($user),
             'preselectedJob' => $request->integer('job') ?: null,
             'isManager' => $this->access->isManager($user),
+            'reasons' => $this->reasonOptions(),
         ]);
+    }
+
+    /** @return list<array{value: string, label: string}> */
+    private function reasonOptions(): array
+    {
+        return collect(ChangeOrder::REASONS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values()->all();
     }
 
     public function store(Request $request): RedirectResponse
@@ -196,6 +205,7 @@ class ChangeOrderController extends Controller
                 'attachments' => $co->attachments->map(fn (ChangeOrderAttachment $file) => ['id' => $file->id, 'name' => $file->name, 'size' => (int) $file->size])->all(),
                 'rejection' => $co->status === ChangeOrder::STATUS_REJECTED ? $co->decision_note : null,
             ],
+            'reasons' => $this->reasonOptions(),
             'jobs' => [],
             'preselectedJob' => null,
             'isManager' => $this->access->isManager($user),
@@ -265,7 +275,8 @@ class ChangeOrderController extends Controller
         $note = $request->validate(['note' => ['nullable', 'string', 'max:1000']])['note'] ?? null;
         $this->orders->approve($co, $user, $note);
 
-        return back()->with('success', "{$co->label()} was approved. Its amount is on the job's billing.");
+        // Back to the list, which then shows the new status.
+        return redirect()->route('change-orders.index')->with('success', "{$co->label()} was approved. Its amount is on the job's billing.");
     }
 
     public function reject(Request $request, int $changeOrder): RedirectResponse
@@ -277,7 +288,7 @@ class ChangeOrderController extends Controller
         $note = $request->validate(['note' => ['required', 'string', 'max:1000']], ['note.required' => 'Say why it is rejected, so it can be corrected.'])['note'];
         $this->orders->reject($co, $user, $note);
 
-        return back()->with('warning', "{$co->label()} was rejected.");
+        return redirect()->route('change-orders.index')->with('warning', "{$co->label()} was rejected.");
     }
 
     public function attach(Request $request, int $changeOrder): RedirectResponse
@@ -338,6 +349,9 @@ class ChangeOrderController extends Controller
             'description' => $co->description,
             'source' => $co->source,
             'status' => $co->status,
+            'reasonCode' => $co->reason_code,
+            'reasonLabel' => $co->reasonLabel(),
+            'customerRequested' => (bool) $co->customer_requested,
             'laborHours' => (float) $co->labor_hours,
             'materialCost' => (float) $co->material_cost,
             'amount' => (float) $co->sell_total,
@@ -376,6 +390,8 @@ class ChangeOrderController extends Controller
         return $request->validate([
             'description' => ['required', 'string', 'max:255'],
             'reason' => ['nullable', 'string', 'max:2000'],
+            'reason_code' => ['nullable', Rule::in(array_keys(ChangeOrder::REASONS))],
+            'customer_requested' => ['nullable', 'boolean'],
             'source' => ['nullable', Rule::in(ChangeOrder::SOURCES)],
             'markup_pct' => ['nullable', 'numeric', 'min:0', 'max:500'],
             'lines' => ['required', 'array', 'min:1', 'max:100'],

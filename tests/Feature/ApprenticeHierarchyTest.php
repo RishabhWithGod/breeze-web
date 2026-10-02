@@ -398,6 +398,8 @@ class ApprenticeHierarchyTest extends TestCase
     {
         $journeymanUser = $this->makeMobileAccount($this->journeyman, 'Journeyman');
 
+        $this->checkInAt($this->job, $journeymanUser);
+
         $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($journeymanUser))
             ->postJson("/api/v1/jobs/{$this->job->id}/status", ['status' => 'in-progress'])
             ->assertOk();
@@ -436,5 +438,18 @@ class ApprenticeHierarchyTest extends TestCase
         $response->assertJsonPath('data.apprenticeAssignments.0.apprenticeName', 'Robin Ashby');
         $response->assertJsonPath('data.canAssignApprentice', false);
         $response->assertJsonMissingPath('data.assignableJourneymen');
+    }
+
+    /** Starting a job needs the starter checked in at it today; this files that check-in. */
+    private function checkInAt(\App\Models\Job $job, \App\Models\User $user): void
+    {
+        \App\Models\JobAttendance::forceCreate([
+            'job_id' => $job->id,
+            'user_id' => $user->id,
+            'date' => now()->timezone(\App\Models\TimeTrackingSetting::current()->timezone)->toDateString(),
+            'status' => \App\Models\JobAttendance::STATUS_CHECKED_IN,
+            'check_in_at' => now(),
+            'check_in_method' => 'manual',
+        ]);
     }
 }

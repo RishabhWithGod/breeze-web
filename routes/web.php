@@ -10,6 +10,8 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TwoFactorChallengeController;
 use App\Http\Controllers\BreezeBucksController;
 use App\Http\Controllers\ChangeOrderController;
+use App\Http\Controllers\SyncConflictController;
+use App\Http\Controllers\JobFieldMaterialController;
 use App\Http\Controllers\ClientAddressController;
 use App\Http\Controllers\ClientContactController;
 use App\Http\Controllers\ClientController;
@@ -333,6 +335,10 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
     Route::get('roles-permissions', [RolePermissionController::class, 'show'])->name('roles.show');
     Route::put('roles-permissions', [RolePermissionController::class, 'update'])->name('roles.update');
 
+    // Field edits that clashed with an office edit, sent up from a phone for a manager to decide.
+    Route::get('sync-conflicts', [SyncConflictController::class, 'index'])->name('sync-conflicts.index');
+    Route::post('sync-conflicts/{conflict}/resolve', [SyncConflictController::class, 'resolve'])->whereNumber('conflict')->name('sync-conflicts.resolve');
+
     // Change orders: added work documented after a job begins, approved by a manager.
     Route::prefix('change-orders')->name('change-orders.')->whereNumber(['changeOrder', 'attachment'])->group(function () {
         Route::get('/', [ChangeOrderController::class, 'index'])->name('index');
@@ -556,6 +562,11 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
     Route::post('jobs/{job}/team', [JobTeamController::class, 'store'])->name('jobs.team.store');
     Route::delete('jobs/{job}/team/{member}', [JobTeamController::class, 'destroy'])->name('jobs.team.destroy');
 
+    // What the crew added on site (material or labor): the office edits, approves onto the estimate, or removes.
+    Route::put('jobs/{job}/field-materials/{material}', [JobFieldMaterialController::class, 'update'])->name('jobs.field-materials.update');
+    Route::post('jobs/{job}/field-materials/{material}/approve', [JobFieldMaterialController::class, 'approve'])->name('jobs.field-materials.approve');
+    Route::delete('jobs/{job}/field-materials/{material}', [JobFieldMaterialController::class, 'destroy'])->name('jobs.field-materials.destroy');
+
     // Notes
     Route::post('jobs/{job}/notes', [JobNoteController::class, 'store'])->name('jobs.notes.store');
     Route::delete('jobs/{job}/notes/{note}', [JobNoteController::class, 'destroy'])->name('jobs.notes.destroy');
@@ -643,6 +654,7 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
         Route::get('attendance/{attendance}/photo', [TimeEntryController::class, 'attendancePhoto'])->name('attendance.photo');
         // A manager closing a check-in the technician never closed.
         Route::post('attendance/{attendance}/check-out', [TimeEntryController::class, 'checkOutAttendance'])->name('attendance.check-out');
+        Route::post('attendance/{attendance}/corrections/{correction}/resolve', [TimeEntryController::class, 'resolveCorrection'])->name('attendance.corrections.resolve');
 
         Route::post('timer/start', [TimerController::class, 'start'])->name('timer.start');
         Route::post('timer/pause', [TimerController::class, 'pause'])->name('timer.pause');

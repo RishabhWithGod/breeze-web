@@ -47,6 +47,7 @@ export const ROUTES = {
   commodities: '/commodities',
   rolesPermissions: '/roles-permissions',
   changeOrders: '/change-orders',
+  syncConflicts: '/sync-conflicts',
   changeOrderCreate: '/change-orders/create',
   estimates: '/estimates',
   estimateCreate: '/estimates/create',
@@ -192,6 +193,9 @@ export const routeTo = {
   jobTeamMember: (jobId: number, memberId: number) => `/jobs/${jobId}/team/${memberId}`,
   jobNotes: (jobId: number) => `/jobs/${jobId}/notes`,
   jobNote: (jobId: number, noteId: number) => `/jobs/${jobId}/notes/${noteId}`,
+  jobFieldMaterial: (jobId: number, id: number) => `/jobs/${jobId}/field-materials/${id}`,
+  jobFieldMaterialApprove: (jobId: number, id: number) =>
+    `/jobs/${jobId}/field-materials/${id}/approve`,
   jobAttachments: (jobId: number) => `/jobs/${jobId}/attachments`,
   jobAttachment: (jobId: number, attachmentId: number) =>
     `/jobs/${jobId}/attachments/${attachmentId}`,
@@ -221,6 +225,7 @@ export const routeTo = {
   teamSetupInvitationResend: (invitationId: number) => `/team-setup/invitations/${invitationId}/resend`,
   changeOrder: (id: number) => `/change-orders/${id}`,
   changeOrderEdit: (id: number) => `/change-orders/${id}/edit`,
+  syncConflictResolve: (id: number) => `/sync-conflicts/${id}/resolve`,
   changeOrderAction: (id: number, action: 'submit' | 'withdraw' | 'approve' | 'reject' | 'attachments') =>
     `/change-orders/${id}/${action}`,
   changeOrderFile: (id: number, fileId: number) => `/change-orders/${id}/attachments/${fileId}`,
@@ -355,6 +360,8 @@ export const routeTo = {
   timeEntriesExport: (format: 'csv' | 'xlsx') => `/time-tracking/entries/export/${format}`,
   jobTimeEntryTasks: (jobId: number) => `/time-tracking/jobs/${jobId}/tasks`,
   attendance: (attendanceId: number) => `/time-tracking/attendance/${attendanceId}`,
+  attendanceCorrectionResolve: (attendanceId: number, correctionId: number) =>
+    `/time-tracking/attendance/${attendanceId}/corrections/${correctionId}/resolve`,
   attendanceCheckOut: (attendanceId: number) => `/time-tracking/attendance/${attendanceId}/check-out`,
   /** One technician's one day — every session behind the day-grouped list's single total. */
   timeEntryDay: (userId: number, date: string) => `/time-tracking/day/${userId}/${date}`,

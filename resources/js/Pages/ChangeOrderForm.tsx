@@ -1,7 +1,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/react'
 import { FileText, Paperclip, Plus, Save, Send, Trash2, Upload, X } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { Alert, Button, Card, SelectField, TextArea, TextInput } from '@/components/common'
+import { Alert, Button, Card, SelectField, Switch, TextArea, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { ChangeOrderLineKind, ChangeOrderSource, SharedPageProps } from '@/types'
@@ -19,6 +19,8 @@ interface ExistingOrder {
   readonly label: string
   readonly description: string
   readonly reason: string | null
+  readonly reasonCode: string | null
+  readonly customerRequested: boolean
   readonly source: ChangeOrderSource
   readonly markupPct: number
   readonly job: { readonly id: number; readonly name: string }
@@ -38,6 +40,7 @@ export interface ChangeOrderFormProps {
   jobs: readonly JobOption[]
   preselectedJob: number | null
   isManager: boolean
+  reasons: readonly { readonly value: string; readonly label: string }[]
 }
 
 interface Line {
@@ -56,7 +59,13 @@ const size = (bytes: number) =>
   bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 
 /** Creates or edits a change order: what was added, as material and labor lines, with the evidence for it. */
-export default function ChangeOrderForm({ changeOrder, jobs, preselectedJob, isManager }: ChangeOrderFormProps) {
+export default function ChangeOrderForm({
+  changeOrder,
+  jobs,
+  preselectedJob,
+  isManager,
+  reasons,
+}: ChangeOrderFormProps) {
   const { errors } = usePage<SharedPageProps>().props
   const fieldErrors = errors as Record<string, string | undefined>
   const editing = changeOrder !== null
@@ -81,6 +90,8 @@ export default function ChangeOrderForm({ changeOrder, jobs, preselectedJob, isM
   )
   const [description, setDescription] = useState(changeOrder?.description ?? '')
   const [reason, setReason] = useState(changeOrder?.reason ?? '')
+  const [reasonCode, setReasonCode] = useState(changeOrder?.reasonCode ?? '')
+  const [customerRequested, setCustomerRequested] = useState(changeOrder?.customerRequested ?? false)
   const [source, setSource] = useState<ChangeOrderSource>(changeOrder?.source ?? 'office')
   const [markup, setMarkup] = useState(changeOrder ? String(changeOrder.markupPct) : '')
   const [materials, setMaterials] = useState<Line[]>(() => linesOf('material', blank('EA')))
@@ -124,6 +135,8 @@ export default function ChangeOrderForm({ changeOrder, jobs, preselectedJob, isM
       ...(editing ? { _method: 'put' } : { job_id: jobId }),
       description,
       reason,
+      reason_code: reasonCode === '' ? null : reasonCode,
+      customer_requested: customerRequested ? 1 : 0,
       ...(isManager ? { source } : {}),
       markup_pct: markup === '' ? 0 : markup,
       lines: sent.map(({ kind, line }) => ({
@@ -299,6 +312,22 @@ export default function ChangeOrderForm({ changeOrder, jobs, preselectedJob, isM
               ) : (
                 <TextInput id="co-source" label="Source" disabled value="Field" />
               )}
+              <SelectField
+                id="co-reason-code"
+                label="Reason"
+                value={reasonCode}
+                onChange={(event) => setReasonCode(event.target.value)}
+                options={[{ value: '', label: 'Select reason' }, ...reasons]}
+                {...(fieldErrors['reason_code'] ? { error: fieldErrors['reason_code'] } : {})}
+              />
+              <div className="flex items-end pb-1">
+                <Switch
+                  id="co-customer-requested"
+                  label="Customer request"
+                  checked={customerRequested}
+                  onChange={(event) => setCustomerRequested(event.target.checked)}
+                />
+              </div>
               <TextInput
                 id="co-description"
                 label="Description"
@@ -311,7 +340,7 @@ export default function ChangeOrderForm({ changeOrder, jobs, preselectedJob, isM
               />
               <TextArea
                 id="co-reason"
-                label="Reason"
+                label="More detail"
                 className="sm:col-span-2"
                 rows={3}
                 maxLength={2000}

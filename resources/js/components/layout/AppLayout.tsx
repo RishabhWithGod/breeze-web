@@ -16,6 +16,8 @@ import { Sidebar } from './Sidebar'
  */
 export function AppLayout({ children }: { children: ReactNode }) {
   const { url } = usePage()
+  // The footer belongs to the dashboard only; every other screen hides it.
+  const onDashboard = url.split(/[?#]/)[0].replace(/\/+$/, '') === '/home'
 
   return (
     <div className="min-h-dvh pt-navbar">
@@ -43,7 +45,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div key={url}>{children}</div>
           </div>
 
-          <Footer />
+          {onDashboard && <Footer />}
         </main>
       </div>
 

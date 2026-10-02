@@ -9,6 +9,7 @@ use App\Models\ClientAddress;
 use App\Models\Estimate;
 use App\Models\Job;
 use App\Models\Project;
+use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\Upload;
 use App\Models\User;
@@ -34,6 +35,8 @@ class JobLocationTest extends TestCase
 
     private Project $project;
 
+    private Team $team;
+
     private ClientAddress $harbour;
 
     private ClientAddress $dock;
@@ -42,7 +45,7 @@ class JobLocationTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = User::factory()->create(['role' => 'Project Manager']);
+        $this->user = User::factory()->create(['role' => 'Project Manager', 'status' => User::STATUS_ACTIVE]);
         $this->client = $this->user->clients()->create(['name' => 'Harborview']);
 
         $this->harbour = $this->client->addresses()->create([
@@ -64,6 +67,8 @@ class JobLocationTest extends TestCase
             'position' => 1,
         ]);
 
+        $this->team = Team::create(['name' => 'Harbor Crew']);
+
         $this->project = $this->user->projects()->create([
             'client_id' => $this->client->id,
             'name' => 'Phase 1',
@@ -80,6 +85,7 @@ class JobLocationTest extends TestCase
             'project_id' => $this->project->id,
             'address_ids' => [$this->harbour->id],
             'upload_id' => $this->drawing()->id,
+            'team_id' => $this->team->id,
             'start_date' => '2026-09-07',
             'end_date' => '2026-09-21',
         ])->assertSessionHasNoErrors();
@@ -104,6 +110,7 @@ class JobLocationTest extends TestCase
             'project_id' => $this->project->id,
             'address_ids' => [$typed->id],
             'upload_id' => $this->drawing()->id,
+            'team_id' => $this->team->id,
             'start_date' => '2026-09-07',
             'end_date' => '2026-09-21',
         ])->assertSessionHasNoErrors();
@@ -204,6 +211,7 @@ class JobLocationTest extends TestCase
             'project_id' => $this->project->id,
             'address_ids' => [$theirSite->id],
             'upload_id' => $this->drawing()->id,
+            'team_id' => $this->team->id,
             'start_date' => '2026-09-07',
             'end_date' => '2026-09-21',
         ])->assertSessionHasErrors('address_ids');

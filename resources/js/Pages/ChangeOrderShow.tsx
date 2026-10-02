@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from '@inertiajs/react'
-import { Check, FileText, History, Pencil, Paperclip, Send, Trash2, Undo2, Upload, X } from 'lucide-react'
+import { ArrowLeft, Check, FileText, History, Pencil, Paperclip, Send, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Alert, Button, Card, ConfirmDialog, Modal, TextArea } from '@/components/common'
 import { ChangeOrderSourcePill, ChangeOrderStatusPill } from '@/components/changeOrders/ChangeOrderPills'
@@ -156,6 +156,9 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
         className="mb-5"
         actions={
           <>
+            <Button variant="ghost" leftIcon={ArrowLeft} onClick={() => router.visit(ROUTES.changeOrders)}>
+              Back
+            </Button>
             {co.can.edit && (
               <Button
                 variant="secondary"
@@ -254,8 +257,19 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
                   {co.author ?? '—'} <span className="font-normal text-white/70">· {formatModified(co.createdAt)}</span>
                 </dd>
               </div>
+              <div>
+                <dt className="text-white/70">Reason</dt>
+                <dd className="mt-0.5 font-medium text-white">
+                  {co.reasonLabel ?? '—'}
+                  {co.customerRequested && (
+                    <span className="ml-2 rounded-full bg-brand/20 px-2 py-0.5 text-xs font-semibold text-white">
+                      Customer request
+                    </span>
+                  )}
+                </dd>
+              </div>
               <div className="sm:col-span-2">
-                <dt className="text-white/70">Description and reason</dt>
+                <dt className="text-white/70">Description and details</dt>
                 <dd className="mt-0.5 whitespace-pre-line text-white">
                   {co.description}
                   {co.reason && <span className="mt-1 block text-white/80">{co.reason}</span>}

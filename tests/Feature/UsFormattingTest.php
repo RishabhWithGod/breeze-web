@@ -52,7 +52,7 @@ class UsFormattingTest extends TestCase
     public function test_a_number_is_stored_the_same_way_however_it_was_typed(string $typed): void
     {
         $this->actingAs($this->planner)
-            ->post(route('foremen.store'), ['name' => 'Dana Wu', 'role' => 'foreman', 'phone' => $typed])
+            ->post(route('foremen.store'), [...$this->login(), 'name' => 'Dana Wu', 'role' => 'foreman', 'phone' => $typed])
             ->assertSessionHasNoErrors();
 
         $this->assertSame('(415) 555-0134', Foreman::sole()->phone);
@@ -77,7 +77,7 @@ class UsFormattingTest extends TestCase
     public function test_a_number_that_could_not_ring_is_refused(string $typed): void
     {
         $this->actingAs($this->planner)
-            ->post(route('foremen.store'), ['name' => 'Dana Wu', 'role' => 'foreman', 'phone' => $typed])
+            ->post(route('foremen.store'), [...$this->login(), 'name' => 'Dana Wu', 'role' => 'foreman', 'phone' => $typed])
             ->assertSessionHasErrors('phone');
 
         $this->assertSame(0, Foreman::count());
@@ -87,7 +87,7 @@ class UsFormattingTest extends TestCase
     {
         // Optional, and still optional. A foreman exists to be handed work.
         $this->actingAs($this->planner)
-            ->post(route('foremen.store'), ['name' => 'Dana Wu', 'role' => 'foreman', 'phone' => ''])
+            ->post(route('foremen.store'), [...$this->login(), 'name' => 'Dana Wu', 'role' => 'foreman', 'phone' => ''])
             ->assertSessionHasNoErrors();
 
         $this->assertNull(Foreman::sole()->phone);
@@ -127,5 +127,15 @@ class UsFormattingTest extends TestCase
         $this->assertSame('ext. 4021', UsPhone::format('ext. 4021'));
         $this->assertNull(UsPhone::format(null));
         $this->assertNull(UsPhone::format(''));
+    }
+
+    /** Every member added is also a mobile-app login, so the Add Member form always sends one. */
+    private function login(): array
+    {
+        return [
+            'email' => 'dana.wu@example.test',
+            'password' => 'Str0ng-Passw0rd!x',
+            'password_confirmation' => 'Str0ng-Passw0rd!x',
+        ];
     }
 }

@@ -23,6 +23,8 @@ interface Row {
   readonly label: string
   readonly job: { readonly id: number; readonly name: string }
   readonly description: string
+  readonly reasonLabel: string | null
+  readonly customerRequested: boolean
   readonly source: ChangeOrderSource
   readonly laborHours: number
   readonly materialCost: number
@@ -188,12 +190,13 @@ export default function ChangeOrders({ orders, page, filters, jobs, canCreate }:
             />
           ) : (
             <div className="overflow-x-auto rounded-panel border border-hairline">
-              <table className="w-full min-w-[60rem] text-left text-sm">
+              <table className="w-full min-w-[68rem] text-left text-sm">
                 <thead>
                   <tr className="border-b border-hairline bg-white/6 text-xs font-semibold text-white/90">
                     <th className="px-4 py-3">Change Order #</th>
                     <th className="px-4 py-3">Job</th>
                     <th className="px-4 py-3">Description</th>
+                    <th className="px-4 py-3">Reason</th>
                     <th className="px-4 py-3">Source</th>
                     <th className="px-4 py-3">Labor Impact</th>
                     <th className="px-4 py-3">Material Impact</th>
@@ -204,7 +207,11 @@ export default function ChangeOrders({ orders, page, filters, jobs, canCreate }:
                 </thead>
                 <tbody className="divide-y divide-hairline text-white/90">
                   {orders.map((row) => (
-                    <tr key={row.id} className="hover:bg-white/4">
+                    <tr
+                      key={row.id}
+                      className="cursor-pointer hover:bg-white/4"
+                      onClick={() => router.visit(routeTo.changeOrder(row.id))}
+                    >
                       <td className="px-4 py-3">
                         <Link href={routeTo.changeOrder(row.id)} className="font-medium text-white hover:text-brand">
                           {row.label}
@@ -212,6 +219,14 @@ export default function ChangeOrders({ orders, page, filters, jobs, canCreate }:
                       </td>
                       <td className="px-4 py-3">{row.job.name}</td>
                       <td className="max-w-xs px-4 py-3">{row.description}</td>
+                      <td className="px-4 py-3">
+                        {row.reasonLabel ?? '—'}
+                        {row.customerRequested && (
+                          <span className="ml-2 rounded-full bg-brand/20 px-2 py-0.5 text-xs font-semibold text-white">
+                            Customer
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <ChangeOrderSourcePill source={row.source} />
                       </td>
@@ -221,7 +236,7 @@ export default function ChangeOrders({ orders, page, filters, jobs, canCreate }:
                       <td className="px-4 py-3">
                         <ChangeOrderStatusPill status={row.status} />
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
                         <MoreMenu
                           variant="minimal"
                           ariaLabel={`Actions for ${row.label}`}

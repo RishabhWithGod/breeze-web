@@ -187,4 +187,53 @@ class MobileAuthTest extends TestCase
         $this->assertNull(\Laravel\Sanctum\PersonalAccessToken::findToken($token));
         $this->assertDatabaseMissing('personal_access_tokens', ['tokenable_id' => $user->id]);
     }
+
+    public function test_me_carries_the_account_details_the_profile_screen_shows(): void
+    {
+        $user = $this->makeElectrician(['name' => 'Sam Rivera', 'phone' => '+1 555 010 4242']);
+        $foreman = new \App\Models\Foreman(['name' => 'Sam Rivera', 'initials' => 'SR', 'role' => 'foreman', 'licence_number' => 'EL-4821']);
+        $foreman->user_id = $user->id;
+        $foreman->save();
+
+        $this->withHeader('Authorization', 'Bearer '.$user->createToken('mobile')->plainTextToken)
+            ->getJson('/api/v1/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Sam Rivera')
+            ->assertJsonPath('data.twoFactorEnabled', false)
+            ->assertJsonPath('data.work.licenceNumber', 'EL-4821')
+            ->assertJsonPath('data.work.crewRole', 'Foreman');
+
+        // The phone number is only ever shown masked.
+        $this->assertStringEndsWith('4242', (string) $this->getJson('/api/v1/auth/me')->json('data.phone'));
+        $this->assertStringNotContainsString('555', (string) $this->getJson('/api/v1/auth/me')->json('data.phone'));
+    }
+
+    public function test_the_devices_signed_in_are_listed_and_the_others_can_be_signed_out(): void
+    {
+        $user = $this->makeElectrician();
+        $user->createToken('other phone');
+        $mine = $user->createToken('this phone')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$mine)->getJson('/api/v1/auth/sessions')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer '.$mine)->postJson('/api/v1/auth/sessions/revoke-others')
+            ->assertOk()->assertJsonPath('data.signedOut', 1);
+
+        $this->assertSame(1, $user->tokens()->count());
+        $this->assertDatabaseHas('security_events', ['user_id' => $user->id, 'type' => SecurityEvent::OTHER_DEVICES_SIGNED_OUT]);
+    }
+
+    public function test_the_profile_name_can_be_changed_from_the_phone(): void
+    {
+        $user = $this->makeElectrician(['name' => 'Old Name']);
+
+        $this->withHeader('Authorization', 'Bearer '.$user->createToken('mobile')->plainTextToken)
+            ->putJson('/api/v1/profile', ['name' => 'New Name'])
+            ->assertOk()->assertJsonPath('data.name', 'New Name');
+
+        $this->assertSame('New Name', $user->fresh()->name);
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Client;
 use App\Models\Project;
 use App\Models\Upload;
 use App\Models\User;
@@ -33,7 +34,7 @@ class ProjectTest extends TestCase
         Storage::fake(config('takeoff.uploads.disk'));
     }
 
-    public function test_the_list_shows_only_the_signed_in_users_projects(): void
+    public function test_the_list_shows_only_the_signed_in_users_projects_under_their_clients(): void
     {
         $this->makeProject(['name' => 'Harborview Data Hall']);
         User::factory()->create()->projects()->create([
@@ -44,10 +45,12 @@ class ProjectTest extends TestCase
             ->get('/projects')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Projects')
-                ->has('projects.data', 1)
-                ->where('projects.data.0.name', 'Harborview Data Hall')
-                ->where('filters.sort', 'recent')
-                ->where('counts.total', 1));
+                ->has('clients.data', 1)
+                ->where('clients.data.0.name', 'Vertex Infrastructure')
+                ->has('clients.data.0.projects', 1)
+                ->where('clients.data.0.projects.0.name', 'Harborview Data Hall')
+                ->where('filters.status', 'all')
+                ->where('totalProjects', 1));
     }
 
     public function test_the_list_can_be_searched_by_project_number(): void
@@ -58,8 +61,9 @@ class ProjectTest extends TestCase
         $this->actingAs($this->user)
             ->get('/projects?search=PRJ-2041')
             ->assertInertia(fn (Assert $page) => $page
-                ->has('projects.data', 1)
-                ->where('projects.data.0.name', 'Harborview Data Hall'));
+                ->has('clients.data.0.projects', 1)
+                ->where('clients.data.0.projects.0.name', 'Harborview Data Hall')
+                ->where('totalProjects', 1));
     }
 
     public function test_the_list_can_be_filtered_by_status(): void
@@ -70,11 +74,11 @@ class ProjectTest extends TestCase
         $this->actingAs($this->user)
             ->get('/projects?status=completed')
             ->assertInertia(fn (Assert $page) => $page
-                ->has('projects.data', 1)
-                ->where('projects.data.0.status', 'completed'));
+                ->has('clients.data.0.projects', 1)
+                ->where('clients.data.0.projects.0.status', 'completed'));
     }
 
-    public function test_the_create_screen_asks_only_for_the_clients_details(): void
+    public function test_the_create_screen_asks_for_a_client_and_the_projects_own_details(): void
     {
         $this->makeProject(['name' => 'Harborview Data Hall']);
 
@@ -82,32 +86,35 @@ class ProjectTest extends TestCase
             ->get('/projects/create')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('ProjectCreate')
-                // The client's own details, typed. No suggestion list on the
-                // name — this screen exists to name a client that is not on
-                // one — no drawing picker, and no discipline to choose.
-                ->missing('clients')
+                // A project is always for a client, picked from the address book.
+                // No drawing picker, and no discipline to choose.
+                ->has('clients', 1)
                 ->missing('limits')
                 ->missing('disciplines'));
     }
 
-    public function test_a_client_is_created_from_its_details_alone(): void
+    public function test_a_project_is_created_under_a_client_from_its_details_alone(): void
     {
+        $client = $this->makeClient();
+        $client->addresses()->create(['label' => 'Main', 'address' => '41 Harbor Way', 'is_primary' => true]);
+
         $response = $this->actingAs($this->user)->post('/projects', [
+            'client_id' => $client->id,
             'name' => 'Harborview Data Hall',
-            'code' => 'PRJ-2041',
-            'location' => '41 Harbor Way',
             'project_type' => 'commercial',
-            'notes' => 'Revision C only.',
         ]);
 
         $project = Project::query()->where('name', 'Harborview Data Hall')->sole();
 
-        $response->assertRedirect(route('projects.show', $project));
+        // Straight on to the drawing upload, with this project already picked.
+        $response->assertRedirect(route('uploads.create', ['project' => $project->id]));
 
         $this->assertSame('draft', $project->status);
         $this->assertSame('commercial', $project->project_type);
-        $this->assertSame('PRJ-2041', $project->code);
-        // The form no longer asks for a takeoff due date.
+        $this->assertSame($client->id, $project->client_id);
+        $this->assertSame('Vertex Infrastructure', $project->client);
+        // The place comes from the client's primary site, not from the form.
+        $this->assertSame('41 Harbor Way', $project->location);
         $this->assertNull($project->due_date);
         // The form leaves discipline unset; the column's default stands.
         $this->assertSame('Electrical', $project->discipline);
@@ -118,8 +125,17 @@ class ProjectTest extends TestCase
 
         $this->assertDatabaseHas('project_activities', [
             'project_id' => $project->id,
-            'title' => 'Client created',
+            'title' => 'Project opened',
         ]);
+    }
+
+    public function test_a_project_must_be_for_a_client(): void
+    {
+        $this->actingAs($this->user)
+            ->post('/projects', ['name' => 'Harborview Data Hall'])
+            ->assertSessionHasErrors('client_id');
+
+        $this->assertDatabaseCount('projects', 0);
     }
 
     public function test_a_drawing_posted_to_the_create_form_is_ignored(): void
@@ -128,6 +144,7 @@ class ProjectTest extends TestCase
         // by hand is dropped rather than quietly stored.
         $this->actingAs($this->user)
             ->post('/projects', [
+                'client_id' => $this->makeClient()->id,
                 'name' => 'Rosewood Clinic',
                 'documents' => [UploadedFile::fake()->create('E-101.pdf', 60, 'application/pdf')],
                 'document_titles' => ['Ground floor lighting'],
@@ -157,12 +174,11 @@ class ProjectTest extends TestCase
         $this->assertSame(0, $project->uploads()->count());
     }
 
-    public function test_the_client_name_is_required(): void
+    public function test_the_project_name_is_required(): void
     {
-        // One field, not two: the name *is* the client, and the `client`
-        // column is written from it server-side.
+        // The `client` column is written from the picked client server-side.
         $this->actingAs($this->user)
-            ->post('/projects', ['name' => 'ab'])
+            ->post('/projects', ['client_id' => $this->makeClient()->id, 'name' => 'ab'])
             ->assertSessionHasErrors('name')
             ->assertSessionDoesntHaveErrors('client');
 
@@ -274,11 +290,17 @@ class ProjectTest extends TestCase
         return $upload;
     }
 
+    private function makeClient(string $name = 'Vertex Infrastructure'): Client
+    {
+        return $this->user->clients()->create(['name' => $name]);
+    }
+
     /** @param array<string, mixed> $attributes */
     private function makeProject(array $attributes = []): Project
     {
         return $this->user->projects()->create([
             'name' => 'Harborview Data Hall',
+            'client_id' => $this->user->clients()->firstOrCreate(['name' => 'Vertex Infrastructure'])->id,
             'client' => 'Vertex Infrastructure',
             'status' => 'draft',
             'review_status' => 'none',

@@ -85,7 +85,7 @@ return [
         'projects' => 'projects',
         'estimates' => 'estimates', 'estimate-builder' => 'estimates', 'estimate-items' => 'estimates', 'addenda' => 'estimates',
         'commodities' => 'estimates', 'price-book' => 'estimates',
-        'jobs' => 'jobs', 'job-costing' => 'jobs', 'documents' => 'jobs', 'document-folders' => 'jobs',
+        'jobs' => 'jobs', 'sync-conflicts' => 'jobs', 'job-costing' => 'jobs', 'documents' => 'jobs', 'document-folders' => 'jobs',
         'tasks' => 'tasks',
         'change-orders' => 'change_orders',
         'scheduling' => 'schedule',

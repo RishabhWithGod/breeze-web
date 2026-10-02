@@ -2,10 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\CompanyProfile;
 use App\Models\Document;
 use App\Models\Foreman;
 use App\Models\Job;
-use App\Models\Upload;
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -25,6 +26,8 @@ class DocumentTest extends TestCase
 
     private User $electrician;
 
+    private Project $project;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -33,6 +36,9 @@ class DocumentTest extends TestCase
 
         $this->manager = User::factory()->create(['role' => 'Project Manager']);
         $this->electrician = User::factory()->create(['role' => 'Electrician']);
+
+        // Documents are filed against a takeoff, and the list and the policy both go by its owner.
+        $this->project = $this->makeProject($this->manager);
     }
 
     public function test_the_upload_screen_is_a_real_page_not_a_popup(): void
@@ -40,13 +46,13 @@ class DocumentTest extends TestCase
         $job = $this->makeJob();
 
         $this->actingAs($this->manager)
-            ->get("/documents/create?job_id={$job->id}")
+            ->get("/documents/create?job_id={$job->id}&project={$this->project->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('DocumentUpload')
                 ->where('jobId', $job->id)
-                ->has('jobs')
-                ->has('importableUploads'));
+                ->where('projectId', $this->project->id)
+                ->has('maxFileSizeMb'));
     }
 
     public function test_uploading_a_document_stores_the_file_and_redirects_to_the_list(): void
@@ -61,6 +67,7 @@ class DocumentTest extends TestCase
             'visibility' => 'team',
         ]);
 
+        // No takeoff named, so back to the general list.
         $response->assertRedirect('/documents');
 
         $document = Document::first();
@@ -93,7 +100,7 @@ class DocumentTest extends TestCase
         $this->assertNotSame($originalPath, $latest->storage_path);
     }
 
-    public function test_the_list_defaults_to_one_row_per_family_and_all_shows_every_version(): void
+    public function test_the_list_shows_only_the_latest_version_of_each_family(): void
     {
         $document = $this->makeDocument($this->manager);
 
@@ -101,14 +108,18 @@ class DocumentTest extends TestCase
             'file' => UploadedFile::fake()->create('plans-v2.pdf', 400, 'application/pdf'),
         ]);
 
-        $this->actingAs($this->manager)
-            ->get('/documents')
-            ->assertInertia(fn (Assert $page) => $page->has('documents.data', 1)
-                ->where('documents.data.0.version', 2));
+        // Earlier versions are opened through History, never listed. There is no filter to turn that off.
+        foreach (['/documents', '/documents?version_status=all'] as $url) {
+            $this->actingAs($this->manager)
+                ->get($url)
+                ->assertInertia(fn (Assert $page) => $page->has('documents.data', 1)
+                    ->where('documents.data.0.version', 2));
+        }
 
         $this->actingAs($this->manager)
-            ->get('/documents?version_status=all')
-            ->assertInertia(fn (Assert $page) => $page->has('documents.data', 2));
+            ->getJson("/documents/{$document->id}/history")
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
     }
 
     public function test_deleting_the_latest_version_promotes_the_previous_one(): void
@@ -127,7 +138,7 @@ class DocumentTest extends TestCase
         $this->assertTrue($document->is_latest);
     }
 
-    public function test_favoriting_persists_and_shows_under_the_favorites_tab(): void
+    public function test_favoriting_persists_and_is_flagged_in_the_list(): void
     {
         $document = $this->makeDocument($this->manager);
 
@@ -135,37 +146,43 @@ class DocumentTest extends TestCase
         $this->assertTrue($document->isFavoritedBy($this->manager));
 
         $this->actingAs($this->manager)
-            ->get('/documents?tab=favorites')
-            ->assertInertia(fn (Assert $page) => $page->has('documents.data', 1));
+            ->get('/documents')
+            ->assertInertia(fn (Assert $page) => $page->has('documents.data', 1)
+                ->where('documents.data.0.isFavorite', true));
 
         // Unfavorite removes it again.
         $this->actingAs($this->manager)->post("/documents/{$document->id}/favorite");
         $this->assertFalse($document->isFavoritedBy($this->manager->refresh()));
     }
 
-    public function test_archiving_moves_a_document_out_of_all_documents_and_into_archived(): void
+    public function test_archiving_marks_a_document_in_the_list_and_restoring_clears_it(): void
     {
         $document = $this->makeDocument($this->manager);
 
         $this->actingAs($this->manager)->post("/documents/{$document->id}/archive")->assertRedirect();
+        $this->assertTrue($document->refresh()->is_archived);
 
+        // Archived documents stay in the one list, marked, so there is something to restore them from.
         $this->actingAs($this->manager)
             ->get('/documents')
-            ->assertInertia(fn (Assert $page) => $page->has('documents.data', 0));
-
-        $this->actingAs($this->manager)
-            ->get('/documents?tab=archived')
-            ->assertInertia(fn (Assert $page) => $page->has('documents.data', 1));
+            ->assertInertia(fn (Assert $page) => $page->has('documents.data', 1)
+                ->where('documents.data.0.isArchived', true));
 
         $this->actingAs($this->manager)->post("/documents/{$document->id}/restore");
         $this->assertFalse($document->refresh()->is_archived);
+
+        $this->actingAs($this->manager)
+            ->get('/documents')
+            ->assertInertia(fn (Assert $page) => $page->where('documents.data.0.isArchived', false));
     }
 
-    public function test_sharing_a_private_document_notifies_the_recipient_and_lists_it_under_shared_with_me(): void
+    public function test_sharing_a_private_document_notifies_the_recipient_and_lets_them_open_it(): void
     {
-        // Private, not team-visible — the only way the electrician can see this
+        // Private, not team-visible — the only way the electrician can open this
         // at all is through the share, which is exactly what this test locks in.
         $document = $this->makeDocument($this->manager, ['visibility' => Document::VISIBILITY_PRIVATE]);
+
+        $this->actingAs($this->electrician)->get("/documents/{$document->id}/download")->assertForbidden();
 
         $this->actingAs($this->manager)->post("/documents/{$document->id}/share", [
             'user_id' => $this->electrician->id,
@@ -177,15 +194,7 @@ class DocumentTest extends TestCase
             'type' => 'document-shared',
         ]);
 
-        // Not visible in the main list before being shared with — a plain private doc.
-        $other = User::factory()->create(['role' => 'Electrician']);
-        $this->actingAs($other)
-            ->get('/documents')
-            ->assertInertia(fn (Assert $page) => $page->has('documents.data', 0));
-
-        $this->actingAs($this->electrician)
-            ->get('/documents?tab=shared')
-            ->assertInertia(fn (Assert $page) => $page->has('documents.data', 1));
+        $this->actingAs($this->electrician)->get("/documents/{$document->id}/download")->assertOk();
     }
 
     public function test_a_non_owner_non_manager_cannot_delete_someone_elses_document(): void
@@ -195,24 +204,43 @@ class DocumentTest extends TestCase
         $this->actingAs($this->electrician)->delete("/documents/{$document->id}")->assertForbidden();
     }
 
-    public function test_filtering_by_job_only_returns_documents_for_that_job(): void
+    public function test_the_list_is_one_takeoffs_paperwork_when_a_project_is_named(): void
     {
-        $jobA = $this->makeJob(['name' => 'Job A']);
-        $jobB = $this->makeJob(['name' => 'Job B']);
+        $other = $this->makeProject($this->manager, ['name' => 'Other Takeoff']);
 
-        $this->makeDocument($this->manager, ['job_id' => $jobA->id]);
-        $this->makeDocument($this->manager, ['job_id' => $jobB->id]);
+        $this->makeDocument($this->manager);
+        $this->makeDocument($this->manager, ['project_id' => $other->id]);
 
         $this->actingAs($this->manager)
-            ->get("/documents?job_id={$jobA->id}")
+            ->get("/documents?project={$other->id}")
             ->assertInertia(fn (Assert $page) => $page->has('documents.data', 1)
-                ->where('documents.data.0.jobId', $jobA->id));
+                ->where('documents.data.0.projectId', $other->id)
+                ->where('takeoff.id', $other->id));
+    }
+
+    public function test_another_managers_project_cannot_be_named_in_the_list(): void
+    {
+        $theirs = $this->makeProject($this->electrician);
+        $this->makeDocument($this->electrician, ['project_id' => $theirs->id]);
+
+        $this->actingAs($this->manager)
+            ->get("/documents?project={$theirs->id}")
+            ->assertSessionHasErrors('project');
     }
 
     public function test_a_private_document_is_hidden_from_other_non_manager_users(): void
     {
-        $other = User::factory()->create(['role' => 'Electrician']);
-        $document = $this->makeDocument($other, ['visibility' => Document::VISIBILITY_PRIVATE]);
+        // Two people on one company's books: the manager's takeoff is the electrician's to work on too.
+        $company = CompanyProfile::create([
+            'user_id' => $this->manager->id, 'name' => 'Acme Electric', 'business_address' => '1 Main St',
+            'primary_contact' => 'A', 'phone' => '(512) 555-0142', 'email' => 'o@x.test', 'timezone' => 'America/Chicago',
+        ]);
+        $this->manager->forceFill(['company_id' => $company->id])->save();
+        $this->electrician->forceFill(['company_id' => $company->id])->save();
+
+        $colleague = User::factory()->create(['role' => 'Electrician']);
+        $colleague->forceFill(['company_id' => $company->id])->save();
+        $this->makeDocument($colleague, ['visibility' => Document::VISIBILITY_PRIVATE]);
 
         $this->actingAs($this->electrician)
             ->get('/documents')
@@ -224,74 +252,15 @@ class DocumentTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->has('documents.data', 1));
     }
 
-    public function test_importing_an_ai_takeoff_drawing_reuses_the_same_file_without_a_second_upload(): void
+    private function makeProject(User $owner, array $attributes = []): Project
     {
-        Storage::disk('local')->put('uploads/riverside-plans.pdf', 'pdf-bytes');
-        $upload = Upload::create([
-            'user_id' => $this->manager->id,
-            'name' => 'Riverside Plans.pdf',
-            'format' => 'PDF',
-            'size_bytes' => 9,
-            'path' => 'uploads/riverside-plans.pdf',
-            'status' => 'complete',
+        return $owner->projects()->create([
+            'name' => 'Riverside Complex',
+            'client' => 'Riverside Properties LLC',
+            'status' => 'draft',
+            'review_status' => 'none',
+            ...$attributes,
         ]);
-
-        $response = $this->actingAs($this->manager)->post('/documents/import-upload', [
-            'upload_id' => $upload->id,
-            'document_type' => 'Electrical Drawing',
-            'visibility' => 'team',
-        ]);
-
-        $response->assertRedirect();
-
-        $document = Document::first();
-        $this->assertNotNull($document);
-        $this->assertSame($upload->id, $document->upload_id);
-        $this->assertSame($upload->path, $document->storage_path);
-
-        // No second file was written into the documents directory — it points at the exact same bytes.
-        $this->assertSame([], Storage::disk('local')->allFiles('documents'));
-        Storage::disk('local')->assertExists($upload->path);
-    }
-
-    /** A takeoff drawing belongs to whoever ran it — importing someone else's by id is not just a UI omission. */
-    public function test_a_user_cannot_import_someone_elses_ai_takeoff_upload(): void
-    {
-        Storage::disk('local')->put('uploads/someone-elses-plans.pdf', 'pdf-bytes');
-        $upload = Upload::create([
-            'user_id' => $this->manager->id,
-            'name' => 'Someone Elses Plans.pdf',
-            'format' => 'PDF',
-            'size_bytes' => 9,
-            'path' => 'uploads/someone-elses-plans.pdf',
-            'status' => 'complete',
-        ]);
-
-        $this->actingAs($this->electrician)->post('/documents/import-upload', [
-            'upload_id' => $upload->id,
-            'document_type' => 'Electrical Drawing',
-            'visibility' => 'team',
-        ])->assertForbidden();
-
-        $this->assertSame(0, Document::count());
-    }
-
-    /** The import picker itself must never list another user's upload as an option. */
-    public function test_the_importable_uploads_list_only_shows_this_users_own_uploads(): void
-    {
-        Storage::disk('local')->put('uploads/managers-plans.pdf', 'pdf-bytes');
-        Upload::create([
-            'user_id' => $this->manager->id,
-            'name' => 'Managers Plans.pdf',
-            'format' => 'PDF',
-            'size_bytes' => 9,
-            'path' => 'uploads/managers-plans.pdf',
-            'status' => 'complete',
-        ]);
-
-        $this->actingAs($this->electrician)
-            ->get('/documents/create')
-            ->assertInertia(fn (Assert $page) => $page->has('importableUploads', 0));
     }
 
     private function makeJob(array $attributes = []): Job
@@ -319,6 +288,7 @@ class DocumentTest extends TestCase
             'file_size' => 512000,
             'document_type' => 'Blueprint',
             'uploaded_by' => $user->id,
+            'project_id' => $this->project->id,
             'visibility' => Document::VISIBILITY_TEAM,
             'version' => 1,
             'is_latest' => true,

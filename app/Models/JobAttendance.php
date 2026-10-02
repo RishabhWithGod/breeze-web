@@ -37,6 +37,7 @@ class JobAttendance extends Model
         'date',
         'status',
         'check_in_at',
+        'check_in_received_at',
         'check_in_lat',
         'check_in_lng',
         'check_in_accuracy',
@@ -44,6 +45,7 @@ class JobAttendance extends Model
         'check_in_method',
         'check_in_photo_path',
         'check_out_at',
+        'check_out_received_at',
         'check_out_lat',
         'check_out_lng',
         'check_out_accuracy',
@@ -51,6 +53,8 @@ class JobAttendance extends Model
         'check_out_method',
         'banked_seconds',
         'client_id',
+        'review_flag',
+        'review_reason',
     ];
 
     protected function casts(): array
@@ -58,6 +62,8 @@ class JobAttendance extends Model
         return [
             'date' => 'date',
             'check_in_at' => 'datetime',
+            'check_in_received_at' => 'datetime',
+            'check_out_received_at' => 'datetime',
             'check_in_lat' => 'decimal:7',
             'check_in_lng' => 'decimal:7',
             'check_in_accuracy' => 'decimal:2',
@@ -94,6 +100,25 @@ class JobAttendance extends Model
         $session = $end->getTimestamp() - $this->check_in_at->getTimestamp();
 
         return $this->banked_seconds + max(0, $session);
+    }
+
+    /** Saved on the phone and sent later: the server heard of it well after it happened. */
+    public function checkInWasOffline(): bool
+    {
+        return $this->check_in_at !== null && $this->check_in_received_at !== null
+            && $this->check_in_received_at->getTimestamp() - $this->check_in_at->getTimestamp() > 120;
+    }
+
+    public function checkOutWasOffline(): bool
+    {
+        return $this->check_out_at !== null && $this->check_out_received_at !== null
+            && $this->check_out_received_at->getTimestamp() - $this->check_out_at->getTimestamp() > 120;
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Relations\HasMany<AttendanceCorrection, $this> */
+    public function corrections(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AttendanceCorrection::class)->latest('id');
     }
 
     public function job(): BelongsTo

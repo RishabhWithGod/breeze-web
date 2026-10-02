@@ -343,7 +343,8 @@ class SchedulingTest extends TestCase
         $this->makeJob(['name' => 'Medium Job', 'priority' => 'medium']);
 
         $this->actingAs($this->user)
-            ->get('/scheduling')
+            // The default order is by start date; priority is asked for.
+            ->get('/scheduling?sort=priority-desc')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('filters.sort', 'priority-desc')
                 ->where('jobs.data.0.name', 'High Job')

@@ -8,6 +8,9 @@ export interface ChangeOrderSummary {
   readonly description: string
   readonly source: ChangeOrderSource
   readonly status: ChangeOrderStatus
+  readonly reasonCode: string | null
+  readonly reasonLabel: string | null
+  readonly customerRequested: boolean
   readonly laborHours: number
   readonly materialCost: number
   readonly amount: number

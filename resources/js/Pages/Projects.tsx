@@ -115,7 +115,7 @@ export default function Projects({ clients, filters, statuses, totalProjects }: 
 
       <PageHeader
         title="Projects"
-        subtitle="What the work is. Every drawing, takeoff and job belongs to one."
+        subtitle="Manage your projects, drawings, estimates, takeoffs, and job activity - all in one place"
         breadcrumbs={[{ label: 'Projects' }]}
         actions={
           <>

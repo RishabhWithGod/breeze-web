@@ -237,7 +237,7 @@ export default function History({ projects, filters, clients, projectOptions }: 
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-white sm:text-3xl">AI Takeoff</h1>
             <p className="mt-1 text-md text-white/90">
-              Upload and process your drawings to extract takeoff data
+              Automatically analyze electrical drawings and generate detailed takeoff data for faster, more accurate estimating
             </p>
           </div>
 

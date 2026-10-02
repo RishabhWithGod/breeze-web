@@ -357,4 +357,128 @@ class MobileAttendanceTest extends TestCase
         $this->assertEqualsWithDelta(22.720500, (float) $job->latitude, 0.0001);
         $this->assertEqualsWithDelta(75.858500, (float) $job->longitude, 0.0001);
     }
+
+    public function test_an_offline_check_in_and_checkout_keep_the_time_they_happened_and_replay_safely(): void
+    {
+        $user = User::factory()->create(['role' => 'Electrician']);
+        $job = $this->makeJob();
+        $this->staffJob($job, $user);
+        $in = now()->subHours(3)->startOfSecond();
+        $out = now()->subMinutes(10)->startOfSecond();
+
+        $this->withHeaders($this->headersFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", [...$this->onSitePoint(), 'method' => 'automatic', 'occurred_at' => $in->toISOString()])
+            ->assertCreated()
+            ->assertJsonPath('data.recorded_offline', true)
+            ->assertJsonPath('data.review_flag', 'delayed_sync');
+
+        $row = JobAttendance::sole();
+        $this->assertSame($in->getTimestamp(), $row->check_in_at->getTimestamp());
+
+        // The queue sends the check-in twice: still one record.
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($this->headersFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", [...$this->onSitePoint(), 'method' => 'automatic', 'occurred_at' => $in->toISOString()])
+            ->assertOk();
+        $this->assertSame(1, JobAttendance::count());
+
+        $this->app['auth']->forgetGuards();
+        $checkout = [...$this->onSitePoint(), 'method' => 'automatic', 'occurred_at' => $out->toISOString()];
+        $this->withHeaders($this->headersFor($user))->postJson("/api/v1/jobs/{$job->id}/attendance/check-out", $checkout)->assertOk();
+        $this->assertSame($out->getTimestamp(), $row->fresh()->check_out_at->getTimestamp());
+        $this->assertEqualsWithDelta(2.83, $row->fresh()->workingSeconds() / 3600, 0.01);
+
+        // And the checkout replayed: same answer, not "you are not checked in".
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($this->headersFor($user))->postJson("/api/v1/jobs/{$job->id}/attendance/check-out", $checkout)->assertOk();
+
+        // A clock a week behind is refused; one set ahead is clamped to now.
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($this->headersFor($user))
+            ->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", [...$this->onSitePoint(), 'occurred_at' => now()->subDays(12)->toISOString()])
+            ->assertStatus(422);
+    }
+
+    public function test_an_automatic_check_in_can_be_undone_and_a_record_can_be_acknowledged_or_reported(): void
+    {
+        $user = User::factory()->create(['role' => 'Electrician']);
+        $job = $this->makeJob();
+        $this->staffJob($job, $user);
+        $h = $this->headersFor($user);
+
+        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", [...$this->onSitePoint(), 'method' => 'automatic'])->assertCreated();
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/corrections", ['kind' => 'ack'])->assertCreated();
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/corrections", ['kind' => 'correction'])->assertStatus(422);
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/corrections", ['kind' => 'correction', 'message' => 'I was at the supplier, not on site.'])
+            ->assertCreated()->assertJsonPath('data.status', 'open');
+        $this->assertSame(2, \App\Models\AttendanceCorrection::count());
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/undo")->assertOk();
+        $this->assertSame(0, JobAttendance::count());
+
+        // Undone twice (a replay): harmless.
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/undo")->assertOk();
+    }
+
+    public function test_the_time_log_lists_a_persons_sessions_with_what_is_flagged_and_offline(): void
+    {
+        $user = User::factory()->create(['role' => 'Electrician']);
+        $other = User::factory()->create(['role' => 'Electrician']);
+        $job = $this->makeJob(['location' => 'Riverside Project Site']);
+        $this->staffJob($job, $user);
+        $h = $this->headersFor($user);
+
+        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", [
+            ...$this->onSitePoint(), 'method' => 'automatic', 'occurred_at' => now()->subHours(2)->toISOString(),
+        ])->assertCreated();
+        JobAttendance::create(['job_id' => $job->id, 'user_id' => $other->id, 'date' => now()->toDateString(), 'status' => 'checkedIn', 'check_in_at' => now(), 'banked_seconds' => 0]);
+
+        $this->app['auth']->forgetGuards();
+        $res = $this->withHeaders($h)->getJson('/api/v1/time-log')->assertOk();
+        $res->assertJsonCount(1, 'data.sessions')
+            ->assertJsonPath('data.sessions.0.kind', 'attendance')
+            ->assertJsonPath('data.sessions.0.source', 'automatic')
+            ->assertJsonPath('data.sessions.0.locationVerified', true)
+            ->assertJsonPath('data.sessions.0.site', 'Riverside Project Site')
+            ->assertJsonPath('data.sessions.0.status', 'on-site')
+            ->assertJsonPath('data.sessions.0.recordedOffline', true)
+            ->assertJsonPath('data.sessions.0.canReport', true)
+            ->assertJsonPath('data.canViewCrew', false);
+
+        // An apprentice reads their own log too.
+        $apprentice = User::factory()->create(['role' => 'Apprentice']);
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($this->headersFor($apprentice))->getJson('/api/v1/time-log')->assertOk()->assertJsonCount(0, 'data.sessions');
+    }
+
+    public function test_an_automatic_check_in_tells_the_technician_in_their_notifications(): void
+    {
+        $user = User::factory()->create(['role' => 'Electrician']);
+        $job = $this->makeJob();
+        $this->staffJob($job, $user);
+        $h = $this->headersFor($user);
+
+        // A manual one is their own doing: no notification.
+        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", [...$this->onSitePoint(), 'method' => 'manual'])->assertCreated();
+        $this->assertSame(0, \App\Models\AppNotification::count());
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/check-out", [...$this->onSitePoint(), 'method' => 'manual'])->assertOk();
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", [...$this->onSitePoint(), 'method' => 'automatic'])->assertCreated();
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($h)->getJson('/api/v1/notifications')
+            ->assertOk()
+            ->assertJsonPath('data.notifications.0.type', 'attendance-checkin')
+            ->assertJsonPath('data.notifications.0.title', 'Checked in automatically')
+            ->assertJsonPath('data.notifications.0.data.jobId', $job->id)
+            ->assertJsonPath('data.notifications.0.unread', true);
+    }
 }
