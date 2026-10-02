@@ -38,7 +38,7 @@ class JobController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $jobs = $this->access->assignedJobsQuery($request->user())
+        $jobs = $this->access->listedJobsQuery($request->user())
             ->with(['foreman:id,name,initials,role', 'addresses:id'])
             ->withSum('timeEntries', 'hours')
             // Newest first — the mobile list is a feed of what's current,
@@ -89,6 +89,13 @@ class JobController extends Controller
                 'name' => $a->name,
             ])->all(),
             'openTasksCount' => $job->tasks()->open()->count(),
+            // The workspace tiles' own live numbers.
+            'unreadMessages' => $job->unreadMessageCountFor($request->user()),
+            // Server-decided so the pencil only shows for who `update()` accepts.
+            'canEdit' => Ownership::owns($request->user(), $job->user_id) && ! $job->isLocked(),
+            'jobTypes' => Job::TYPES,
+            'documentsCount' => $job->documentsFor($request->user())->count(),
+            'changeOrdersCount' => \App\Models\ChangeOrder::where('job_id', $job->id)->count(),
             'crewTime' => $this->crewTime($job),
             'myTasksComplete' => $this->myTasksComplete($request, $job),
             // Who is assigned as an apprentice on this job right now —
@@ -244,7 +251,7 @@ class JobController extends Controller
      */
     private function apprenticeAssignmentOptions(Request $request, Job $job): array
     {
-        if ($request->user()->foreman?->role !== Foreman::ROLE_FOREMAN) {
+        if (! $request->user()->hasForemanAuthority()) {
             return ['canAssignApprentice' => false];
         }
 
@@ -257,7 +264,7 @@ class JobController extends Controller
                 'name' => $j->name,
             ])->values(),
             'apprenticesByJourneyman' => $journeymen->mapWithKeys(
-                fn (Foreman $j) => [$j->id => $j->teamApprentices()->get(['id', 'name'])->map(fn (Foreman $a) => [
+                fn (Foreman $j) => [$j->id => $job->assignableApprentices($j)->get(['foremen.id', 'foremen.name'])->map(fn (Foreman $a) => [
                     'id' => $a->id,
                     'name' => $a->name,
                 ])->values()],
@@ -281,9 +288,8 @@ class JobController extends Controller
     {
         abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
 
-        $actingForeman = $request->user()->foreman;
         abort_unless(
-            $actingForeman?->role === Foreman::ROLE_FOREMAN,
+            $request->user()->hasForemanAuthority(),
             403,
             'Only a foreman can approve a crew member’s work.',
         );
@@ -453,7 +459,7 @@ class JobController extends Controller
             // is the authority here — the same distinction
             // `ElectricianJobAccess`/`JobSchedulePolicy` already draw.
             $foreman = $request->user()->foreman;
-            if ($foreman?->role === Foreman::ROLE_FOREMAN) {
+            if ($request->user()->hasForemanAuthority()) {
                 return $this->fail('Only a journeyman or apprentice can start this job.', 403);
             }
 
@@ -502,7 +508,7 @@ class JobController extends Controller
             // gated on any other crew member's still-open work (see
             // `prepareCompletion()`'s own doc comment).
             $foreman = $request->user()->foreman;
-            $isForeman = $foreman?->role === Foreman::ROLE_FOREMAN;
+            $isForeman = $request->user()->hasForemanAuthority();
 
             if (! $isForeman) {
                 if ($foreman === null) {

@@ -33,9 +33,8 @@ class JobApprenticeAssignmentController extends Controller
     {
         abort_unless($this->access->canAccess($request->user(), $job), 403, 'You are not staffed on this job.');
 
-        $actingForeman = $request->user()->foreman;
         abort_unless(
-            $actingForeman?->role === Foreman::ROLE_FOREMAN,
+            $request->user()->hasForemanAuthority(),
             403,
             'Only a foreman can assign an apprentice.',
         );

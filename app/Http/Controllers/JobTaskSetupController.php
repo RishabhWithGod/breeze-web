@@ -168,23 +168,7 @@ class JobTaskSetupController extends Controller
      */
     private function projectMemberIds(Job $job): ?Collection
     {
-        $members = $job->project?->members;
-
-        if ($members === null || $members->isEmpty()) {
-            return null;
-        }
-
-        /*
-         * Anyone added to the job's crew since the job was raised was added for this work — from its
-         * task screen, or the register — so they are offered too, not left out for not being among
-         * the people picked when the project was made.
-         */
-        $joinedSince = Foreman::query()
-            ->where('created_at', '>=', $job->created_at)
-            ->when($job->team_id !== null, fn ($query) => $query->where('team_id', $job->team_id))
-            ->pluck('id');
-
-        return $members->pluck('id')->merge($joinedSince)->unique()->values();
+        return $job->projectMemberIds();
     }
 
     /**

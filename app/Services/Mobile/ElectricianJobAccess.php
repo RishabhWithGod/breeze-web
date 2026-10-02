@@ -52,6 +52,37 @@ class ElectricianJobAccess
             return Job::query()->inCompanyOf($user);
         }
 
+        return $this->staffedJobsQuery($user);
+    }
+
+    /**
+     * What the mobile job *list* shows. A foreman or journeyman's list is
+     * only the work they are actually staffed on, even when their role keeps
+     * the wider company-wide access [canAccess] gives managers — a field lead
+     * scrolling a feed of every job in the company is noise, not a worklist.
+     * Managers/admins/owners still list everything.
+     *
+     * @return Builder<Job>
+     */
+    public function listedJobsQuery(User $user): Builder
+    {
+        $role = mb_strtolower(trim((string) $user->role));
+
+        if (in_array($role, ['foreman', 'journeyman'], true)) {
+            return $this->staffedJobsQuery($user);
+        }
+
+        return $this->assignedJobsQuery($user);
+    }
+
+    /**
+     * Only the jobs this user is explicitly staffed on — never the
+     * company-wide view.
+     *
+     * @return Builder<Job>
+     */
+    private function staffedJobsQuery(User $user): Builder
+    {
         // An apprentice's access is entirely the explicit Foreman→
         // Journeyman→Apprentice assignment a foreman sets from the Job
         // Detail screen — never the broader staffing mechanics

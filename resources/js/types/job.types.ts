@@ -307,3 +307,41 @@ export interface JobDraft {
   project_id: string
   upload_id: string
 }
+
+export type FieldMaterialException = 'over' | 'under'
+
+/** A planned estimate line against what the crew reported using. */
+export interface FieldMaterialPlanned {
+  /** The estimate item's id. */
+  readonly id: number
+  readonly taskId: number
+  readonly taskTitle: string
+  readonly description: string
+  readonly unit: string | null
+  readonly plannedQty: number
+  /** Null until the crew reports an actual quantity. */
+  readonly actualQty: number | null
+  readonly reason: string | null
+  readonly exception: FieldMaterialException | null
+  readonly reportedBy: string | null
+  readonly reportedAt: string | null
+}
+
+/** A material the crew added on site that was never planned. */
+export interface FieldMaterialAdded {
+  readonly id: number
+  readonly description: string
+  readonly unit: string | null
+  readonly qty: number
+  readonly reason: string | null
+  readonly taskTitle: string | null
+  readonly addedBy: string | null
+  readonly createdAt: string
+}
+
+export interface JobFieldMaterials {
+  readonly planned: readonly FieldMaterialPlanned[]
+  readonly added: readonly FieldMaterialAdded[]
+  /** Over-plan lines plus every added material. */
+  readonly needsReviewCount: number
+}

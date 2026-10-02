@@ -175,6 +175,50 @@ class MobileJobsAndTasksTest extends TestCase
             ->assertOk();
     }
 
+    public function test_a_web_created_foreman_or_journeyman_lists_only_the_jobs_they_are_staffed_on(): void
+    {
+        foreach (['Foreman', 'Journeyman'] as $role) {
+            $user = User::factory()->create(['role' => $role, 'registration_source' => User::SOURCE_WEB]);
+            $member = TeamMember::create(['name' => $user->name, 'initials' => 'WF', 'role' => $role, 'user_id' => $user->id]);
+            $mine = $this->makeJob(['name' => "Mine {$role}"]);
+            $other = $this->makeJob(['name' => "Other {$role}"]);
+            $this->staffOnTask($mine, $member);
+
+            $ids = array_column(
+                $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+                    ->getJson('/api/v1/jobs')->assertOk()->json('data.jobs'),
+                'id',
+            );
+
+            $this->assertContains($mine->id, $ids, "{$role} should list their own job");
+            $this->assertNotContains($other->id, $ids, "{$role} must not list an unstaffed job");
+        }
+    }
+
+    public function test_a_manager_lists_every_job_and_carries_a_foremans_authority(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $this->assertTrue($manager->hasForemanAuthority());
+        $this->assertFalse(User::factory()->create(['role' => 'Journeyman'])->hasForemanAuthority());
+
+        $a = $this->makeJob(['name' => 'A']);
+        $b = $this->makeJob(['name' => 'B']);
+
+        $ids = array_column(
+            $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($manager))
+                ->getJson('/api/v1/jobs')->assertOk()->json('data.jobs'),
+            'id',
+        );
+        $this->assertContains($a->id, $ids);
+        $this->assertContains($b->id, $ids);
+
+        // The foreman-only extras on a job's detail are on for a manager too.
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($manager))
+            ->getJson("/api/v1/jobs/{$a->id}")
+            ->assertOk()
+            ->assertJsonPath('data.canAssignApprentice', true);
+    }
+
     public function test_a_mobile_onboarded_foreman_only_sees_jobs_they_are_staffed_on(): void
     {
         // Same role strings a web-side manager can carry ('Foreman'), but

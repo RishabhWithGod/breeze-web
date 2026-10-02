@@ -129,6 +129,29 @@ class MobileTasksAndScheduleTest extends TestCase
         $this->assertSame($createdAts->sortDesc()->values()->all(), $createdAts->values()->all());
     }
 
+    public function test_each_task_says_whether_it_is_the_users_own(): void
+    {
+        [$user, $member] = $this->makeMobileJourneyman();
+        $job = $this->makeJob(['name' => 'Mine And Crew']);
+        $mine = $this->staffOnTask($job, $member);
+
+        // A second task on the same job that belongs to a different crew member.
+        $theirs = $job->tasks()->where('id', '!=', $mine->id)->first()
+            ?? $job->tasks()->create([
+                'job_schedule_id' => $mine->job_schedule_id, 'title' => 'Someone else', 'status' => 'pending', 'position' => 9,
+            ]);
+        $theirs->assignments()->delete();
+
+        $rows = collect($this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->getJson('/api/v1/tasks?per_page=100')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['tasks' => ['*' => ['isMine', 'startsOn', 'completionPct']]]])
+            ->json('data.tasks'))->keyBy('id');
+
+        $this->assertTrue($rows[$mine->id]['isMine']);
+        $this->assertFalse($rows[$theirs->id]['isMine']);
+    }
+
     public function test_tasks_pagination_is_capped_at_100(): void
     {
         [$user, $member] = $this->makeMobileJourneyman();

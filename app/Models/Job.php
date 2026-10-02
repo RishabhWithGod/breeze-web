@@ -688,6 +688,95 @@ class Job extends Model
             ->get();
     }
 
+    /**
+     * The crew register ids this job's own project picked as its members —
+     * null when none were picked, which callers read as "no narrowing, fall
+     * back to the job's team" rather than "nobody".
+     *
+     * Read live on every call, so a member added to the project later (or
+     * removed) is reflected immediately with no copy to keep in sync. And
+     * anyone who joined the job's team *after* the job was raised is
+     * included automatically too: they were added for this work, not left
+     * out for missing the original pick.
+     *
+     * @return ?Collection<int, int>
+     */
+    public function projectMemberIds(): ?Collection
+    {
+        $members = $this->project?->members;
+
+        if ($members === null || $members->isEmpty()) {
+            return null;
+        }
+
+        $joinedSince = Foreman::query()
+            ->where('created_at', '>=', $this->created_at)
+            ->when($this->team_id !== null, fn ($query) => $query->where('team_id', $this->team_id))
+            ->pluck('id');
+
+        return $members->pluck('id')->merge($joinedSince)->unique()->values();
+    }
+
+    /**
+     * The apprentices that can be put under [journeyman] on this job: those
+     * on the journeyman's own team, narrowed to the project's picked members
+     * when the project has any.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<Foreman>
+     */
+    public function assignableApprentices(Foreman $journeyman)
+    {
+        $memberIds = $this->projectMemberIds();
+
+        return $journeyman->teamApprentices()
+            ->when($memberIds !== null, fn ($query) => $query->whereIn('foremen.id', $memberIds->all()));
+    }
+
+    /**
+     * Paperwork a crew member may open on this job: filed under the job
+     * itself or its project, latest version only, never archived, and never
+     * someone else's private document.
+     *
+     * @return Builder<Document>
+     */
+    public function documentsFor(User $user): Builder
+    {
+        return Document::query()
+            ->where(function (Builder $q) {
+                $q->where('job_id', $this->id);
+                if ($this->project_id !== null) {
+                    $q->orWhere('project_id', $this->project_id);
+                }
+            })
+            ->where('is_latest', true)
+            ->where('is_archived', false)
+            ->where(fn (Builder $q) => $q
+                ->where('visibility', '!=', Document::VISIBILITY_PRIVATE)
+                ->orWhereNull('visibility')
+                ->orWhere('uploaded_by', $user->id));
+    }
+
+    /** @return HasMany<JobFieldMaterial, $this> */
+    public function fieldMaterials(): HasMany
+    {
+        return $this->hasMany(JobFieldMaterial::class);
+    }
+
+    /** @return HasMany<JobMessage, $this> */
+    public function messages(): HasMany
+    {
+        return $this->hasMany(JobMessage::class);
+    }
+
+    /** Messages from other people that this user has not opened yet. */
+    public function unreadMessageCountFor(User $user): int
+    {
+        $lastRead = (int) \Illuminate\Support\Facades\DB::table('job_message_reads')
+            ->where('job_id', $this->id)->where('user_id', $user->id)->value('last_read_message_id');
+
+        return $this->messages()->where('id', '>', $lastRead)->where('user_id', '!=', $user->id)->count();
+    }
+
     /** @return HasMany<JobApprenticeAssignment, $this> */
     public function apprenticeAssignments(): HasMany
     {

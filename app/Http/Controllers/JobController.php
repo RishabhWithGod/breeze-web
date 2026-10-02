@@ -27,6 +27,7 @@ use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\JobSites;
 use App\Services\Clients\ProjectDirectory;
 use App\Services\JobCosting\JobCostSummary;
+use App\Services\Mobile\JobFieldMaterialsSummary;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Services\Takeoff\TakeoffLinkOptions;
 use App\Support\JobCrew;
@@ -297,6 +298,8 @@ class JobController extends Controller
             'canManageApprentices' => $schedulePolicy->assignApprentice($request->user(), $job),
             'canCreateInvoice' => app(InvoicePolicy::class)->create($request->user()),
             'changeOrders' => $this->changeOrdersFor($request, $job),
+            // Planned vs actual materials and on-site additions from the mobile app.
+            'fieldMaterials' => app(JobFieldMaterialsSummary::class)->for($job),
             'apprenticeAssignments' => $job->apprenticeAssignments()
                 ->with(['journeyman:id,name', 'apprentice:id,name'])
                 ->get()

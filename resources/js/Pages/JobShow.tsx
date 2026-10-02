@@ -40,6 +40,7 @@ import {
 import {
   JobAttachmentsPanel,
   JobEstimatesPanel,
+  JobFieldMaterialsPanel,
   JobNotesPanel,
   JobTakeoffPanel,
   JobTaskFieldNotesPanel,
@@ -55,6 +56,7 @@ import type {
   ChangeOrderStatus,
   JobCostRow,
   JobDetail,
+  JobFieldMaterials,
   JobStatus,
   SharedPageProps,
   Tone,
@@ -95,6 +97,8 @@ export interface JobShowProps {
       readonly amount: number
     }[]
   } | null
+  /** What the crew reported from the mobile app: planned vs actual, and materials added on site. */
+  fieldMaterials: JobFieldMaterials
   apprenticeAssignments: readonly {
     readonly id: number
     readonly journeymanId: number
@@ -125,6 +129,7 @@ export default function JobShow({
   canManageApprentices,
   canCreateInvoice,
   changeOrders,
+  fieldMaterials,
   apprenticeAssignments,
   back,
   from,
@@ -234,6 +239,9 @@ export default function JobShow({
     { key: 'notes', label: 'Notes', count: job.notes.length },
     { key: 'documents', label: 'Documents', count: job.attachments.length + fieldFiles.length },
   ]
+
+  const hasFieldMaterials =
+    fieldMaterials.added.length > 0 || fieldMaterials.planned.some((line) => line.actualQty !== null)
 
   const hasFieldNotes = job.tasks.some(
     (task) =>
@@ -520,6 +528,12 @@ export default function JobShow({
             }
           />
           <JobTasksPanel tasks={job.tasks} canPlan={canPlanWork && !isLocked} jobOrigin={from} />
+
+          {hasFieldMaterials && (
+            <div className="mt-8 border-t border-hairline pt-6">
+              <JobFieldMaterialsPanel fieldMaterials={fieldMaterials} />
+            </div>
+          )}
 
           {hasFieldNotes && (
             <div className="mt-8 border-t border-hairline pt-6">

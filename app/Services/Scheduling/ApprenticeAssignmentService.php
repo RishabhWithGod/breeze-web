@@ -38,7 +38,7 @@ class ApprenticeAssignmentService
 
         // And only an apprentice on that journeyman's own team — the crew
         // hierarchy the picker itself narrows to.
-        $apprentice = $journeyman->teamApprentices()->find($apprenticeId);
+        $apprentice = $job->assignableApprentices($journeyman)->find($apprenticeId);
         if ($apprentice === null) {
             throw ValidationException::withMessages([
                 'apprentice_id' => 'That apprentice is not on this journeyman\'s team.',
