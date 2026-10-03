@@ -9,6 +9,7 @@ use App\Models\ProjectActivity;
 use App\Models\Team;
 use App\Rules\UsPhoneNumber;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Services\Teams\ResolveInlineTeam;
 use App\Support\CompanyRule;
 use App\Support\Ownership;
 use App\Support\UsPhone;
@@ -333,6 +334,10 @@ class ClientController extends Controller
         if ($request->input('labor_rate') === '') {
             $request->merge(['labor_rate' => null]);
         }
+
+        // A team typed into the picker but not yet on the register — created
+        // now, only because this client is actually being saved.
+        $request->merge(['team_id' => app(ResolveInlineTeam::class)($request->input('team_id'))]);
 
         return $request->validate([
             'name' => [

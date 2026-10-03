@@ -20,6 +20,7 @@ use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\EstimateMergeJobBuilder;
 use App\Services\Takeoff\JobFactory;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Services\Teams\ResolveInlineTeam;
 use App\Support\CompanyRule;
 use App\Support\Ownership;
 use App\Support\WireLengths;
@@ -328,6 +329,10 @@ class FinalTakeoffController extends Controller
             return $this->storeMergedJob($request, $mergeEstimateIds, $mergeBuilder);
         }
 
+        // A team typed into the picker but not yet on the register — created
+        // now, only because this job is actually being saved.
+        $request->merge(['team_id' => app(ResolveInlineTeam::class)($request->input('team_id'))]);
+
         $attributes = $request->validate([
             'name' => ['nullable', 'string', 'max:160'],
             /*
@@ -435,6 +440,10 @@ class FinalTakeoffController extends Controller
     private function storeMergedJob(Request $request, array $estimateIds, EstimateMergeJobBuilder $builder): RedirectResponse
     {
         $userId = Ownership::userIdList($request->user());
+
+        // A team typed into the picker but not yet on the register — created
+        // now, only because this job is actually being saved.
+        $request->merge(['team_id' => app(ResolveInlineTeam::class)($request->input('team_id'))]);
 
         $attributes = $request->validate([
             'name' => ['required', 'string', 'min:3', 'max:160'],

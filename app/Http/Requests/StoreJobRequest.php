@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Job;
+use App\Services\Teams\ResolveInlineTeam;
 use App\Support\CompanyRule;
 use App\Support\Ownership;
 use Illuminate\Foundation\Http\FormRequest;
@@ -10,6 +11,12 @@ use Illuminate\Validation\Rule;
 
 class StoreJobRequest extends FormRequest
 {
+    /** A team typed into the picker but not yet on the register — created now, only because this job is actually being saved. */
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['team_id' => app(ResolveInlineTeam::class)($this->input('team_id'))]);
+    }
+
     /**
      * Mirrors the Create New Job screen: only the name is required. Client,
      * project, drawing, site, crew and dates can all be filled in later —

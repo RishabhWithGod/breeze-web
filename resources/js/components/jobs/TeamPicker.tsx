@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { router } from '@inertiajs/react'
+import { useState } from 'react'
 import { Plus, Users, X } from 'lucide-react'
 import { Button, SearchSelect, TextInput } from '@/components/common'
-import { ROUTES } from '@/constants'
+
+/** The sentinel prefix a drafted-but-not-yet-real team's id carries. */
+const DRAFT_PREFIX = 'new:'
 
 export interface TeamPickerProps {
   teams: readonly { readonly id: number; readonly name: string }[]
@@ -23,8 +24,11 @@ export interface TeamPickerProps {
  *
  * Raising a job for a crew nobody has written down is normal, especially on the
  * first job anyone raises: the register starts empty. Sending someone to Teams
- * and back to add one would lose everything they had typed on this form, so it
- * is recorded from here and picked the moment it arrives.
+ * and back to add one would lose everything they had typed on this form, so a
+ * typed name is kept as a draft option here and only turns into a real team
+ * when the form around it is actually saved — never the moment "Add team" is
+ * clicked, which used to leave a team behind in the register even when the
+ * form it was meant for was abandoned.
  */
 export function TeamPicker({
   teams,
@@ -38,33 +42,9 @@ export function TeamPicker({
 }: TeamPickerProps) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
-  const [saving, setSaving] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
-
-  /*
-   * The name just typed, so the crew it becomes can be selected the moment it
-   * arrives. A ref rather than state: this drives one call on the next render
-   * and nothing about what is drawn.
-   */
-  const justAdded = useRef<string | null>(null)
-
-  /*
-   * The new crew comes back as part of the refreshed props, not in the
-   * response — reading it off the response would mean knowing which prop the
-   * parent keeps its teams under, which is not this component's business.
-   */
-  useEffect(() => {
-    const typed = justAdded.current
-
-    if (typed === null) return
-
-    const added = teams.find((team) => team.name === typed)
-
-    if (!added) return
-
-    justAdded.current = null
-    onChange(String(added.id))
-  }, [teams, onChange])
+  /** Names typed in this session but not yet real teams — shown as options so one can be picked right away. */
+  const [drafts, setDrafts] = useState<readonly string[]>([])
 
   const reset = () => {
     setName('')
@@ -73,43 +53,33 @@ export function TeamPicker({
   }
 
   const save = () => {
-    if (name.trim() === '') {
+    const trimmed = name.trim()
+
+    if (trimmed === '') {
       setAddError('Name this team.')
 
       return
     }
 
-    router.post(
-      ROUTES.teams,
-      // `inline` keeps the server from redirecting to the register and taking
-      // this half-filled form with it.
-      { name: name.trim(), inline: true },
-      {
-        preserveScroll: true,
-        preserveState: true,
-        onStart: () => {
-          setSaving(true)
-          setAddError(null)
-        },
-        onSuccess: () => {
-          justAdded.current = name.trim()
-          reset()
-        },
-        onError: (errors) => setAddError(errors['name'] ?? 'That team could not be saved.'),
-        onFinish: () => setSaving(false),
-      },
-    )
+    setDrafts((current) => (current.includes(trimmed) ? current : [...current, trimmed]))
+    onChange(DRAFT_PREFIX + trimmed)
+    reset()
   }
+
+  const options = [
+    ...teams.map((team) => ({ label: team.name, value: String(team.id) })),
+    ...drafts.map((draftName) => ({ label: `${draftName} (new)`, value: DRAFT_PREFIX + draftName })),
+  ]
 
   return (
     <div>
       <SearchSelect
         id="job-team"
         label={required ? 'Team*' : 'Team'}
-        options={teams.map((team) => ({ label: team.name, value: String(team.id) }))}
+        options={options}
         value={value}
         onChange={onChange}
-        placeholder={teams.length > 0 ? 'Select team' : 'No teams yet'}
+        placeholder={options.length > 0 ? 'Select team' : 'No teams yet'}
         emptyLabel="No team yet"
         disabled={disabled}
         {...(hint ? { hint } : {})}
@@ -121,14 +91,7 @@ export function TeamPicker({
           <div className="mt-3 rounded-panel border border-hairline bg-white/4 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-sm font-medium text-white">New team</p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                leftIcon={X}
-                disabled={saving}
-                onClick={reset}
-              >
+              <Button type="button" variant="ghost" size="sm" leftIcon={X} onClick={reset}>
                 Cancel
               </Button>
             </div>
@@ -139,19 +102,15 @@ export function TeamPicker({
               placeholder="e.g. North Crew"
               autoComplete="off"
               value={name}
-              disabled={saving}
               onChange={(event) => setName(event.target.value)}
               {...(addError ? { error: addError } : {})}
             />
 
-            <Button
-              type="button"
-              size="sm"
-              className="mt-4"
-              leftIcon={Plus}
-              isLoading={saving}
-              onClick={save}
-            >
+            <p className="mt-2 text-xs text-white/70">
+              Saved once this form is — not before.
+            </p>
+
+            <Button type="button" size="sm" className="mt-3" leftIcon={Plus} onClick={save}>
               Add team
             </Button>
           </div>
