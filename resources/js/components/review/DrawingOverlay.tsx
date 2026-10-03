@@ -265,9 +265,32 @@ export function DrawingOverlay({
 
   const filterActive = activeCategory !== null || activeStatus !== 'all'
 
+  /** All/Approved/Rejected counts for this page — live off `boxes`, so a verdict just clicked shows up immediately. */
+  const statusCounts = useMemo(() => {
+    const counts: Partial<Record<'all' | 'approved' | 'rejected', number>> = { all: boxes.length }
+
+    for (const box of boxes) {
+      if (box.status === 'approved' || box.status === 'rejected') {
+        counts[box.status] = (counts[box.status] ?? 0) + 1
+      }
+    }
+
+    return counts
+  }, [boxes])
+
+  // Status only, not category: the All/Approved/Rejected tabs are meant to
+  // narrow this list the same way they narrow the boxes on the drawing, but
+  // `activeCategory` just highlights a row here rather than hiding the rest
+  // of them, so it stays out of this filter.
   const symbolsOnPageFiltered = useMemo(
-    () => overlaySymbols.filter((symbol) => boxes.some((box) => box.reviewId === symbol.id)),
-    [overlaySymbols, boxes],
+    () =>
+      overlaySymbols.filter((symbol) =>
+        boxes.some(
+          (box) =>
+            box.reviewId === symbol.id && (activeStatus === 'all' || box.status === activeStatus),
+        ),
+      ),
+    [overlaySymbols, boxes, activeStatus],
   )
 
   /*
@@ -604,6 +627,7 @@ export function DrawingOverlay({
             ]}
             value={activeStatus}
             onChange={setActiveStatus}
+            counts={statusCounts}
           />
           {filterActive && (
             <Button
