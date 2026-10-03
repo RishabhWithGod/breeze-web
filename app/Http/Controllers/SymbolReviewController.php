@@ -921,9 +921,20 @@ class SymbolReviewController extends Controller
             meta: ['ids' => $validated['ids']],
         );
 
+        // "N detection(s) pending." read as if something still needed doing —
+        // it is the opposite: this is what clicking an already-decided row's
+        // own checkmark or X again, to undo it, is reported as.
+        $item = $count === 1 ? 'Item' : 'Items';
+        $verdict = match ($status) {
+            SymbolReview::STATUS_APPROVED => 'approved',
+            SymbolReview::STATUS_REJECTED => 'rejected',
+            SymbolReview::STATUS_PENDING => 'returned to pending',
+            default => $status,
+        };
+
         return back()->with(
             $validated['action'] === 'reject' ? 'warning' : 'success',
-            "{$count} ".str('detection')->plural($count)." {$status}."
+            "{$item} {$verdict}."
         );
     }
 
