@@ -6,6 +6,8 @@ import { Navbar } from './Navbar'
 import { RealtimeUserSync } from './RealtimeUserSync'
 import { ResumeTakeoffButton } from './ResumeTakeoffButton'
 import { Sidebar } from './Sidebar'
+import type { SharedPageProps } from '@/types'
+import { cn } from '@/utils'
 
 /**
  * App shell: fixed header, responsive sidebar and a fluid content column that
@@ -15,7 +17,8 @@ import { Sidebar } from './Sidebar'
  * state across visits while only the content column swaps.
  */
 export function AppLayout({ children }: { children: ReactNode }) {
-  const { url } = usePage()
+  const { url, props } = usePage<SharedPageProps>()
+  const { takeoffFlow } = props
   // The footer belongs to the dashboard only; every other screen hides it.
   const onDashboard = (url.split(/[?#]/)[0] ?? '').replace(/\/+$/, '') === '/home'
 
@@ -29,7 +32,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <div className="lg:pl-sidebar">
         <main
           id="main-content"
-          className="mx-auto flex min-h-[calc(100dvh-var(--spacing-navbar))] max-w-ultra flex-col px-4 py-6 sm:px-6 sm:py-8 xl:px-10"
+          className={cn(
+            'mx-auto flex min-h-[calc(100dvh-var(--spacing-navbar))] max-w-ultra flex-col px-4 py-6 sm:px-6 sm:py-8 xl:px-10',
+            // Room for the floating Resume Takeoff button to sit in, clear of
+            // a form's own trailing buttons — those are bottom-right on every
+            // screen that has them, exactly where the widget floats too.
+            takeoffFlow && 'pb-24 sm:pb-28',
+          )}
         >
           <div className="flex-1">
             {/*
