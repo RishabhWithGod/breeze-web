@@ -35,7 +35,14 @@ use Illuminate\Database\Eloquent\Builder;
 class ElectricianJobAccess
 {
     /** Roles that see every job on mobile too, matching their web access. */
-    private const UNRESTRICTED = ['project manager', 'foreman', 'journeyman', 'admin', 'owner', 'estimator'];
+    private const UNRESTRICTED = ['manager', 'project manager', 'foreman', 'journeyman', 'admin', 'owner', 'estimator'];
+
+    /**
+     * Roles whose job *list* is every job in their company. Everyone else —
+     * foreman, journeyman, apprentice, estimator, technician — lists only
+     * the jobs they are assigned to.
+     */
+    private const LIST_ALL = ['manager', 'project manager', 'admin', 'owner'];
 
     public function __construct(private readonly TeamMemberResolver $resolver) {}
 
@@ -56,23 +63,39 @@ class ElectricianJobAccess
     }
 
     /**
-     * What the mobile job *list* shows. A foreman or journeyman's list is
-     * only the work they are actually staffed on, even when their role keeps
-     * the wider company-wide access [canAccess] gives managers — a field lead
-     * scrolling a feed of every job in the company is noise, not a worklist.
-     * Managers/admins/owners still list everything.
+     * What the mobile job *list* shows. Only a manager-level role (manager,
+     * project manager, admin, owner) lists every job of their company — the
+     * jobs of all their members. Every other role lists only the work they
+     * are actually assigned to, even when [canAccess] would let them open
+     * more: a field lead scrolling a feed of every job in the company is
+     * noise, not a worklist.
      *
      * @return Builder<Job>
      */
     public function listedJobsQuery(User $user): Builder
     {
-        $role = mb_strtolower(trim((string) $user->role));
-
-        if (in_array($role, ['foreman', 'journeyman'], true)) {
-            return $this->staffedJobsQuery($user);
+        if ($this->listsEveryJob($user)) {
+            return Job::query()->inCompanyOf($user);
         }
 
-        return $this->assignedJobsQuery($user);
+        return $this->staffedJobsQuery($user);
+    }
+
+    private function listsEveryJob(User $user): bool
+    {
+        return in_array(mb_strtolower(trim((string) $user->role)), self::LIST_ALL, true);
+    }
+
+    /**
+     * Only the jobs this user is explicitly assigned to, whatever their role
+     * — a manager's company-wide list is not "their" work. What "My Schedule"
+     * plans around.
+     *
+     * @return Builder<Job>
+     */
+    public function staffedJobs(User $user): Builder
+    {
+        return $this->staffedJobsQuery($user);
     }
 
     /**
@@ -130,7 +153,9 @@ class ElectricianJobAccess
         // managerial roles this list exists for. `registration_source` is
         // the only thing that still tells the two apart once the role
         // string is identical.
-        if ($user->isFromMobile()) {
+        // A manager-level role is the exception: even on a mobile-registered
+        // account it must open every job its list shows.
+        if ($user->isFromMobile() && ! $this->listsEveryJob($user)) {
             return false;
         }
 

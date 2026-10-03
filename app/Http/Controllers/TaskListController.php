@@ -51,7 +51,9 @@ class TaskListController extends Controller
                 fn ($inner) => $inner->whereNull('foreman_id'),
                 fn ($inner) => $inner->when(
                     $foreman !== 'all',
-                    fn ($deeper) => $deeper->whereHas('foreman', fn ($f) => $f->where('name', $foreman)),
+                    fn ($deeper) => $deeper->where(fn ($named) => $named
+                        ->whereHas('foreman', fn ($f) => $f->where('name', $foreman))
+                        ->orWhereHas('crew', fn ($f) => $f->where('name', $foreman))),
                 )
             );
 
@@ -64,7 +66,7 @@ class TaskListController extends Controller
             ->when($narrowed, fn ($query) => $query->whereHas('tasks', $matching))
             ->with([
                 'tasks' => fn ($query) => $matching($query)
-                    ->with('foreman:id,name,initials', 'supervisor:id,name,initials')
+                    ->with('foreman:id,name,initials', 'supervisor:id,name,initials', 'crew:id,name,initials,role')
                     ->orderBy('position')
                     ->orderBy('id'),
             ])
@@ -82,8 +84,9 @@ class TaskListController extends Controller
                     'estimatedHours' => $task->estimated_hours === null
                         ? null
                         : (float) $task->estimated_hours,
-                    'foreman' => $task->foreman?->name,
-                    'supervisor' => $task->supervisor?->name,
+                    // Everyone running / over the task, by name — a task can have several.
+                    'foreman' => $task->crew->where('pivot.slot', JobTask::SLOT_RUNNER)->pluck('name')->unique()->implode(', ') ?: $task->foreman?->name,
+                    'supervisor' => $task->crew->where('pivot.slot', JobTask::SLOT_OVERSEER)->pluck('name')->unique()->implode(', ') ?: $task->supervisor?->name,
                     // A calendar date, sent as one — the screen reads it without a timezone.
                     'dueOn' => $task->ends_on?->toDateString(),
                 ])->values(),

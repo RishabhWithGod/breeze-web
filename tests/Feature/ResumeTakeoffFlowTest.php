@@ -258,9 +258,11 @@ class ResumeTakeoffFlowTest extends TestCase
         $this->actingAs($this->user)->post(route('jobs.tasks.setup.store', $job), [
             'tasks' => [[
                 'title' => 'Rough-in',
-                'foreman_id' => Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW'])->id,
                 // Every task has both someone running it and someone over them.
-                'supervisor_id' => Foreman::create(['name' => 'Sam Ortiz', 'initials' => 'SO'])->id,
+                'member_ids' => [
+                    Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW'])->id,
+                    Foreman::create(['name' => 'Sam Ortiz', 'initials' => 'SO', 'role' => Foreman::ROLE_FOREMAN])->id,
+                ],
             ]],
         ])->assertSessionHasNoErrors();
 

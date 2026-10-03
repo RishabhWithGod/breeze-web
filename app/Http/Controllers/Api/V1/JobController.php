@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Models\Foreman;
 use App\Models\JobApprenticeAssignment;
+use App\Models\JobTask;
 use App\Models\JobAttendance;
 use App\Models\TimeTrackingSetting;
 use App\Models\User;
@@ -368,7 +369,7 @@ class JobController extends Controller
             return null;
         }
 
-        $myTasks = $job->tasks()->where('foreman_id', $foreman->id);
+        $myTasks = $job->tasks()->runBy($foreman->id);
         if (! $myTasks->exists()) {
             return null;
         }
@@ -407,12 +408,12 @@ class JobController extends Controller
         $me = $viewer->foreman;
         $tasks = $job->tasks()->whereNotNull('foreman_id');
         if ($me?->role === Foreman::ROLE_FOREMAN) {
-            $tasks->where(fn ($q) => $q->where('supervisor_id', $me->id)->orWhere('foreman_id', $me->id));
+            $tasks->heldBy($me->id);
         }
         // Deduped in PHP, not `->distinct()`: `Job::tasks()` orders by
         // `position, id`, and MySQL refuses `DISTINCT` alongside an `ORDER
         // BY` column that isn't in the selected column itself.
-        $foremanIds = $tasks->pluck('foreman_id')->unique();
+        $foremanIds = $tasks->with('crew:id')->get()->flatMap(fn (JobTask $task) => $task->runnerIds())->unique()->values();
         if ($foremanIds->isEmpty()) {
             return [];
         }

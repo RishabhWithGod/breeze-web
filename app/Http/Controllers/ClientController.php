@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\ClientAddress;
+use App\Models\Foreman;
 use App\Models\Invoice;
 use App\Models\ProjectActivity;
 use App\Models\Team;
@@ -86,12 +87,33 @@ class ClientController extends Controller
             // client's sites" picker — with a way to add one inline, the same
             // as a job's own team picker.
             'teams' => Team::query()->orderBy('name')->get(['id', 'name']),
+            // Everyone on the register, with the team they are on (or none yet) —
+            // the Add Client form offers the chosen team's people plus anyone
+            // not on a team, since a member can be added before a team is decided.
+            'members' => Foreman::query()->orderBy('name')->get()->map(fn (Foreman $member) => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'role' => $member->role,
+                'roleLabel' => $member->roleLabel(),
+                'teamId' => $member->team_id,
+            ])->values(),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $this->validated($request);
+        $data = $this->validated($request, null, requireCrew: true);
+
+        // Only the chosen crew's people, or people not on any crew yet — someone
+        // already on another team cannot be put on this client's.
+        $members = Foreman::query()->whereIn('id', $data['member_ids'])->get();
+        $foreign = $members->first(fn (Foreman $member) => $member->team_id !== null && $member->team_id !== (int) $data['team_id']);
+
+        if ($foreign !== null) {
+            return back()->withInput()->withErrors([
+                'member_ids' => "{$foreign->name} is on another team. Pick people from this team, or people not on a team yet.",
+            ]);
+        }
 
         $client = $request->user()->clients()->create([
             'name' => $data['name'],
@@ -100,6 +122,10 @@ class ClientController extends Controller
             'labor_rate' => $data['labor_rate'] ?? null,
             'team_id' => $data['team_id'] ?? null,
         ]);
+
+        // Added without a team? They join this client's team now — the team is
+        // assigned the moment they are put on a client, not before.
+        $members->whereNull('team_id')->each(fn (Foreman $member) => $member->update(['team_id' => $data['team_id']]));
 
         $this->writeAddresses($client, $data['addresses'] ?? []);
         $this->writePrimaryContact($client, $data['contact_email'] ?? null, $data['contact_phone'] ?? null);
@@ -327,7 +353,7 @@ class ClientController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function validated(Request $request, ?Client $client = null): array
+    private function validated(Request $request, ?Client $client = null, bool $requireCrew = false): array
     {
         // The form posts an empty string when the field is left blank.
         if ($request->input('labor_rate') === '') {
@@ -367,7 +393,10 @@ class ClientController extends Controller
              * Optional — a client can be on the register before anyone
              * decides who works their sites.
              */
-            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
+            'team_id' => [$requireCrew ? 'required' : 'nullable', 'integer', CompanyRule::exists('teams')],
+            // Required when a client is added: who from that crew works for them.
+            'member_ids' => $requireCrew ? ['required', 'array', 'min:1'] : ['nullable', 'array'],
+            'member_ids.*' => ['integer', CompanyRule::exists('foremen')],
             /*
              * The address book, filled in as the client is opened. It can be
              * empty — a client can be on the register before anyone knows where
@@ -399,6 +428,9 @@ class ClientController extends Controller
         ], [
             'name.required' => 'Client name is required',
             'name.unique' => 'A client with that name is already on the register',
+            'team_id.required' => 'Pick the team for this client',
+            'member_ids.required' => 'Pick at least one member',
+            'member_ids.min' => 'Pick at least one member',
             'contact_email.email' => 'That does not look like an email address',
             'labor_rate.numeric' => 'Enter a valid hourly rate',
             'labor_rate.min' => 'Rate cannot be negative',

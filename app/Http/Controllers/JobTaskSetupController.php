@@ -63,7 +63,7 @@ class JobTaskSetupController extends Controller
             $this->flow->remember($job->project);
         }
 
-        $job->loadMissing(['schedule.tasks.foreman', 'schedule.tasks.estimateItems']);
+        $job->loadMissing(['schedule.tasks.foreman', 'schedule.tasks.crew', 'schedule.tasks.estimateItems']);
 
         return Inertia::render('JobTaskSetup', [
             'returnUrl' => $this->returnUrl($request, $job),
@@ -99,7 +99,8 @@ class JobTaskSetupController extends Controller
             'existingTasks' => $job->schedule?->tasks->map(fn (JobTask $task) => [
                 'id' => $task->id,
                 'title' => $task->title,
-                'foreman' => $task->foreman?->name,
+                // Everyone the task is given to, by name.
+                'foreman' => $task->crew->pluck('name')->unique()->implode(', ') ?: $task->foreman?->name,
                 'supervisor' => $task->supervisor?->name,
                 'lineCount' => $task->estimateItems->count(),
             ])->values() ?? [],
@@ -148,9 +149,27 @@ class JobTaskSetupController extends Controller
             $supervisors->whereIn('id', $projectMemberIds);
         }
 
+        $runners = $journeymen->get(['id', 'name', 'initials', 'role']);
+        $overseers = $supervisors->get(['id', 'name', 'initials', 'role']);
+
         return [
-            'foremen' => $journeymen->get(['id', 'name', 'initials', 'role']),
-            'supervisors' => $supervisors->get(['id', 'name', 'initials', 'role']),
+            'foremen' => $runners,
+            'supervisors' => $overseers,
+            /*
+             * The one list the task form offers: every journeyman and foreman who
+             * can be given the task, each with the role they hold so the picker
+             * can show it beside the name. Journeymen run the work, foremen are
+             * over it — which side of the task someone lands on follows their
+             * role, not a second field to fill in.
+             */
+            'members' => $runners->concat($overseers)->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values()
+                ->map(fn (Foreman $person) => [
+                    'id' => $person->id,
+                    'name' => $person->name,
+                    'initials' => $person->initials,
+                    'role' => $person->role,
+                    'roleLabel' => $person->roleLabel(),
+                ])->all(),
             /*
              * Said on the screen, because "why is this list so short" is the
              * first question a narrowed picker raises.
@@ -192,10 +211,10 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'tasks' => ['required', 'array', 'min:1', 'max:50'],
             'tasks.*.title' => ['required', 'string', 'max:200'],
-            'tasks.*.foreman_id' => ['required', 'integer', CompanyRule::exists('foremen')],
-            // Who is over the task — required alongside the foreman, so every
-            // task always has both someone running it and someone above them.
-            'tasks.*.supervisor_id' => ['required', 'integer', CompanyRule::exists('foremen')],
+            // Everyone the task is given to. Journeymen run it and foremen are over
+            // it, so every task has someone doing the work and someone above them.
+            'tasks.*.member_ids' => ['required', 'array', 'min:1', 'max:30'],
+            'tasks.*.member_ids.*' => ['integer', CompanyRule::exists('foremen')],
             /*
              * No `distinct`: with a nested wildcard it compares across every
              * task, not within one, and would report the right refusal under an
@@ -209,17 +228,19 @@ class JobTaskSetupController extends Controller
         ], [
             'tasks.required' => 'A job needs at least one task.',
             'tasks.*.title.required' => 'Give the task a name, or remove the row.',
-            'tasks.*.foreman_id.required' => 'Pick the foreman running this task.',
-            'tasks.*.supervisor_id.required' => 'Pick the supervisor overseeing this task.',
+            'tasks.*.member_ids.required' => 'Pick the members this task is for.',
+            'tasks.*.member_ids.min' => 'Pick the members this task is for.',
             'tasks.*.estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
             'tasks.*.estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
 
-        // Everyone named across every row, against the job's own crew.
-        $this->refuseOffCrew($job, array_merge(
-            array_column($data['tasks'], 'foreman_id'),
-            array_column($data['tasks'], 'supervisor_id'),
-        ));
+        // Each row's people against the job's own crew, then split into who runs
+        // the task and who is over it.
+        $crews = [];
+        foreach ($data['tasks'] as $index => $row) {
+            $this->refuseOffCrew($job, $row['member_ids'], "tasks.{$index}.member_ids");
+            $crews[$index] = $this->splitCrew($row['member_ids'], "tasks.{$index}.member_ids");
+        }
 
         /*
          * Everything is checked before anything is built. Creating the schedule
@@ -241,12 +262,12 @@ class JobTaskSetupController extends Controller
         // would tell someone they're on work that was never actually saved.
         $createdTasks = [];
 
-        DB::transaction(function () use ($schedule, $job, $request, $data, &$createdTasks) {
+        DB::transaction(function () use ($schedule, $job, $request, $data, $crews, &$createdTasks) {
             // Appended after whatever is already planned, so re-running the step
             // extends the schedule instead of renumbering it.
             $position = (int) $schedule->tasks()->max('position');
 
-            foreach ($data['tasks'] as $row) {
+            foreach ($data['tasks'] as $index => $row) {
                 $position++;
 
                 $laborLineIds = $row['estimate_item_ids'] ?? [];
@@ -262,8 +283,8 @@ class JobTaskSetupController extends Controller
                     'job_id' => $job->id,
                     'created_by' => $request->user()?->id,
                     'title' => trim($row['title']),
-                    'foreman_id' => $row['foreman_id'] ?? null,
-                    'supervisor_id' => $row['supervisor_id'] ?? null,
+                    'foreman_id' => $crews[$index]['runners'][0],
+                    'supervisor_id' => $crews[$index]['overseers'][0],
                     /*
                      * Read off the lines rather than typed: the estimate already
                      * priced this work in hours, and asking for the number again
@@ -276,6 +297,9 @@ class JobTaskSetupController extends Controller
                     'status' => JobTask::STATUS_PENDING,
                     'position' => $position,
                 ]);
+
+                // The whole crew, not just the first journeyman and foreman.
+                $task->assignCrew($crews[$index]['runners'], $crews[$index]['overseers']);
 
                 // Claiming the lines is what takes them out of the picker.
                 if ($lineIds !== []) {
@@ -366,8 +390,7 @@ class JobTaskSetupController extends Controller
                 'id' => $task->id,
                 'title' => $task->title,
                 'status' => $task->status,
-                'foremanId' => $task->foreman_id,
-                'supervisorId' => $task->supervisor_id,
+                'memberIds' => $task->runnerIds()->merge($task->overseerIds())->unique()->values(),
                 'lineIds' => $task->estimateItems()
                     ->where('category', EstimateItem::CATEGORY_LABOR)
                     ->pluck('id')
@@ -407,7 +430,7 @@ class JobTaskSetupController extends Controller
      *
      * @param  array<int, int|null>  $ids
      */
-    private function refuseOffCrew(Job $job, array $ids): void
+    private function refuseOffCrew(Job $job, array $ids, string $errorKey = 'member_ids'): void
     {
         $given = array_values(array_filter($ids));
 
@@ -420,7 +443,7 @@ class JobTaskSetupController extends Controller
         if ($projectMemberIds !== null) {
             if (array_diff($given, $projectMemberIds->all()) !== []) {
                 throw ValidationException::withMessages([
-                    'foreman_id' => 'That person is not staffed to this project.',
+                    $errorKey => 'That person is not staffed to this project.',
                 ]);
             }
 
@@ -437,7 +460,7 @@ class JobTaskSetupController extends Controller
 
         if (array_diff($given, $onCrew) !== []) {
             throw ValidationException::withMessages([
-                'foreman_id' => "That person is not on {$team->name}.",
+                $errorKey => "That person is not on {$team->name}.",
             ]);
         }
     }
@@ -455,21 +478,22 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'status' => ['required', Rule::in(JobTask::STATUSES)],
-            'foreman_id' => ['required', 'integer', CompanyRule::exists('foremen')],
-            'supervisor_id' => ['required', 'integer', CompanyRule::exists('foremen')],
+            'member_ids' => ['required', 'array', 'min:1', 'max:30'],
+            'member_ids.*' => ['integer', CompanyRule::exists('foremen')],
             'estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],
             'estimate_item_ids.*' => ['integer'],
         ], [
             'title.required' => 'Give the task a name.',
-            'foreman_id.required' => 'Pick the foreman running this task.',
-            'supervisor_id.required' => 'Pick the supervisor overseeing this task.',
+            'member_ids.required' => 'Pick the members this task is for.',
+            'member_ids.min' => 'Pick the members this task is for.',
             'estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
             'estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
 
-        $this->refuseOffCrew($job, [$data['foreman_id'], $data['supervisor_id']]);
+        $this->refuseOffCrew($job, $data['member_ids']);
+        $crew = $this->splitCrew($data['member_ids'], 'member_ids');
 
         $title = trim($data['title']);
 
@@ -517,15 +541,18 @@ class JobTaskSetupController extends Controller
             $this->pairedMaterialLines($job, $laborIds, $task->id),
         )));
 
-        DB::transaction(function () use ($task, $job, $title, $data, $ids) {
+        // Who was on the task before, so only people newly given it are told.
+        $before = $task->runnerIds()->merge($task->overseerIds())->unique();
+
+        DB::transaction(function () use ($task, $job, $title, $data, $ids, $crew) {
             $task->update([
                 'title' => $title,
                 'status' => $data['status'],
-                'foreman_id' => $data['foreman_id'],
-                'supervisor_id' => $data['supervisor_id'] ?? null,
                 // Re-read off the labour it now covers, never typed.
                 'estimated_hours' => $this->hoursOn($ids),
             ]);
+
+            $task->assignCrew($crew['runners'], $crew['overseers']);
 
             // Dropped lines go back into the picker for another task to take.
             EstimateItem::query()
@@ -540,11 +567,12 @@ class JobTaskSetupController extends Controller
             $job->refreshEstimatedHours();
         });
 
-        // Only when the assignment itself actually changed — re-saving a
-        // task's lines or title with the same foreman/supervisor is not a
-        // new assignment, and would otherwise re-notify them every edit.
-        if ($task->wasChanged('foreman_id') || $task->wasChanged('supervisor_id')) {
-            $this->notifyAssignment($task);
+        // Only the people newly given the task — re-saving its lines or title
+        // with the same crew is not a new assignment, and would otherwise
+        // re-notify everyone on every edit.
+        $added = $task->runnerIds()->merge($task->overseerIds())->unique()->diff($before)->values();
+        if ($added->isNotEmpty()) {
+            $this->notifyAssignment($task, $added);
         }
 
         return redirect()
@@ -554,22 +582,64 @@ class JobTaskSetupController extends Controller
 
     /**
      * Tells whoever is newly running or overseeing a task — reused for both
-     * a task's first breakout ({@see store()}, always a new assignment) and
-     * a later reassignment ({@see update()}, only called there when the
-     * foreman/supervisor actually changed).
+     * a task's first breakout ({@see store()}, everyone on it is new) and a
+     * later reassignment ({@see update()}, only the people just added).
+     *
+     * @param  ?Collection<int, int>  $only  Foreman ids to tell; everyone on the task when null.
      */
-    private function notifyAssignment(JobTask $task): void
+    private function notifyAssignment(JobTask $task, ?Collection $only = null): void
     {
-        $task->loadMissing('foreman.user', 'supervisor.user');
+        $ids = $only ?? $task->runnerIds()->merge($task->overseerIds())->unique();
 
-        if ($task->foreman?->user !== null) {
-            $task->foreman->user->notify(new TaskScheduleChanged($task, TaskScheduleChanged::ASSIGNED));
+        Foreman::query()->with('user')->whereKey($ids)->get()
+            ->map(fn (Foreman $person) => $person->user)
+            ->filter()
+            ->unique('id')
+            ->each(fn ($user) => $user->notify(new TaskScheduleChanged($task, TaskScheduleChanged::ASSIGNED)));
+    }
+
+    /**
+     * Splits the people picked for a task into who runs it and who is over it,
+     * by the role each holds: journeymen run the work, foremen oversee it.
+     *
+     * Every task needs both — someone doing the work and someone answerable for
+     * it — and an apprentice is never put on a task directly; they go on the
+     * job under a journeyman from the job's own screen.
+     *
+     * @param  array<int, int|string>  $memberIds
+     * @return array{runners: list<int>, overseers: list<int>}
+     */
+    private function splitCrew(array $memberIds, string $errorKey): array
+    {
+        $people = Foreman::query()->whereKey($memberIds)->get()->keyBy('id');
+        $runners = [];
+        $overseers = [];
+
+        foreach (array_unique(array_map('intval', $memberIds)) as $id) {
+            $person = $people->get($id);
+
+            if ($person === null) {
+                continue;
+            }
+
+            if ($person->role === Foreman::ROLE_JOURNEYMAN) {
+                $runners[] = $id;
+            } elseif ($person->role === Foreman::ROLE_FOREMAN) {
+                $overseers[] = $id;
+            } else {
+                throw ValidationException::withMessages([
+                    $errorKey => "{$person->name} is an apprentice. Apprentices go on the job under a journeyman, not on a task.",
+                ]);
+            }
         }
 
-        if ($task->supervisor?->user !== null
-            && $task->supervisor->user->isNot($task->foreman?->user)) {
-            $task->supervisor->user->notify(new TaskScheduleChanged($task, TaskScheduleChanged::ASSIGNED));
+        if ($runners === [] || $overseers === []) {
+            throw ValidationException::withMessages([
+                $errorKey => 'Pick at least one journeyman and one foreman for this task.',
+            ]);
         }
+
+        return ['runners' => $runners, 'overseers' => $overseers];
     }
 
     /**

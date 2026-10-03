@@ -85,10 +85,25 @@ class ScheduleController extends Controller
             ->get()
             ->mapWithKeys(fn (CrewShiftAcknowledgement $ack) => [$ack->crew_shift_id => $ack->acknowledged_at]);
 
+        $rows = $shifts->getCollection()->map(fn (CrewShift $shift) => $this->present($shift, $acknowledged[$shift->id] ?? null));
+
+        // A job someone is assigned to belongs on their schedule even before
+        // the office has booked crew shifts for it.
+        $planned = $this->plannedDays(
+            $user,
+            $teamMemberId,
+            $ranged ? Carbon::parse($range['from'])->startOfDay() : now()->startOfDay(),
+            $ranged ? Carbon::parse($range['to'] ?? $range['from'])->startOfDay() : now()->startOfDay()->addDays(60),
+            $ranged || $shifts->currentPage() === 1,
+        );
+        $rows = $rows->concat($planned)
+            ->sortBy([['scheduledDate', 'asc'], ['startTime', 'asc'], ['id', 'desc']])
+            ->values();
+
         return $this->ok([
             // When this list was read — what the app shows as "last updated" and keeps for offline.
             'generatedAt' => now()->toISOString(),
-            'shifts' => $shifts->getCollection()->map(fn (CrewShift $shift) => $this->present($shift, $acknowledged[$shift->id] ?? null))->all(),
+            'shifts' => $rows->all(),
             'meta' => [
                 'currentPage' => $shifts->currentPage(),
                 'lastPage' => $shifts->lastPage(),
@@ -96,6 +111,99 @@ class ScheduleController extends Controller
                 'total' => $shifts->total(),
             ],
         ]);
+    }
+
+    /**
+     * Working days, in `[$from, $to]`, of every job this person is assigned
+     * to that has no crew shifts booked at all. Read live from the job's own
+     * dates, so reassigning someone or moving a date changes their schedule
+     * with no extra bookkeeping; the moment the office books real shifts for
+     * the job, those take over and these stop appearing.
+     *
+     * The span is the person's own tasks' dates where they have any, else the
+     * job's own start/end. The id is negative and derived from job + day: it
+     * is stable between reads, cannot collide with a real shift's id, and is
+     * never acknowledged (`changed` is always false).
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function plannedDays(\App\Models\User $user, int $teamMemberId, Carbon $from, Carbon $to, bool $include): \Illuminate\Support\Collection
+    {
+        if (! $include) {
+            return collect();
+        }
+
+        $foremanId = $user->foreman?->id;
+        $jobs = $this->access->staffedJobs($user)
+            ->where('status', '!=', Job::STATUS_COMPLETED)
+            ->whereNotIn('id', CrewShift::query()->select('job_id'))
+            ->with(['schedule', 'team:id,name'])
+            ->get();
+
+        if ($jobs->isEmpty()) {
+            return collect();
+        }
+
+        $taskSpans = JobTask::query()
+            ->whereIn('job_id', $jobs->pluck('id'))
+            ->where(function ($query) use ($teamMemberId, $foremanId) {
+                $query->whereHas('members', fn ($q) => $q->where('team_members.id', $teamMemberId));
+                if ($foremanId !== null) {
+                    $query->orWhere(fn ($q) => $q->heldBy($foremanId));
+                }
+            })
+            ->whereNotNull('starts_on')
+            ->whereNotNull('ends_on')
+            ->selectRaw('job_id, min(starts_on) as first_day, max(ends_on) as last_day')
+            ->groupBy('job_id')
+            ->reorder()
+            ->get()
+            ->keyBy('job_id');
+
+        $days = collect();
+
+        foreach ($jobs as $job) {
+            $span = $taskSpans->get($job->id);
+            $start = $span?->first_day ?? $job->start_date;
+            $end = $span?->last_day ?? $job->end_date ?? $start;
+
+            if ($start === null) {
+                continue;
+            }
+
+            $start = Carbon::parse($start)->startOfDay();
+            $end = Carbon::parse($end)->startOfDay();
+            $schedule = $job->schedule;
+            $startTime = $schedule?->work_start_time ?: '08:00:00';
+            $hours = $schedule !== null ? max(0.5, min(24, $schedule->hoursPerDay())) : 8.0;
+
+            for ($day = $start->copy()->max($from); $day->lte($end->copy()->min($to)); $day->addDay()) {
+                if ($schedule !== null ? ! $schedule->isWorkingDay($day) : $day->isWeekend()) {
+                    continue;
+                }
+
+                $days->push([
+                    'id' => -($job->id * 100000 + (int) Carbon::create(2020, 1, 1)->diffInDays($day)),
+                    'jobId' => $job->id,
+                    'jobName' => $job->name ?? '',
+                    'client' => $job->client,
+                    'address' => $job->location ?? '',
+                    'crewName' => $job->team?->name ?? $user->name,
+                    'scheduledDate' => $day->toDateString(),
+                    'startTime' => $startTime,
+                    'endTime' => Carbon::parse($startTime)->addMinutes((int) round($hours * 60))->format('H:i:s'),
+                    'durationHours' => $hours,
+                    'status' => CrewShift::STATUS_SCHEDULED,
+                    'notes' => null,
+                    'changed' => false,
+                    'changedAt' => null,
+                    'acknowledgedAt' => null,
+                    'updatedAt' => $job->updated_at?->toISOString(),
+                ]);
+            }
+        }
+
+        return $days;
     }
 
     /** "Got it" on a changed shift: it stops reading Changed for this person. */
@@ -164,7 +272,7 @@ class ScheduleController extends Controller
         $myTasks = $job->tasks()
             ->where(function ($query) use ($teamMemberId, $foremanId, $journeymanIds) {
                 if ($journeymanIds->isNotEmpty()) {
-                    $query->whereIn('foreman_id', $journeymanIds)->orWhereIn('supervisor_id', $journeymanIds);
+                    $query->heldByAny($journeymanIds);
                 }
 
                 $query->orWhereHas('members', fn ($q) => $q->where('team_members.id', $teamMemberId));

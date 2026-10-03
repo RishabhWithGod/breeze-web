@@ -99,6 +99,14 @@ class User extends Authenticatable
     protected static function booted(): void
     {
         // Initials are a display concern, so they are derived rather than typed.
+        // A changed name/phone/email/role shows up on the register and crew
+        // record too (see `MemberIdentitySync`).
+        static::saved(function (User $user) {
+            if ($user->wasChanged(['name', 'phone', 'email', 'role'])) {
+                app(\App\Services\Team\MemberIdentitySync::class)->fromUser($user);
+            }
+        });
+
         static::saving(function (User $user) {
             if ($user->isDirty('name') || blank($user->initials)) {
                 $user->initials = static::initialsFor($user->name);

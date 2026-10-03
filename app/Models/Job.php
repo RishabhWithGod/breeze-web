@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
 class Job extends Model
@@ -174,6 +175,33 @@ class Job extends Model
     }
 
     /**
+     * Everyone given this job's tasks in one slot — the journeymen running them
+     * (`runner`) or the foremen over them (`overseer`) — each once, however many
+     * tasks they are on. Read from the crew list plus the task's own first-person
+     * column, so a task written by an older path is still counted.
+     *
+     * @return Collection<int, Foreman>
+     */
+    public function taskCrew(string $slot): Collection
+    {
+        $taskIds = $this->tasks()->pluck('id');
+        $column = $slot === JobTask::SLOT_RUNNER ? 'foreman_id' : 'supervisor_id';
+
+        $ids = DB::table('job_task_foremen')
+            ->whereIn('job_task_id', $taskIds)
+            ->where('slot', $slot)
+            ->pluck('foreman_id')
+            ->merge($this->tasks()->whereNotNull($column)->pluck($column))
+            ->filter()
+            ->unique()
+            ->values();
+
+        return $ids->isEmpty()
+            ? collect()
+            : Foreman::query()->with('user')->whereKey($ids)->get();
+    }
+
+    /**
      * The foremen actually on this job, named once each.
      *
      * They are assigned per task now — a job is not one person's — so this
@@ -185,11 +213,7 @@ class Job extends Model
      */
     public function assignedForemen(): array
     {
-        $fromTasks = $this->tasks
-            ->pluck('foreman')
-            ->filter()
-            ->unique('id')
-            ->values();
+        $fromTasks = $this->taskCrew(JobTask::SLOT_RUNNER);
 
         $foremen = $fromTasks->isNotEmpty()
             ? $fromTasks
@@ -208,9 +232,7 @@ class Job extends Model
      */
     public function assignedSupervisors(): array
     {
-        return self::named(
-            $this->tasks->pluck('supervisor')->filter()->unique('id')->values(),
-        );
+        return self::named($this->taskCrew(JobTask::SLOT_OVERSEER));
     }
 
     /**
@@ -664,7 +686,7 @@ class Job extends Model
      */
     public function assignedForemanIds(): Collection
     {
-        $fromTasks = $this->tasks()->whereNotNull('foreman_id')->pluck('foreman_id')->unique()->values();
+        $fromTasks = $this->taskCrew(JobTask::SLOT_RUNNER)->pluck('id')->values();
 
         return $fromTasks->isNotEmpty()
             ? $fromTasks
@@ -798,10 +820,8 @@ class Job extends Model
      */
     public function hasSeniorCrewAssigned(): bool
     {
-        $crewIds = $this->tasks()
-            ->pluck('foreman_id')
-            ->merge($this->tasks()->pluck('supervisor_id'))
-            ->filter()
+        $crewIds = $this->taskCrew(JobTask::SLOT_RUNNER)->pluck('id')
+            ->merge($this->taskCrew(JobTask::SLOT_OVERSEER)->pluck('id'))
             ->unique();
 
         if ($crewIds->isEmpty() && $this->foreman_id !== null) {
@@ -824,7 +844,7 @@ class Job extends Model
         $hasPerTaskForemen = $this->tasks()->whereNotNull('foreman_id')->exists();
 
         return $hasPerTaskForemen
-            ? $this->tasks()->where('foreman_id', $foremanId)->open()->count()
+            ? $this->tasks()->runBy($foremanId)->open()->count()
             : $this->tasks()->open()->count();
     }
 
@@ -1031,7 +1051,7 @@ class Job extends Model
      */
     public function notifiableSupervisors(): Collection
     {
-        return $this->tasks->pluck('supervisor')->filter()->unique('id')
+        return $this->taskCrew(JobTask::SLOT_OVERSEER)
             ->map(fn (Foreman $supervisor) => $supervisor->user)
             ->filter()
             ->values();
@@ -1046,7 +1066,7 @@ class Job extends Model
      */
     public function notifiableForemen(): Collection
     {
-        $fromTasks = $this->tasks->pluck('foreman')->filter()->unique('id');
+        $fromTasks = $this->taskCrew(JobTask::SLOT_RUNNER);
         $foremen = $fromTasks->isNotEmpty() ? $fromTasks : collect([$this->foreman])->filter();
 
         return $foremen

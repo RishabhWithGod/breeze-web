@@ -114,9 +114,10 @@ class JobDetailResource extends JsonResource
                 'id' => $task->id,
                 'title' => $task->title,
                 'status' => $task->status,
-                'foreman' => $task->foreman?->name,
-                // Who is over it. Null for work with nobody above the foreman.
-                'supervisor' => $task->supervisor?->name,
+                // Everyone running it, by name — a task can have several journeymen.
+                'foreman' => $this->crewNames($task, \App\Models\JobTask::SLOT_RUNNER) ?? $task->foreman?->name,
+                // Everyone over it. Null for work with nobody above the crew.
+                'supervisor' => $this->crewNames($task, \App\Models\JobTask::SLOT_OVERSEER) ?? $task->supervisor?->name,
                 'estimatedHours' => $task->estimated_hours === null
                     ? null
                     : (float) $task->estimated_hours,
@@ -127,10 +128,17 @@ class JobDetailResource extends JsonResource
 
                 // Everyone on the task: the foreman running it, the supervisor
                 // over it, and the team members assigned to it.
-                'crew' => collect([
-                    $task->foreman ? ['name' => $task->foreman->name, 'initials' => $task->foreman->initials, 'role' => 'Foreman'] : null,
-                    $task->supervisor ? ['name' => $task->supervisor->name, 'initials' => $task->supervisor->initials, 'role' => 'Supervisor'] : null,
-                ])->filter()->concat(
+                'crew' => ($task->relationLoaded('crew') && $task->crew->isNotEmpty()
+                    ? $task->crew->map(fn ($person) => [
+                        'name' => $person->name,
+                        'initials' => $person->initials,
+                        'role' => $person->pivot->slot === \App\Models\JobTask::SLOT_OVERSEER ? 'Foreman' : 'Journeyman',
+                    ])
+                    : collect([
+                        $task->foreman ? ['name' => $task->foreman->name, 'initials' => $task->foreman->initials, 'role' => 'Foreman'] : null,
+                        $task->supervisor ? ['name' => $task->supervisor->name, 'initials' => $task->supervisor->initials, 'role' => 'Supervisor'] : null,
+                    ])->filter()
+                )->concat(
                     $task->relationLoaded('assignments')
                         ? $task->assignments->map(fn ($assignment) => [
                             'name' => $assignment->member?->name ?? 'Unknown',
@@ -297,5 +305,17 @@ class JobDetailResource extends JsonResource
                 'createdAt' => $change->created_at->toISOString(),
             ])->all(),
         ];
+    }
+
+    /** The names of everyone on a task in one slot, joined — null when none are loaded. */
+    private function crewNames(\App\Models\JobTask $task, string $slot): ?string
+    {
+        if (! $task->relationLoaded('crew')) {
+            return null;
+        }
+
+        $names = $task->crew->filter(fn ($person) => $person->pivot->slot === $slot)->pluck('name')->unique();
+
+        return $names->isEmpty() ? null : $names->implode(', ');
     }
 }

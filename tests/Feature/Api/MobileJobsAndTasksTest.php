@@ -195,6 +195,37 @@ class MobileJobsAndTasksTest extends TestCase
         }
     }
 
+    public function test_every_manager_level_role_lists_all_jobs_and_everyone_else_only_assigned_ones(): void
+    {
+        $assigned = $this->makeJob(['name' => 'Assigned']);
+        $unassigned = $this->makeJob(['name' => 'Unassigned']);
+
+        foreach (['Manager', 'Project Manager', 'Admin', 'Owner'] as $role) {
+            // The guard caches the first request's user for the whole test.
+            $this->app['auth']->forgetGuards();
+            $ids = array_column(
+                $this->withHeader('Authorization', 'Bearer '.$this->tokenFor(User::factory()->create(['role' => $role])))
+                    ->getJson('/api/v1/jobs')->assertOk()->json('data.jobs'),
+                'id',
+            );
+            $this->assertContains($assigned->id, $ids, "{$role} lists every job");
+            $this->assertContains($unassigned->id, $ids, "{$role} lists every job");
+        }
+
+        $user = User::factory()->create(['role' => 'Estimator', 'registration_source' => User::SOURCE_WEB]);
+        $member = TeamMember::create(['name' => $user->name, 'initials' => 'ES', 'role' => 'Estimator', 'user_id' => $user->id]);
+        $this->staffOnTask($assigned, $member);
+
+        $this->app['auth']->forgetGuards();
+        $ids = array_column(
+            $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+                ->getJson('/api/v1/jobs')->assertOk()->json('data.jobs'),
+            'id',
+        );
+        $this->assertContains($assigned->id, $ids);
+        $this->assertNotContains($unassigned->id, $ids);
+    }
+
     public function test_a_manager_lists_every_job_and_carries_a_foremans_authority(): void
     {
         $manager = User::factory()->create(['role' => 'Project Manager']);

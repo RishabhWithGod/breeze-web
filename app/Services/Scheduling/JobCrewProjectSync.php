@@ -4,6 +4,7 @@ namespace App\Services\Scheduling;
 
 use App\Models\Foreman;
 use App\Models\Job;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Carries the crew a job was handed to back onto its client and project.
@@ -40,8 +41,9 @@ class JobCrewProjectSync
         }
 
         $assigned = $job->tasks()
-            ->get(['foreman_id', 'supervisor_id'])
+            ->get(['id', 'foreman_id', 'supervisor_id'])
             ->flatMap(fn ($task) => [$task->foreman_id, $task->supervisor_id])
+            ->merge(DB::table('job_task_foremen')->whereIn('job_task_id', $job->tasks()->pluck('id'))->pluck('foreman_id'))
             ->push($job->foreman_id);
 
         $ids = Foreman::query()

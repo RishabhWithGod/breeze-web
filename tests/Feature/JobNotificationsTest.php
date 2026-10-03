@@ -101,7 +101,7 @@ class JobNotificationsTest extends TestCase
         $job = $this->makeJob(['status' => 'planning']);
 
         $this->actingAs($this->planner)->post(route('jobs.tasks.setup.store', $job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $foreman->id, 'supervisor_id' => $supervisor->id]],
+            'tasks' => [['title' => 'Rough-in', 'member_ids' => [$foreman->id, $supervisor->id]]],
         ]);
 
         $task = JobTask::sole();
@@ -122,8 +122,7 @@ class JobNotificationsTest extends TestCase
         $this->actingAs($this->planner)->post(route('jobs.tasks.setup.store', $job), [
             'tasks' => [[
                 'title' => 'Rough-in',
-                'foreman_id' => $foreman->id,
-                'supervisor_id' => $supervisor->id,
+                'member_ids' => [$foreman->id, $supervisor->id],
             ]],
         ]);
 
@@ -139,7 +138,7 @@ class JobNotificationsTest extends TestCase
         $job = $this->makeJob(['status' => 'planning']);
 
         $this->actingAs($this->planner)->post(route('jobs.tasks.setup.store', $job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $foremanA->id, 'supervisor_id' => $supervisor->id]],
+            'tasks' => [['title' => 'Rough-in', 'member_ids' => [$foremanA->id, $supervisor->id]]],
         ]);
         Notification::fake(); // Clear the assignment notification from creation.
 
@@ -148,8 +147,7 @@ class JobNotificationsTest extends TestCase
         $this->actingAs($this->planner)->put(route('tasks.edit.update', $task), [
             'title' => $task->title,
             'status' => $task->status,
-            'foreman_id' => $foremanB->id,
-            'supervisor_id' => $supervisor->id,
+            'member_ids' => [$foremanB->id, $supervisor->id],
             'estimate_item_ids' => [],
         ]);
 
@@ -163,7 +161,7 @@ class JobNotificationsTest extends TestCase
         $job = $this->makeJob(['status' => 'planning']);
 
         $this->actingAs($this->planner)->post(route('jobs.tasks.setup.store', $job), [
-            'tasks' => [['title' => 'Rough-in', 'foreman_id' => $foreman->id, 'supervisor_id' => $supervisor->id]],
+            'tasks' => [['title' => 'Rough-in', 'member_ids' => [$foreman->id, $supervisor->id]]],
         ]);
         Notification::fake(); // Clear the assignment notification from creation.
 
@@ -172,8 +170,7 @@ class JobNotificationsTest extends TestCase
         $this->actingAs($this->planner)->put(route('tasks.edit.update', $task), [
             'title' => 'Rough-in, revised',
             'status' => $task->status,
-            'foreman_id' => $foreman->id,
-            'supervisor_id' => $supervisor->id,
+            'member_ids' => [$foreman->id, $supervisor->id],
             'estimate_item_ids' => [],
         ]);
 
@@ -188,8 +185,7 @@ class JobNotificationsTest extends TestCase
         [$supervisorUser, $supervisor] = $this->makeForeman('Dana', Foreman::ROLE_FOREMAN);
         $job = $this->makeJob(['foreman_id' => $foreman->id, 'status' => 'scheduled']);
         $this->makeTask($job, [
-            'title' => 'Rough-in', 'foreman_id' => $foreman->id,
-            'supervisor_id' => $supervisor->id, 'status' => JobTask::STATUS_READY, 'priority' => 'medium',
+            'title' => 'Rough-in', 'foreman_id' => $foreman->id, 'supervisor_id' => $supervisor->id, 'status' => JobTask::STATUS_READY, 'priority' => 'medium',
         ]);
 
         $this->checkInAt($job, $foremanUser);

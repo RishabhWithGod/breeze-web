@@ -12,7 +12,7 @@ import {
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { CrewMemberPicker, TaskLinePicker, type EstimateLine } from '@/components/jobs'
+import { CrewMultiSelect, TaskLinePicker, type CrewMultiSelectPerson, type EstimateLine } from '@/components/jobs'
 import { ROUTES } from '@/constants'
 import type { SharedPageProps } from '@/types'
 
@@ -32,9 +32,8 @@ export interface JobTaskEditProps {
     readonly id: number
     readonly title: string
     readonly status: string
-    readonly foremanId: number | null
-    /** Who is over it. Null for work with nobody above the crew running it. */
-    readonly supervisorId: number | null
+    /** Everyone the task is given to — journeymen running it and foremen over it. */
+    readonly memberIds: readonly number[]
     readonly lineIds: readonly number[]
   }
   /**
@@ -47,12 +46,7 @@ export interface JobTaskEditProps {
    * the job has no crew. Narrowed by the server — see
    * JobTaskSetupController::staffing().
    */
-  foremen: readonly { readonly id: number; readonly name: string; readonly initials: string }[]
-  supervisors: readonly {
-    readonly id: number
-    readonly name: string
-    readonly initials: string
-  }[]
+  members: readonly CrewMultiSelectPerson[]
   /** The crew both lists came from, so the screen can say why they are short. */
   team: { readonly id: number; readonly name: string } | null
   statuses: readonly string[]
@@ -82,17 +76,13 @@ export default function JobTaskEdit({
   job,
   task,
   estimateLines,
-  foremen,
-  supervisors,
+  members,
   team,
   statuses,
 }: JobTaskEditProps) {
   const [title, setTitle] = useState(task.title)
   const [status, setStatus] = useState(task.status)
-  const [foremanId, setForemanId] = useState(task.foremanId === null ? '' : String(task.foremanId))
-  const [supervisorId, setSupervisorId] = useState(
-    task.supervisorId === null ? '' : String(task.supervisorId),
-  )
+  const [memberIds, setMemberIds] = useState<string[]>(task.memberIds.map(String))
   const [lineIds, setLineIds] = useState<number[]>([...task.lineIds])
   const [processing, setProcessing] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
@@ -108,8 +98,7 @@ export default function JobTaskEdit({
       {
         title,
         status,
-        foreman_id: foremanId === '' ? null : Number(foremanId),
-        supervisor_id: supervisorId === '' ? null : Number(supervisorId),
+        member_ids: memberIds.map(Number),
         estimate_item_ids: lineIds,
       },
       {
@@ -182,37 +171,16 @@ export default function JobTaskEdit({
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                {/* Who runs it. One per task — see JobTask::foreman(). */}
-                <CrewMemberPicker
-                  id="task-foreman"
-                  label="Journeyman*"
-                  slot="worker"
-                  people={foremen}
-                  value={foremanId}
-                  onChange={setForemanId}
-                  teamId={team?.id ?? null}
-                  teamName={team?.name ?? null}
-                  emptyLabel={
-                    foremen.length > 0 ? 'Select who runs it' : 'No one on this crew'
-                  }
+                {/* Everyone the task is for — journeymen run it, foremen are over it. */}
+                <CrewMultiSelect
+                  id="task-members"
+                  label="Members*"
+                  people={members}
+                  value={memberIds}
+                  onChange={setMemberIds}
+                  placeholder="Select who this task is for"
                   disabled={processing}
-                  {...(errors['foreman_id'] ? { error: errors['foreman_id'] } : {})}
-                />
-                {/* Who is over it — from the same crew. */}
-                <CrewMemberPicker
-                  id="task-supervisor"
-                  label="Foreman*"
-                  slot="foreman"
-                  people={supervisors}
-                  value={supervisorId}
-                  onChange={setSupervisorId}
-                  teamId={team?.id ?? null}
-                  teamName={team?.name ?? null}
-                  emptyLabel={
-                    supervisors.length > 0 ? 'Select foreman' : 'No foreman on this crew'
-                  }
-                  disabled={processing}
-                  {...(errors['supervisor_id'] ? { error: errors['supervisor_id'] } : {})}
+                  {...(errors['member_ids'] ? { error: errors['member_ids'] } : {})}
                 />
                 {/*
                   Not on the setup screen, because a task being planned has not

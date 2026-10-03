@@ -247,6 +247,7 @@ class JobController extends Controller
                 ->with(
                     'foreman:id,name,initials',
                     'supervisor:id,name,initials',
+                    'crew:id,name,initials,role',
                     'assignments.member:id,name,initials',
                     // Field notes/photos — the crew's own Materials screen on
                     // the mobile app, read-only here. The task-level pair is

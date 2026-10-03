@@ -197,6 +197,45 @@ class MobileTasksAndScheduleTest extends TestCase
         $this->assertSame([$myShift->id], $ids->all());
     }
 
+    public function test_an_assigned_job_with_no_booked_shifts_still_appears_on_the_schedule(): void
+    {
+        [$user, $member] = $this->makeMobileJourneyman();
+        $monday = now()->next('Monday')->startOfDay();
+        $job = $this->makeJob([
+            'name' => 'Assigned Only',
+            'start_date' => $monday->toDateString(),
+            'end_date' => $monday->copy()->addDays(4)->toDateString(), // Mon–Fri
+        ]);
+        \Illuminate\Support\Facades\DB::table('job_assignments')->insert([
+            'job_id' => $job->id, 'user_id' => $user->id, 'role' => 'electrician',
+            'name' => $user->name, 'assigned_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $unassigned = $this->makeJob([
+            'name' => 'Not Mine',
+            'start_date' => $monday->toDateString(),
+            'end_date' => $monday->copy()->addDays(4)->toDateString(),
+        ]);
+
+        $shifts = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->getJson('/api/v1/schedule?from='.$monday->toDateString().'&to='.$monday->copy()->addDays(6)->toDateString())
+            ->assertOk()
+            ->json('data.shifts');
+
+        $this->assertCount(5, $shifts, 'five working days Monday to Friday');
+        $this->assertSame([$job->id], array_values(array_unique(array_column($shifts, 'jobId'))));
+        $this->assertCount(5, array_unique(array_column($shifts, 'id')), 'ids are unique per day');
+        $this->assertTrue(collect($shifts)->every(fn ($s) => $s['id'] < 0 && $s['changed'] === false));
+
+        // Real booked shifts take over once the office creates them.
+        CrewShift::create(['job_id' => $job->id, 'scheduled_date' => $monday->toDateString()]);
+        $this->app['auth']->forgetGuards();
+        $after = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->getJson('/api/v1/schedule?from='.$monday->toDateString().'&to='.$monday->copy()->addDays(6)->toDateString())
+            ->json('data.shifts');
+        $this->assertCount(1, $after);
+        $this->assertGreaterThan(0, $after[0]['id']);
+    }
+
     public function test_schedule_excludes_past_shifts_and_orders_soonest_first(): void
     {
         [$user, $member] = $this->makeMobileJourneyman();

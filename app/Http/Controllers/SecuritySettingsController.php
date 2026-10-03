@@ -106,8 +106,10 @@ class SecuritySettingsController extends Controller
             throw ValidationException::withMessages(['code' => 'That code is invalid or has expired.']);
         }
 
+        // No new codes when the app side already had a set — the person keeps
+        // the ones they saved, rather than seeing an empty list.
         return redirect()->route('security.index')->with('success', 'Two-factor authentication is now enabled.')
-            ->with('recoveryCodes', $result['recoveryCodes']);
+            ->with('recoveryCodes', $result['recoveryCodes'] === [] ? null : $result['recoveryCodes']);
     }
 
     public function disableTwoFactor(Request $request): RedirectResponse

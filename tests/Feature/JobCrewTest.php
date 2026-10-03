@@ -123,8 +123,7 @@ class JobCrewTest extends TestCase
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [[
                     'title' => 'Rough-in',
-                    'foreman_id' => $this->priya->id,
-                    'supervisor_id' => $this->torres->id,
+                    'member_ids' => [$this->priya->id, $this->torres->id],
                     'estimate_item_ids' => [],
                 ]],
             ])
@@ -136,18 +135,18 @@ class JobCrewTest extends TestCase
         $this->assertSame($this->torres->id, $task->supervisor_id);
     }
 
-    /** A supervisor is required: every task has somebody over the person running it. */
+    /** A foreman is required: every task has somebody over the people running it. */
     public function test_a_task_needs_a_supervisor(): void
     {
         $this->actingAs($this->user)
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [[
                     'title' => 'Rough-in',
-                    'foreman_id' => $this->priya->id,
+                    'member_ids' => [$this->priya->id],
                     'estimate_item_ids' => [],
                 ]],
             ])
-            ->assertSessionHasErrors('tasks.0.supervisor_id');
+            ->assertSessionHasErrors('tasks.0.member_ids');
 
         $this->assertSame(0, JobTask::count());
     }
@@ -162,12 +161,11 @@ class JobCrewTest extends TestCase
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [[
                     'title' => 'Rough-in',
-                    'foreman_id' => $this->stranger->id,
-                    'supervisor_id' => $this->torres->id,
+                    'member_ids' => [$this->stranger->id, $this->torres->id],
                     'estimate_item_ids' => [],
                 ]],
             ])
-            ->assertSessionHasErrors('foreman_id');
+            ->assertSessionHasErrors(['tasks.0.member_ids']);
 
         $this->assertSame(0, JobTask::count());
     }
@@ -178,12 +176,11 @@ class JobCrewTest extends TestCase
             ->post(route('jobs.tasks.setup.store', $this->job), [
                 'tasks' => [[
                     'title' => 'Rough-in',
-                    'foreman_id' => $this->priya->id,
-                    'supervisor_id' => $this->stranger->id,
+                    'member_ids' => [$this->priya->id, $this->stranger->id],
                     'estimate_item_ids' => [],
                 ]],
             ])
-            ->assertSessionHasErrors('foreman_id');
+            ->assertSessionHasErrors(['tasks.0.member_ids']);
 
         $this->assertSame(0, JobTask::count());
     }
@@ -206,11 +203,10 @@ class JobCrewTest extends TestCase
             ->put(route('tasks.edit.update', $task), [
                 'title' => 'Rough-in',
                 'status' => JobTask::STATUS_PENDING,
-                'foreman_id' => $this->stranger->id,
-                'supervisor_id' => $this->torres->id,
+                'member_ids' => [$this->stranger->id, $this->torres->id],
                 'estimate_item_ids' => [],
             ])
-            ->assertSessionHasErrors('foreman_id');
+            ->assertSessionHasErrors('member_ids');
 
         $this->assertSame($this->priya->id, $task->fresh()->foreman_id);
     }

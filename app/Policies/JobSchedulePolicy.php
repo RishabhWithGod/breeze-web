@@ -169,8 +169,7 @@ class JobSchedulePolicy
     private function isAssigned(User $user, JobTask $task): bool
     {
         $foremanId = $user->foreman?->id;
-        if ($foremanId !== null
-            && ($task->foreman_id === $foremanId || $task->supervisor_id === $foremanId)) {
+        if ($foremanId !== null && $task->isHeldBy($foremanId)) {
             return true;
         }
 
@@ -210,7 +209,7 @@ class JobSchedulePolicy
             return false;
         }
 
-        if ($task->supervisor_id === $foreman->id) {
+        if ($task->isOverseenBy($foreman->id)) {
             return true;
         }
 
