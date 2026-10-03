@@ -2,7 +2,6 @@
 
 namespace App\Services\Company;
 
-use App\Models\CompanyProfile;
 use App\Models\User;
 use App\Services\Billing\SubscriptionSummary;
 use Illuminate\Support\Facades\Hash;
@@ -12,9 +11,9 @@ use Illuminate\Validation\ValidationException;
 /**
  * Adds another manager to a company.
  *
- * The one place it happens: from Add Member, by the company's owner. The new
- * manager joins the owner's company and goes straight into the app,
- * since the company is already set up and its terms already signed.
+ * The one place it happens: from Add Member, by any existing manager. The new
+ * manager joins the same company and goes straight into the app, since the
+ * company is already set up and its terms already signed.
  */
 class ManagerRegistrar
 {
@@ -28,21 +27,15 @@ class ManagerRegistrar
         return in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true);
     }
 
-    /** Whether this account is the owner of its company — the one who set it up. */
-    public function isOwner(?User $user): bool
-    {
-        return $user !== null
-            && $user->company_id !== null
-            && CompanyProfile::query()->whereKey($user->company_id)->value('user_id') === $user->id;
-    }
-
     /**
-     * Whether `$actor` may add and correct the company's managers: only its owner.
-     * The same gate covers correcting the company's own details.
+     * Whether `$actor` may add and correct the company's managers: any manager,
+     * not only the one who originally set the company up. The same gate covers
+     * correcting the company's own details and offering "Manager" as a role on
+     * Add Member / Team Setup invitations.
      */
     public function canAdd(?User $actor): bool
     {
-        return $this->isOwner($actor) && $this->isManager($actor);
+        return $actor !== null && $this->isManager($actor);
     }
 
     /**

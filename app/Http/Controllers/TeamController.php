@@ -163,9 +163,9 @@ class TeamController extends Controller
             return collect();
         }
 
+        // Shown as a badge only — who actually set the company up. Every
+        // manager can see and correct this list regardless of whose this is.
         $ownerId = CompanyProfile::query()->whereKey($viewer->company_id)->value('user_id');
-
-        $viewerIsOwner = $ownerId === $viewer->id;
 
         return User::query()
             ->where('company_id', $viewer->company_id)
@@ -180,10 +180,11 @@ class TeamController extends Controller
                 'role' => $manager->role,
                 'isOwner' => $manager->id === $ownerId,
                 'isYou' => $manager->id === $viewer->id,
-                // Only the owner sees this list, and only the owner corrects anyone on it.
-                'canEdit' => $viewerIsOwner,
+                // Any manager reaching this list (see the canAdd guard above)
+                // may correct anyone else on it.
+                'canEdit' => true,
                 // Someone's own sign-in email is changed from Security, not here.
-                'canEditEmail' => $viewerIsOwner && $manager->id !== $viewer->id,
+                'canEditEmail' => $manager->id !== $viewer->id,
                 'addedAt' => $manager->created_at?->toISOString(),
             ])
             ->sortByDesc('isOwner')
