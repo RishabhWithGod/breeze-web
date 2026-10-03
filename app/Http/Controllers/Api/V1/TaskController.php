@@ -44,7 +44,7 @@ class TaskController extends Controller
         $tasks = JobTask::query()
             ->whereIn('job_id', $this->access->assignedJobsQuery($request->user())->select('id'))
             ->tap(fn ($query) => $this->limitToCrew($query, $user))
-            ->with(['job:id,name', 'foreman:id,name,initials,role', 'supervisor:id,name,initials,role', 'assignments.member'])
+            ->with(['job:id,name', 'foreman:id,name,initials,role', 'supervisor:id,name,initials,role', 'crew:id,name,initials,role', 'assignments.member'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate(min((int) $request->integer('per_page', 50), 100));
@@ -52,7 +52,7 @@ class TaskController extends Controller
         // Each assignee's own sign-off on a job: submitted for review, or approved.
         $completions = JobForemanCompletion::query()
             ->whereIn('job_id', $tasks->getCollection()->pluck('job_id')->unique())
-            ->whereIn('foreman_id', $tasks->getCollection()->pluck('foreman_id')->filter()->unique())
+            ->whereIn('foreman_id', $tasks->getCollection()->flatMap(fn (JobTask $task) => $task->runnerIds())->unique())
             ->get()
             ->keyBy(fn (JobForemanCompletion $c) => $c->job_id.':'.$c->foreman_id);
 
@@ -62,7 +62,17 @@ class TaskController extends Controller
                 // a foreman approves a journeyman's work once it is submitted.
                 'assigneeId' => $task->foreman_id,
                 // A foreman who oversees a task still approves its worker; never their own work.
-                'assigneeIsMe' => $myForemanId !== null && $task->foreman_id === $myForemanId,
+                'assigneeIsMe' => $myForemanId !== null && $task->isRunBy($myForemanId),
+                // Everyone the task is given to, with the role each holds on it — the app can
+                // show them all; `assigneeId` and the fields around it stay the first runner's.
+                'assignees' => $task->crew->map(fn ($person) => [
+                    'id' => $person->id,
+                    'name' => $person->name,
+                    'initials' => $person->initials,
+                    'role' => $person->role,
+                    'roleLabel' => $person->roleLabel(),
+                    'slot' => $person->pivot->slot,
+                ])->values(),
                 'assigneeReady' => (bool) $completions->get($task->job_id.':'.$task->foreman_id)?->isReadyForReview()
                     && ! $completions->get($task->job_id.':'.$task->foreman_id)?->isApproved(),
                 'assigneeApproved' => (bool) $completions->get($task->job_id.':'.$task->foreman_id)?->isApproved(),
@@ -132,13 +142,13 @@ class TaskController extends Controller
         $crewUserIds = Foreman::query()->whereIn('id', $crewIds)->whereNotNull('user_id')->pluck('user_id')->push($user->id);
 
         $query->where(fn ($q) => $q
-            ->where(fn ($held) => $held->whereIn('foreman_id', $crewIds)->orWhereIn('supervisor_id', $crewIds))
+            ->where(fn ($held) => $held->heldByAny($crewIds))
             ->orWhereHas('assignments.member', fn ($m) => $m->whereIn('user_id', $crewUserIds)));
     }
 
     private function isMine(JobTask $task, int $userId, ?int $foremanId): bool
     {
-        if ($foremanId !== null && ($task->foreman_id === $foremanId || $task->supervisor_id === $foremanId)) {
+        if ($foremanId !== null && $task->isHeldBy($foremanId)) {
             return true;
         }
 

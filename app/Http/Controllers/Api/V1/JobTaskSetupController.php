@@ -272,7 +272,10 @@ class JobTaskSetupController extends Controller
             $this->pairedMaterialLines($job, $laborIds, $task->id),
         )));
 
-        DB::transaction(function () use ($task, $job, $title, $data, $ids) {
+        $oldRunner = $task->foreman_id;
+        $oldOverseer = $task->supervisor_id;
+
+        DB::transaction(function () use ($task, $job, $title, $data, $ids, $oldRunner, $oldOverseer) {
             $task->update([
                 'title' => $title,
                 'status' => $data['status'],
@@ -280,6 +283,9 @@ class JobTaskSetupController extends Controller
                 'supervisor_id' => $data['supervisor_id'],
                 'estimated_hours' => $this->hoursOn($ids),
             ]);
+
+            // The app names one person per slot; anyone else the task was given to stays.
+            $task->replacePrimaries($oldRunner, $oldOverseer);
 
             // Dropped lines go back into the picker for another task to take.
             EstimateItem::query()

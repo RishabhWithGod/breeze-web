@@ -85,13 +85,27 @@ class CompanySetupTest extends TestCase
         $this->get(route('company.setup.create'))->assertRedirect(route('home'));
     }
 
+    public function test_the_address_lookup_is_reachable_while_setup_is_pending(): void
+    {
+        $this->signUp();
+
+        // Not bounced to the setup screen: the Business Address field searches
+        // through these endpoints before the company exists.
+        $this->getJson('/address-lookup?q=12+Main+St&session=abc')
+            ->assertOk()
+            ->assertJsonStructure(['suggestions']);
+        $this->getJson('/address-lookup/place?place_id=abc&session=abc')
+            ->assertOk()
+            ->assertJsonStructure(['place']);
+    }
+
     public function test_every_required_field_is_validated(): void
     {
         $this->signUp();
 
         $this->post(route('company.setup.store'), [])->assertSessionHasErrors([
-            'name', 'business_address', 'primary_contact', 'phone', 'email', 'timezone',
-        ]);
+            'name', 'business_address', 'primary_contact', 'phone', 'email',
+        ])->assertSessionDoesntHaveErrors('timezone');
 
         $this->post(route('company.setup.store'), $this->validCompany(['phone' => '12', 'timezone' => 'Mars/Base']))
             ->assertSessionHasErrors(['phone', 'timezone']);
@@ -101,6 +115,25 @@ class CompanySetupTest extends TestCase
         ]))->assertSessionHasErrors('logo');
 
         $this->assertSame(0, CompanyProfile::count());
+    }
+
+    public function test_the_time_zone_is_not_asked_for_and_is_filled_in_when_left_out(): void
+    {
+        $user = $this->signUp();
+
+        $data = $this->validCompany();
+        unset($data['timezone']);
+
+        $this->post(route('company.setup.store'), $data)->assertSessionHasNoErrors();
+
+        $company = CompanyProfile::firstOrFail();
+        $this->assertSame(config('app.timezone'), $company->timezone);
+
+        // Correcting the company later without a zone keeps the one it has.
+        $company->update(['timezone' => 'America/Chicago']);
+        $this->put(route('settings.company.update'), $this->validCompany(['name' => 'Volt Renamed', 'timezone' => '']))
+            ->assertSessionHasNoErrors();
+        $this->assertSame('America/Chicago', $company->fresh()->timezone);
     }
 
     public function test_every_signup_sets_up_its_own_company(): void

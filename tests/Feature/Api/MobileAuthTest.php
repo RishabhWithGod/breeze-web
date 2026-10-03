@@ -85,10 +85,53 @@ class MobileAuthTest extends TestCase
         $this->assertDatabaseMissing('personal_access_tokens', ['tokenable_id' => $user->id]);
     }
 
-    public function test_a_two_factor_enabled_account_does_not_receive_a_token_from_password_alone(): void
+    public function test_web_two_factor_does_not_ask_the_app_for_a_code_and_the_reverse(): void
     {
         $user = $this->makeElectrician();
         UserSecuritySetting::forUser($user)->update(['two_factor_enabled' => true]);
+
+        $this->postJson('/api/v1/auth/login', ['email' => $user->email, 'password' => 'correct-password'])
+            ->assertOk()
+            ->assertJsonMissingPath('data.requiresTwoFactor')
+            ->assertJsonPath('data.twoFactorEnabled', false);
+    }
+
+    public function test_a_user_can_turn_app_two_factor_on_and_off_without_touching_the_web_setting(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+        $user = $this->makeElectrician();
+        $headers = ['Authorization' => 'Bearer '.$user->createToken('t')->plainTextToken];
+
+        $this->postJson('/api/v1/auth/two-factor/send', [], $headers)->assertOk();
+
+        // A wrong code does not turn it on; the right one does.
+        $this->postJson('/api/v1/auth/two-factor/confirm', ['code' => '000000'], $headers)->assertStatus(422);
+        $this->assertFalse(UserSecuritySetting::forUser($user)->fresh()->app_two_factor_enabled);
+
+        \Illuminate\Support\Facades\Cache::put(
+            "security-otp:enable_2fa_app:{$user->id}",
+            ['hash' => \Illuminate\Support\Facades\Hash::make('123456'), 'target' => null],
+            now()->addMinutes(10),
+        );
+        $this->postJson('/api/v1/auth/two-factor/confirm', ['code' => '123456'], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.twoFactorEnabled', true)
+            ->assertJsonCount(8, 'data.recoveryCodes');
+
+        $settings = UserSecuritySetting::forUser($user)->fresh();
+        $this->assertTrue($settings->app_two_factor_enabled);
+        $this->assertFalse($settings->two_factor_enabled, 'the web setting is untouched');
+
+        $this->postJson('/api/v1/auth/two-factor/disable', ['current_password' => 'wrong'], $headers)->assertStatus(422);
+        $this->postJson('/api/v1/auth/two-factor/disable', ['current_password' => 'correct-password'], $headers)
+            ->assertOk()->assertJsonPath('data.twoFactorEnabled', false);
+        $this->assertFalse(UserSecuritySetting::forUser($user)->fresh()->app_two_factor_enabled);
+    }
+
+    public function test_a_two_factor_enabled_account_does_not_receive_a_token_from_password_alone(): void
+    {
+        $user = $this->makeElectrician();
+        UserSecuritySetting::forUser($user)->update(['app_two_factor_enabled' => true]);
 
         $response = $this->postJson('/api/v1/auth/login', [
             'email' => $user->email,
@@ -105,7 +148,7 @@ class MobileAuthTest extends TestCase
         Notification::fake();
 
         $user = $this->makeElectrician();
-        UserSecuritySetting::forUser($user)->update(['two_factor_enabled' => true]);
+        UserSecuritySetting::forUser($user)->update(['app_two_factor_enabled' => true]);
 
         $this->postJson('/api/v1/auth/login', ['email' => $user->email, 'password' => 'correct-password']);
 
@@ -129,7 +172,7 @@ class MobileAuthTest extends TestCase
     public function test_the_wrong_two_factor_code_is_rejected(): void
     {
         $user = $this->makeElectrician();
-        UserSecuritySetting::forUser($user)->update(['two_factor_enabled' => true]);
+        UserSecuritySetting::forUser($user)->update(['app_two_factor_enabled' => true]);
 
         $this->postJson('/api/v1/auth/login', ['email' => $user->email, 'password' => 'correct-password']);
 

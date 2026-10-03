@@ -106,4 +106,14 @@ class Foreman extends Model
             ->where('role', self::ROLE_APPRENTICE)
             ->orderBy('name');
     }
+
+    protected static function booted(): void
+    {
+        // A change made on the web register reaches the account and the app too.
+        static::saved(function (Foreman $model) {
+            if ($model->wasRecentlyCreated || $model->wasChanged(['name', 'role', 'team_id'])) {
+                app(\App\Services\Team\MemberIdentitySync::class)->fromForeman($model);
+            }
+        });
+    }
 }

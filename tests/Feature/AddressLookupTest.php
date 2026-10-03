@@ -253,6 +253,7 @@ class AddressLookupTest extends TestCase
     {
         $this->actingAs($this->user)->post(route('clients.store'), [
             'name' => 'Harborview Data Hall',
+            ...$this->crew(),
             'addresses' => [
                 [
                     'label' => 'Main building',
@@ -282,6 +283,7 @@ class AddressLookupTest extends TestCase
     {
         $this->actingAs($this->user)->post(route('clients.store'), [
             'name' => 'Rosewood Clinic',
+            ...$this->crew(),
             'addresses' => [['label' => 'Clinic', 'address' => 'Behind the old mill, Route 9']],
         ])->assertSessionHasNoErrors();
 
@@ -298,6 +300,7 @@ class AddressLookupTest extends TestCase
         // located", it is wrong — so it never reaches the database.
         $this->actingAs($this->user)->post(route('clients.store'), [
             'name' => 'Harborview Data Hall',
+            ...$this->crew(),
             'addresses' => [[
                 'label' => 'Main hall', 'address' => '41 Harbor Way', 'latitude' => 47.6062,
             ]],
@@ -311,6 +314,7 @@ class AddressLookupTest extends TestCase
         // The browser is not authoritative about anything, least of all this.
         $this->actingAs($this->user)->post(route('clients.store'), [
             'name' => 'Nowhere',
+            ...$this->crew(),
             'addresses' => [[
                 'label' => 'Main', 'address' => 'Nowhere',
                 'latitude' => 91, 'longitude' => 181,
@@ -324,6 +328,7 @@ class AddressLookupTest extends TestCase
     {
         $this->actingAs($this->user)->post(route('clients.store'), [
             'name' => 'Harborview',
+            ...$this->crew(),
             'addresses' => [[
                 'label' => 'Main', 'address' => '41 Harbor Way',
                 'place_id' => '<script>alert(1)</script>',
@@ -331,5 +336,17 @@ class AddressLookupTest extends TestCase
         ])->assertSessionHasErrors('addresses.0.place_id');
 
         $this->assertSame(0, Client::count());
+    }
+
+    /** The crew a client now has to be added with: a team and a member on it. */
+    private function crew(): array
+    {
+        $team = \App\Models\Team::firstOrCreate(['name' => 'Crew A']);
+        $member = \App\Models\Foreman::firstOrCreate(
+            ['name' => 'Dana Wu'],
+            ['initials' => 'DW', 'role' => 'journeyman', 'team_id' => $team->id],
+        );
+
+        return ['team_id' => $team->id, 'member_ids' => [$member->id]];
     }
 }

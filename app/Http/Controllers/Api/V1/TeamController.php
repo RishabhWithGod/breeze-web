@@ -229,7 +229,7 @@ class TeamController extends Controller
     {
         abort_unless($this->canManage($request->user()), 403);
 
-        $taskCount = JobTask::where('foreman_id', $member->id)->count();
+        $taskCount = JobTask::runBy($member->id)->count();
 
         if ($taskCount > 0) {
             return $this->fail(

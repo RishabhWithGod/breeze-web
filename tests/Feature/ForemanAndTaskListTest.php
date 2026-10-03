@@ -540,14 +540,14 @@ class ForemanAndTaskListTest extends TestCase
     public function test_a_task_can_be_retitled_and_handed_to_someone_else(): void
     {
         $dana = Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW']);
+        $sam = Foreman::create(['name' => 'Sam Ortiz', 'initials' => 'SO', 'role' => Foreman::ROLE_FOREMAN]);
         $task = $this->taskFor(null);
 
         $this->actingAs($this->planner)
             ->put(route('tasks.edit.update', ['task' => $task, 'from' => 'tasks']), [
                 'title' => '  Rough-in second floor  ',
                 'status' => JobTask::STATUS_IN_PROGRESS,
-                'foreman_id' => $dana->id,
-                'supervisor_id' => $dana->id,
+                'member_ids' => [$dana->id, $sam->id],
                 'estimate_item_ids' => [],
             ])
             ->assertRedirect(route('tasks.index'))
@@ -563,6 +563,7 @@ class ForemanAndTaskListTest extends TestCase
     public function test_a_title_another_task_on_the_job_already_has_is_refused(): void
     {
         $dana = Foreman::create(['name' => 'Dana Wu', 'initials' => 'DW']);
+        $sam = Foreman::create(['name' => 'Sam Ortiz', 'initials' => 'SO', 'role' => Foreman::ROLE_FOREMAN]);
         $this->taskFor($dana, 'Second fix');
         $task = $this->taskFor($dana, 'Rough-in first floor');
 
@@ -570,8 +571,7 @@ class ForemanAndTaskListTest extends TestCase
             ->put(route('tasks.edit.update', $task), [
                 'title' => 'second fix',
                 'status' => $task->status,
-                'foreman_id' => $dana->id,
-                'supervisor_id' => $dana->id,
+                'member_ids' => [$dana->id, $sam->id],
                 'estimate_item_ids' => [],
             ])
             ->assertSessionHasErrors('title');

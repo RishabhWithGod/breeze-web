@@ -27,6 +27,15 @@ class JobTask extends Model
         // A task being created or handed to someone is what makes the job's
         // crew real, so the client and project pick it up if they had none.
         // Never allowed to fail the save it rides on.
+        // The two columns are the first runner and first overseer; whoever writes them
+        // (the old single-person forms, the mobile app, the job factory) keeps the full
+        // crew list in step. Never removes anyone — {@see assignCrew()} owns that.
+        static::saved(function (self $task): void {
+            if ($task->wasRecentlyCreated || $task->wasChanged(['foreman_id', 'supervisor_id'])) {
+                $task->keepPrimariesOnCrew();
+            }
+        });
+
         static::saved(function (self $task): void {
             if ($task->job_id === null || ! ($task->wasRecentlyCreated || $task->wasChanged(['foreman_id', 'supervisor_id']))) {
                 return;
@@ -271,6 +280,153 @@ class JobTask extends Model
         return $this->hasMany(TimeEntry::class, 'job_task_id');
     }
 
+    /* ------------------------------------------------------------- Task crew */
+
+    public const SLOT_RUNNER = 'runner';
+
+    public const SLOT_OVERSEER = 'overseer';
+
+    /**
+     * Everyone this task is given to, in either slot — `pivot->slot` says which.
+     *
+     * @return BelongsToMany<Foreman, $this>
+     */
+    public function crew(): BelongsToMany
+    {
+        return $this->belongsToMany(Foreman::class, 'job_task_foremen')->withPivot('slot')->withTimestamps();
+    }
+
+    /** @return Collection<int, int> Journeymen running the work. */
+    public function runnerIds(): Collection
+    {
+        return $this->crewIds(self::SLOT_RUNNER, $this->foreman_id);
+    }
+
+    /** @return Collection<int, int> Foremen over it. */
+    public function overseerIds(): Collection
+    {
+        return $this->crewIds(self::SLOT_OVERSEER, $this->supervisor_id);
+    }
+
+    /** @return Collection<int, int> */
+    private function crewIds(string $slot, ?int $primary): Collection
+    {
+        // A list that already loaded `crew` is answered from it, so a page of tasks
+        // does not ask the database once per task.
+        $listed = $this->relationLoaded('crew')
+            ? $this->crew->filter(fn (Foreman $person) => $person->pivot->slot === $slot)->pluck('id')
+            : DB::table('job_task_foremen')->where('job_task_id', $this->id)->where('slot', $slot)->orderBy('id')->pluck('foreman_id');
+
+        return $listed
+            ->when($primary !== null, fn (Collection $ids) => $ids->prepend($primary))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+    }
+
+    public function isRunBy(int $foremanId): bool
+    {
+        return $this->runnerIds()->contains($foremanId);
+    }
+
+    public function isOverseenBy(int $foremanId): bool
+    {
+        return $this->overseerIds()->contains($foremanId);
+    }
+
+    public function isHeldBy(int $foremanId): bool
+    {
+        return $this->isRunBy($foremanId) || $this->isOverseenBy($foremanId);
+    }
+
+    /**
+     * Gives the task to exactly these people: journeymen to run it, foremen over it.
+     *
+     * The first of each becomes the task's `foreman_id` / `supervisor_id`, which
+     * is what the rest of the app has always read. The crew list is written
+     * first so anything reacting to the save already sees all of them.
+     *
+     * @param  array<int, int|string>  $runnerIds
+     * @param  array<int, int|string>  $overseerIds
+     */
+    public function assignCrew(array $runnerIds, array $overseerIds): void
+    {
+        $runners = array_values(array_unique(array_map('intval', $runnerIds)));
+        $overseers = array_values(array_unique(array_map('intval', $overseerIds)));
+        $now = now();
+
+        DB::transaction(function () use ($runners, $overseers, $now) {
+            DB::table('job_task_foremen')->where('job_task_id', $this->id)->delete();
+
+            $rows = [];
+            foreach ([self::SLOT_RUNNER => $runners, self::SLOT_OVERSEER => $overseers] as $slot => $ids) {
+                foreach ($ids as $id) {
+                    $rows[] = ['job_task_id' => $this->id, 'foreman_id' => $id, 'slot' => $slot, 'created_at' => $now, 'updated_at' => $now];
+                }
+            }
+            if ($rows !== []) {
+                DB::table('job_task_foremen')->insert($rows);
+            }
+
+            $this->foreman_id = $runners[0] ?? null;
+            $this->supervisor_id = $overseers[0] ?? null;
+            $this->save();
+        });
+    }
+
+    /**
+     * Sends everyone who runs this task back to review — a task leaving
+     * `completed` undoes each runner's own sign-off. Falls back to the
+     * whole-job flag for a task with nobody running it.
+     */
+    public function clearRunnersReview(): void
+    {
+        $runners = $this->runnerIds();
+
+        if ($runners->isEmpty()) {
+            $this->job?->clearReadyForReview();
+
+            return;
+        }
+
+        $runners->each(fn (int $id) => $this->job?->clearForemanReadyForReview($id));
+    }
+
+    /**
+     * For writers that still name one person per slot (the mobile app): swaps the
+     * previous first journeyman / foreman for the one now on the columns and keeps
+     * everyone else the task was given to.
+     */
+    public function replacePrimaries(?int $oldRunner, ?int $oldOverseer): void
+    {
+        $swap = fn (Collection $ids, ?int $old, ?int $new) => $ids
+            ->reject(fn (int $id) => $id === $old)
+            ->prepend($new)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $this->assignCrew(
+            $swap($this->runnerIds(), $oldRunner, $this->foreman_id),
+            $swap($this->overseerIds(), $oldOverseer, $this->supervisor_id),
+        );
+    }
+
+    /** Makes sure the two primary columns are on the crew list; never removes anyone. */
+    public function keepPrimariesOnCrew(): void
+    {
+        $now = now();
+
+        foreach ([self::SLOT_RUNNER => $this->foreman_id, self::SLOT_OVERSEER => $this->supervisor_id] as $slot => $id) {
+            if ($id !== null) {
+                DB::table('job_task_foremen')->insertOrIgnore([
+                    'job_task_id' => $this->id, 'foreman_id' => $id, 'slot' => $slot, 'created_at' => $now, 'updated_at' => $now,
+                ]);
+            }
+        }
+    }
+
     /* ------------------------------------------------------------------ Scopes */
 
     /**
@@ -285,7 +441,51 @@ class JobTask extends Model
     {
         return $query->where(fn (Builder $held) => $held
             ->where('foreman_id', $memberId)
-            ->orWhere('supervisor_id', $memberId));
+            ->orWhere('supervisor_id', $memberId)
+            ->orWhereExists($this->onCrew($memberId)));
+    }
+
+    /**
+     * Tasks held by any of these people — what a foreman's whole crew is carrying.
+     *
+     * @param  iterable<int, int>  $memberIds
+     */
+    public function scopeHeldByAny(Builder $query, iterable $memberIds): Builder
+    {
+        $ids = collect($memberIds)->filter()->unique()->values()->all();
+
+        return $query->where(fn (Builder $held) => $held
+            ->whereIn('foreman_id', $ids)
+            ->orWhereIn('supervisor_id', $ids)
+            ->orWhereExists(fn ($sub) => $sub->selectRaw('1')
+                ->from('job_task_foremen')
+                ->whereColumn('job_task_foremen.job_task_id', 'job_tasks.id')
+                ->whereIn('job_task_foremen.foreman_id', $ids)));
+    }
+
+    /** Tasks this person is one of the journeymen running. */
+    public function scopeRunBy(Builder $query, int $memberId): Builder
+    {
+        return $query->where(fn (Builder $held) => $held
+            ->where('foreman_id', $memberId)
+            ->orWhereExists($this->onCrew($memberId, self::SLOT_RUNNER)));
+    }
+
+    /** Tasks this person is one of the foremen over. */
+    public function scopeOverseenBy(Builder $query, int $memberId): Builder
+    {
+        return $query->where(fn (Builder $held) => $held
+            ->where('supervisor_id', $memberId)
+            ->orWhereExists($this->onCrew($memberId, self::SLOT_OVERSEER)));
+    }
+
+    private function onCrew(int $memberId, ?string $slot = null): \Closure
+    {
+        return fn ($sub) => $sub->selectRaw('1')
+            ->from('job_task_foremen')
+            ->whereColumn('job_task_foremen.job_task_id', 'job_tasks.id')
+            ->where('job_task_foremen.foreman_id', $memberId)
+            ->when($slot !== null, fn ($q) => $q->where('job_task_foremen.slot', $slot));
     }
 
     /**
@@ -301,38 +501,28 @@ class JobTask extends Model
      */
     public static function workload(bool $closed, ?\Closure $constrain = null): Collection
     {
-        $held = function (string $column) use ($closed, $constrain) {
-            $query = static::query()
-                ->whereHas('job')
-                // Narrowed to whose work it is, when asked (a manager's own jobs, or a company's).
-                ->when($constrain, fn (Builder $q) => $constrain($q))
-                ->whereNotNull($column)
-                ->when(
-                    $closed,
-                    fn (Builder $q) => $q->whereIn('status', self::CLOSED_STATUSES),
-                    fn (Builder $q) => $q->whereNotIn('status', self::CLOSED_STATUSES),
-                );
+        $tasks = static::query()
+            ->whereHas('job')
+            // Narrowed to whose work it is, when asked (a manager's own jobs, or a company's).
+            ->when($constrain, fn (Builder $q) => $constrain($q))
+            ->when(
+                $closed,
+                fn (Builder $q) => $q->whereIn('status', self::CLOSED_STATUSES),
+                fn (Builder $q) => $q->whereNotIn('status', self::CLOSED_STATUSES),
+            )
+            ->select(['job_tasks.id as task_id', 'job_tasks.job_id', 'job_tasks.estimated_hours']);
 
-            // Supervising a task you are also running is one job of work.
-            if ($column === 'supervisor_id') {
-                $query->where(fn (Builder $q) => $q
-                    ->whereNull('foreman_id')
-                    ->orWhereColumn('supervisor_id', '!=', 'foreman_id'));
-            }
-
-            return $query->select([
-                $column.' as member_id',
-                'job_id',
-                'estimated_hours',
-            ]);
-        };
+        // One row per person per task — someone both running and overseeing a
+        // task is carrying one task, not two.
+        $people = DB::table('job_task_foremen')->select(['job_task_id', 'foreman_id'])->distinct();
 
         return DB::query()
-            ->fromSub($held('foreman_id')->unionAll($held('supervisor_id')), 'held')
-            ->groupBy('member_id')
+            ->fromSub($tasks, 't')
+            ->joinSub($people, 'm', 'm.job_task_id', '=', 't.task_id')
+            ->groupBy('m.foreman_id')
             ->selectRaw(
-                'member_id, count(*) as tasks, count(distinct job_id) as jobs, '.
-                'coalesce(sum(estimated_hours), 0) as hours'
+                'm.foreman_id as member_id, count(*) as tasks, count(distinct t.job_id) as jobs, '.
+                'coalesce(sum(t.estimated_hours), 0) as hours'
             )
             ->get()
             ->keyBy('member_id');

@@ -217,11 +217,7 @@ class JobTaskWorkflowService
      *  back to the whole-job flag for a task with no per-task foreman. */
     private function clearOwningForemanReview(JobTask $task): void
     {
-        if ($task->foreman_id !== null) {
-            $task->job?->clearForemanReadyForReview($task->foreman_id);
-        } else {
-            $task->job?->clearReadyForReview();
-        }
+        $task->clearRunnersReview();
     }
 
     /**

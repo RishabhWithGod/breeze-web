@@ -28,12 +28,13 @@ class LoginRequest extends FormRequest
     /**
      * Verify credentials, throttling repeated failures, and log a real
      * security event either way. Returns true when the account has 2FA
-     * enabled — the caller must not log the session in yet, only start the
+     * enabled *for [$channel]* (web and the mobile app are separate
+     * choices) — the caller must not log the session in yet, only start the
      * two-factor challenge.
      *
      * @throws ValidationException
      */
-    public function authenticate(): bool
+    public function authenticate(string $channel = UserSecuritySetting::CHANNEL_WEB): bool
     {
         $this->ensureIsNotRateLimited();
 
@@ -59,7 +60,7 @@ class LoginRequest extends FormRequest
 
         RateLimiter::clear($this->throttleKey());
 
-        return UserSecuritySetting::forUser($user)->two_factor_enabled;
+        return UserSecuritySetting::forUser($user)->twoFactorEnabledFor($channel);
     }
 
     /** @throws ValidationException */

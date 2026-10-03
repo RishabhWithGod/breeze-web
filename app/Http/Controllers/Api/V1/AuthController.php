@@ -44,7 +44,7 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request): JsonResponse
     {
-        $requiresTwoFactor = $request->authenticate();
+        $requiresTwoFactor = $request->authenticate(UserSecuritySetting::CHANNEL_APP);
 
         $user = User::query()->where('email', Str::lower($request->string('email')->toString()))->firstOrFail();
 
@@ -129,7 +129,12 @@ class AuthController extends Controller
 
         $user = User::query()->where('email', Str::lower($data['email']))->first();
 
-        if (! $user || ! app(OtpChallengeService::class)->verify($user, self::OTP_PURPOSE, $data['code'])) {
+        // Only an account that asks for a code on the app can be signed in
+        // through this step — it is not a way around the password.
+        if (! $user
+            || ! UserSecuritySetting::forUser($user)->app_two_factor_enabled
+            || ! (app(OtpChallengeService::class)->verify($user, self::OTP_PURPOSE, $data['code'])
+                || app(\App\Services\Security\TwoFactorService::class)->verifyRecoveryCode($user, $data['code'], $request))) {
             throw ValidationException::withMessages([
                 'code' => 'That code is incorrect or has expired.',
             ]);
@@ -232,6 +237,42 @@ class AuthController extends Controller
         return $this->ok(null, 'Signed out.');
     }
 
+    /** Emails the code that turns app two-factor on. */
+    public function sendTwoFactorEnableCode(Request $request, \App\Services\Security\TwoFactorService $twoFactor): JsonResponse
+    {
+        $twoFactor->sendEnableChallenge($request->user(), UserSecuritySetting::CHANNEL_APP);
+
+        return $this->ok(null, 'A verification code was sent to your email.');
+    }
+
+    /** Confirms that code. Recovery codes come back once, only when a fresh set was made. */
+    public function confirmTwoFactorEnable(Request $request, \App\Services\Security\TwoFactorService $twoFactor): JsonResponse
+    {
+        $data = $request->validate(['code' => ['required', 'string']]);
+
+        $result = $twoFactor->confirmEnable($request->user(), $data['code'], $request, UserSecuritySetting::CHANNEL_APP);
+
+        if (! $result['success']) {
+            throw ValidationException::withMessages(['code' => 'That code is invalid or has expired.']);
+        }
+
+        return $this->ok([
+            'twoFactorEnabled' => true,
+            'recoveryCodes' => $result['recoveryCodes'] ?? [],
+        ], 'Two-factor sign-in is now on for the app.');
+    }
+
+    public function disableTwoFactor(Request $request, \App\Services\Security\TwoFactorService $twoFactor): JsonResponse
+    {
+        $data = $request->validate(['current_password' => ['required', 'string']]);
+
+        if (! $twoFactor->disable($request->user(), $data['current_password'], $request, UserSecuritySetting::CHANNEL_APP)) {
+            throw ValidationException::withMessages(['current_password' => 'That password is incorrect.']);
+        }
+
+        return $this->ok(['twoFactorEnabled' => false], 'Two-factor sign-in is now off for the app.');
+    }
+
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -245,7 +286,7 @@ class AuthController extends Controller
             'status' => $user->status,
             // Read-only on the phone: changing either goes through the web's verified flow.
             'phone' => $user->maskedPhone(),
-            'twoFactorEnabled' => (bool) UserSecuritySetting::forUser($user)->two_factor_enabled,
+            'twoFactorEnabled' => UserSecuritySetting::forUser($user)->app_two_factor_enabled,
             // What the crew register holds for this person — shown, never edited here.
             'work' => ($foreman = $user->foreman) === null ? null : [
                 'crewRole' => $foreman->roleLabel(),
@@ -317,7 +358,7 @@ class AuthController extends Controller
                 'initials' => $user->initials,
                 'status' => $user->status,
             ],
-            'twoFactorEnabled' => UserSecuritySetting::forUser($user)->two_factor_enabled,
+            'twoFactorEnabled' => UserSecuritySetting::forUser($user)->app_two_factor_enabled,
         ];
     }
 }

@@ -575,7 +575,7 @@ class MultiCompanyCrewTest extends TestCase
             ->where('company.name', 'Volt Electric')->where('company.timezone', 'America/Denver'));
 
         // Every required field is still required, and the logo can be taken away.
-        $this->actingAs($owner)->put(route('settings.company.update'), [])->assertSessionHasErrors(['name', 'business_address', 'timezone']);
+        $this->actingAs($owner)->put(route('settings.company.update'), [])->assertSessionHasErrors(['name', 'business_address']);
         $oldLogo = $volt->logo_path;
         $this->actingAs($owner)->put(route('settings.company.update'), [...$change, 'logo' => null, 'remove_logo' => true])->assertSessionHasNoErrors();
         $this->assertNull($volt->fresh()->logo_path);

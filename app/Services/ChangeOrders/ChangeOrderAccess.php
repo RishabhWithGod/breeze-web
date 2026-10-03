@@ -71,7 +71,7 @@ class ChangeOrderAccess
         $foremanId = $this->foreman($user)?->id;
 
         return $jobs->where(fn (Builder $q) => $q->where('foreman_id', $foremanId)
-            ->orWhereHas('tasks', fn (Builder $tasks) => $tasks->where('foreman_id', $foremanId)));
+            ->orWhereHas('tasks', fn (Builder $tasks) => $tasks->runBy($foremanId)));
     }
 
     public function canRaiseFor(User $user, Job $job): bool

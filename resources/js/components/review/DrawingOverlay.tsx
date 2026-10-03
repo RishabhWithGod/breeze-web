@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { router } from '@inertiajs/react'
 import { Box, ChevronDown, ChevronLeft, ChevronRight, Maximize, Minus, Plus, RotateCcw, Search } from 'lucide-react'
-import { Button, ButtonLink, Card, FilterTabs, IconButton } from '@/components/common'
+import { Button, ButtonLink, Card, IconButton } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { OccurrenceOrigin, OverlaySymbol, PageDimensions, ReviewStatus } from '@/types'
 import { categoryKey, cn, symbolColor, UNMAPPED_COLOR } from '@/utils'
@@ -595,17 +595,13 @@ export function DrawingOverlay({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-2">
-          <FilterTabs
-            options={[
-              { label: 'All', value: 'all' as const },
-              { label: 'Approved', value: 'approved' as const },
-              { label: 'Rejected', value: 'rejected' as const },
-            ]}
-            value={activeStatus}
-            onChange={setActiveStatus}
-          />
-          {filterActive && (
+        {/*
+          The All / Approved / Rejected tabs are hidden for now. The status filter
+          state (`activeStatus`) stays at 'all', so nothing is filtered by it; the
+          bar only appears when a legend category filter needs its "Clear" button.
+        */}
+        {filterActive && (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-b border-hairline px-4 py-2">
             <Button
               variant="ghost"
               size="sm"
@@ -616,8 +612,8 @@ export function DrawingOverlay({
             >
               Clear filters
             </Button>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="grid gap-3 p-3 sm:grid-cols-[6.5rem_minmax(0,1fr)]">
           {/* Page rail. */}

@@ -288,7 +288,7 @@ class ForemanController extends Controller
     {
         abort_unless($this->canManage($request->user()), 403);
 
-        $taskCount = JobTask::where('foreman_id', $foreman->id)->count();
+        $taskCount = JobTask::runBy($foreman->id)->count();
 
         if ($taskCount > 0) {
             return back()->with(

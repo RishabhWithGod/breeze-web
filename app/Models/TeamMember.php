@@ -54,4 +54,14 @@ class TeamMember extends Model
     {
         return $this->hasMany(TimeEntry::class);
     }
+
+    protected static function booted(): void
+    {
+        // A change made on the web register reaches the account and the app too.
+        static::saved(function (TeamMember $model) {
+            if ($model->wasRecentlyCreated || $model->wasChanged(['name'])) {
+                app(\App\Services\Team\MemberIdentitySync::class)->fromTeamMember($model);
+            }
+        });
+    }
 }

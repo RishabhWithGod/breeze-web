@@ -30,15 +30,15 @@ class EnsureCompanySetUp
             $this->flagIfNeverSetUp($user);
         }
 
-        if ($user?->needs_company_setup && ! $request->routeIs('company.setup.*', 'logout')) {
+        if ($user?->needs_company_setup && ! $request->routeIs('company.setup.*', 'address.*', 'logout')) {
             return redirect()->route('company.setup.create');
         }
 
-        if ($user?->needs_terms_acceptance && ! $request->routeIs('company.setup.*', 'terms.*', 'logout')) {
+        if ($user?->needs_terms_acceptance && ! $request->routeIs('company.setup.*', 'terms.*', 'address.*', 'logout')) {
             return redirect()->route('terms.create');
         }
 
-        if ($user?->needs_payment_setup && ! $request->routeIs('company.setup.*', 'terms.*', 'payment.setup.*', 'logout')) {
+        if ($user?->needs_payment_setup && ! $request->routeIs('company.setup.*', 'terms.*', 'payment.setup.*', 'address.*', 'logout')) {
             return redirect()->route('payment.setup.create');
         }
 

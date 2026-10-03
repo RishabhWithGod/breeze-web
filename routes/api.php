@@ -90,6 +90,13 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('auth/sessions', [AuthController::class, 'sessions'])->name('auth.sessions');
         Route::post('auth/sessions/revoke-others', [AuthController::class, 'revokeOtherSessions'])->name('auth.sessions.revoke-others');
         Route::put('auth/password', [AuthController::class, 'updatePassword'])->name('auth.password.update');
+        // The app's own two-factor switch — separate from the web's.
+        Route::post('auth/two-factor/send', [AuthController::class, 'sendTwoFactorEnableCode'])
+            ->middleware('throttle:two-factor')->name('auth.two-factor.send');
+        Route::post('auth/two-factor/confirm', [AuthController::class, 'confirmTwoFactorEnable'])
+            ->middleware('throttle:two-factor')->name('auth.two-factor.confirm');
+        Route::post('auth/two-factor/disable', [AuthController::class, 'disableTwoFactor'])
+            ->middleware('throttle:two-factor')->name('auth.two-factor.disable');
         Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
 
         Route::middleware('account.active')->group(function () {

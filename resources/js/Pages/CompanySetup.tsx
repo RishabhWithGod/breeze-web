@@ -1,8 +1,8 @@
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
-import { ArrowLeft, ArrowRight, CloudUpload, Globe, Mail, Phone, Save } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CloudUpload, Mail, Phone, Save } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, ButtonLink, Checkbox, SelectField, TextArea, TextInput } from '@/components/common'
+import { AddressField, Button, ButtonLink, Checkbox, TextInput } from '@/components/common'
 import { appLayout, PageTransition } from '@/components/layout'
 import type { SelectOption } from '@/types'
 import { cn, formatUsPhone } from '@/utils'
@@ -60,6 +60,10 @@ function browserTimezone(zones: readonly SelectOption[]): string {
 export default function CompanySetup({ company, defaults, timezones, editing }: CompanySetupProps) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [logoError, setLogoError] = useState<string | null>(null)
+  const [addressPoint, setAddressPoint] = useState<{ latitude: number | null; longitude: number | null }>({
+    latitude: null,
+    longitude: null,
+  })
 
   const { data, setData, post, transform, processing, errors, clearErrors } = useForm<CompanyDraft>({
     name: company?.name ?? '',
@@ -137,13 +141,19 @@ export default function CompanySetup({ company, defaults, timezones, editing }: 
           </FieldCard>
 
           <FieldCard>
-            <TextArea
+            <AddressField
               id="business-address"
               label="Business Address"
-              rows={4}
+              placeholder="Start typing the business address"
               value={data.business_address}
-              maxLength={1000}
-              onChange={(event) => update('business_address', event.target.value)}
+              latitude={addressPoint.latitude}
+              longitude={addressPoint.longitude}
+              onChange={(place) => {
+                // Only the address text is saved on the company; the point just
+                // lets the field say "Location selected" for a chosen suggestion.
+                setAddressPoint({ latitude: place.latitude, longitude: place.longitude })
+                update('business_address', place.address)
+              }}
               {...(errors.business_address ? { error: errors.business_address } : {})}
             />
           </FieldCard>
@@ -194,27 +204,6 @@ export default function CompanySetup({ company, defaults, timezones, editing }: 
               onChange={(event) => update('license_number', event.target.value)}
               {...(errors.license_number ? { error: errors.license_number } : {})}
             />
-          </FieldCard>
-
-          <FieldCard>
-            <label htmlFor="company-timezone" className="mb-2 block text-md font-medium text-white">
-              Time Zone
-            </label>
-            <div className="relative [&_select]:pl-11">
-              <Globe
-                size={18}
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 left-4 z-10 -translate-y-1/2 text-white/85"
-              />
-              <SelectField
-                id="company-timezone"
-                options={[{ value: '', label: 'Select a time zone' }, ...timezones]}
-                value={data.timezone}
-                aria-invalid={Boolean(errors.timezone) || undefined}
-                onChange={(event) => update('timezone', event.target.value)}
-              />
-            </div>
-            {errors.timezone && <p className="mt-2 text-sm text-red-300">{errors.timezone}</p>}
           </FieldCard>
 
           <FieldCard>
