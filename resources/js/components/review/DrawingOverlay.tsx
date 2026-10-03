@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { router } from '@inertiajs/react'
 import { Box, ChevronDown, ChevronLeft, ChevronRight, Maximize, Minus, Plus, RotateCcw, Search } from 'lucide-react'
-import { Button, ButtonLink, Card, IconButton } from '@/components/common'
+import { Button, ButtonLink, Card, FilterTabs, IconButton } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { OccurrenceOrigin, OverlaySymbol, PageDimensions, ReviewStatus } from '@/types'
 import { categoryKey, cn, symbolColor, UNMAPPED_COLOR } from '@/utils'
