@@ -60,7 +60,7 @@ class CompanySetupController extends Controller
         if ($company) {
             $company->update($data);
         } else {
-            $created = $request->user()->company()->create($data);
+            $created = $request->user()->company()->create($data + ['timezone' => config('app.timezone')]);
             $request->user()->unsetRelation('company');
             // The account belongs to the company it just described.
             $request->user()->forceFill(['company_id' => $created->id])->save();

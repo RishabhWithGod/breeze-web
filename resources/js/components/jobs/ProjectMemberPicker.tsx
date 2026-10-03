@@ -28,6 +28,16 @@ export interface ProjectMemberPickerProps {
   disabled?: boolean
   /** Hides the inline "Add a member" option. */
   allowInlineAdd?: boolean
+  /** The heading above the list. */
+  label?: string
+  /** Marks the heading as required and shows `error` under the list. */
+  required?: boolean
+  error?: string
+  /**
+   * Shows the list and the add option even when no team is chosen yet. A member
+   * added that way is on no team; the team is assigned later.
+   */
+  allowNoTeam?: boolean
 }
 
 /**
@@ -47,6 +57,10 @@ export function ProjectMemberPicker({
   onChange,
   disabled = false,
   allowInlineAdd = true,
+  label = 'Project Members',
+  required = false,
+  error,
+  allowNoTeam = false,
 }: ProjectMemberPickerProps) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
@@ -135,10 +149,11 @@ export function ProjectMemberPicker({
     <div>
       <label className="mb-2 flex items-center gap-2 text-md font-medium text-white">
         <Users size={16} aria-hidden className="text-white/60" />
-        Project Members
+        {label}
+        {required && <span className="text-red-300">*</span>}
       </label>
 
-      {teamId === null ? (
+      {teamId === null && !allowNoTeam ? (
         <p className="text-sm text-white/60">
           This client has no crew on file yet — add one from their profile to staff a project.
         </p>
@@ -164,14 +179,16 @@ export function ProjectMemberPicker({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-white/60">No one is on “{teamName}” yet.</p>
+            <p className="text-sm text-white/60">
+              {teamName ? `No one is on “${teamName}” yet.` : 'No members yet — add one below.'}
+            </p>
           )}
 
           {allowInlineAdd &&
             (adding ? (
               <div className="mt-3 rounded-panel border border-hairline bg-white/4 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-white">New member for {teamName}</p>
+                  <p className="text-sm font-medium text-white">New member for {teamName ?? 'this client'}</p>
                   <Button
                     type="button"
                     variant="ghost"
@@ -272,6 +289,8 @@ export function ProjectMemberPicker({
             ))}
         </>
       )}
+
+      {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
     </div>
   )
 }

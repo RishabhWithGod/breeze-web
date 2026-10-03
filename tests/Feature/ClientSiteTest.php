@@ -370,6 +370,7 @@ class ClientSiteTest extends TestCase
         $this->actingAs($this->user)
             ->post(route('clients.store'), [
                 'name' => 'Northgate Holdings',
+                ...$this->crew(),
                 'addresses' => [
                     ['label' => 'Depot', 'address' => '4 Mill Way', 'site_type' => 'industrial'],
                     ['label' => 'Head office', 'address' => '2 King St', 'site_type' => 'commercial'],
@@ -426,5 +427,17 @@ class ClientSiteTest extends TestCase
 
                 $this->assertSame('industrial', $client['addresses'][0]['siteType']);
             });
+    }
+
+    /** The crew a client now has to be added with: a team and a member on it. */
+    private function crew(): array
+    {
+        $team = \App\Models\Team::firstOrCreate(['name' => 'Crew A']);
+        $member = \App\Models\Foreman::firstOrCreate(
+            ['name' => 'Dana Wu'],
+            ['initials' => 'DW', 'role' => 'journeyman', 'team_id' => $team->id],
+        );
+
+        return ['team_id' => $team->id, 'member_ids' => [$member->id]];
     }
 }

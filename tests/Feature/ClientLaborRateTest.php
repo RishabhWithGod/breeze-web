@@ -50,6 +50,7 @@ class ClientLaborRateTest extends TestCase
     {
         $this->actingAs($this->user)->post('/clients', [
             'name' => 'Harborview Electric',
+            ...$this->crew(),
             'labor_rate' => '75',
         ]);
 
@@ -62,6 +63,7 @@ class ClientLaborRateTest extends TestCase
     {
         $this->actingAs($this->user)->post('/clients', [
             'name' => 'Harborview Electric',
+            ...$this->crew(),
             'labor_rate' => '',
         ]);
 
@@ -202,5 +204,17 @@ class ClientLaborRateTest extends TestCase
             'max_material_cost' => 60.0,
             'last_seen_at' => now(),
         ]);
+    }
+
+    /** The crew a client now has to be added with: a team and a member on it. */
+    private function crew(): array
+    {
+        $team = \App\Models\Team::firstOrCreate(['name' => 'Crew A']);
+        $member = \App\Models\Foreman::firstOrCreate(
+            ['name' => 'Dana Wu'],
+            ['initials' => 'DW', 'role' => 'journeyman', 'team_id' => $team->id],
+        );
+
+        return ['team_id' => $team->id, 'member_ids' => [$member->id]];
     }
 }

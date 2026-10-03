@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Foreman;
 use App\Models\JobTask;
+use Illuminate\Support\Facades\DB;
 use App\Models\JobTaskAssignment;
 use App\Models\TeamMember;
 
@@ -36,8 +37,19 @@ class JobCrew
             ->whereIn('job_task_id', $tasks->pluck('id'))
             ->get(['job_task_id', 'team_member_id']);
 
+        // Everyone a task is given to — not just the first journeyman and foreman.
+        $crew = DB::table('job_task_foremen')
+            ->whereIn('job_task_id', $tasks->pluck('id'))
+            ->get(['job_task_id', 'foreman_id'])
+            ->groupBy('job_task_id');
+
+        $foremanIdsOn = fn ($task) => collect([$task->foreman_id, $task->supervisor_id])
+            ->merge(($crew[$task->id] ?? collect())->pluck('foreman_id'))
+            ->filter()
+            ->unique();
+
         $foremanUsers = Foreman::query()
-            ->whereIn('id', $tasks->pluck('foreman_id')->merge($tasks->pluck('supervisor_id'))->filter()->unique())
+            ->whereIn('id', $tasks->flatMap($foremanIdsOn)->unique())
             ->pluck('user_id', 'id');
 
         $memberUsers = TeamMember::query()
@@ -48,10 +60,8 @@ class JobCrew
         $people = [];
 
         foreach ($tasks as $task) {
-            foreach ([$task->foreman_id, $task->supervisor_id] as $foremanId) {
-                if ($foremanId) {
-                    $people[$task->job_id][self::key($foremanUsers[$foremanId] ?? null, 'foreman', $foremanId)] = true;
-                }
+            foreach ($foremanIdsOn($task) as $foremanId) {
+                $people[$task->job_id][self::key($foremanUsers[$foremanId] ?? null, 'foreman', $foremanId)] = true;
             }
         }
 

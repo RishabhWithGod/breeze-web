@@ -272,7 +272,7 @@ class ScheduleController extends Controller
         $myTasks = $job->tasks()
             ->where(function ($query) use ($teamMemberId, $foremanId, $journeymanIds) {
                 if ($journeymanIds->isNotEmpty()) {
-                    $query->whereIn('foreman_id', $journeymanIds)->orWhereIn('supervisor_id', $journeymanIds);
+                    $query->heldByAny($journeymanIds);
                 }
 
                 $query->orWhereHas('members', fn ($q) => $q->where('team_members.id', $teamMemberId));
