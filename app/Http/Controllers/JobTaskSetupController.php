@@ -871,6 +871,7 @@ class JobTaskSetupController extends Controller
         abort_unless(
             $this->policy->createTask($user, $job->schedule ?? new JobSchedule(['job_id' => $job->id])),
             403,
+            "You can't plan tasks on \"{$job->name}\" — it isn't your job.",
         );
     }
 
