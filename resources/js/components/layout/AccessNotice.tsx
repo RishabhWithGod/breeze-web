@@ -11,17 +11,21 @@ import type { SharedPageProps } from '@/types'
 export function AccessNotice() {
   const { flash } = usePage<SharedPageProps>().props
   const message = flash.denied
-  // The flash object is new with every response, so a notice that repeats the last one's words still shows.
-  const [closed, setClosed] = useState<SharedPageProps['flash'] | null>(null)
-  const visible = Boolean(message) && closed !== flash
+  // Compared by the message text, not the flash object itself — a fresh
+  // props object arrives with every response even when the session's own
+  // flash data hasn't changed, which made a dismissed notice reappear on the
+  // very next navigation while Laravel's own one-extra-request grace period
+  // for flash data was still running out.
+  const [closed, setClosed] = useState<string | null>(null)
+  const visible = Boolean(message) && closed !== message
 
   useEffect(() => {
     if (!message) return
 
-    const timer = window.setTimeout(() => setClosed(flash), 8000)
+    const timer = window.setTimeout(() => setClosed(message), 8000)
 
     return () => window.clearTimeout(timer)
-  }, [flash, message])
+  }, [message])
 
   return (
     <AnimatePresence>
@@ -39,7 +43,7 @@ export function AccessNotice() {
           <button
             type="button"
             aria-label="Dismiss"
-            onClick={() => setClosed(flash)}
+            onClick={() => setClosed(message)}
             className="text-white/70 hover:text-white"
           >
             <X size={16} aria-hidden />
