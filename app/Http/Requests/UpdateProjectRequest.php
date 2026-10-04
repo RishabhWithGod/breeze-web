@@ -42,9 +42,15 @@ class UpdateProjectRequest extends FormRequest
             /*
              * Which crew normally works this client's sites — the same field
              * Edit Client's own Team field sets, offered here too so picking
-             * it doesn't need a trip to that screen. Optional.
+             * it doesn't need a trip to that screen. Optional on its own, but
+             * someone actually picked to staff this project has to land on a
+             * real team, not just sit checked on an unset one.
              */
-            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
+            'team_id' => [
+                ...($this->hasSelectedMembers() ? ['required'] : ['nullable']),
+                'integer',
+                CompanyRule::exists('teams'),
+            ],
             /*
              * Who from the client's crew is staffed to it. Optional, and
              * narrowed server-side to that client's own team — see
@@ -65,12 +71,19 @@ class UpdateProjectRequest extends FormRequest
         ];
     }
 
+    /** Whether at least one real person was checked in the Project Members list. */
+    private function hasSelectedMembers(): bool
+    {
+        return count(array_filter((array) $this->input('member_ids', []))) > 0;
+    }
+
     /** @return array<string, string> */
     public function messages(): array
     {
         return [
             'name.required' => 'Project name is required',
             'client_id.required' => 'Pick the client this project is for',
+            'team_id.required' => 'Pick a team for the members you selected',
             'name.min' => 'Use at least 3 characters',
             'end_date.after_or_equal' => 'End date cannot be before the start date',
             'estimate_target_total.numeric' => 'Enter a valid amount',
