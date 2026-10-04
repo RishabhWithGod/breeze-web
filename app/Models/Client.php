@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -61,6 +62,18 @@ class Client extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * This client's own people — picked on Add Client, independent of any
+     * team. Who normally works their sites, as opposed to `team()`, which is
+     * which crew a project is staffed from.
+     *
+     * @return BelongsToMany<Foreman, $this>
+     */
+    public function members(): BelongsToMany
+    {
+        return $this->belongsToMany(Foreman::class, 'client_members')->withTimestamps();
     }
 
     /** @return HasMany<Project, $this> */

@@ -112,6 +112,10 @@ class ClientController extends Controller
             'team_id' => $data['team_id'] ?? null,
         ]);
 
+        // Who normally works this client's sites — on record for this client
+        // alone, not any team.
+        $client->members()->sync($data['member_ids']);
+
         $this->writeAddresses($client, $data['addresses'] ?? []);
         $this->writePrimaryContact($client, $data['contact_email'] ?? null, $data['contact_phone'] ?? null);
 
@@ -136,6 +140,7 @@ class ClientController extends Controller
             'addresses' => fn ($query) => $query->withCount('jobs'),
             'contacts',
             'projects' => fn ($query) => $query->withCount(['uploads', 'aiResults']),
+            'members' => fn ($query) => $query->orderBy('name'),
         ]);
 
         $projectCounts = $client->projects->countBy('status');
@@ -179,6 +184,13 @@ class ClientController extends Controller
                     'jobCount' => $address->jobs_count,
                 ])->values(),
             ],
+            // Who normally works this client's sites — picked on Add Client.
+            'members' => $client->members->map(fn (Foreman $member) => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'role' => $member->role,
+                'roleLabel' => $member->roleLabel(),
+            ])->values(),
             /*
              * The reason this screen exists. A client's work is their projects,
              * the way a job's work is its tasks — so they are listed here, not
