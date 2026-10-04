@@ -100,21 +100,10 @@ class ClientController extends Controller
     {
         $data = $this->validated($request, null, requireCrew: true);
 
-        $members = Foreman::query()->whereIn('id', $data['member_ids'])->get();
-
-        // The Add Client form no longer picks a team, so this only matters when
-        // one is set some other way (e.g. a future edit) — someone already on a
-        // different team cannot be put on this client's.
-        if ($data['team_id'] !== null) {
-            $foreign = $members->first(fn (Foreman $member) => $member->team_id !== null && $member->team_id !== (int) $data['team_id']);
-
-            if ($foreign !== null) {
-                return back()->withInput()->withErrors([
-                    'member_ids' => "{$foreign->name} is on another team. Pick people from this team, or people not on a team yet.",
-                ]);
-            }
-        }
-
+        // Add Client never picks a team — team assignment only happens from the
+        // Teams page (ForemanController) and the Projects page — so there is
+        // nothing here to put a chosen member onto, and no "already on another
+        // team" conflict this form could ever cause.
         $client = $request->user()->clients()->create([
             'name' => $data['name'],
             'website' => $this->normalizeWebsite($data['website'] ?? null),
@@ -122,12 +111,6 @@ class ClientController extends Controller
             'labor_rate' => $data['labor_rate'] ?? null,
             'team_id' => $data['team_id'] ?? null,
         ]);
-
-        // Added without a team? They join this client's team now — the team is
-        // assigned the moment they are put on a client, not before.
-        if ($data['team_id'] !== null) {
-            $members->whereNull('team_id')->each(fn (Foreman $member) => $member->update(['team_id' => $data['team_id']]));
-        }
 
         $this->writeAddresses($client, $data['addresses'] ?? []);
         $this->writePrimaryContact($client, $data['contact_email'] ?? null, $data['contact_phone'] ?? null);
