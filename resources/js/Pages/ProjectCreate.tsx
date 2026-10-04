@@ -16,7 +16,7 @@ import {
   TextInput,
   UnfinishedTakeoffNotice,
 } from '@/components/common'
-import { ProjectMemberPicker } from '@/components/jobs'
+import { ProjectMemberPicker, TEAM_DRAFT_PREFIX, TeamPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { PROJECT_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
 import type { ClientOption, ResumableTakeoff } from '@/types'
@@ -30,6 +30,7 @@ interface ProjectDraft {
   start_date: string
   end_date: string
   estimate_target_total: string
+  team_id: string
   member_ids: string[]
   vendor_rate_list: File[]
 }
@@ -37,6 +38,8 @@ interface ProjectDraft {
 export interface ProjectCreateProps {
   /** The client register, each with the sites it has on file. */
   clients: readonly ClientOption[]
+  /** The crew register, for the Team field — same picker Edit Client offers. */
+  teams: readonly { readonly id: number; readonly name: string }[]
   /** Set when the form was opened from a client's own screen. */
   defaultClientId: number | null
   unfinishedTakeoff: ResumableTakeoff | null
@@ -52,6 +55,7 @@ export interface ProjectCreateProps {
  */
 export default function ProjectCreate({
   clients,
+  teams,
   defaultClientId,
   unfinishedTakeoff,
 }: ProjectCreateProps) {
@@ -74,6 +78,7 @@ export default function ProjectCreate({
       start_date: '',
       end_date: '',
       estimate_target_total: '',
+      team_id: defaultClient?.teamId == null ? '' : String(defaultClient.teamId),
       member_ids: [],
       vendor_rate_list: [],
     })
@@ -100,6 +105,8 @@ export default function ProjectCreate({
       ...current,
       client_id: clientId,
       member_ids: [],
+      // The new client's own team, not whichever one the last client had.
+      team_id: client?.teamId == null ? '' : String(client.teamId),
       /*
        * The type comes from the site, because it is the building that
        * decides it — a client can own a house and a warehouse. Only a site
@@ -113,6 +120,18 @@ export default function ProjectCreate({
 
   const selectedClient = clients.find((option) => String(option.id) === data.client_id)
   const primarySite = selectedClient?.addresses.find((site) => site.isPrimary)
+
+  /*
+   * The member list only knows the client's own team's roster as it was when
+   * the page loaded — picking a different team here (or drafting a new one)
+   * has no roster to show yet, so the picker falls back to "no one yet" and
+   * an inline add starts that team's roster rather than showing someone
+   * else's.
+   */
+  const clientTeamIdValue = selectedClient?.teamId == null ? '' : String(selectedClient.teamId)
+  const teamUnchangedFromClient = data.team_id === clientTeamIdValue
+  const isDraftTeam = data.team_id.startsWith(TEAM_DRAFT_PREFIX)
+  const memberPickerTeamId = data.team_id === '' || isDraftTeam ? null : Number(data.team_id)
 
   const clientOptions = [
     { label: 'Select client', value: '' },
@@ -370,15 +389,30 @@ export default function ProjectCreate({
             </div>
 
             {/*
+              Which crew normally works this client's sites — sets the
+              client's own Team field, the same one Edit Client offers.
+            */}
+            {selectedClient && (
+              <TeamPicker
+                teams={teams}
+                value={data.team_id}
+                onChange={(next) => update('team_id', next)}
+                hint="Who normally works this client's sites. Setting it here updates the client's own team."
+                disabled={processing}
+                {...(errors.team_id ? { error: errors.team_id } : {})}
+              />
+            )}
+
+            {/*
               Who from the client's own crew works this project. Offered only
               once a client is picked — the roster is theirs, not a blank
               choice of everyone on the register.
             */}
             {selectedClient && (
               <ProjectMemberPicker
-                teamId={selectedClient.teamId}
-                teamName={selectedClient.teamName}
-                members={selectedClient.teamMembers}
+                teamId={memberPickerTeamId}
+                teamName={teamUnchangedFromClient ? selectedClient.teamName : null}
+                members={teamUnchangedFromClient ? selectedClient.teamMembers : []}
                 value={data.member_ids}
                 onChange={(ids) => update('member_ids', ids)}
                 disabled={processing}

@@ -3,7 +3,7 @@ import { Plus, Users, X } from 'lucide-react'
 import { Button, SearchSelect, TextInput } from '@/components/common'
 
 /** The sentinel prefix a drafted-but-not-yet-real team's id carries. */
-const DRAFT_PREFIX = 'new:'
+export const TEAM_DRAFT_PREFIX = 'new:'
 
 export interface TeamPickerProps {
   teams: readonly { readonly id: number; readonly name: string }[]
@@ -62,13 +62,13 @@ export function TeamPicker({
     }
 
     setDrafts((current) => (current.includes(trimmed) ? current : [...current, trimmed]))
-    onChange(DRAFT_PREFIX + trimmed)
+    onChange(TEAM_DRAFT_PREFIX + trimmed)
     reset()
   }
 
   const options = [
     ...teams.map((team) => ({ label: team.name, value: String(team.id) })),
-    ...drafts.map((draftName) => ({ label: `${draftName} (new)`, value: DRAFT_PREFIX + draftName })),
+    ...drafts.map((draftName) => ({ label: `${draftName} (new)`, value: TEAM_DRAFT_PREFIX + draftName })),
   ]
 
   return (

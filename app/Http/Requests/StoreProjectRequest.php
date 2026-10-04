@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Project;
+use App\Services\Teams\ResolveInlineTeam;
 use App\Support\CompanyRule;
 use App\Support\UploadLimits;
 use Illuminate\Foundation\Http\FormRequest;
@@ -28,6 +29,10 @@ class StoreProjectRequest extends FormRequest
         if ($this->input('estimate_target_total') === '') {
             $this->merge(['estimate_target_total' => null]);
         }
+
+        // A team typed into the picker but not yet on the register — created
+        // now, only because this project is actually being saved.
+        $this->merge(['team_id' => app(ResolveInlineTeam::class)($this->input('team_id'))]);
     }
 
     /** @return array<string, mixed> */
@@ -39,6 +44,12 @@ class StoreProjectRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:255'],
             // A project is always for somebody.
             'client_id' => ['required', 'integer', 'exists:clients,id'],
+            /*
+             * Which crew normally works this client's sites — the same field
+             * Edit Client's own Team field sets, offered here too so picking
+             * it doesn't need a trip to that screen. Optional.
+             */
+            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             /*
              * Who from the client's crew is staffed to it. Optional, and
              * narrowed server-side to that client's own team — see

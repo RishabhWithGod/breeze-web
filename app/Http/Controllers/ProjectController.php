@@ -15,6 +15,7 @@ use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\Project;
 use App\Models\ProjectActivity;
+use App\Models\Team;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Estimating\ProjectRateBookImporter;
@@ -130,6 +131,8 @@ class ProjectController extends Controller
     {
         return Inertia::render('ProjectCreate', [
             'clients' => $this->clients->options($request->user()),
+            // The crew register, for the Team field — same one Edit Client offers.
+            'teams' => Team::query()->orderBy('name')->get(['id', 'name']),
             /*
              * Opened from a client's own screen, that client is the answer and
              * the form should not ask again. Checked against the owner rather
@@ -158,6 +161,10 @@ class ProjectController extends Controller
         $data = $request->validated();
 
         $client = $request->user()->clients()->with('primaryAddress')->findOrFail($data['client_id']);
+
+        // Which crew normally works this client's sites — the same field
+        // Edit Client's own Team field sets.
+        $client->update(['team_id' => $data['team_id'] ?? null]);
 
         /*
          * The project's location is the client's primary site, snapshotted. A
@@ -407,6 +414,8 @@ class ProjectController extends Controller
                 'memberIds' => $project->members->pluck('id'),
             ],
             'clients' => $this->clients->options($request->user()),
+            // The crew register, for the Team field — same one Edit Client offers.
+            'teams' => Team::query()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -426,6 +435,11 @@ class ProjectController extends Controller
         $data = $request->validated();
 
         $client = $request->user()->clients()->with('primaryAddress')->findOrFail($data['client_id']);
+
+        // Which crew normally works this client's sites — the same field
+        // Edit Client's own Team field sets.
+        $client->update(['team_id' => $data['team_id'] ?? null]);
+
         $site = $client->primaryAddress;
 
         $project->update([
