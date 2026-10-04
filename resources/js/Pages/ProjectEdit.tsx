@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
@@ -64,6 +64,15 @@ export default function ProjectEdit({ project, clients, teams }: ProjectEditProp
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const initialClient = clients.find((option) => option.id === project.clientId)
+  const alreadyStaffedIds = project.memberIds.map(String)
+
+  /*
+   * Who is actually on record as staffed to this project — unlike
+   * `data.member_ids`, which also includes anyone just defaulted or hand-
+   * checked in this still-unsaved form. Reset to empty on a client switch:
+   * nothing staffed under the old client means anything for the new one.
+   */
+  const [assignedIds, setAssignedIds] = useState<readonly string[]>(alreadyStaffedIds)
 
   const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
     useForm<ProjectEditDraft>({
@@ -76,7 +85,14 @@ export default function ProjectEdit({ project, clients, teams }: ProjectEditProp
       estimate_target_total:
         project.estimateTargetTotal === null ? '' : String(project.estimateTargetTotal),
       team_id: initialClient?.teamId == null ? '' : String(initialClient.teamId),
-      member_ids: project.memberIds.map(String),
+      /*
+       * Already-staffed members, plus the client's own crew defaulted in on
+       * top — unchecking one who shouldn't be on this particular project is
+       * the exception.
+       */
+      member_ids: Array.from(
+        new Set([...alreadyStaffedIds, ...(initialClient?.members ?? []).map((member) => String(member.id))]),
+      ),
       vendor_rate_list: [],
     })
 
@@ -97,10 +113,14 @@ export default function ProjectEdit({ project, clients, teams }: ProjectEditProp
     const client = clients.find((option) => String(option.id) === clientId)
     const primary = client?.addresses.find((site) => site.isPrimary)
 
+    // Nothing staffed under the previous client means anything here.
+    setAssignedIds([])
+
     setData((current) => ({
       ...current,
       client_id: clientId,
-      member_ids: [],
+      // The new client's own crew, not whichever one the last client had.
+      member_ids: (client?.members ?? []).map((member) => String(member.id)),
       // The new client's own team, not whichever one the last client had.
       team_id: client?.teamId == null ? '' : String(client.teamId),
       /*
@@ -430,6 +450,7 @@ export default function ProjectEdit({ project, clients, teams }: ProjectEditProp
                 value={data.member_ids}
                 onChange={(ids) => update('member_ids', ids)}
                 disabled={processing}
+                assignedIds={assignedIds}
               />
             )}
           </div>

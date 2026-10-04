@@ -38,6 +38,14 @@ export interface ProjectMemberPickerProps {
    * added that way is on no team; the team is assigned later.
    */
   allowNoTeam?: boolean
+  /**
+   * Who is actually staffed to this project on record right now, as opposed
+   * to `value` — which also includes anyone checked (by default or by hand)
+   * in this still-unsaved form. Omit on a form with nothing to compare
+   * against yet, e.g. Add Project. When given, a member outside this list
+   * carries a "Not assigned yet" tag, checked or not.
+   */
+  assignedIds?: readonly string[]
 }
 
 /**
@@ -61,6 +69,7 @@ export function ProjectMemberPicker({
   required = false,
   error,
   allowNoTeam = false,
+  assignedIds,
 }: ProjectMemberPickerProps) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
@@ -180,11 +189,16 @@ export function ProjectMemberPicker({
                     onChange={() => toggle(String(member.id))}
                     disabled={disabled}
                   />
-                  <StatusChip
-                    hideDot
-                    tone={ROLE_TONE[member.role] ?? 'neutral'}
-                    label={member.roleLabel}
-                  />
+                  <span className="flex items-center gap-2">
+                    {assignedIds && !assignedIds.includes(String(member.id)) && (
+                      <StatusChip hideDot tone="warning" label="Not assigned yet" />
+                    )}
+                    <StatusChip
+                      hideDot
+                      tone={ROLE_TONE[member.role] ?? 'neutral'}
+                      label={member.roleLabel}
+                    />
+                  </span>
                 </div>
               ))}
             </div>

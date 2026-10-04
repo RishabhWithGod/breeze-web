@@ -79,7 +79,9 @@ export default function ProjectCreate({
       end_date: '',
       estimate_target_total: '',
       team_id: defaultClient?.teamId == null ? '' : String(defaultClient.teamId),
-      member_ids: [],
+      // The client's own crew defaults in, already checked — unchecking one
+      // who shouldn't be on this particular project is the exception.
+      member_ids: (defaultClient?.members ?? []).map((member) => String(member.id)),
       vendor_rate_list: [],
     })
 
@@ -104,7 +106,8 @@ export default function ProjectCreate({
     setData((current) => ({
       ...current,
       client_id: clientId,
-      member_ids: [],
+      // The new client's own crew, not whichever one the last client had.
+      member_ids: (client?.members ?? []).map((member) => String(member.id)),
       // The new client's own team, not whichever one the last client had.
       team_id: client?.teamId == null ? '' : String(client.teamId),
       /*
