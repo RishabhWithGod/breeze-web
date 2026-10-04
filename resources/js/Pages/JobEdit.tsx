@@ -344,6 +344,8 @@ export default function JobEdit({ job, clients, projects, uploads, teams, from }
               onChange={(next) => update('team_id', next)}
               hint="New tasks on this job are handed to this crew."
               disabled={processing}
+              // Hidden for now, same as Create Job's own Team field.
+              allowInlineAdd={false}
               {...(errors.team_id ? { error: errors.team_id } : {})}
             />
 

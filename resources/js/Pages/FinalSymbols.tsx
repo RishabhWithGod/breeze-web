@@ -455,6 +455,8 @@ export default function FinalSymbols({
             hint="Tasks on this job are handed to this crew."
             disabled={jobForm.processing}
             required
+            // Hidden for now, same as Create Job's own Team field.
+            allowInlineAdd={false}
             {...(jobForm.errors.team_id ? { error: jobForm.errors.team_id } : {})}
           />
 
