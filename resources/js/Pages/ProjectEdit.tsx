@@ -451,6 +451,9 @@ export default function ProjectEdit({ project, clients, teams }: ProjectEditProp
                 onChange={(ids) => update('member_ids', ids)}
                 disabled={processing}
                 assignedIds={assignedIds}
+                // A client's own crew (client_members) exists independent of
+                // any team now — no team is not the same as no one to staff.
+                allowNoTeam
               />
             )}
           </div>

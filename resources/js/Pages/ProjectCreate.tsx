@@ -436,6 +436,9 @@ export default function ProjectCreate({
                 value={data.member_ids}
                 onChange={(ids) => update('member_ids', ids)}
                 disabled={processing}
+                // A client's own crew (client_members) exists independent of
+                // any team now — no team is not the same as no one to staff.
+                allowNoTeam
               />
             )}
 
