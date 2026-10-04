@@ -28,7 +28,7 @@ return new class extends Migration
         foreach (DB::table('subscriptions')->get(['id', 'plan']) as $subscription) {
             $maxUsers = config("subscription.plans.{$subscription->plan}.max_users");
 
-            DB::table('subscriptions')->whereKey($subscription->id)->update([
+            DB::table('subscriptions')->where('id', $subscription->id)->update([
                 // The old "unlimited" tier had no cap to carry over — ten seats
                 // is this migration's own starting point for it, not a limit.
                 'seats' => $maxUsers ?? 10,
