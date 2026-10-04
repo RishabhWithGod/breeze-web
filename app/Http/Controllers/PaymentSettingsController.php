@@ -287,7 +287,7 @@ class PaymentSettingsController extends Controller
             return null;
         }
 
-        $quote = app(PlanPricing::class)->quote($subscription->plan, $subscription->billing_cycle);
+        $quote = app(PlanPricing::class)->quote($subscription->plan, $subscription->billing_cycle, $subscription->seats);
 
         return [
             'planName' => config("subscription.plans.{$subscription->plan}.name"),

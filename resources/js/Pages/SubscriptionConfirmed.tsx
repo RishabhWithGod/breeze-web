@@ -9,6 +9,7 @@ import {
   FileText,
   ScrollText,
   UserRound,
+  Users,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ButtonLink, StatusChip } from '@/components/common'
@@ -18,6 +19,7 @@ import { cn, formatCalendarDate } from '@/utils'
 
 export interface SubscriptionConfirmedProps {
   plan: { readonly name: string; readonly tagline: string; readonly status: 'active' | 'canceled' }
+  seats: number
   confirmationNumber: string
   billingCycle: 'monthly' | 'yearly'
   /** `YYYY-MM-DD` */
@@ -35,6 +37,7 @@ export interface SubscriptionConfirmedProps {
  */
 export default function SubscriptionConfirmed({
   plan,
+  seats,
   confirmationNumber,
   billingCycle,
   nextBillingDate,
@@ -71,6 +74,12 @@ export default function SubscriptionConfirmed({
               {plan.status === 'active' && <StatusChip pill tone="success" label="Active" />}
             </div>
             <p className="mt-1 text-xs text-white/70">{plan.tagline}</p>
+          </Row>
+
+          <Row icon={Users} tone="blue" label="Seats">
+            <strong className="text-md text-white">
+              {seats} {seats === 1 ? 'seat' : 'seats'}
+            </strong>
           </Row>
 
           <Row icon={ScrollText} tone="purple" label="Confirmation Number">

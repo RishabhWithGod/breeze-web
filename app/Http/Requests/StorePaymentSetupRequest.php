@@ -14,6 +14,9 @@ class StorePaymentSetupRequest extends FormRequest
         return [
             'plan' => ['required', Rule::in(array_keys(config('subscription.plans')))],
             'billing_cycle' => ['required', Rule::in(['monthly', 'yearly'])],
+            // No upper bound: every plan is priced per seat now, so there is
+            // nothing a seat count could exceed — just a sane lower one.
+            'seats' => ['required', 'integer', 'min:1', 'max:9999'],
         ];
     }
 }

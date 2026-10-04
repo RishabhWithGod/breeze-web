@@ -1,5 +1,5 @@
 import { Head, Link, useForm } from '@inertiajs/react'
-import { ArrowLeft, ArrowRight, Check, Info, Lock } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Info, Lock, Minus, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Alert, Button } from '@/components/common'
 import { buttonStyles } from '@/components/common/buttonStyles'
@@ -11,7 +11,7 @@ export interface PaymentSetupProps {
   plans: readonly SubscriptionPlan[]
   annualDiscountPercent: number
   /** What this account chose before, when it comes back to this step. */
-  saved: { readonly plan: string; readonly billingCycle: 'monthly' | 'yearly' } | null
+  saved: { readonly plan: string; readonly billingCycle: 'monthly' | 'yearly'; readonly seats: number } | null
   /** False while no Stripe key is set, so the screen can say so before anyone clicks. */
   stripeReady: boolean
   /** True when the person came back from Stripe without paying. */
@@ -34,6 +34,7 @@ export default function PaymentSetup({
 }: PaymentSetupProps) {
   const initialPlan = plans.find((plan) => plan.key === saved?.plan) ?? plans.find((plan) => plan.popular) ?? plans[0]!
   const [planKey, setPlanKey] = useState(initialPlan.key)
+  const [seats, setSeats] = useState(saved?.seats ?? initialPlan.maxUsers)
 
   const { data, setData, post, transform, processing, errors } = useForm({
     billing_cycle: saved?.billingCycle ?? ('yearly' as 'monthly' | 'yearly'),
@@ -41,13 +42,19 @@ export default function PaymentSetup({
 
   const plan = plans.find((option) => option.key === planKey)!
   const quote = useMemo(
-    () => quotePlan(plan, data.billing_cycle, annualDiscountPercent),
-    [plan, data.billing_cycle, annualDiscountPercent],
+    () => quotePlan(plan, data.billing_cycle, annualDiscountPercent, seats),
+    [plan, data.billing_cycle, annualDiscountPercent, seats],
   )
+
+  /** Picking a different plan starts its seat count fresh — this is not a running tab across plans. */
+  const selectPlan = (option: SubscriptionPlan) => {
+    setPlanKey(option.key)
+    setSeats(option.maxUsers)
+  }
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    transform((form) => ({ ...form, plan: planKey }))
+    transform((form) => ({ ...form, plan: planKey, seats }))
     // Keep scroll only on a validation-error re-render of this same page —
     // a successful subscription moves on to the next screen, which should
     // open at the top.
@@ -55,6 +62,7 @@ export default function PaymentSetup({
   }
 
   const planError = (errors as Record<string, string | undefined>)['plan']
+  const seatsError = (errors as Record<string, string | undefined>)['seats']
 
   return (
     <PageTransition>
@@ -94,10 +102,59 @@ export default function PaymentSetup({
                   key={option.key}
                   plan={option}
                   selected={option.key === planKey}
-                  onSelect={() => setPlanKey(option.key)}
+                  onSelect={() => selectPlan(option)}
                 />
               ))}
             </fieldset>
+          </Panel>
+
+          {/* ============================================================ Seats == */}
+          <Panel title="Seats">
+            <div className="space-y-3 p-4">
+              <p className="text-sm text-white/80">
+                How many people on {plan.name} — the total updates as you adjust this, and you can add more seats
+                any time from Billing Settings.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Fewer seats"
+                  disabled={seats <= 1}
+                  onClick={() => setSeats((current) => Math.max(1, current - 1))}
+                  className="grid size-10 shrink-0 place-items-center rounded-panel border border-hairline-strong bg-white/6 text-white transition-colors hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Minus size={16} aria-hidden />
+                </button>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={9999}
+                  value={seats}
+                  onChange={(event) => setSeats(Math.max(1, Math.min(9999, Number(event.target.value) || 1)))}
+                  aria-label="Number of seats"
+                  className="w-24 rounded-panel border border-hairline-strong bg-white/8 px-3 py-2 text-center text-lg font-semibold text-white tabular-nums focus:border-brand focus:outline-none"
+                />
+                <button
+                  type="button"
+                  aria-label="More seats"
+                  onClick={() => setSeats((current) => Math.min(9999, current + 1))}
+                  className="grid size-10 shrink-0 place-items-center rounded-panel border border-hairline-strong bg-white/6 text-white transition-colors hover:bg-white/12"
+                >
+                  <Plus size={16} aria-hidden />
+                </button>
+                <span className="text-sm text-white/75">
+                  × {formatCents(Math.round(plan.price * 100))}/seat/mo
+                </span>
+              </div>
+              {seatsError && <p className="text-xs text-status-danger">{seatsError}</p>}
+              {plan.volumePricingNote && (
+                <p className="flex gap-2.5 rounded-panel border border-hairline bg-white/4 p-3 text-xs text-white/85">
+                  <Info size={15} aria-hidden className="mt-0.5 shrink-0 text-brand" />
+                  {plan.volumePricingNote}
+                </p>
+              )}
+            </div>
           </Panel>
 
           {/* ================================================ Billing cycle == */}
@@ -184,7 +241,14 @@ export default function PaymentSetup({
                     </span>
                   }
                 />
-                <SummaryRow label="Users Included" value={<strong className="text-white">{plan.usersLabel}</strong>} />
+                <SummaryRow
+                  label="Seats"
+                  value={
+                    <strong className="text-white">
+                      {quote.seats} × {formatCents(Math.round(plan.price * 100))}
+                    </strong>
+                  }
+                />
               </dl>
 
               <dl className="mt-4 space-y-2.5 border-t border-hairline pt-4 text-sm">
@@ -306,11 +370,11 @@ function PlanCard({ plan, selected, onSelect }: { plan: SubscriptionPlan; select
 
       <span className="mt-3 flex items-baseline gap-1.5 text-white">
         <span className="text-3xl font-bold tabular-nums">${plan.price}</span>
-        <span className="text-xs text-white/75">/month</span>
+        <span className="text-xs text-white/75">/user/month</span>
       </span>
 
       <ul className="mt-3 space-y-1.5">
-        {[plan.usersLabel, ...plan.highlights].map((line) => (
+        {plan.highlights.map((line) => (
           <li key={line} className="flex items-center gap-2 text-xs text-white/90">
             <Check size={14} aria-hidden className="shrink-0 text-status-success" />
             {line}

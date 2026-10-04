@@ -47,7 +47,7 @@ class PaymentSetupController extends Controller
         return Inertia::render('PaymentSetup', [
             'plans' => $summary->build($user)['plans'],
             'annualDiscountPercent' => (int) config('subscription.annual_discount_percent'),
-            'saved' => $own ? ['plan' => $own->plan, 'billingCycle' => $own->billing_cycle] : null,
+            'saved' => $own ? ['plan' => $own->plan, 'billingCycle' => $own->billing_cycle, 'seats' => $own->seats] : null,
             // False when no Stripe key is set: the screen says so instead of failing on click.
             'stripeReady' => $stripe->configured(),
             'cancelled' => $request->boolean('cancelled'),
@@ -69,6 +69,7 @@ class PaymentSetupController extends Controller
                 $user,
                 $request->validated('plan'),
                 $request->validated('billing_cycle'),
+                (int) $request->validated('seats'),
                 route('payment.setup.complete').'?session_id={CHECKOUT_SESSION_ID}',
                 route('payment.setup.create').'?cancelled=1',
             );
@@ -109,6 +110,7 @@ class PaymentSetupController extends Controller
 
         $plan = $session['metadata']['plan'] ?? null;
         $cycle = $session['metadata']['cycle'] ?? null;
+        $seats = max(1, (int) ($session['metadata']['seats'] ?? 1));
 
         $genuine = ($session['client_reference_id'] ?? null) === (string) $user->id
             && ($session['status'] ?? null) === 'complete'
@@ -123,11 +125,12 @@ class PaymentSetupController extends Controller
         $details = $session['customer_details'] ?? [];
         $address = $details['address'] ?? [];
 
-        DB::transaction(function () use ($user, $session, $plan, $cycle, $stripeSubscription, $card, $details, $address) {
+        DB::transaction(function () use ($user, $session, $plan, $cycle, $seats, $stripeSubscription, $card, $details, $address) {
             $existing = Subscription::query()->where('user_id', $user->id)->first();
 
             Subscription::updateOrCreate(['user_id' => $user->id], [
                 'plan' => $plan,
+                'seats' => $seats,
                 'status' => 'active',
                 'billing_cycle' => $cycle,
                 'renews_on' => $this->renewsOn($stripeSubscription, $cycle),
@@ -181,6 +184,7 @@ class PaymentSetupController extends Controller
 
         return Inertia::render('SubscriptionConfirmed', [
             'plan' => ['name' => $plan['name'], 'tagline' => $plan['tagline'], 'status' => $subscription->status],
+            'seats' => $subscription->seats,
             'confirmationNumber' => $subscription->confirmation_number,
             'billingCycle' => $subscription->billing_cycle,
             'nextBillingDate' => $subscription->renews_on->toDateString(),

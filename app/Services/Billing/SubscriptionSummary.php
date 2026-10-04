@@ -35,7 +35,9 @@ class SubscriptionSummary
             'status' => $subscription->status,
             'billingCycle' => $subscription->billing_cycle,
             'renewsOn' => $subscription->renews_on->toDateString(),
-            'seats' => ['used' => $seatsUsed, 'limit' => $plan['max_users']],
+            // The seats this company actually bought, not the plan's own
+            // suggested starting count — see `Subscription::seats`.
+            'seats' => ['used' => $seatsUsed, 'limit' => $subscription->seats, 'byRole' => $this->seatsUsedByRole($user)],
             'annualDiscountPercent' => (int) config('subscription.annual_discount_percent'),
             'usage' => [
                 [
@@ -77,14 +79,16 @@ class SubscriptionSummary
     /** Whether one more person can hold an account on this person's plan today. */
     public function hasSeatAvailable(?User $user): bool
     {
-        $limit = $this->plan(Subscription::forUser($user)->plan)['max_users'];
-
-        return $limit === null || $this->seatsUsed($user) < $limit;
+        return $this->seatsUsed($user) < Subscription::forUser($user)->seats;
     }
 
     /**
      * Whether the company could move onto `$planKey` today — refused while it
-     * has more users, projects or storage than that plan holds.
+     * has more projects or storage than that plan holds.
+     *
+     * Seats are not part of this: a plan switch changes the per-seat rate and
+     * feature set, not how many seats were bought, so the seat count carries
+     * over unchanged and there is nothing about it to block here.
      *
      * @return list<string> what stands in the way; empty when nothing does
      */
@@ -92,11 +96,6 @@ class SubscriptionSummary
     {
         $limits = $this->plan($planKey)['limits'];
         $blockers = [];
-
-        $maxUsers = $this->plan($planKey)['max_users'];
-        if ($maxUsers !== null && $this->seatsUsed($user) > $maxUsers) {
-            $blockers[] = "{$this->seatsUsed($user)} people have an account, and this plan has {$maxUsers}";
-        }
 
         $projects = Project::query()->count();
         if ($projects > $limits['projects']) {
@@ -114,14 +113,38 @@ class SubscriptionSummary
     /** Everyone who can sign in — the seats taken. */
     private function seatsUsed(?User $user = null): int
     {
+        return $this->companyUsers($user)->count();
+    }
+
+    /**
+     * The same seats taken, broken down by role — what "Invite Team Members"
+     * shows before someone tries to add another person and only then finds
+     * out there is no room left.
+     *
+     * @return list<array{role: string, count: int}>
+     */
+    private function seatsUsedByRole(?User $user = null): array
+    {
+        return $this->companyUsers($user)
+            ->selectRaw('role, count(*) as count')
+            ->groupBy('role')
+            ->orderByDesc('count')
+            ->get()
+            ->map(fn ($row) => ['role' => $row->role ?? 'Unassigned', 'count' => (int) $row->count])
+            ->values()
+            ->all();
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Builder<User> */
+    private function companyUsers(?User $user = null)
+    {
         return User::query()
             ->where('status', User::STATUS_ACTIVE)
             // A company's plan counts that company's people, not everyone's.
             ->when(
                 $user?->company_id !== null,
                 fn ($query) => $query->where('company_id', $user->company_id),
-            )
-            ->count();
+            );
     }
 
     /** @return array<string, mixed> */

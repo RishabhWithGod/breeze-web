@@ -60,7 +60,7 @@ class TechnicianController extends Controller
 
         // Approving gives someone an account; a plan that is full has no room for one.
         if (! $user->isActive() && ! $this->subscription->hasSeatAvailable($request->user())) {
-            return back()->withErrors(['team_id' => 'Your plan is full. Upgrade in Settings → Subscription to approve '.$user->name.'.']);
+            return back()->withErrors(['team_id' => 'No seats left. Buy more in Settings → Subscription to approve '.$user->name.'.']);
         }
 
         $this->approvals->approve($user, $request->user(), $data['team_id'], $data['role']);

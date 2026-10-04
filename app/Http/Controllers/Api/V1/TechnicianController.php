@@ -47,7 +47,7 @@ class TechnicianController extends Controller
         ]);
 
         if (! $user->isActive() && ! $this->subscription->hasSeatAvailable($request->user())) {
-            return $this->fail('Your plan is full. Upgrade in Settings → Subscription to approve '.$user->name.'.', 422);
+            return $this->fail('No seats left. Buy more in Settings → Subscription to approve '.$user->name.'.', 422);
         }
 
         $this->approvals->approve($user, $request->user(), $data['team_id'], $data['role']);

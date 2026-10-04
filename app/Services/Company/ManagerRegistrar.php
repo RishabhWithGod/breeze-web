@@ -47,7 +47,7 @@ class ManagerRegistrar
     {
         if (! $this->subscription->hasSeatAvailable($actor)) {
             throw ValidationException::withMessages([
-                $errorField => 'Your plan is full. Upgrade your plan to add another person.',
+                $errorField => 'No seats left. Buy more seats to add another person.',
             ]);
         }
 

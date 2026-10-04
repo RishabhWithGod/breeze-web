@@ -290,15 +290,9 @@ export default function PaymentSettings({
                     label="Users"
                     value={
                       <span
-                        className={
-                          subscription.seats.limit !== null && subscription.seats.used > subscription.seats.limit
-                            ? 'text-red-300'
-                            : undefined
-                        }
+                        className={subscription.seats.used > subscription.seats.limit ? 'text-red-300' : undefined}
                       >
-                        {subscription.seats.limit === null
-                          ? `${subscription.seats.used} · unlimited`
-                          : `${subscription.seats.used} of ${subscription.seats.limit}`}
+                        {subscription.seats.used} of {subscription.seats.limit}
                       </span>
                     }
                   />

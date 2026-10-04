@@ -16,7 +16,7 @@ class Subscription extends Model
 {
     public const CYCLES = ['monthly', 'yearly'];
 
-    protected $fillable = ['user_id', 'plan', 'status', 'stripe_customer_id', 'stripe_subscription_id', 'confirmation_number', 'receipt_url', 'billing_cycle', 'renews_on', 'updated_by'];
+    protected $fillable = ['user_id', 'plan', 'seats', 'status', 'stripe_customer_id', 'stripe_subscription_id', 'confirmation_number', 'receipt_url', 'billing_cycle', 'renews_on', 'updated_by'];
 
     protected function casts(): array
     {
@@ -46,6 +46,7 @@ class Subscription extends Model
 
         return static::query()->whereNull('user_id')->first() ?? static::create([
             'plan' => $plan,
+            'seats' => config("subscription.plans.{$plan}.max_users") ?? 10,
             'status' => 'active',
             'billing_cycle' => 'monthly',
             'renews_on' => Carbon::today()->addMonth(),

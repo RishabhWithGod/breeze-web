@@ -11,6 +11,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Policies\JobSchedulePolicy;
 use App\Rules\UsPhoneNumber;
+use App\Services\Billing\SubscriptionSummary;
 use App\Services\Company\ManagerRegistrar;
 use App\Services\TimeTracking\TeamMemberResolver;
 use App\Support\CompanyRule;
@@ -177,7 +178,7 @@ class ForemanController extends Controller
         return JobTask::workload($closed, fn ($query) => $query->ownedBy($owner));
     }
 
-    public function create(Request $request): Response
+    public function create(Request $request, SubscriptionSummary $summary): Response
     {
         abort_unless($this->canManage($request->user()), 403);
 
@@ -189,12 +190,16 @@ class ForemanController extends Controller
          * is the one already picked there rather than asked for twice.
          */
         $job = $this->jobFor($request);
+        $seats = $summary->build($request->user())['seats'];
 
         return Inertia::render('ForemanCreate', [
             ...$this->formProps(),
             'jobId' => $job?->id,
             'defaultTeamId' => $job?->team_id,
             'returnUrl' => $job === null ? null : route('jobs.tasks.setup', $job),
+            // So the form can say how many seats are left before someone fills
+            // the whole thing in and only then finds out there is no room.
+            'seats' => ['used' => $seats['used'], 'limit' => $seats['limit'], 'byRole' => $seats['byRole']],
         ]);
     }
 

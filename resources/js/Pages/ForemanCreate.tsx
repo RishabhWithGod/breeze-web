@@ -15,6 +15,7 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
+import type { SeatsByRole } from '@/types'
 import { formatUsPhone, toTitleCase } from '@/utils'
 
 interface ForemanDraft {
@@ -46,6 +47,8 @@ export interface ForemanCreateProps {
   defaultTeamId: number | null
   /** Where Back and a successful add go — that same task screen, or the register. */
   returnUrl: string | null
+  /** Seats on the company's plan — so a full register says so before the form is filled in, not after. */
+  seats: { readonly used: number; readonly limit: number; readonly byRole: readonly SeatsByRole[] }
 }
 
 /**
@@ -60,7 +63,7 @@ export interface ForemanCreateProps {
  * Initials are not asked for at all. "Dana Wu" gives "DW", and a field the app
  * can fill in itself is one more thing to type and one more thing to get wrong.
  */
-export default function ForemanCreate({ teams, roles, jobId, defaultTeamId, returnUrl }: ForemanCreateProps) {
+export default function ForemanCreate({ teams, roles, jobId, defaultTeamId, returnUrl, seats }: ForemanCreateProps) {
   const backUrl = returnUrl ?? ROUTES.teams
 
   const { data, setData, post, processing, errors, hasErrors, clearErrors } = useForm<ForemanDraft>({
@@ -121,6 +124,7 @@ export default function ForemanCreate({ teams, roles, jobId, defaultTeamId, retu
 
       <form onSubmit={submit} noValidate className="space-y-6">
         <RequiredFieldsNotice fields={['Member Name', 'Role', 'Email', 'Password', 'Confirm Password']} />
+        <SeatsNotice seats={seats} />
         <AnimatePresence initial={false}>
           {hasErrors && (
             <Alert key="form-error" tone="danger" title="Check the form">
@@ -297,3 +301,37 @@ export default function ForemanCreate({ teams, roles, jobId, defaultTeamId, retu
 }
 
 ForemanCreate.layout = appLayout
+
+/**
+ * How many of the company's seats are already spoken for, by role — read
+ * before filling the form in, not discovered after submitting it and being
+ * refused.
+ */
+function SeatsNotice({
+  seats,
+}: {
+  seats: { readonly used: number; readonly limit: number; readonly byRole: readonly SeatsByRole[] }
+}) {
+  const remaining = Math.max(0, seats.limit - seats.used)
+  const full = remaining === 0
+
+  return (
+    <Alert tone={full ? 'warning' : 'info'} title={full ? 'No seats left' : `${remaining} of ${seats.limit} seats left`}>
+      <span className="block">
+        {seats.used} of {seats.limit} seats are in use
+        {seats.byRole.length > 0 && (
+          <>
+            {' — '}
+            {seats.byRole.map(({ role, count }, index) => (
+              <span key={role}>
+                {index > 0 && ', '}
+                {count} {role}
+              </span>
+            ))}
+          </>
+        )}
+        .{full && ' Buy more seats from Billing Settings before adding another member.'}
+      </span>
+    </Alert>
+  )
+}

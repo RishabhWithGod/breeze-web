@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Alert, Button, Card, ConfirmDialog, Modal, RequiredFieldsNotice, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import type { SharedPageProps } from '@/types'
+import type { SeatsByRole, SharedPageProps } from '@/types'
 import { cn, formatUsPhone } from '@/utils'
 
 interface InvitationRow {
@@ -38,8 +38,10 @@ export interface TeamSetupProps {
   seats: {
     readonly used: number
     readonly pending: number
-    readonly limit: number | null
-    readonly available: number | null
+    /** Seats this company actually bought — see `Subscription::seats`. No plan is unlimited any more. */
+    readonly limit: number
+    readonly available: number
+    readonly byRole: readonly SeatsByRole[]
   }
   /** Crew already on the register. */
   members: number
@@ -107,8 +109,8 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
   const invalid = (draft: Draft) =>
     draft.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(draft.email.trim()) || draft.teamId.trim() === ''
 
-  const seatsLeft = seats.available === null ? null : seats.available - filled.length
-  const overSeats = seatsLeft !== null && seatsLeft < 0
+  const seatsLeft = seats.available - filled.length
+  const overSeats = seatsLeft < 0
 
   const change = (key: string, patch: Partial<Draft>) =>
     setDrafts((current) => current.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)))
@@ -506,10 +508,21 @@ function SeatStrip({ seats, members, adding }: { seats: TeamSetupProps['seats'];
         </span>
       )}
       <span className={cn('ml-auto font-semibold', seats.available === 0 ? 'text-red-300' : 'text-brand')}>
-        {seats.limit === null ? 'Unlimited seats' : `${seats.available} of ${seats.limit} seats available`}
+        {seats.available} of {seats.limit} seats available
       </span>
       {members > 0 && (
         <span className="w-full text-xs text-white/60 sm:w-auto">{members} already on the crew register.</span>
+      )}
+      {seats.byRole.length > 0 && (
+        <span className="w-full text-xs text-white/60 sm:w-auto">
+          By role:{' '}
+          {seats.byRole.map(({ role, count }, index) => (
+            <span key={role}>
+              {index > 0 && ', '}
+              {count} {role}
+            </span>
+          ))}
+        </span>
       )}
     </div>
   )
