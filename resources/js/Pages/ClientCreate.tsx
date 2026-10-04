@@ -241,6 +241,7 @@ export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, team
               hint="Who normally works this client's sites. Projects raised for them can be staffed from this crew."
               disabled={processing}
               required
+              allowInlineAdd={false}
               {...(errors.team_id ? { error: errors.team_id } : {})}
             />
 
