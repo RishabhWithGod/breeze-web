@@ -259,6 +259,8 @@ export interface ClientOption {
   readonly teamName: string | null
   /** That crew's roster — who a project raised for this client can be staffed with. */
   readonly teamMembers: readonly ClientTeamMemberOption[]
+  /** This client's own people, picked on Add Client — independent of any team. */
+  readonly members: readonly ClientTeamMemberOption[]
 }
 
 /**

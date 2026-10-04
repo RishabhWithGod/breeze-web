@@ -19,7 +19,7 @@ import {
 import { ProjectMemberPicker, TEAM_DRAFT_PREFIX, TeamPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { PROJECT_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
-import type { ClientOption, ResumableTakeoff } from '@/types'
+import type { ClientOption, ClientTeamMemberOption, ResumableTakeoff } from '@/types'
 import { cleanAmountInput, formatAmountInput, formatFileSize } from '@/utils'
 
 interface ProjectDraft {
@@ -132,6 +132,23 @@ export default function ProjectCreate({
   const teamUnchangedFromClient = data.team_id === clientTeamIdValue
   const isDraftTeam = data.team_id.startsWith(TEAM_DRAFT_PREFIX)
   const memberPickerTeamId = data.team_id === '' || isDraftTeam ? null : Number(data.team_id)
+
+  /*
+   * Who can be staffed to this project: the client's own people (picked on
+   * Add Client, independent of any team) plus — when the team here still
+   * matches the client's own — that team's roster too. Either one is a
+   * legitimate way someone ended up on this client's crew.
+   */
+  const memberPickerMembers: ClientTeamMemberOption[] = []
+  const seenMemberIds = new Set<number>()
+  for (const member of [
+    ...(selectedClient?.members ?? []),
+    ...(teamUnchangedFromClient ? (selectedClient?.teamMembers ?? []) : []),
+  ]) {
+    if (seenMemberIds.has(member.id)) continue
+    seenMemberIds.add(member.id)
+    memberPickerMembers.push(member)
+  }
 
   const clientOptions = [
     { label: 'Select client', value: '' },
@@ -412,7 +429,7 @@ export default function ProjectCreate({
               <ProjectMemberPicker
                 teamId={memberPickerTeamId}
                 teamName={teamUnchangedFromClient ? selectedClient.teamName : null}
-                members={teamUnchangedFromClient ? selectedClient.teamMembers : []}
+                members={memberPickerMembers}
                 value={data.member_ids}
                 onChange={(ids) => update('member_ids', ids)}
                 disabled={processing}
