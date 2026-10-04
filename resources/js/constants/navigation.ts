@@ -15,6 +15,7 @@ import {
   Sparkles,
   Users,
   ListChecks,
+  Zap,
 } from 'lucide-react'
 import { ROUTES } from './routes'
 import type { NavItem } from '@/types'
@@ -46,6 +47,8 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   },
   // Lands on the takeoff history, matching the reference product.
   { label: 'AI Takeoff', href: ROUTES.aiTakeoff, icon: Sparkles, permission: 'takeoff.view' },
+  // A static preview of the calculation tools, ahead of the real engine.
+  { label: 'Electrical Tools', href: ROUTES.electricalTools, icon: Zap },
   {
     label: 'Estimates',
     href: ROUTES.estimates,

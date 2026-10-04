@@ -27,6 +27,8 @@ export const ROUTES = {
   getStarted: '/get-started',
   /** AI Takeoff module landing screen — the takeoff history. */
   aiTakeoff: '/ai-takeoff',
+  /** Electrical Tools landing screen — the calculator catalog. */
+  electricalTools: '/electrical-tools',
   /** Address suggestions for the Site / Location field. JSON, not a page. */
   addressLookup: '/address-lookup',
   /** The place behind a chosen suggestion — asked once, on selection. */
@@ -148,6 +150,8 @@ export const routeTo = {
    */
   jobTaskSetupFromJob: (jobId: number, origin: JobOrigin | null = null) =>
     `/jobs/${jobId}/tasks/setup?from=job${origin ? `&origin=${origin}` : ''}`,
+  /** One tool's own preview screen. */
+  electricalTool: (slug: string) => `/electrical-tools/${slug}`,
   project: (projectId: number) => `/projects/${projectId}`,
   projectEdit: (projectId: number) => `/projects/${projectId}/edit`,
   /** AI Takeoff upload, opened with this client already picked. */

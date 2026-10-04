@@ -23,6 +23,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFolderController;
 use App\Http\Controllers\DrawingDetailsController;
+use App\Http\Controllers\ElectricalToolsController;
 use App\Http\Controllers\EstimateBuilderController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\EstimateDetailController;
@@ -178,6 +179,12 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
             ->name('uploads.store');
         // Polled by the upload screen; never blocks a render.
         Route::get('engine-status', [UploadController::class, 'engineStatus'])->name('ai.engine-status');
+    });
+
+    // Electrical Tools: a preview of the calculation tools, ahead of the real engine.
+    Route::prefix('electrical-tools')->group(function () {
+        Route::get('/', [ElectricalToolsController::class, 'index'])->name('electrical-tools.index');
+        Route::get('{tool}', [ElectricalToolsController::class, 'show'])->name('electrical-tools.show');
     });
 
     Route::delete('takeoffs/{project}', [TakeoffHistoryController::class, 'destroy'])->name('takeoffs.destroy');
