@@ -71,9 +71,14 @@ export interface JobTaskSetupProps {
   team: { readonly id: number; readonly name: string } | null
 }
 
-const emptyRow = (): TaskRow => ({
+/**
+ * A blank task, pre-staffed with whoever is already confirmed on this job's
+ * project — picked there, they are presumed to be working the tasks raised
+ * under it too, unless this particular one says otherwise.
+ */
+const emptyRow = (defaultMemberIds: readonly string[] = []): TaskRow => ({
   title: '',
-  member_ids: [],
+  member_ids: [...defaultMemberIds],
   estimate_item_ids: [],
 })
 
@@ -131,7 +136,9 @@ export default function JobTaskSetup({
   members,
   team,
 }: JobTaskSetupProps) {
-  const [rows, setRows] = useState<TaskRow[]>(() => readTaskDraft(job.id) ?? [emptyRow()])
+  const defaultMemberIds = members.map((person) => String(person.id))
+
+  const [rows, setRows] = useState<TaskRow[]>(() => readTaskDraft(job.id) ?? [emptyRow(defaultMemberIds)])
   const [processing, setProcessing] = useState(false)
 
   // Written a short pause after the last change, not on every keystroke.
@@ -392,7 +399,7 @@ export default function JobTaskSetup({
               size="sm"
               leftIcon={Plus}
               disabled={processing}
-              onClick={() => setRows((current) => [...current, emptyRow()])}
+              onClick={() => setRows((current) => [...current, emptyRow(defaultMemberIds)])}
             >
               Add another task
             </Button>
