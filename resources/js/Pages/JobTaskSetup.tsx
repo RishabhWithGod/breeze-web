@@ -243,7 +243,10 @@ export default function JobTaskSetup({
         />
       )}
 
-      <RequiredFieldsNotice fields={['Task name']} className="mb-6" />
+      <RequiredFieldsNotice
+        fields={estimateLines.length > 0 ? ['Task name', 'Estimate lines', 'Members'] : ['Task name', 'Members']}
+        className="mb-6"
+      />
 
       {hasErrors && (
         <Alert tone="danger" title="Check the tasks" className="mb-6">
@@ -337,7 +340,9 @@ export default function JobTaskSetup({
 
                     {/* What the task is the work for, taken from the estimate. */}
                     <div>
-                      <p className="mb-2 text-md font-medium text-white">Estimate lines</p>
+                      <p className="mb-2 text-md font-medium text-white">
+                        Estimate lines{estimateLines.length > 0 && <span className="text-red-300">*</span>}
+                      </p>
                       <TaskLinePicker
                         lines={estimateLines}
                         value={row.estimate_item_ids}
