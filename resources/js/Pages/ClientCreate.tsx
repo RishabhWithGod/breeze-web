@@ -15,7 +15,7 @@ import {
   TextInput,
   UnfinishedTakeoffNotice,
 } from '@/components/common'
-import { ProjectMemberPicker, TeamPicker } from '@/components/jobs'
+import { ProjectMemberPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { useDisclosure } from '@/hooks'
 import { ROUTES } from '@/constants'
@@ -29,7 +29,6 @@ interface ClientDraft {
   contact_phone: string
   notes: string
   labor_rate: string
-  team_id: string
   member_ids: string[]
   addresses: DraftAddress[]
 }
@@ -43,9 +42,7 @@ export interface ClientCreateProps {
   unfinishedTakeoff: ResumableTakeoff | null
   /** What the labor rate field starts at — the configured default. */
   defaultLaborRate: number
-  /** The crew register, for the "which team works this client's sites" picker. */
-  teams: readonly { readonly id: number; readonly name: string }[]
-  /** Everyone on the register, with the team they are on — null when not on one yet. */
+  /** Everyone on the register, offered as this client's members regardless of team. */
   members: readonly (ClientTeamMemberOption & { readonly teamId: number | null })[]
 }
 
@@ -56,7 +53,7 @@ export interface ClientCreateProps {
  * itself is a project under them, and a drawing is uploaded against one of
  * those, so neither belongs on this screen.
  */
-export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, teams, members }: ClientCreateProps) {
+export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, members }: ClientCreateProps) {
   const confirmNew = useDisclosure()
 
   const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
@@ -67,7 +64,6 @@ export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, team
       contact_phone: '',
       notes: '',
       labor_rate: String(defaultLaborRate),
-      team_id: '',
       member_ids: [],
       addresses: [emptyAddress()],
     })
@@ -84,12 +80,6 @@ export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, team
     setData(field, value)
     if (errors[field]) clearErrors(field)
   }
-
-  const teamId = data.team_id === '' ? null : Number(data.team_id)
-  const teamName = teams.find((team) => team.id === teamId)?.name ?? null
-  /** The chosen team's people, plus anyone not on a team yet. */
-  const membersFor = (id: number | null) => members.filter((member) => member.teamId === null || member.teamId === id)
-  const teamOptions = membersFor(teamId)
 
   const create = () => {
     confirmNew.close()
@@ -229,34 +219,18 @@ export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, team
               />
             </div>
 
-            <TeamPicker
-              teams={teams}
-              value={data.team_id}
-              onChange={(next) => {
-                update('team_id', next)
-                // Someone picked for the old team may not be on this one.
-                const allowed = new Set(membersFor(next === '' ? null : Number(next)).map((member) => String(member.id)))
-                setData('member_ids', data.member_ids.filter((id) => allowed.has(id)))
-              }}
-              hint="Who normally works this client's sites. Projects raised for them can be staffed from this crew."
-              disabled={processing}
-              required
-              allowInlineAdd={false}
-              {...(errors.team_id ? { error: errors.team_id } : {})}
-            />
-
             {/*
-              Who from that team works for this client. The chosen team's people
-              plus anyone not on a team yet — a member can be added without a
-              team, and is put on this one when they are picked here.
+              Who works for this client — the whole crew register, not
+              filtered by team. A member picked here who isn't on a team yet
+              is unaffected; team assignment happens elsewhere.
             */}
             <ProjectMemberPicker
               label="Members"
               required
               allowNoTeam
-              teamId={teamId}
-              teamName={teamName}
-              members={teamOptions}
+              teamId={null}
+              teamName={null}
+              members={members}
               value={data.member_ids}
               onChange={(ids) => update('member_ids', ids)}
               disabled={processing}

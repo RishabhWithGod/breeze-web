@@ -84,13 +84,8 @@ class ClientController extends Controller
             // shown as a real number rather than an empty box, so leaving it
             // alone is a decision rather than an oversight.
             'defaultLaborRate' => (float) config('ai.estimating.labor_rate'),
-            // The crew register, for the "which team normally works this
-            // client's sites" picker — with a way to add one inline, the same
-            // as a job's own team picker.
-            'teams' => Team::query()->orderBy('name')->get(['id', 'name']),
-            // Everyone on the register, with the team they are on (or none yet) —
-            // the Add Client form offers the chosen team's people plus anyone
-            // not on a team, since a member can be added before a team is decided.
+            // Everyone on the register — Add Client offers the whole crew,
+            // not filtered by team, since the form no longer picks one.
             'members' => Foreman::query()->orderBy('name')->get()->map(fn (Foreman $member) => [
                 'id' => $member->id,
                 'name' => $member->name,
@@ -105,15 +100,19 @@ class ClientController extends Controller
     {
         $data = $this->validated($request, null, requireCrew: true);
 
-        // Only the chosen crew's people, or people not on any crew yet — someone
-        // already on another team cannot be put on this client's.
         $members = Foreman::query()->whereIn('id', $data['member_ids'])->get();
-        $foreign = $members->first(fn (Foreman $member) => $member->team_id !== null && $member->team_id !== (int) $data['team_id']);
 
-        if ($foreign !== null) {
-            return back()->withInput()->withErrors([
-                'member_ids' => "{$foreign->name} is on another team. Pick people from this team, or people not on a team yet.",
-            ]);
+        // The Add Client form no longer picks a team, so this only matters when
+        // one is set some other way (e.g. a future edit) — someone already on a
+        // different team cannot be put on this client's.
+        if ($data['team_id'] !== null) {
+            $foreign = $members->first(fn (Foreman $member) => $member->team_id !== null && $member->team_id !== (int) $data['team_id']);
+
+            if ($foreign !== null) {
+                return back()->withInput()->withErrors([
+                    'member_ids' => "{$foreign->name} is on another team. Pick people from this team, or people not on a team yet.",
+                ]);
+            }
         }
 
         $client = $request->user()->clients()->create([
@@ -126,7 +125,9 @@ class ClientController extends Controller
 
         // Added without a team? They join this client's team now — the team is
         // assigned the moment they are put on a client, not before.
-        $members->whereNull('team_id')->each(fn (Foreman $member) => $member->update(['team_id' => $data['team_id']]));
+        if ($data['team_id'] !== null) {
+            $members->whereNull('team_id')->each(fn (Foreman $member) => $member->update(['team_id' => $data['team_id']]));
+        }
 
         $this->writeAddresses($client, $data['addresses'] ?? []);
         $this->writePrimaryContact($client, $data['contact_email'] ?? null, $data['contact_phone'] ?? null);
@@ -395,10 +396,10 @@ class ClientController extends Controller
             'labor_rate' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             /*
              * The crew this client's projects are normally staffed from.
-             * Optional — a client can be on the register before anyone
-             * decides who works their sites.
+             * Always optional — Add Client no longer picks one; a client can
+             * be on the register before anyone decides who works their sites.
              */
-            'team_id' => [$requireCrew ? 'required' : 'nullable', 'integer', CompanyRule::exists('teams')],
+            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             // Required when a client is added: who from that crew works for them.
             'member_ids' => $requireCrew ? ['required', 'array', 'min:1'] : ['nullable', 'array'],
             'member_ids.*' => ['integer', CompanyRule::exists('foremen')],
@@ -433,7 +434,6 @@ class ClientController extends Controller
         ], [
             'name.required' => 'Client name is required',
             'name.unique' => 'A client with that name is already on the register',
-            'team_id.required' => 'Pick the team for this client',
             'member_ids.required' => 'Pick at least one member',
             'member_ids.min' => 'Pick at least one member',
             'contact_email.email' => 'That does not look like an email address',
