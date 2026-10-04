@@ -47,8 +47,6 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   },
   // Lands on the takeoff history, matching the reference product.
   { label: 'AI Takeoff', href: ROUTES.aiTakeoff, icon: Sparkles, permission: 'takeoff.view' },
-  // A static preview of the calculation tools, ahead of the real engine.
-  { label: 'Electrical Tools', href: ROUTES.electricalTools, icon: Zap },
   {
     label: 'Estimates',
     href: ROUTES.estimates,
@@ -107,6 +105,8 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
       // },
     ],
   },
+  // A static preview of the calculation tools, ahead of the real engine.
+  { label: 'Electrical Tools', href: ROUTES.electricalTools, icon: Zap },
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock, permission: 'time_tracking.view' },
   { label: 'Billing', href: ROUTES.billing, icon: ReceiptText, permission: 'billing.view' },
   // { label: 'Analytics', href: ROUTES.jobCosting, icon: ChartColumn },
