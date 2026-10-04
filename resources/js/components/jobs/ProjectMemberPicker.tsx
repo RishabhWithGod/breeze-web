@@ -115,10 +115,20 @@ export function ProjectMemberPicker({
       return
     }
 
+    const trimmedName = name.trim()
+    /*
+     * Set before the request, not in `onSuccess`: Inertia swaps in the
+     * refreshed `members` prop — which is what the matching effect above
+     * watches — as part of resolving the visit, before `onSuccess` ever
+     * runs. Setting it there was always one render too late, so the new
+     * member showed up on the list but was never checked off.
+     */
+    justAdded.current = trimmedName
+
     router.post(
       ROUTES.foremen,
       {
-        name: name.trim(),
+        name: trimmedName,
         role,
         team_id: teamId,
         email: email.trim(),
@@ -135,11 +145,11 @@ export function ProjectMemberPicker({
           setSaving(true)
           setAddErrors({})
         },
-        onSuccess: () => {
-          justAdded.current = name.trim()
-          reset()
+        onSuccess: () => reset(),
+        onError: (errors) => {
+          justAdded.current = null
+          setAddErrors(errors as Record<string, string>)
         },
-        onError: (errors) => setAddErrors(errors as Record<string, string>),
         onFinish: () => setSaving(false),
       },
     )
