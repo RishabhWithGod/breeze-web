@@ -245,7 +245,7 @@ export default function PaymentSetup({
                   label="Seats"
                   value={
                     <strong className="text-white">
-                      {quote.seats} × {formatCents(Math.round(plan.price * 100))}
+                      {quote.seats} × {formatCents(Math.round(plan.price * 100) * quote.months)}
                     </strong>
                   }
                 />
