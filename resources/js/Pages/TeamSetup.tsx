@@ -1,7 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react'
-import { ArrowRight, Pencil, Plus, RotateCw, Search, Send, Trash2 } from 'lucide-react'
+import { ArrowRight, Plus, RotateCw, Search, Send, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Alert, Button, Card, ConfirmDialog, Modal, RequiredFieldsNotice, TextInput } from '@/components/common'
+import { Alert, Button, Card, ConfirmDialog, RequiredFieldsNotice, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { SeatsByRole, SharedPageProps } from '@/types'
@@ -178,16 +178,11 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
 
   return (
     <PageTransition>
-      <Head title="Team Setup" />
+      <Head title="Member Setup" />
 
       <PageHeader
-        title="Team Setup"
+        title="Member Setup"
         subtitle="Invite your crew members and assign them to teams. We'll send an invitation so they can join Breeze.Ai and get to work."
-        breadcrumbs={[
-          { label: 'Jobs', href: ROUTES.jobs },
-          { label: 'Teams', href: ROUTES.teams },
-          { label: 'Team Setup' },
-        ]}
         className="mb-5"
       />
 
@@ -211,9 +206,6 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
 
       {/* ------------------------------------------------------------------ seats -- */}
       <SeatStrip seats={seats} members={members} adding={filled.length} />
-
-      {/* ------------------------------------------------------------------ teams -- */}
-      <TeamsPanel teams={teams} />
 
       {/* ------------------------------------------------------------- invitations -- */}
       <Card padding="md" className="mt-4">
@@ -528,121 +520,3 @@ function SeatStrip({ seats, members, adding }: { seats: TeamSetupProps['seats'];
   )
 }
 
-/** The teams people are put on: add one, rename it, or delete an empty one. */
-function TeamsPanel({ teams }: { teams: TeamSetupProps['teams'] }) {
-  const [name, setName] = useState('')
-  const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null)
-  const { errors } = usePage<SharedPageProps>().props
-
-  const add = (event: React.FormEvent) => {
-    event.preventDefault()
-    if (name.trim() === '') return
-    router.post(
-      ROUTES.teams,
-      { name: name.trim(), inline: true },
-      { preserveScroll: true, onSuccess: () => setName('') },
-    )
-  }
-
-  return (
-    <Card padding="md">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Teams</h2>
-          <p className="text-xs text-white/70">Add the crews first, then choose one for each person below.</p>
-        </div>
-        <form onSubmit={add} className="flex items-start gap-2">
-          <TextInput
-            id="new-team"
-            aria-label="New team name"
-            placeholder="New team name"
-            maxLength={120}
-            className="w-56"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            {...(errors['name'] ? { error: errors['name'] } : {})}
-          />
-          <Button type="submit" variant="secondary" leftIcon={Plus} disabled={name.trim() === ''}>
-            Add team
-          </Button>
-        </form>
-      </div>
-
-      {teams.length === 0 ? (
-        <p className="mt-3 text-sm text-white/70">
-          No teams yet. People can be invited without one and put on a team later.
-        </p>
-      ) : (
-        <ul className="mt-4 flex flex-wrap gap-2.5">
-          {teams.map((team) => (
-            <li
-              key={team.id}
-              className="flex items-center gap-2 rounded-full border border-hairline-strong bg-white/6 py-1.5 pr-2 pl-4 text-sm text-white"
-            >
-              <span className="font-semibold">{team.name}</span>
-              <span className="text-xs text-white/65">
-                {team.members} {team.members === 1 ? 'member' : 'members'}
-              </span>
-              <IconButton label={`Rename ${team.name}`} onClick={() => setRenaming({ id: team.id, name: team.name })}>
-                <Pencil size={14} aria-hidden />
-              </IconButton>
-              {team.members === 0 && (
-                <IconButton
-                  label={`Delete ${team.name}`}
-                  onClick={() => router.delete(routeTo.team(team.id), { preserveScroll: true })}
-                >
-                  <Trash2 size={14} aria-hidden />
-                </IconButton>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {renaming && <RenameModal team={renaming} onClose={() => setRenaming(null)} />}
-    </Card>
-  )
-}
-
-function RenameModal({ team, onClose }: { team: { id: number; name: string }; onClose: () => void }) {
-  const [value, setValue] = useState(team.name)
-  const { errors } = usePage<SharedPageProps>().props
-
-  const save = () =>
-    router.put(routeTo.team(team.id), { name: value.trim() }, { preserveScroll: true, onSuccess: onClose })
-
-  return (
-    <Modal
-      isOpen
-      onClose={onClose}
-      title="Rename team"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button disabled={value.trim() === '' || value.trim() === team.name} onClick={save}>
-            Save name
-          </Button>
-        </>
-      }
-    >
-      <form
-        onSubmit={(event) => {
-          event.preventDefault()
-          save()
-        }}
-      >
-        <TextInput
-          id="rename-setup-team"
-          label="Team name"
-          autoFocus
-          maxLength={120}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          {...(errors['name'] ? { error: errors['name'] } : {})}
-        />
-      </form>
-    </Modal>
-  )
-}
