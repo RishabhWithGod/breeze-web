@@ -67,6 +67,11 @@ class InvoiceDetailController extends Controller
         return Inertia::render('InvoiceShow', [
             'invoice' => $this->present($invoice),
             'items' => InvoiceItemResource::collection($invoice->items)->resolve($request),
+            // The whole estimate this was billed against, read-only — only for
+            // someone who may open that estimate themselves.
+            'estimateItems' => $invoice->estimate !== null && $request->user()->can('view', $invoice->estimate)
+                ? \App\Http\Resources\EstimateItemResource::collection($invoice->estimate->items)->resolve($request)
+                : [],
             // The estimate-vs-actual breakdown behind this invoice's job, so a
             // manager can see what was billed against what was estimated and
             // what actually happened — without leaving the invoice screen.

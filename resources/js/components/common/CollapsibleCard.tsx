@@ -21,6 +21,8 @@ export interface CollapsibleCardProps {
   summary?: ReactNode
   /** Buttons for this section. Only drawn while it is open. */
   actions?: ReactNode
+  /** Pinned to the top-right of the open body, opposite `actions`. */
+  corner?: ReactNode
   /**
    * Drops the lit border and left stripe, so the card sits like any plain card
    * on the screen, and the icon takes the screen's standard blue tile.
@@ -50,6 +52,7 @@ export function CollapsibleCard({
   tone = 'brand',
   summary,
   actions,
+  corner,
   plain = false,
   isOpen,
   onToggle,
@@ -112,8 +115,11 @@ export function CollapsibleCard({
             className="overflow-hidden"
           >
             <div className="border-t border-hairline px-5 py-5 sm:px-6">
-              {actions && (
-                <div className="mb-4 flex flex-wrap items-center gap-2">{actions}</div>
+              {(actions || corner) && (
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  {actions}
+                  {corner && <div className="ml-auto">{corner}</div>}
+                </div>
               )}
               {children}
             </div>

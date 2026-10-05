@@ -10,7 +10,6 @@ import type {
 /** Filter chips above the symbol grid. Values match SymbolReview::scopeStatus. */
 export const REVIEW_FILTERS: readonly { value: ReviewFilter; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'pending', label: 'Pending' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'modified', label: 'Edited' },

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Head, usePage } from '@inertiajs/react'
+import { Head, router, usePage } from '@inertiajs/react'
 import {
   ArrowLeft,
   Boxes,
@@ -25,6 +25,7 @@ import {
   CardHeader,
   CollapsibleCard,
   StatusChip,
+  TextInput,
   WorkflowProgress,
 } from '@/components/common'
 import { AddendumSelectionList, EstimateItemsTable } from '@/components/estimates'
@@ -376,6 +377,7 @@ export default function EstimateShow({
               raised yet, not only in the pre-job workspace.
             */}
             <CollapsibleCard
+              corner={<LaborRateField key={laborRate} id="c1" estimateId={estimate.id} rate={laborRate} />}
               title={`Original Estimate — ${estimate.number}`}
               subtitle="What is being priced, and at what rate"
               icon={ListChecks}
@@ -398,6 +400,7 @@ export default function EstimateShow({
 
             {addenda.map((addendum) => (
               <CollapsibleCard
+                corner={<LaborRateField key={laborRate} id="c2" estimateId={estimate.id} rate={laborRate} />}
                 key={addendum.id}
                 title={addendum.addendumName || `Addendum ${addendum.addendumNumber ?? ''}`.trim()}
                 subtitle={addendum.number}
@@ -422,6 +425,7 @@ export default function EstimateShow({
           </>
         ) : (
           <CollapsibleCard
+            corner={<LaborRateField key={laborRate} id="c3" estimateId={estimate.id} rate={laborRate} />}
             title="Line items"
             subtitle="What is being priced, and at what rate"
             icon={ListChecks}
@@ -455,6 +459,7 @@ export default function EstimateShow({
         )}
 
         <CollapsibleCard
+          corner={<LaborRateField key={laborRate} id="c4" estimateId={estimate.id} rate={laborRate} />}
           title="Estimate details"
           subtitle="The dates and rates these numbers were built on"
           icon={FileText}
@@ -520,6 +525,7 @@ export default function EstimateShow({
         */}
         {drawingPanels.map((panel) => (
           <CollapsibleCard
+            corner={<LaborRateField key={laborRate} id="c5" estimateId={estimate.id} rate={laborRate} />}
             key={panel.key}
             title={panel.title}
             subtitle={panel.subtitle}
@@ -632,6 +638,7 @@ export default function EstimateShow({
           <>
             {estimate.kind === 'standalone' && (
               <CollapsibleCard
+                corner={<LaborRateField key={laborRate} id="c7" estimateId={estimate.id} rate={laborRate} />}
                 title="Addendum"
                 subtitle="Extra scope found after this estimate, from its own takeoff"
                 icon={FileStack}
@@ -721,3 +728,51 @@ export default function EstimateShow({
 }
 
 EstimateShow.layout = appLayout
+
+/**
+ * One labor rate for the whole estimate. Starts at the client's own rate (the
+ * one set when the client was added); applying a new one re-prices every labor
+ * line here and on its addenda, and the totals follow.
+ */
+function LaborRateField({ id, estimateId, rate }: { id: string; estimateId: number; rate: number }) {
+  const [value, setValue] = useState(String(rate))
+  const [saving, setSaving] = useState(false)
+
+  const parsed = Number(value)
+  const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0
+
+  const apply = () =>
+    router.put(
+      routeTo.estimateLaborRate(estimateId),
+      { labor_rate: parsed },
+      {
+        preserveScroll: true,
+        onStart: () => setSaving(true),
+        onFinish: () => setSaving(false),
+      },
+    )
+
+  return (
+    <div className="flex items-center gap-2">
+      <label htmlFor={`labor-rate-${id}`} className="text-sm font-medium text-white/80">
+        Labor rate
+      </label>
+      <TextInput
+        id={`labor-rate-${id}`}
+        type="number"
+        min={0}
+        step="0.01"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        aria-label="Labor rate per hour"
+        className="w-28"
+        controlClassName="py-1.5 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      {valid && parsed !== rate && (
+        <Button size="sm" isLoading={saving} onClick={apply}>
+          Apply
+        </Button>
+      )}
+    </div>
+  )
+}

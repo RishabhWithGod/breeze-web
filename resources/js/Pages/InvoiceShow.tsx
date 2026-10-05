@@ -56,9 +56,21 @@ import {
   formatHours,
 } from '@/utils'
 
+interface EstimateListRow {
+  readonly id: number
+  readonly category: string
+  readonly description: string
+  readonly unit: string
+  readonly quantity: number
+  readonly unitCost: number
+  readonly total: number
+}
+
 export interface InvoiceShowProps {
   invoice: InvoiceDetail
   items: readonly InvoiceItemRow[]
+  /** Every line of the estimate this invoice was billed against — empty when there is none or it is not viewable. */
+  estimateItems: readonly EstimateListRow[]
   /** The job this invoice was raised for's estimate-vs-actual breakdown —
    *  `null` when the invoice has no job, or the field it prices is redacted
    *  for a role without cost visibility. */
@@ -79,6 +91,7 @@ export interface InvoiceShowProps {
 export default function InvoiceShow({
   invoice,
   items,
+  estimateItems,
   jobCostSummary,
   journeymanHours,
   can,
@@ -90,6 +103,7 @@ export default function InvoiceShow({
   const costDetails = useDisclosure()
   // Open to begin with — the lines are what the invoice is — and folds away on request.
   const [linesOpen, setLinesOpen] = useState(true)
+  const [estimateOpen, setEstimateOpen] = useState(false)
 
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
@@ -271,6 +285,53 @@ export default function InvoiceShow({
           estimateNumber={invoice.estimateNumber}
         />
       </CollapsibleCard>
+
+      {/* ============================================ Whole estimate ======== */}
+      {estimateItems.length > 0 && (
+        <CollapsibleCard
+          className="mt-5"
+          title="Estimate List"
+          subtitle={`Every line of estimate ${invoice.estimateNumber ?? ''}`.trim()}
+          icon={FileText}
+          tone="info"
+          plain
+          summary={
+            <span className="tabular-nums">
+              {estimateItems.length} {estimateItems.length === 1 ? 'line' : 'lines'}
+              {invoice.estimateTotal !== null && ` · ${formatCurrency(invoice.estimateTotal, 2)}`}
+            </span>
+          }
+          isOpen={estimateOpen}
+          onToggle={() => setEstimateOpen((open) => !open)}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-md">
+              <thead className="text-sm text-white/70">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Description</th>
+                  <th className="px-3 py-2 font-medium">Category</th>
+                  <th className="px-3 py-2 text-right font-medium">Qty</th>
+                  <th className="px-3 py-2 font-medium">Unit</th>
+                  <th className="px-3 py-2 text-right font-medium">Unit cost</th>
+                  <th className="px-3 py-2 text-right font-medium">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-hairline">
+                {estimateItems.map((line) => (
+                  <tr key={line.id} className="text-white/90">
+                    <td className="px-3 py-2">{line.description}</td>
+                    <td className="px-3 py-2 capitalize">{line.category}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{line.quantity}</td>
+                    <td className="px-3 py-2">{line.unit}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(line.unitCost, 2)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(line.total, 2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CollapsibleCard>
+      )}
 
       {/* ================================================ Notes + totals ===== */}
       <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">

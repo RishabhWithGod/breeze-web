@@ -5,7 +5,6 @@ import {
   Minus,
   Pencil,
   Plus,
-  RotateCcw,
   X,
 } from 'lucide-react'
 import {
@@ -458,45 +457,26 @@ export function SymbolCard({
 
         {/* Two decisions on the surface; everything else behind More. */}
         <div className="mt-auto grid grid-cols-3 gap-2 pt-1">
-          {row.status === 'approved' ? (
-            <IconButton
-              variant="secondary"
-              size="sm"
-              icon={RotateCcw}
-              label="Undo"
-              onClick={() => post(routeTo.symbolReset(resultId, row.id))}
-              className="mx-auto rounded-panel"
-            />
-          ) : (
-            <IconButton
-              variant="primary"
-              size="sm"
-              icon={Check}
-              label="Approve"
-              onClick={() => post(routeTo.symbolApprove(resultId, row.id))}
-              className="mx-auto rounded-panel"
-            />
-          )}
+          {/* Approved unless rejected: the tick keeps it, the cross drops it. */}
+          <IconButton
+            variant={row.status === 'approved' ? 'primary' : 'secondary'}
+            size="sm"
+            icon={Check}
+            label={row.status === 'approved' ? 'Approved' : 'Approve'}
+            disabled={row.status === 'approved'}
+            onClick={() => post(routeTo.symbolApprove(resultId, row.id))}
+            className="mx-auto rounded-panel"
+          />
 
-          {isRejected ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={RotateCcw}
-              onClick={() => post(routeTo.symbolReset(resultId, row.id))}
-            >
-              Reinstate
-            </Button>
-          ) : (
-            <Button
-              variant="danger"
-              size="sm"
-              leftIcon={X}
-              onClick={() => post(routeTo.symbolReject(resultId, row.id))}
-            >
-              Reject
-            </Button>
-          )}
+          <IconButton
+            variant={isRejected ? 'danger' : 'secondary'}
+            size="sm"
+            icon={X}
+            label={isRejected ? 'Rejected' : 'Reject'}
+            disabled={isRejected}
+            onClick={() => post(routeTo.symbolReject(resultId, row.id))}
+            className="mx-auto rounded-panel"
+          />
 
           <IconButton
             variant="secondary"

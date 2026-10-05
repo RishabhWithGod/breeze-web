@@ -79,8 +79,9 @@ class SymbolReviewController extends Controller
         $this->authorise($result, $review);
 
         $from = $review->status;
+        // Nothing is left undecided: clearing a decision puts it back to the default, approved.
         $review->update([
-            'status' => SymbolReview::STATUS_PENDING,
+            'status' => SymbolReview::STATUS_APPROVED,
             'reviewed_by' => null,
             'reviewed_at' => null,
         ]);
@@ -90,7 +91,7 @@ class SymbolReviewController extends Controller
             "Cleared the decision on {$review->name}",
             $review,
             from: $from,
-            to: SymbolReview::STATUS_PENDING,
+            to: SymbolReview::STATUS_APPROVED,
         );
 
         return back()->with('success', "{$review->name} is pending review again.");
@@ -635,8 +636,8 @@ class SymbolReviewController extends Controller
         }
 
         $from = $review->status;
-        $review->update(['status' => SymbolReview::STATUS_PENDING, 'reviewed_by' => null, 'reviewed_at' => null]);
-        $result->recordHistory('undone', "Undid the decision on {$review->name}", $review, from: $from, to: SymbolReview::STATUS_PENDING, meta: ['undid_history_id' => $entry->id]);
+        $review->update(['status' => SymbolReview::STATUS_APPROVED, 'reviewed_by' => null, 'reviewed_at' => null]);
+        $result->recordHistory('undone', "Undid the decision on {$review->name}", $review, from: $from, to: SymbolReview::STATUS_APPROVED, meta: ['undid_history_id' => $entry->id]);
 
         return true;
     }
@@ -902,15 +903,15 @@ class SymbolReviewController extends Controller
         $status = match ($validated['action']) {
             'approve' => SymbolReview::STATUS_APPROVED,
             'reject' => SymbolReview::STATUS_REJECTED,
-            'reset' => SymbolReview::STATUS_PENDING,
+            'reset' => SymbolReview::STATUS_APPROVED,
         };
 
         $result->touchReviewStarted();
 
         $count = $result->reviews()->whereIn('id', $validated['ids'])->update([
             'status' => $status,
-            'reviewed_by' => $status === SymbolReview::STATUS_PENDING ? null : $request->user()->id,
-            'reviewed_at' => $status === SymbolReview::STATUS_PENDING ? null : now(),
+            'reviewed_by' => $validated['action'] === 'reset' ? null : $request->user()->id,
+            'reviewed_at' => $validated['action'] === 'reset' ? null : now(),
             'updated_at' => now(),
         ]);
 
