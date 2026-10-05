@@ -46,6 +46,13 @@ export interface ProjectMemberPickerProps {
    * carries a "Not assigned yet" tag, checked or not.
    */
   assignedIds?: readonly string[]
+  /**
+   * Invited but not yet on the register — shown so whoever is picking knows
+   * someone is already on their way in, without inviting them twice. Not
+   * selectable: there is nothing on the register to put on this client until
+   * they actually accept.
+   */
+  pendingMembers?: readonly { readonly id: number; readonly name: string; readonly roleLabel: string }[]
 }
 
 /**
@@ -70,6 +77,7 @@ export function ProjectMemberPicker({
   error,
   allowNoTeam = false,
   assignedIds,
+  pendingMembers = [],
 }: ProjectMemberPickerProps) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
@@ -206,6 +214,26 @@ export function ProjectMemberPicker({
             <p className="text-sm text-white/60">
               {teamName ? `No one is on “${teamName}” yet.` : 'No members yet — add one below.'}
             </p>
+          )}
+
+          {pendingMembers.length > 0 && (
+            <div className="mt-2.5 space-y-2.5 rounded-panel border border-dashed border-hairline bg-white/2 p-4">
+              {pendingMembers.map((member) => (
+                <div key={`pending-${member.id}`} className="flex items-center justify-between gap-3">
+                  <Checkbox
+                    id={`project-member-pending-${member.id}`}
+                    label={member.name}
+                    checked={false}
+                    onChange={() => {}}
+                    disabled
+                  />
+                  <span className="flex items-center gap-2">
+                    <StatusChip hideDot tone="info" label="Pending invite" />
+                    <StatusChip hideDot tone={ROLE_TONE[member.roleLabel.toLowerCase()] ?? 'neutral'} label={member.roleLabel} />
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
 
           {allowInlineAdd &&

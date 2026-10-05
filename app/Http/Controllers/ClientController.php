@@ -8,6 +8,7 @@ use App\Models\Foreman;
 use App\Models\Invoice;
 use App\Models\ProjectActivity;
 use App\Models\Team;
+use App\Models\TeamInvitation;
 use App\Rules\UsPhoneNumber;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Services\Teams\ResolveInlineTeam;
@@ -93,6 +94,22 @@ class ClientController extends Controller
                 'roleLabel' => $member->roleLabel(),
                 'teamId' => $member->team_id,
             ])->values(),
+            /*
+             * Invited but not yet on the register — shown so a manager can see
+             * who is already on their way in, without inviting them twice.
+             * Not yet a real crew member: nothing on the register to put on
+             * this client until they actually accept.
+             */
+            'pendingMembers' => TeamInvitation::query()
+                ->where('status', TeamInvitation::STATUS_PENDING)
+                ->where('expires_at', '>', now())
+                ->orderBy('name')
+                ->get()
+                ->map(fn (TeamInvitation $invitation) => [
+                    'id' => $invitation->id,
+                    'name' => $invitation->name,
+                    'roleLabel' => $invitation->role,
+                ])->values(),
         ]);
     }
 

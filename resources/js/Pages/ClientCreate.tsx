@@ -44,6 +44,8 @@ export interface ClientCreateProps {
   defaultLaborRate: number
   /** Everyone on the register, offered as this client's members regardless of team. */
   members: readonly (ClientTeamMemberOption & { readonly teamId: number | null })[]
+  /** Invited but not yet on the register — shown, not selectable, until they accept. */
+  pendingMembers: readonly { readonly id: number; readonly name: string; readonly roleLabel: string }[]
 }
 
 /**
@@ -53,7 +55,7 @@ export interface ClientCreateProps {
  * itself is a project under them, and a drawing is uploaded against one of
  * those, so neither belongs on this screen.
  */
-export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, members }: ClientCreateProps) {
+export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, members, pendingMembers }: ClientCreateProps) {
   const confirmNew = useDisclosure()
 
   const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
@@ -231,6 +233,7 @@ export default function ClientCreate({ unfinishedTakeoff, defaultLaborRate, memb
               teamId={null}
               teamName={null}
               members={members}
+              pendingMembers={pendingMembers}
               value={data.member_ids}
               onChange={(ids) => update('member_ids', ids)}
               disabled={processing}
