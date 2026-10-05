@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { router } from '@inertiajs/react'
 import { ROUTES } from '@/constants'
 import { useUploadStore } from '@/store'
@@ -20,8 +20,13 @@ export interface AddendumDetails {
 export function useFileUpload(): {
   isUploading: boolean
   startUpload: (extra?: AddendumDetails) => void
+  /** Aborts the upload in flight, so no takeoff run is opened. */
+  cancelUpload: () => void
 } {
   const [isUploading, setIsUploading] = useState(false)
+  const cancelToken = useRef<{ cancel: () => void } | null>(null)
+
+  const cancelUpload = useCallback(() => cancelToken.current?.cancel(), [])
 
   const startUpload = useCallback((extra?: AddendumDetails) => {
     const {
@@ -70,6 +75,13 @@ export function useFileUpload(): {
       },
       {
         forceFormData: true,
+        onCancelToken: (token) => {
+          cancelToken.current = token
+        },
+        onCancel: () => {
+          // Back to ready, so the same drawings can be started again.
+          targets.forEach((file) => setFileStatus(file.id, 'ready', 0))
+        },
         onProgress: (event) => {
           if (!event?.percentage) return
           targets.forEach((file) => setFileProgress(file.id, event.percentage ?? 0))
@@ -86,6 +98,7 @@ export function useFileUpload(): {
           setFormError(errors['project_id'] ?? errors['files'] ?? null)
         },
         onFinish: () => {
+          cancelToken.current = null
           setIsUploading(false)
           setSubmitting(false)
         },
@@ -93,5 +106,5 @@ export function useFileUpload(): {
     )
   }, [])
 
-  return { isUploading, startUpload }
+  return { isUploading, startUpload, cancelUpload }
 }

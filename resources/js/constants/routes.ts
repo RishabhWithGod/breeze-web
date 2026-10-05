@@ -278,6 +278,7 @@ export const routeTo = {
     `/estimates/${estimateId}?from_job=${jobId}`,
   estimateEditFromJob: (estimateId: number, jobId: number) =>
     `/estimates/${estimateId}/edit?from_job=${jobId}`,
+  estimateLaborRate: (estimateId: number) => `/estimates/${estimateId}/labor-rate`,
   estimateItems: (estimateId: number) => `/estimates/${estimateId}/items`,
   estimateItem: (estimateId: number, itemId: number) =>
     `/estimates/${estimateId}/items/${itemId}`,
