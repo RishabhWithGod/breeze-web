@@ -56,7 +56,7 @@ class SetupChecklist
 
         $definitions = [
             self::COMPANY => ['Company Profile', 'Add your company details, logo, and preferences.', '/settings?tab=company', 'Review'],
-            self::TEAM => ['Invite Member', 'Add team members and set their roles.', '/team-setup', 'Invite member'],
+            self::TEAM => ['Add Member', 'Add team members and set their roles.', '/team-setup', 'Add member'],
             self::COMMODITIES => ['Configure Commodity List', 'Set up your commodity categories and items.', '/commodities', 'Open commodity list'],
             self::CLIENT => ['Create First Client', 'Add your first client to get started.', '/clients/create', 'Add client'],
             self::PROJECT => ['Create First Project', 'Set up your first project and start building estimates.', '/projects/create', 'Add project'],
