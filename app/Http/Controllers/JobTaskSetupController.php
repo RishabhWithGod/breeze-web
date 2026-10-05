@@ -602,9 +602,9 @@ class JobTaskSetupController extends Controller
      * Splits the people picked for a task into who runs it and who is over it,
      * by the role each holds: journeymen run the work, foremen oversee it.
      *
-     * Every task needs both — someone doing the work and someone answerable for
-     * it — and an apprentice is never put on a task directly; they go on the
-     * job under a journeyman from the job's own screen.
+     * One of either is enough — a task does not have to have both a runner and
+     * an overseer, just someone on it. An apprentice is never put on a task
+     * directly; they go on the job under a journeyman from the job's own screen.
      *
      * @param  array<int, int|string>  $memberIds
      * @return array{runners: list<int>, overseers: list<int>}
@@ -633,9 +633,9 @@ class JobTaskSetupController extends Controller
             }
         }
 
-        if ($runners === [] || $overseers === []) {
+        if ($runners === [] && $overseers === []) {
             throw ValidationException::withMessages([
-                $errorKey => 'Pick at least one journeyman and one foreman for this task.',
+                $errorKey => 'Pick at least one journeyman or foreman for this task.',
             ]);
         }
 
