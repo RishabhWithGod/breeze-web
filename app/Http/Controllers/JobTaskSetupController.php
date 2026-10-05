@@ -283,8 +283,8 @@ class JobTaskSetupController extends Controller
                     'job_id' => $job->id,
                     'created_by' => $request->user()?->id,
                     'title' => trim($row['title']),
-                    'foreman_id' => $crews[$index]['runners'][0],
-                    'supervisor_id' => $crews[$index]['overseers'][0],
+                    'foreman_id' => $crews[$index]['runners'][0] ?? null,
+                    'supervisor_id' => $crews[$index]['overseers'][0] ?? null,
                     /*
                      * Read off the lines rather than typed: the estimate already
                      * priced this work in hours, and asking for the number again
