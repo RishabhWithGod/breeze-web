@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RegisterRequest;
 use App\Models\User;
+use App\Notifications\AccountCreated;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,6 +30,8 @@ class RegisteredUserController extends Controller
 
         // Every new account describes its company, accepts the terms and sets up payment before it does anything else.
         $user->forceFill(['needs_company_setup' => true, 'needs_terms_acceptance' => true, 'needs_payment_setup' => true])->save();
+
+        $user->notify(new AccountCreated($user));
 
         Auth::login($user);
 
