@@ -2,6 +2,7 @@ import { Head, router, usePage } from '@inertiajs/react'
 import {
   Archive,
   ArrowDown,
+  ArrowLeft,
   ArrowUp,
   ArrowUpDown,
   Download,
@@ -135,6 +136,9 @@ export default function CommodityList({
           className="mb-0 border-b border-hairline p-4 sm:p-5"
           actions={
             <>
+              <Button variant="secondary" leftIcon={ArrowLeft} onClick={() => window.history.back()}>
+                Back
+              </Button>
               <Button variant="outline" leftIcon={Upload} onClick={() => setImporting(true)}>
                 Upload List
               </Button>

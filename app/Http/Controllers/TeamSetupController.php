@@ -119,8 +119,9 @@ class TeamSetupController extends Controller
         $joined = collect($sent)->where('status', TeamInvitation::STATUS_ACCEPTED)->count();
         $invited = count($sent) - $joined;
 
-        // Next in setup is the commodity list; the people just added carry on there.
-        return redirect()->route('commodities.index')->with('success', collect([
+        // Stays on this screen — the invitations just sent now show in its own
+        // list. Moving on to the commodity list is "Continue", not this.
+        return redirect()->route('team-setup.show')->with('success', collect([
             $joined > 0 ? $joined.' '.str('member')->plural($joined).' added and can sign in now' : null,
             $invited > 0 ? $invited.' '.str('invitation')->plural($invited).' sent' : null,
         ])->filter()->implode(' · ').'.');

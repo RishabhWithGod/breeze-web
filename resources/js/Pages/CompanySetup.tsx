@@ -125,6 +125,19 @@ export default function CompanySetup({ company, defaults, timezones, editing }: 
         noValidate
         className="mx-auto max-w-5xl rounded-card border border-l-4 border-brand/40 border-l-brand glass p-6 shadow-glow sm:p-9"
       >
+        {!editing && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            leftIcon={ArrowLeft}
+            className="mb-4"
+            onClick={() => window.history.back()}
+          >
+            Back
+          </Button>
+        )}
+
         <h1 className="text-4xl font-bold text-white">{editing ? 'Edit Company Profile' : 'Company Profile'}</h1>
         <p className="mt-2 text-md text-white/85">
           {editing

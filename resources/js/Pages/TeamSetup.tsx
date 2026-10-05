@@ -140,9 +140,10 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
         preserveScroll: true,
         onStart: () => setBusy(true),
         onFinish: () => setBusy(false),
-        // Team Setup is done once invitations are out — move on to the next
-        // setup step, same as clicking "Continue to Commodity List".
-        onSuccess: () => router.visit(ROUTES.commodities),
+        // Stays right here — the people just invited now show in the list
+        // above, already sent. A blank row is left to invite the next person;
+        // moving on to the commodity list is its own, separate button.
+        onSuccess: () => setDrafts([blankDraft(defaultRole)]),
       },
     )
   }
