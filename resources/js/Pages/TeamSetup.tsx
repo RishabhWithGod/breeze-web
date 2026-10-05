@@ -1,7 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react'
-import { ArrowRight, Plus, RotateCw, Search, Send, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Plus, RotateCw, Search, Send, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Alert, Button, Card, ConfirmDialog, RequiredFieldsNotice, TextInput } from '@/components/common'
+import { Alert, Button, ButtonLink, Card, ConfirmDialog, RequiredFieldsNotice, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { SeatsByRole, SharedPageProps } from '@/types'
@@ -183,6 +183,11 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
       <PageHeader
         title="Member Setup"
         subtitle="Invite your crew members and assign them to teams. We'll send an invitation so they can join Breeze.Ai and get to work."
+        actions={
+          <ButtonLink href={ROUTES.teams} variant="secondary" leftIcon={ArrowLeft}>
+            Back
+          </ButtonLink>
+        }
         className="mb-5"
       />
 
