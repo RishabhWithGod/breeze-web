@@ -385,7 +385,9 @@ export default function FinalSymbols({
           </div>
 
           <fieldset>
-            <legend className="mb-1 text-md font-medium text-white">Site Location</legend>
+            <legend className="mb-1 text-md font-medium text-white">
+              Site Location{(selectedProject?.addresses ?? []).length === 0 && <span className="text-red-300">*</span>}
+            </legend>
             <JobSitePicker
               clientId={selectedProject?.clientId ?? null}
               clientName={selectedProject?.clientName ?? ''}

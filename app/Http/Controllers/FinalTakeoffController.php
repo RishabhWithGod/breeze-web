@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\ApprovalHistoryResource;
 use App\Http\Resources\FinalSymbolResource;
 use App\Models\AiResult;
+use App\Models\ClientAddress;
 use App\Models\Estimate;
 use App\Models\FinalSymbol;
 use App\Models\Job;
@@ -333,6 +334,17 @@ class FinalTakeoffController extends Controller
         // now, only because this job is actually being saved.
         $request->merge(['team_id' => app(ResolveInlineTeam::class)($request->input('team_id'))]);
 
+        /*
+         * Needed before validation: whether this client already has a site on
+         * file decides whether one has to be added here. Re-derived the same
+         * way the client itself is below, from whatever project is named or
+         * the takeoff's own.
+         */
+        $candidateProjectId = (int) ($request->input('project_id') ?: $result->project_id);
+        $candidateClientId = (int) Project::whereKey($candidateProjectId)->value('client_id');
+        $clientHasSites = $candidateClientId !== 0
+            && ClientAddress::where('client_id', $candidateClientId)->exists();
+
         $attributes = $request->validate([
             'name' => ['nullable', 'string', 'max:160'],
             /*
@@ -341,8 +353,15 @@ class FinalTakeoffController extends Controller
              * written from the first one picked rather than typed.
              */
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
-            // One site per job — the same rule the standalone job form applies.
-            'address_ids' => ['nullable', 'array', 'max:1'],
+            /*
+             * One site per job — the same rule the standalone job form
+             * applies. Required when the client has no site on file yet: a
+             * job has to end up somewhere, and this is the only chance to
+             * record one before it is created.
+             */
+            'address_ids' => $clientHasSites
+                ? ['nullable', 'array', 'max:1']
+                : ['required', 'array', 'min:1', 'max:1'],
             'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
@@ -365,6 +384,8 @@ class FinalTakeoffController extends Controller
             'start_date.required' => 'Pick the day this job starts',
             'end_date.required' => 'Pick the day this job is due to finish',
             'end_date.after_or_equal' => 'End date must be on or after the start date',
+            'address_ids.required' => 'This client has no site on file yet — add one below.',
+            'address_ids.min' => 'This client has no site on file yet — add one below.',
         ]);
 
         $addressIds = $attributes['address_ids'] ?? [];
