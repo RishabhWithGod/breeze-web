@@ -188,8 +188,18 @@ export default function Processing({
 
   const handleCancel = useCallback(() => {
     cancelDialog.close()
-    router.post(routeTo.processingCancel(project.id), {}, { preserveScroll: true })
-  }, [cancelDialog, project.id])
+
+    // Shown as cancelled straight away instead of after the round trip; put
+    // back if the server refuses.
+    const before = run
+    setRun({ ...run, status: 'cancelled', stage: 'cancelled', stageLabel: 'Cancelled', finished: true })
+
+    router.post(
+      routeTo.processingCancel(project.id),
+      {},
+      { preserveScroll: true, onError: () => setRun(before) },
+    )
+  }, [cancelDialog, project.id, run])
 
   const handleRestart = useCallback(() => {
     router.post(routeTo.processingRestart(project.id), {}, { preserveScroll: true })
@@ -351,7 +361,7 @@ export default function Processing({
 
           <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
             {isRunning && (
-              <Button variant="ghost" leftIcon={Ban} onClick={cancelDialog.open}>
+              <Button variant="secondary" leftIcon={Ban} onClick={cancelDialog.open}>
                 Cancel run
               </Button>
             )}

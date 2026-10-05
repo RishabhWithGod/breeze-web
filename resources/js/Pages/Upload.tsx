@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Head, Link, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import type { LucideIcon } from 'lucide-react'
-import { ArrowLeft, Building2, FileText, FolderOpen, Hash, History, Layers, Layers2, Play, Ruler, Sparkles, TriangleAlert, UploadCloud } from 'lucide-react'
+import { ArrowLeft, Ban, Building2, FileText, FolderOpen, Hash, History, Layers, Layers2, Play, Ruler, Sparkles, TriangleAlert, UploadCloud } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -123,7 +123,9 @@ export default function Upload({
     setFormError,
   } = useUploadStore()
   const hasValidFiles = useUploadStore(selectHasValidFiles)
-  const { startUpload } = useFileUpload()
+  const { startUpload, cancelUpload } = useFileUpload()
+  // While uploading, Cancel aborts the request; before that it drops the queued drawings.
+  const cancelOrClear = () => (isSubmitting ? cancelUpload() : useUploadStore.getState().reset())
   const selectedProject = projects.find((project) => project.id === projectId) ?? null
 
   /*
@@ -383,6 +385,9 @@ export default function Upload({
                 >
                   Upload and Analyze
                 </Button>
+                <Button size="lg" fullWidth variant="secondary" leftIcon={Ban} onClick={cancelOrClear}>
+                  Cancel
+                </Button>
               </div>
             </div>
           </div>
@@ -478,9 +483,14 @@ export default function Upload({
           <p className="text-sm text-white/80">
             {files.length} {files.length === 1 ? 'file' : 'files'} ready for AI takeoff
           </p>
-          <Button size="lg" leftIcon={Play} isLoading={isSubmitting} onClick={() => startUpload()}>
-            Start AI Takeoff
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="lg" variant="secondary" leftIcon={Ban} onClick={cancelOrClear}>
+              Cancel
+            </Button>
+            <Button size="lg" leftIcon={Play} isLoading={isSubmitting} onClick={() => startUpload()}>
+              Start AI Takeoff
+            </Button>
+          </div>
         </div>
       )}
     </PageTransition>

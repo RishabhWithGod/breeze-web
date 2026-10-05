@@ -161,8 +161,7 @@ class EstimateDetailController extends Controller
              * number, only correct it when a particular hour really did
              * cost something else.
              */
-            'laborRate' => $estimate->clientRecord?->effectiveLaborRate()
-                ?? (float) config('ai.estimating.labor_rate'),
+            'laborRate' => $this->currentLaborRate($estimate),
 
             /*
              * Read off the same drawing but not priced by the engine: wire runs are
@@ -377,6 +376,55 @@ class EstimateDetailController extends Controller
         return redirect()
             ->route('estimates.show', $this->showParams($request, $estimate))
             ->with('success', "Estimate {$estimate->number} updated.");
+    }
+
+    /**
+     * The rate every labor line on this estimate (and its addenda) is at when
+     * they all agree — what the labor-rate field shows after it has been set.
+     * Otherwise the client's own rate, or the configured default.
+     */
+    private function currentLaborRate(Estimate $estimate): float
+    {
+        $rates = EstimateItem::query()
+            ->where('category', EstimateItem::CATEGORY_LABOR)
+            ->whereIn('estimate_id', collect([$estimate->id])->merge($estimate->addenda()->pluck('id')))
+            ->pluck('unit_cost')
+            ->map(fn ($rate) => round((float) $rate, 2))
+            ->unique();
+
+        return $rates->count() === 1
+            ? (float) $rates->first()
+            : ($estimate->clientRecord?->effectiveLaborRate() ?? (float) config('ai.estimating.labor_rate'));
+    }
+
+    /** Sets one labor rate across the whole estimate — every labor line, addenda included — and re-prices it. */
+    public function updateLaborRate(Request $request, Estimate $estimate): RedirectResponse
+    {
+        $this->authorize('update', $estimate);
+
+        abort_if($estimate->builder_managed && $estimate->status !== 'draft', 409, 'This estimate is with review and approval and can no longer be edited here.');
+
+        $validated = $request->validate([
+            'labor_rate' => ['required', 'numeric', 'min:0', 'max:100000'],
+        ]);
+
+        $rate = round((float) $validated['labor_rate'], 2);
+
+        collect([$estimate])->merge($estimate->addenda)->each(function (Estimate $target) use ($rate) {
+            // One by one, so each line's total follows its new rate on save.
+            $target->items()->where('category', EstimateItem::CATEGORY_LABOR)->get()
+                ->each(fn (EstimateItem $item) => $item->update(['unit_cost' => $rate]));
+
+            $target->recalculateTotals();
+            app(EstimateBuilder::class)->syncJobBudget($target);
+        });
+
+        $estimate->aiResult?->recordHistory(
+            'estimate_labor_rate_updated',
+            "Labor rate set to $".number_format($rate, 2)." on estimate {$estimate->number}",
+        );
+
+        return back()->with('success', 'Labor rate set to $'.number_format($rate, 2).' on every labor line.');
     }
 
     /**
