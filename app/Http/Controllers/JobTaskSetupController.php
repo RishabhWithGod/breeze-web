@@ -136,17 +136,21 @@ class JobTaskSetupController extends Controller
         $team = $job->team;
         $projectMemberIds = $this->projectMemberIds($job);
 
-        $journeymen = $team === null
-            ? Foreman::where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name')
-            : $team->journeymen();
-
-        $supervisors = $team === null
-            ? Foreman::where('role', Foreman::ROLE_FOREMAN)->orderBy('name')
-            : $team->foremen();
-
+        /*
+         * The project's own confirmed members are the candidate pool whenever
+         * it has any — whether or not each of them happens to also be on this
+         * job's team, since a project member no longer has to be. The team
+         * roster is only a fallback for a project with nobody picked yet.
+         */
         if ($projectMemberIds !== null) {
-            $journeymen->whereIn('id', $projectMemberIds);
-            $supervisors->whereIn('id', $projectMemberIds);
+            $journeymen = Foreman::whereIn('id', $projectMemberIds)->where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name');
+            $supervisors = Foreman::whereIn('id', $projectMemberIds)->where('role', Foreman::ROLE_FOREMAN)->orderBy('name');
+        } elseif ($team !== null) {
+            $journeymen = $team->journeymen();
+            $supervisors = $team->foremen();
+        } else {
+            $journeymen = Foreman::where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name');
+            $supervisors = Foreman::where('role', Foreman::ROLE_FOREMAN)->orderBy('name');
         }
 
         $runners = $journeymen->get(['id', 'name', 'initials', 'role']);
