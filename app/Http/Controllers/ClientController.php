@@ -8,8 +8,10 @@ use App\Models\Foreman;
 use App\Models\Invoice;
 use App\Models\ProjectActivity;
 use App\Models\Team;
+use App\Models\TeamInvitation;
 use App\Rules\UsPhoneNumber;
 use App\Services\Takeoff\TakeoffFlow;
+use App\Services\Teams\ResolveInlineTeam;
 use App\Support\CompanyRule;
 use App\Support\Ownership;
 use App\Support\UsPhone;
@@ -83,13 +85,8 @@ class ClientController extends Controller
             // shown as a real number rather than an empty box, so leaving it
             // alone is a decision rather than an oversight.
             'defaultLaborRate' => (float) config('ai.estimating.labor_rate'),
-            // The crew register, for the "which team normally works this
-            // client's sites" picker — with a way to add one inline, the same
-            // as a job's own team picker.
-            'teams' => Team::query()->orderBy('name')->get(['id', 'name']),
-            // Everyone on the register, with the team they are on (or none yet) —
-            // the Add Client form offers the chosen team's people plus anyone
-            // not on a team, since a member can be added before a team is decided.
+            // Everyone on the register — Add Client offers the whole crew,
+            // not filtered by team, since the form no longer picks one.
             'members' => Foreman::query()->orderBy('name')->get()->map(fn (Foreman $member) => [
                 'id' => $member->id,
                 'name' => $member->name,
@@ -97,6 +94,22 @@ class ClientController extends Controller
                 'roleLabel' => $member->roleLabel(),
                 'teamId' => $member->team_id,
             ])->values(),
+            /*
+             * Invited but not yet on the register — shown so a manager can see
+             * who is already on their way in, without inviting them twice.
+             * Not yet a real crew member: nothing on the register to put on
+             * this client until they actually accept.
+             */
+            'pendingMembers' => TeamInvitation::query()
+                ->where('status', TeamInvitation::STATUS_PENDING)
+                ->where('expires_at', '>', now())
+                ->orderBy('name')
+                ->get()
+                ->map(fn (TeamInvitation $invitation) => [
+                    'id' => $invitation->id,
+                    'name' => $invitation->name,
+                    'roleLabel' => $invitation->role,
+                ])->values(),
         ]);
     }
 
@@ -104,17 +117,10 @@ class ClientController extends Controller
     {
         $data = $this->validated($request, null, requireCrew: true);
 
-        // Only the chosen crew's people, or people not on any crew yet — someone
-        // already on another team cannot be put on this client's.
-        $members = Foreman::query()->whereIn('id', $data['member_ids'])->get();
-        $foreign = $members->first(fn (Foreman $member) => $member->team_id !== null && $member->team_id !== (int) $data['team_id']);
-
-        if ($foreign !== null) {
-            return back()->withInput()->withErrors([
-                'member_ids' => "{$foreign->name} is on another team. Pick people from this team, or people not on a team yet.",
-            ]);
-        }
-
+        // Add Client never picks a team — team assignment only happens from the
+        // Teams page (ForemanController) and the Projects page — so there is
+        // nothing here to put a chosen member onto, and no "already on another
+        // team" conflict this form could ever cause.
         $client = $request->user()->clients()->create([
             'name' => $data['name'],
             'website' => $this->normalizeWebsite($data['website'] ?? null),
@@ -123,9 +129,9 @@ class ClientController extends Controller
             'team_id' => $data['team_id'] ?? null,
         ]);
 
-        // Added without a team? They join this client's team now — the team is
-        // assigned the moment they are put on a client, not before.
-        $members->whereNull('team_id')->each(fn (Foreman $member) => $member->update(['team_id' => $data['team_id']]));
+        // Who normally works this client's sites — on record for this client
+        // alone, not any team.
+        $client->members()->sync($data['member_ids']);
 
         $this->writeAddresses($client, $data['addresses'] ?? []);
         $this->writePrimaryContact($client, $data['contact_email'] ?? null, $data['contact_phone'] ?? null);
@@ -151,6 +157,7 @@ class ClientController extends Controller
             'addresses' => fn ($query) => $query->withCount('jobs'),
             'contacts',
             'projects' => fn ($query) => $query->withCount(['uploads', 'aiResults']),
+            'members' => fn ($query) => $query->orderBy('name'),
         ]);
 
         $projectCounts = $client->projects->countBy('status');
@@ -194,6 +201,13 @@ class ClientController extends Controller
                     'jobCount' => $address->jobs_count,
                 ])->values(),
             ],
+            // Who normally works this client's sites — picked on Add Client.
+            'members' => $client->members->map(fn (Foreman $member) => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'role' => $member->role,
+                'roleLabel' => $member->roleLabel(),
+            ])->values(),
             /*
              * The reason this screen exists. A client's work is their projects,
              * the way a job's work is its tasks — so they are listed here, not
@@ -360,6 +374,10 @@ class ClientController extends Controller
             $request->merge(['labor_rate' => null]);
         }
 
+        // A team typed into the picker but not yet on the register — created
+        // now, only because this client is actually being saved.
+        $request->merge(['team_id' => app(ResolveInlineTeam::class)($request->input('team_id'))]);
+
         return $request->validate([
             'name' => [
                 'required', 'string', 'min:2', 'max:160',
@@ -390,10 +408,10 @@ class ClientController extends Controller
             'labor_rate' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             /*
              * The crew this client's projects are normally staffed from.
-             * Optional — a client can be on the register before anyone
-             * decides who works their sites.
+             * Always optional — Add Client no longer picks one; a client can
+             * be on the register before anyone decides who works their sites.
              */
-            'team_id' => [$requireCrew ? 'required' : 'nullable', 'integer', CompanyRule::exists('teams')],
+            'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             // Required when a client is added: who from that crew works for them.
             'member_ids' => $requireCrew ? ['required', 'array', 'min:1'] : ['nullable', 'array'],
             'member_ids.*' => ['integer', CompanyRule::exists('foremen')],
@@ -428,7 +446,6 @@ class ClientController extends Controller
         ], [
             'name.required' => 'Client name is required',
             'name.unique' => 'A client with that name is already on the register',
-            'team_id.required' => 'Pick the team for this client',
             'member_ids.required' => 'Pick at least one member',
             'member_ids.min' => 'Pick at least one member',
             'contact_email.email' => 'That does not look like an email address',

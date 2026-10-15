@@ -76,11 +76,13 @@ export interface SubscriptionPlan {
   readonly name: string
   readonly tagline: string
   readonly description: string
-  /** Dollars per month. */
+  /** Dollars per seat per month. */
   readonly price: number
-  /** How many people can have an account on it; null when there is no limit. */
-  readonly maxUsers: number | null
+  /** The seat count Payment Setup's picker opens on for this plan — a starting point, not a cap. */
+  readonly maxUsers: number
   readonly usersLabel: string
+  /** Shown beside the price for a plan priced per seat with no built-in ceiling — e.g. Platinum's "contact us for volume pricing". */
+  readonly volumePricingNote?: string
   readonly popular: boolean
   readonly limits: PlanLimits
   /** The few lines shown on the plan's card. */
@@ -96,6 +98,12 @@ export interface SubscriptionUsage {
   readonly unit: string | null
 }
 
+/** One role's share of the seats in use — what "Invite Team Members" reads before adding another person. */
+export interface SeatsByRole {
+  readonly role: string
+  readonly count: number
+}
+
 /** The company's plan, and how much of it is used — counted from real records. */
 export interface SubscriptionSummary {
   readonly plan: SubscriptionPlan
@@ -103,8 +111,8 @@ export interface SubscriptionSummary {
   readonly billingCycle: 'monthly' | 'yearly'
   /** `YYYY-MM-DD` */
   readonly renewsOn: string
-  /** People with an account, against what the plan allows (null: no limit). */
-  readonly seats: { readonly used: number; readonly limit: number | null }
+  /** People with an account, against the seats this company actually bought. */
+  readonly seats: { readonly used: number; readonly limit: number; readonly byRole: readonly SeatsByRole[] }
   readonly annualDiscountPercent: number
   readonly usage: readonly SubscriptionUsage[]
   /** Every plan on offer, to choose between. */

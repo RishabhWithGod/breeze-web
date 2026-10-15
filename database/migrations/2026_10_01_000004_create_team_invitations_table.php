@@ -24,7 +24,10 @@ return new class extends Migration
             // pending → accepted, or cancelled. An unanswered one lapses at `expires_at`.
             $table->string('status', 20)->default('pending');
             $table->timestamp('sent_at')->nullable();
-            $table->timestamp('expires_at');
+            // Nullable at the DB level only to dodge MySQL's "a non-first TIMESTAMP
+            // column needs an explicit default under strict mode" rule -- the app
+            // always sets a real value when it creates the row.
+            $table->timestamp('expires_at')->nullable();
             $table->timestamp('accepted_at')->nullable();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->timestamps();

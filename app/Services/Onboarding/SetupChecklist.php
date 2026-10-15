@@ -16,8 +16,9 @@ use App\Support\Ownership;
  * Nothing is ticked by hand: each step is done when the thing it asks for exists
  * — a company on file, someone on the team, a price list, a client, a project — so
  * the progress is always what is true, and it follows the work wherever it is done.
- * Two steps (the team and the price list) may be skipped; the others may not, and
- * the project waits for its client.
+ * Team, Client and Project may be left for later; Company cannot, since nothing
+ * else in the app makes sense without one. Setup can be called finished once
+ * every step is either done or skipped — see `canFinish` in `for()`.
  */
 class SetupChecklist
 {
@@ -32,10 +33,7 @@ class SetupChecklist
     public const PROJECT = 'project';
 
     /** Steps a company may leave for later. */
-    public const SKIPPABLE = [self::TEAM, self::COMMODITIES];
-
-    /** Steps that have to be done before setup can be called finished. */
-    public const REQUIRED = [self::COMPANY, self::CLIENT, self::PROJECT];
+    public const SKIPPABLE = [self::TEAM, self::CLIENT, self::PROJECT];
 
     /**
      * @return array{
@@ -58,22 +56,36 @@ class SetupChecklist
 
         $definitions = [
             self::COMPANY => ['Company Profile', 'Add your company details, logo, and preferences.', '/settings?tab=company', 'Review'],
-            self::TEAM => ['Invite Team', 'Add team members and set their roles.', '/team-setup', 'Invite team'],
+            self::TEAM => ['Add Member', 'Add team members and set their roles.', '/team-setup', 'Add member'],
             self::COMMODITIES => ['Configure Commodity List', 'Set up your commodity categories and items.', '/commodities', 'Open commodity list'],
             self::CLIENT => ['Create First Client', 'Add your first client to get started.', '/clients/create', 'Add client'],
             self::PROJECT => ['Create First Project', 'Set up your first project and start building estimates.', '/projects/create', 'Add project'],
         ];
 
+        // A project is work for a client; skipping Client for now leaves Project
+        // with nothing to build, so it is skipped along with it rather than left
+        // locked with no way to move past it.
+        $clientSkipped = in_array(self::CLIENT, $skipped, true);
+
         $steps = [];
         foreach ($definitions as $key => [$title, $description, $href, $action]) {
-            $locked = $key === self::PROJECT && ! $done[self::CLIENT];
+            $locked = $key === self::PROJECT && ! $done[self::CLIENT] && ! $clientSkipped;
 
             $status = match (true) {
                 $done[$key] => 'completed',
                 $locked => 'locked',
+                $key === self::PROJECT && $clientSkipped => 'skipped',
                 in_array($key, $skipped, true) => 'skipped',
                 default => 'pending',
             };
+
+            // Project's own "Undo skip" would be a no-op when its skipped status
+            // is only borrowed from Client's — nothing was ever recorded against
+            // Project itself to undo. Point the person at Client instead. Only
+            // when Project is actually showing as skipped for that reason, not
+            // whenever Client happens to be skipped regardless of Project's own
+            // state (a real project already made is still 'completed').
+            $borrowedSkip = $status === 'skipped' && $key === self::PROJECT && $clientSkipped;
 
             $steps[] = [
                 'key' => $key,
@@ -83,7 +95,10 @@ class SetupChecklist
                 'href' => $href,
                 'action' => $action,
                 'skippable' => in_array($key, self::SKIPPABLE, true),
-                'lockedBecause' => $locked ? 'Add your first client first.' : null,
+                'undoable' => ! $borrowedSkip,
+                'lockedBecause' => $locked
+                    ? 'Add your first client first.'
+                    : ($borrowedSkip ? 'Skipped along with Client — undo that to continue.' : null),
             ];
         }
 
@@ -97,7 +112,8 @@ class SetupChecklist
             'percent' => (int) round($completed / count($steps) * 100),
             'next' => $next,
             'finished' => $company?->onboarding_finished_at !== null,
-            'canFinish' => collect(self::REQUIRED)->every(fn (string $key) => $done[$key]),
+            // Every step accounted for — nothing pending, nothing still locked.
+            'canFinish' => collect($steps)->every(fn (array $step) => in_array($step['status'], ['completed', 'skipped'], true)),
         ];
     }
 

@@ -51,16 +51,26 @@ class StripeSubscriptions
      * A Checkout Session that charges the plan now and bills it again each period.
      *
      * The price is the plan's price for the cycle, worked out here rather than
-     * taken from the browser.
+     * taken from the browser. Billed as Stripe's own quantity, not a single
+     * pre-multiplied amount, so a seat count really is per-seat on the invoice
+     * and in the Stripe dashboard, not just in this app's own math.
+     *
+     * `allow_promotion_codes` lets a real Stripe Promotion Code (e.g. a
+     * convention discount) be redeemed on Stripe's own page — nothing here
+     * grants a discount itself.
      *
      * @return array{url: string, id: string}
      */
-    public function createCheckout(User $user, string $plan, string $cycle, string $successUrl, string $cancelUrl): array
+    public function createCheckout(User $user, string $plan, string $cycle, int $seats, string $successUrl, string $cancelUrl): array
     {
-        $quote = $this->pricing->quote($plan, $cycle);
+        // Per seat, per cycle — not the already-multiplied total. Stripe does
+        // quantity × unit_amount itself, which is what makes this a real
+        // Stripe-native per-seat subscription rather than one flat line Stripe
+        // (and the dashboard reading it later) has no idea is seats at all.
+        $perSeatQuote = $this->pricing->quote($plan, $cycle, 1);
         $name = config("subscription.plans.{$plan}.name");
         $interval = $cycle === 'yearly' ? 'year' : 'month';
-        $metadata = ['user_id' => (string) $user->id, 'plan' => $plan, 'cycle' => $cycle];
+        $metadata = ['user_id' => (string) $user->id, 'plan' => $plan, 'cycle' => $cycle, 'seats' => (string) $seats];
 
         $response = $this->post('/checkout/sessions', [
             'mode' => 'subscription',
@@ -73,6 +83,7 @@ class StripeSubscriptions
             'customer' => $this->createUsCustomer($user),
             'customer_update' => ['address' => 'auto', 'name' => 'auto'],
             'payment_method_types' => ['card'],
+            'allow_promotion_codes' => 'true',
             // Dollars only: Stripe's Adaptive Pricing would otherwise re-show the
             // price in the buyer's local currency.
             'adaptive_pricing' => ['enabled' => 'false'],
@@ -81,10 +92,10 @@ class StripeSubscriptions
             'metadata' => $metadata,
             'subscription_data' => ['metadata' => $metadata],
             'line_items' => [[
-                'quantity' => 1,
+                'quantity' => max(1, $seats),
                 'price_data' => [
                     'currency' => 'usd',
-                    'unit_amount' => $quote['total'],
+                    'unit_amount' => $perSeatQuote['total'],
                     'recurring' => ['interval' => $interval],
                     'product_data' => [
                         'name' => "Breeze.Ai {$name} — ".($cycle === 'yearly' ? 'Annual' : 'Monthly'),

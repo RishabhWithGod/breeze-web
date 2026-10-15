@@ -6,6 +6,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  RequiredFieldsNotice,
   SectionHeading,
   SelectField,
   TextArea,
@@ -89,6 +90,8 @@ export default function InvoiceEdit({ invoice, clients }: InvoiceEditProps) {
           </ButtonLink>
         }
       />
+
+      <RequiredFieldsNotice fields={['Client', 'Invoice Date']} className="mb-6" />
 
       {hasErrors && (
         <Alert tone="danger" title="Check the form" className="mb-6">

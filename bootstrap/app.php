@@ -88,9 +88,20 @@ return Application::configure(basePath: dirname(__DIR__))
              * landing on an error screen. A page opened directly gets a plain "no access" screen.
              */
             if ($status === 403 && ($request->header('X-Inertia') || ! $request->expectsJson())) {
-                $message = str_starts_with((string) $exception->getMessage(), 'Your role')
-                    ? $exception->getMessage().' Ask a manager if you need it.'
-                    : "You don't have permission to do that. Ask a manager if you need access.";
+                // A bare `abort(403)`/`abort_unless($cond, 403)` — the common case —
+                // carries no message at all, so it still gets the generic line below.
+                // Anywhere a controller or policy bothered to say what was actually
+                // refused, that reaches the person instead of being thrown away.
+                $reason = trim((string) $exception->getMessage());
+                // Laravel's own default for a denied Policy ability ($this->authorize()
+                // returning false with no Response::deny() message) — as uninformative
+                // as no message at all.
+                $message = match (true) {
+                    $reason === '', $reason === 'This action is unauthorized.' =>
+                        "You don't have permission to do that. Ask a manager if you need access.",
+                    str_starts_with($reason, 'Your role') => $reason.' Ask a manager if you need it.',
+                    default => $reason,
+                };
 
                 if ($request->header('X-Inertia')) {
                     $previous = url()->previous();

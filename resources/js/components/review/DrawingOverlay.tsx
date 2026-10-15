@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { router } from '@inertiajs/react'
 import { Box, ChevronDown, ChevronLeft, ChevronRight, Maximize, Minus, Plus, RotateCcw, Search } from 'lucide-react'
-import { Button, ButtonLink, Card, IconButton } from '@/components/common'
+import { Button, ButtonLink, Card, FilterTabs, IconButton } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { OccurrenceOrigin, OverlaySymbol, PageDimensions, ReviewStatus } from '@/types'
 import { categoryKey, cn, symbolColor, UNMAPPED_COLOR } from '@/utils'
@@ -265,9 +265,32 @@ export function DrawingOverlay({
 
   const filterActive = activeCategory !== null || activeStatus !== 'all'
 
+  /** All/Approved/Rejected counts for this page — live off `boxes`, so a verdict just clicked shows up immediately. */
+  const statusCounts = useMemo(() => {
+    const counts: Partial<Record<'all' | 'approved' | 'rejected', number>> = { all: boxes.length }
+
+    for (const box of boxes) {
+      if (box.status === 'approved' || box.status === 'rejected') {
+        counts[box.status] = (counts[box.status] ?? 0) + 1
+      }
+    }
+
+    return counts
+  }, [boxes])
+
+  // Status only, not category: the All/Approved/Rejected tabs are meant to
+  // narrow this list the same way they narrow the boxes on the drawing, but
+  // `activeCategory` just highlights a row here rather than hiding the rest
+  // of them, so it stays out of this filter.
   const symbolsOnPageFiltered = useMemo(
-    () => overlaySymbols.filter((symbol) => boxes.some((box) => box.reviewId === symbol.id)),
-    [overlaySymbols, boxes],
+    () =>
+      overlaySymbols.filter((symbol) =>
+        boxes.some(
+          (box) =>
+            box.reviewId === symbol.id && (activeStatus === 'all' || box.status === activeStatus),
+        ),
+      ),
+    [overlaySymbols, boxes, activeStatus],
   )
 
   /*
@@ -595,13 +618,18 @@ export function DrawingOverlay({
           </div>
         </div>
 
-        {/*
-          The All / Approved / Rejected tabs are hidden for now. The status filter
-          state (`activeStatus`) stays at 'all', so nothing is filtered by it; the
-          bar only appears when a legend category filter needs its "Clear" button.
-        */}
-        {filterActive && (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-b border-hairline px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-2">
+          <FilterTabs
+            options={[
+              { label: 'All', value: 'all' as const },
+              { label: 'Approved', value: 'approved' as const },
+              { label: 'Rejected', value: 'rejected' as const },
+            ]}
+            value={activeStatus}
+            onChange={setActiveStatus}
+            counts={statusCounts}
+          />
+          {filterActive && (
             <Button
               variant="ghost"
               size="sm"
@@ -612,8 +640,8 @@ export function DrawingOverlay({
             >
               Clear filters
             </Button>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="grid gap-3 p-3 sm:grid-cols-[6.5rem_minmax(0,1fr)]">
           {/* Page rail. */}

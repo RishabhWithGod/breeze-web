@@ -8,6 +8,7 @@ import {
   ButtonLink,
   Card,
   RadioGroup,
+  RequiredFieldsNotice,
   SectionHeading,
   SelectField,
   TextArea,
@@ -167,8 +168,8 @@ export default function JobEdit({ job, clients, projects, uploads, teams, from }
   /**
    * A job created before clients and projects were merged may name a client
    * that never became a record. Its stored name becomes the placeholder, so the
-   * select shows who the job is for rather than a blank "Select client" — but
-   * the placeholder has no value, so saving still requires picking a real one.
+   * select shows who the job is for rather than a blank "Select client" —
+   * leaving it on the placeholder now just saves with no client picked.
    */
   const clientOptions = [
     job.clientId === null && job.client
@@ -217,6 +218,8 @@ export default function JobEdit({ job, clients, projects, uploads, teams, from }
         }
       />
 
+      <RequiredFieldsNotice fields={['Job Name']} className="mb-6" />
+
       {hasErrors && (
         <Alert tone="danger" title="Check the form" className="mb-6">
           Some fields need attention before this job can be saved.
@@ -242,7 +245,7 @@ export default function JobEdit({ job, clients, projects, uploads, teams, from }
               <div className="grid gap-6 lg:grid-cols-2">
                 <SelectField
                   id="job-client"
-                  label="Client*"
+                  label="Client"
                   options={clientOptions}
                   value={data.client_id}
                   onChange={(event) => selectClient(event.target.value)}
@@ -250,7 +253,7 @@ export default function JobEdit({ job, clients, projects, uploads, teams, from }
                 />
                 <SelectField
                   id="job-project"
-                  label="Project*"
+                  label="Project"
                   options={projectOptions}
                   value={data.project_id}
                   disabled={data.client_id === ''}
@@ -303,7 +306,7 @@ export default function JobEdit({ job, clients, projects, uploads, teams, from }
 
             {/* Same picker as Create Job, so a site can be added from here too. */}
             <fieldset>
-              <legend className="mb-1 text-md font-medium text-white">Site Location*</legend>
+              <legend className="mb-1 text-md font-medium text-white">Site Location</legend>
               <JobSitePicker
                 clientId={selectedClient?.id ?? null}
                 clientName={selectedClient?.name ?? ''}
@@ -341,6 +344,8 @@ export default function JobEdit({ job, clients, projects, uploads, teams, from }
               onChange={(next) => update('team_id', next)}
               hint="New tasks on this job are handed to this crew."
               disabled={processing}
+              // Hidden for now, same as Create Job's own Team field.
+              allowInlineAdd={false}
               {...(errors.team_id ? { error: errors.team_id } : {})}
             />
 

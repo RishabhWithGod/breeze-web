@@ -49,17 +49,22 @@ class PaymentSettingsController extends Controller
             ]);
         }
 
-        $processors = PaymentProcessor::orderBy('id')->get()->map(fn (PaymentProcessor $processor) => [
-            'id' => $processor->id,
-            'key' => $processor->key,
-            'displayName' => $processor->display_name,
-            'status' => $processor->status,
-            'isConnected' => $processor->isConnected(),
-            'connectedAt' => $processor->connected_at?->toISOString(),
-            'lastTestedAt' => $processor->last_tested_at?->toISOString(),
-            'lastError' => $processor->last_error,
-            'credentialFields' => $this->processors->connectorFor($processor->key)->requiredCredentialFields(),
-        ]);
+        // PayPal is hidden for now, PM's call — the row and the connector
+        // behind it are untouched, just not offered on this screen.
+        $processors = PaymentProcessor::orderBy('id')->get()
+            ->reject(fn (PaymentProcessor $processor) => $processor->key === PaymentProcessor::PAYPAL)
+            ->values()
+            ->map(fn (PaymentProcessor $processor) => [
+                'id' => $processor->id,
+                'key' => $processor->key,
+                'displayName' => $processor->display_name,
+                'status' => $processor->status,
+                'isConnected' => $processor->isConnected(),
+                'connectedAt' => $processor->connected_at?->toISOString(),
+                'lastTestedAt' => $processor->last_tested_at?->toISOString(),
+                'lastError' => $processor->last_error,
+                'credentialFields' => $this->processors->connectorFor($processor->key)->requiredCredentialFields(),
+            ]);
 
         $methods = PaymentMethod::with('processor')->orderByDesc('is_default')->orderByDesc('id')->get()
             ->map(fn (PaymentMethod $method) => [
@@ -287,7 +292,7 @@ class PaymentSettingsController extends Controller
             return null;
         }
 
-        $quote = app(PlanPricing::class)->quote($subscription->plan, $subscription->billing_cycle);
+        $quote = app(PlanPricing::class)->quote($subscription->plan, $subscription->billing_cycle, $subscription->seats);
 
         return [
             'planName' => config("subscription.plans.{$subscription->plan}.name"),

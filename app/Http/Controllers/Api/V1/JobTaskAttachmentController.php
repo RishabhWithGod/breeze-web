@@ -8,6 +8,7 @@ use App\Models\JobTask;
 use App\Models\JobTaskAttachment;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Mobile\ElectricianJobAccess;
+use App\Support\UploadLimits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -57,7 +58,7 @@ class JobTaskAttachmentController extends Controller
         }
 
         $data = $request->validate([
-            'file' => ['required', 'image', 'max:20480'],
+            'file' => ['required', 'image', 'max:'.(UploadLimits::effectiveMb() * 1024)],
         ], [
             'file.image' => 'Only photos can be attached here.',
             'file.max' => 'Photos must be 20 MB or smaller.',

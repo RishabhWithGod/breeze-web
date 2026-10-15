@@ -3,7 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Models\Project;
+use App\Services\Teams\ResolveInlineTeam;
 use App\Support\CompanyRule;
+use App\Support\UploadLimits;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -22,6 +24,10 @@ class UpdateProjectRequest extends FormRequest
         if ($this->input('estimate_target_total') === '') {
             $this->merge(['estimate_target_total' => null]);
         }
+
+        // A team typed into the picker but not yet on the register — created
+        // now, only because this project is actually being saved.
+        $this->merge(['team_id' => app(ResolveInlineTeam::class)($this->input('team_id'))]);
     }
 
     /** @return array<string, mixed> */
@@ -33,6 +39,18 @@ class UpdateProjectRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:255'],
             // A project is always for somebody.
             'client_id' => ['required', 'integer', 'exists:clients,id'],
+            /*
+             * Which crew normally works this client's sites — the same field
+             * Edit Client's own Team field sets, offered here too so picking
+             * it doesn't need a trip to that screen. Optional on its own, but
+             * someone actually picked to staff this project has to land on a
+             * real team, not just sit checked on an unset one.
+             */
+            'team_id' => [
+                ...($this->hasSelectedMembers() ? ['required'] : ['nullable']),
+                'integer',
+                CompanyRule::exists('teams'),
+            ],
             /*
              * Who from the client's crew is staffed to it. Optional, and
              * narrowed server-side to that client's own team — see
@@ -49,8 +67,14 @@ class UpdateProjectRequest extends FormRequest
              * see StoreProjectRequest for why these formats and this limit.
              */
             'vendor_rate_list' => ['nullable', 'array', 'max:20'],
-            'vendor_rate_list.*' => ['file', 'mimes:xlsx,ods,csv,txt,pdf,doc,docx,rtf,odt', 'max:10240'],
+            'vendor_rate_list.*' => ['file', 'mimes:xlsx,ods,csv,txt,pdf,doc,docx,rtf,odt', 'max:'.(UploadLimits::effectiveMb() * 1024)],
         ];
+    }
+
+    /** Whether at least one real person was checked in the Project Members list. */
+    private function hasSelectedMembers(): bool
+    {
+        return count(array_filter((array) $this->input('member_ids', []))) > 0;
     }
 
     /** @return array<string, string> */
@@ -59,13 +83,14 @@ class UpdateProjectRequest extends FormRequest
         return [
             'name.required' => 'Project name is required',
             'client_id.required' => 'Pick the client this project is for',
+            'team_id.required' => 'Pick a team for the members you selected',
             'name.min' => 'Use at least 3 characters',
             'end_date.after_or_equal' => 'End date cannot be before the start date',
             'estimate_target_total.numeric' => 'Enter a valid amount',
             'estimate_target_total.min' => 'Amount cannot be negative',
             'vendor_rate_list.max' => 'Upload up to 20 files at a time',
             'vendor_rate_list.*.mimes' => 'Upload an Excel, CSV, PDF, or Word (.doc/.docx) commodity list',
-            'vendor_rate_list.*.max' => 'Each file must be smaller than 10MB',
+            'vendor_rate_list.*.max' => 'Each file must be under '.UploadLimits::effectiveMb().' MB',
         ];
     }
 }

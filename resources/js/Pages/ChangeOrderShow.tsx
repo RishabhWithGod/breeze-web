@@ -271,7 +271,7 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
               <div className="sm:col-span-2">
                 <dt className="text-white/70">Description and details</dt>
                 <dd className="mt-0.5 whitespace-pre-line text-white">
-                  {co.description}
+                  {co.description ?? <span className="text-white/60">No description</span>}
                   {co.reason && <span className="mt-1 block text-white/80">{co.reason}</span>}
                 </dd>
               </div>

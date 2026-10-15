@@ -136,17 +136,21 @@ class JobTaskSetupController extends Controller
         $team = $job->team;
         $projectMemberIds = $this->projectMemberIds($job);
 
-        $journeymen = $team === null
-            ? Foreman::where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name')
-            : $team->journeymen();
-
-        $supervisors = $team === null
-            ? Foreman::where('role', Foreman::ROLE_FOREMAN)->orderBy('name')
-            : $team->foremen();
-
+        /*
+         * The project's own confirmed members are the candidate pool whenever
+         * it has any — whether or not each of them happens to also be on this
+         * job's team, since a project member no longer has to be. The team
+         * roster is only a fallback for a project with nobody picked yet.
+         */
         if ($projectMemberIds !== null) {
-            $journeymen->whereIn('id', $projectMemberIds);
-            $supervisors->whereIn('id', $projectMemberIds);
+            $journeymen = Foreman::whereIn('id', $projectMemberIds)->where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name');
+            $supervisors = Foreman::whereIn('id', $projectMemberIds)->where('role', Foreman::ROLE_FOREMAN)->orderBy('name');
+        } elseif ($team !== null) {
+            $journeymen = $team->journeymen();
+            $supervisors = $team->foremen();
+        } else {
+            $journeymen = Foreman::where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name');
+            $supervisors = Foreman::where('role', Foreman::ROLE_FOREMAN)->orderBy('name');
         }
 
         $runners = $journeymen->get(['id', 'name', 'initials', 'role']);
@@ -283,8 +287,8 @@ class JobTaskSetupController extends Controller
                     'job_id' => $job->id,
                     'created_by' => $request->user()?->id,
                     'title' => trim($row['title']),
-                    'foreman_id' => $crews[$index]['runners'][0],
-                    'supervisor_id' => $crews[$index]['overseers'][0],
+                    'foreman_id' => $crews[$index]['runners'][0] ?? null,
+                    'supervisor_id' => $crews[$index]['overseers'][0] ?? null,
                     /*
                      * Read off the lines rather than typed: the estimate already
                      * priced this work in hours, and asking for the number again
@@ -602,9 +606,9 @@ class JobTaskSetupController extends Controller
      * Splits the people picked for a task into who runs it and who is over it,
      * by the role each holds: journeymen run the work, foremen oversee it.
      *
-     * Every task needs both — someone doing the work and someone answerable for
-     * it — and an apprentice is never put on a task directly; they go on the
-     * job under a journeyman from the job's own screen.
+     * One of either is enough — a task does not have to have both a runner and
+     * an overseer, just someone on it. An apprentice is never put on a task
+     * directly; they go on the job under a journeyman from the job's own screen.
      *
      * @param  array<int, int|string>  $memberIds
      * @return array{runners: list<int>, overseers: list<int>}
@@ -633,9 +637,9 @@ class JobTaskSetupController extends Controller
             }
         }
 
-        if ($runners === [] || $overseers === []) {
+        if ($runners === [] && $overseers === []) {
             throw ValidationException::withMessages([
-                $errorKey => 'Pick at least one journeyman and one foreman for this task.',
+                $errorKey => 'Pick at least one journeyman or foreman for this task.',
             ]);
         }
 
@@ -944,6 +948,7 @@ class JobTaskSetupController extends Controller
         abort_unless(
             $this->policy->createTask($user, $job->schedule ?? new JobSchedule(['job_id' => $job->id])),
             403,
+            "You can't plan tasks on \"{$job->name}\" — it isn't your job.",
         );
     }
 

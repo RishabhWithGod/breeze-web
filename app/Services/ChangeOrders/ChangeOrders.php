@@ -124,7 +124,7 @@ class ChangeOrders
     private function details(User $user, array $data): array
     {
         return [
-            'description' => trim($data['description']),
+            'description' => filled($data['description'] ?? null) ? trim($data['description']) : null,
             'reason' => filled($data['reason'] ?? null) ? trim($data['reason']) : null,
             'reason_code' => $data['reason_code'] ?? null,
             'customer_requested' => (bool) ($data['customer_requested'] ?? false),

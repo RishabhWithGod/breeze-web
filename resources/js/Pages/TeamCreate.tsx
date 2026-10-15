@@ -6,6 +6,7 @@ import {
   ButtonLink,
   Card,
   CardHeader,
+  RequiredFieldsNotice,
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
@@ -46,6 +47,8 @@ export default function TeamCreate() {
           </ButtonLink>
         }
       />
+
+      <RequiredFieldsNotice fields={['Team Name']} className="mb-6" />
 
       {hasErrors && (
         <Alert tone="danger" title="Check the form" className="mb-6">

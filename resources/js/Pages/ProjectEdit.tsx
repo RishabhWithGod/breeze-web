@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
@@ -10,14 +10,15 @@ import {
   Card,
   CardHeader,
   IconButton,
+  RequiredFieldsNotice,
   SelectField,
   TextArea,
   TextInput,
 } from '@/components/common'
-import { ProjectMemberPicker } from '@/components/jobs'
+import { ProjectMemberPicker, TEAM_DRAFT_PREFIX, TeamPicker } from '@/components/jobs'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { PROJECT_TYPE_OPTIONS, ROUTES, routeTo } from '@/constants'
-import type { ClientOption } from '@/types'
+import type { ClientOption, ClientTeamMemberOption } from '@/types'
 import { cleanAmountInput, formatAmountInput, formatFileSize } from '@/utils'
 
 interface ProjectEditDraft {
@@ -28,6 +29,7 @@ interface ProjectEditDraft {
   start_date: string
   end_date: string
   estimate_target_total: string
+  team_id: string
   member_ids: string[]
   vendor_rate_list: File[]
 }
@@ -47,6 +49,8 @@ export interface ProjectEditProps {
   }
   /** The client register, each with the sites it has on file. */
   clients: readonly ClientOption[]
+  /** The crew register, for the Team field — same picker Edit Client offers. */
+  teams: readonly { readonly id: number; readonly name: string }[]
 }
 
 /**
@@ -56,10 +60,21 @@ export interface ProjectEditProps {
  * the same fields, the same rules, so correcting a project is never a
  * different form from opening one.
  */
-export default function ProjectEdit({ project, clients }: ProjectEditProps) {
+export default function ProjectEdit({ project, clients, teams }: ProjectEditProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data, setData, put, processing, errors, hasErrors, clearErrors } =
+  const initialClient = clients.find((option) => option.id === project.clientId)
+  const alreadyStaffedIds = project.memberIds.map(String)
+
+  /*
+   * Who is actually on record as staffed to this project — unlike
+   * `data.member_ids`, which also includes anyone just defaulted or hand-
+   * checked in this still-unsaved form. Reset to empty on a client switch:
+   * nothing staffed under the old client means anything for the new one.
+   */
+  const [assignedIds, setAssignedIds] = useState<readonly string[]>(alreadyStaffedIds)
+
+  const { data, setData, post, transform, processing, errors, hasErrors, clearErrors } =
     useForm<ProjectEditDraft>({
       client_id: project.clientId === null ? '' : String(project.clientId),
       name: project.name,
@@ -69,7 +84,15 @@ export default function ProjectEdit({ project, clients }: ProjectEditProps) {
       end_date: project.endDate ?? '',
       estimate_target_total:
         project.estimateTargetTotal === null ? '' : String(project.estimateTargetTotal),
-      member_ids: project.memberIds.map(String),
+      team_id: initialClient?.teamId == null ? '' : String(initialClient.teamId),
+      /*
+       * Already-staffed members, plus the client's own crew defaulted in on
+       * top — unchecking one who shouldn't be on this particular project is
+       * the exception.
+       */
+      member_ids: Array.from(
+        new Set([...alreadyStaffedIds, ...(initialClient?.members ?? []).map((member) => String(member.id))]),
+      ),
       vendor_rate_list: [],
     })
 
@@ -90,10 +113,16 @@ export default function ProjectEdit({ project, clients }: ProjectEditProps) {
     const client = clients.find((option) => String(option.id) === clientId)
     const primary = client?.addresses.find((site) => site.isPrimary)
 
+    // Nothing staffed under the previous client means anything here.
+    setAssignedIds([])
+
     setData((current) => ({
       ...current,
       client_id: clientId,
-      member_ids: [],
+      // The new client's own crew, not whichever one the last client had.
+      member_ids: (client?.members ?? []).map((member) => String(member.id)),
+      // The new client's own team, not whichever one the last client had.
+      team_id: client?.teamId == null ? '' : String(client.teamId),
       /*
        * The type comes from the site, because it is the building that
        * decides it — a client can own a house and a warehouse. Only a site
@@ -107,6 +136,35 @@ export default function ProjectEdit({ project, clients }: ProjectEditProps) {
 
   const selectedClient = clients.find((option) => String(option.id) === data.client_id)
   const primarySite = selectedClient?.addresses.find((site) => site.isPrimary)
+
+  /*
+   * The member list only knows the client's own team's roster as it was when
+   * the page loaded — picking a different team here (or drafting a new one)
+   * has no roster to show yet, so the picker falls back to "no one yet" and
+   * an inline add starts that team's roster rather than showing someone
+   * else's.
+   */
+  const clientTeamIdValue = selectedClient?.teamId == null ? '' : String(selectedClient.teamId)
+  const teamUnchangedFromClient = data.team_id === clientTeamIdValue
+  const isDraftTeam = data.team_id.startsWith(TEAM_DRAFT_PREFIX)
+  const memberPickerTeamId = data.team_id === '' || isDraftTeam ? null : Number(data.team_id)
+
+  /*
+   * Who can be staffed to this project: the client's own people (picked on
+   * Add Client, independent of any team) plus — when the team here still
+   * matches the client's own — that team's roster too. Either one is a
+   * legitimate way someone ended up on this client's crew.
+   */
+  const memberPickerMembers: ClientTeamMemberOption[] = []
+  const seenMemberIds = new Set<number>()
+  for (const member of [
+    ...(selectedClient?.members ?? []),
+    ...(teamUnchangedFromClient ? (selectedClient?.teamMembers ?? []) : []),
+  ]) {
+    if (seenMemberIds.has(member.id)) continue
+    seenMemberIds.add(member.id)
+    memberPickerMembers.push(member)
+  }
 
   const clientOptions = [
     { label: 'Select client', value: '' },
@@ -149,7 +207,15 @@ export default function ProjectEdit({ project, clients }: ProjectEditProps) {
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    put(routeTo.project(project.id), { forceFormData: true })
+    /*
+     * Sent as a spoofed PUT, not a real one: PHP never parses a multipart
+     * body on an actual PUT request, so every field — not just the file —
+     * would arrive empty and "required" would fire on whatever has that
+     * rule. Posting with `_method` is what every other multipart edit in
+     * this app already does — see ChangeOrderForm's own `editing` branch.
+     */
+    transform((form) => ({ ...form, _method: 'put' }))
+    post(routeTo.project(project.id), { forceFormData: true })
   }
 
   return (
@@ -171,6 +237,7 @@ export default function ProjectEdit({ project, clients }: ProjectEditProps) {
       />
 
       <form onSubmit={submit} noValidate className="space-y-6">
+        <RequiredFieldsNotice fields={['Client', 'Project Name']} />
         <AnimatePresence initial={false}>
           {hasErrors && (
             <Alert key="form-error" tone="danger" title="Check the form">
@@ -356,18 +423,37 @@ export default function ProjectEdit({ project, clients }: ProjectEditProps) {
             </div>
 
             {/*
+              Which crew normally works this client's sites — sets the
+              client's own Team field, the same one Edit Client offers.
+            */}
+            {selectedClient && (
+              <TeamPicker
+                teams={teams}
+                value={data.team_id}
+                onChange={(next) => update('team_id', next)}
+                hint="Who normally works this client's sites. Setting it here updates the client's own team."
+                disabled={processing}
+                {...(errors.team_id ? { error: errors.team_id } : {})}
+              />
+            )}
+
+            {/*
               Who from the client's own crew works this project. Offered only
               once a client is picked — the roster is theirs, not a blank
               choice of everyone on the register.
             */}
             {selectedClient && (
               <ProjectMemberPicker
-                teamId={selectedClient.teamId}
-                teamName={selectedClient.teamName}
-                members={selectedClient.teamMembers}
+                teamId={memberPickerTeamId}
+                teamName={teamUnchangedFromClient ? selectedClient.teamName : null}
+                members={memberPickerMembers}
                 value={data.member_ids}
                 onChange={(ids) => update('member_ids', ids)}
                 disabled={processing}
+                assignedIds={assignedIds}
+                // A client's own crew (client_members) exists independent of
+                // any team now — no team is not the same as no one to staff.
+                allowNoTeam
               />
             )}
           </div>

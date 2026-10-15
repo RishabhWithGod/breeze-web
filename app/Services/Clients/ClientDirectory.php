@@ -28,7 +28,7 @@ class ClientDirectory
      */
     public function options(User $user): Collection
     {
-        return Client::with(['addresses', 'team.members'])
+        return Client::with(['addresses', 'team.members', 'members'])
             ->whereIn('user_id', \App\Support\Ownership::userIds($user))
             ->orderBy('name')
             ->get(['id', 'name', 'team_id'])
@@ -59,6 +59,17 @@ class ClientDirectory
                  * already carry on the register rather than asking again.
                  */
                 'teamMembers' => ($client->team?->members ?? collect())->map(fn ($member) => [
+                    'id' => $member->id,
+                    'name' => $member->name,
+                    'role' => $member->role,
+                    'roleLabel' => $member->roleLabel(),
+                ])->all(),
+                /*
+                 * This client's own people, picked on Add Client — independent
+                 * of any team, and offered here too so a project can be
+                 * staffed from them even before a team is set.
+                 */
+                'members' => $client->members->map(fn ($member) => [
                     'id' => $member->id,
                     'name' => $member->name,
                     'role' => $member->role,

@@ -1,10 +1,10 @@
 import { Head, router, usePage } from '@inertiajs/react'
-import { ArrowRight, Pencil, Plus, RotateCw, Search, Send, Trash2, UserPlus } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Plus, RotateCw, Search, Send, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Alert, Button, Card, ConfirmDialog, Modal, TextInput } from '@/components/common'
+import { Alert, Button, Card, ConfirmDialog, RequiredFieldsNotice, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import type { SharedPageProps } from '@/types'
+import type { SeatsByRole, SharedPageProps } from '@/types'
 import { cn, formatUsPhone } from '@/utils'
 
 interface InvitationRow {
@@ -38,8 +38,10 @@ export interface TeamSetupProps {
   seats: {
     readonly used: number
     readonly pending: number
-    readonly limit: number | null
-    readonly available: number | null
+    /** Seats this company actually bought — see `Subscription::seats`. No plan is unlimited any more. */
+    readonly limit: number
+    readonly available: number
+    readonly byRole: readonly SeatsByRole[]
   }
   /** Crew already on the register. */
   members: number
@@ -91,7 +93,6 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
   const [drafts, setDrafts] = useState<Draft[]>(() => [blankDraft(defaultRole)])
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
-  const [touched, setTouched] = useState(false)
   const [cancelling, setCancelling] = useState<InvitationRow | null>(null)
 
   const term = search.trim().toLowerCase()
@@ -103,10 +104,13 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
     () => drafts.filter((draft) => draft.name.trim() !== '' || draft.email.trim() !== ''),
     [drafts],
   )
-  const invalid = (draft: Draft) => draft.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(draft.email.trim())
+  // Name, email and a team are all required before a row can be sent — "not on a
+  // team" is still a real choice, but it has to be picked, not just left blank.
+  const invalid = (draft: Draft) =>
+    draft.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(draft.email.trim()) || draft.teamId.trim() === ''
 
-  const seatsLeft = seats.available === null ? null : seats.available - filled.length
-  const overSeats = seatsLeft !== null && seatsLeft < 0
+  const seatsLeft = seats.available - filled.length
+  const overSeats = seatsLeft < 0
 
   const change = (key: string, patch: Partial<Draft>) =>
     setDrafts((current) => current.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)))
@@ -117,7 +121,6 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
     )
 
   const send = () => {
-    setTouched(true)
     if (filled.length === 0 || filled.some(invalid) || overSeats) return
 
     router.post(
@@ -130,17 +133,17 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
           // Left empty, the person is emailed a link to choose their own.
           password: draft.password === '' ? null : draft.password,
           role: draft.role,
-          team_id: draft.teamId === '' ? null : Number(draft.teamId),
+          team_id: draft.teamId === 'none' ? null : Number(draft.teamId),
         })),
       },
       {
         preserveScroll: true,
         onStart: () => setBusy(true),
         onFinish: () => setBusy(false),
-        onSuccess: () => {
-          setDrafts([blankDraft(defaultRole)])
-          setTouched(false)
-        },
+        // Stays right here — the people just invited now show in the list
+        // above, already sent. A blank row is left to invite the next person;
+        // moving on to the commodity list is its own, separate button.
+        onSuccess: () => setDrafts([blankDraft(defaultRole)]),
       },
     )
   }
@@ -157,7 +160,10 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
 
   const teamOptions = (
     <>
-      <option value="">Not on a team</option>
+      <option value="" disabled>
+        Select team
+      </option>
+      <option value="none">Not on a team</option>
       {teams.map((team) => (
         <option key={team.id} value={team.id}>
           {team.name}
@@ -173,18 +179,20 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
 
   return (
     <PageTransition>
-      <Head title="Team Setup" />
+      <Head title="Member Setup" />
 
       <PageHeader
-        title="Team Setup"
+        title="Member Setup"
         subtitle="Invite your crew members and assign them to teams. We'll send an invitation so they can join Breeze.Ai and get to work."
-        breadcrumbs={[
-          { label: 'Jobs', href: ROUTES.jobs },
-          { label: 'Teams', href: ROUTES.teams },
-          { label: 'Team Setup' },
-        ]}
+        actions={
+          <Button variant="secondary" leftIcon={ArrowLeft} onClick={() => window.history.back()}>
+            Back
+          </Button>
+        }
         className="mb-5"
       />
+
+      <RequiredFieldsNotice fields={['Name', 'Email', 'Team assignment']} className="mb-4" />
 
       {flash.success && (
         <Alert key={flash.success} tone="success" className="mb-4">
@@ -205,12 +213,9 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
       {/* ------------------------------------------------------------------ seats -- */}
       <SeatStrip seats={seats} members={members} adding={filled.length} />
 
-      {/* ------------------------------------------------------------------ teams -- */}
-      <TeamsPanel teams={teams} />
-
       {/* ------------------------------------------------------------- invitations -- */}
       <Card padding="md" className="mt-4">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-4">
           <TextInput
             id="setup-search"
             aria-label="Search members by name or email"
@@ -220,14 +225,6 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" leftIcon={UserPlus} onClick={addDraft}>
-              Add another member
-            </Button>
-            <Button leftIcon={Send} isLoading={busy} disabled={filled.length === 0 || overSeats} onClick={send}>
-              Send invitations
-            </Button>
-          </div>
         </div>
 
         <div className="overflow-x-auto rounded-panel border border-hairline">
@@ -296,13 +293,14 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
               })}
 
               {shownDrafts.map((draft) => {
-                const started = draft.name.trim() !== '' || draft.email.trim() !== ''
-                const show = touched && started
+                const show = draft.name.trim() !== '' || draft.email.trim() !== '' || draft.teamId !== ''
                 const nameError =
                   errorFor(draft, 'name') ?? (show && draft.name.trim().length < 2 ? 'Enter a name.' : undefined)
                 const emailError =
                   errorFor(draft, 'email') ??
                   (show && !/^\S+@\S+\.\S+$/.test(draft.email.trim()) ? 'Enter a valid email.' : undefined)
+                const teamError =
+                  errorFor(draft, 'team_id') ?? (show && draft.teamId.trim() === '' ? 'Choose a team.' : undefined)
 
                 return (
                   <tr key={draft.key}>
@@ -379,10 +377,11 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
                         aria-label="Team assignment"
                         value={draft.teamId}
                         onChange={(event) => change(draft.key, { teamId: event.target.value })}
-                        className={cn(CONTROL, '[&>option]:bg-navy-900')}
+                        className={cn(CONTROL, '[&>option]:bg-navy-900', teamError && 'border-status-danger/70')}
                       >
                         {teamOptions}
                       </select>
+                      {teamError && <span className="mt-1 block text-xs text-red-300">{teamError}</span>}
                     </td>
                     <td className="px-3 py-2.5 align-top">
                       <Chip className={STATUS.draft.className}>{STATUS.draft.label}</Chip>
@@ -411,7 +410,12 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
                 Only {seats.available} {seats.available === 1 ? 'seat is' : 'seats are'} left on your plan.
               </span>
             )}
-            <Button leftIcon={Send} isLoading={busy} disabled={filled.length === 0 || overSeats} onClick={send}>
+            <Button
+              leftIcon={Send}
+              isLoading={busy}
+              disabled={filled.length === 0 || filled.some(invalid) || overSeats}
+              onClick={send}
+            >
               Send invitations
             </Button>
             <Button variant="outline" rightIcon={ArrowRight} onClick={() => router.visit(ROUTES.commodities)}>
@@ -502,130 +506,23 @@ function SeatStrip({ seats, members, adding }: { seats: TeamSetupProps['seats'];
         </span>
       )}
       <span className={cn('ml-auto font-semibold', seats.available === 0 ? 'text-red-300' : 'text-brand')}>
-        {seats.limit === null ? 'Unlimited seats' : `${seats.available} of ${seats.limit} seats available`}
+        {seats.available} of {seats.limit} seats available
       </span>
       {members > 0 && (
         <span className="w-full text-xs text-white/60 sm:w-auto">{members} already on the crew register.</span>
+      )}
+      {seats.byRole.length > 0 && (
+        <span className="w-full text-xs text-white/60 sm:w-auto">
+          By role:{' '}
+          {seats.byRole.map(({ role, count }, index) => (
+            <span key={role}>
+              {index > 0 && ', '}
+              {count} {role}
+            </span>
+          ))}
+        </span>
       )}
     </div>
   )
 }
 
-/** The teams people are put on: add one, rename it, or delete an empty one. */
-function TeamsPanel({ teams }: { teams: TeamSetupProps['teams'] }) {
-  const [name, setName] = useState('')
-  const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null)
-  const { errors } = usePage<SharedPageProps>().props
-
-  const add = (event: React.FormEvent) => {
-    event.preventDefault()
-    if (name.trim() === '') return
-    router.post(
-      ROUTES.teams,
-      { name: name.trim(), inline: true },
-      { preserveScroll: true, onSuccess: () => setName('') },
-    )
-  }
-
-  return (
-    <Card padding="md">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Teams</h2>
-          <p className="text-xs text-white/70">Add the crews first, then choose one for each person below.</p>
-        </div>
-        <form onSubmit={add} className="flex items-start gap-2">
-          <TextInput
-            id="new-team"
-            aria-label="New team name"
-            placeholder="New team name"
-            maxLength={120}
-            className="w-56"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            {...(errors['name'] ? { error: errors['name'] } : {})}
-          />
-          <Button type="submit" variant="secondary" leftIcon={Plus} disabled={name.trim() === ''}>
-            Add team
-          </Button>
-        </form>
-      </div>
-
-      {teams.length === 0 ? (
-        <p className="mt-3 text-sm text-white/70">
-          No teams yet. People can be invited without one and put on a team later.
-        </p>
-      ) : (
-        <ul className="mt-4 flex flex-wrap gap-2.5">
-          {teams.map((team) => (
-            <li
-              key={team.id}
-              className="flex items-center gap-2 rounded-full border border-hairline-strong bg-white/6 py-1.5 pr-2 pl-4 text-sm text-white"
-            >
-              <span className="font-semibold">{team.name}</span>
-              <span className="text-xs text-white/65">
-                {team.members} {team.members === 1 ? 'member' : 'members'}
-              </span>
-              <IconButton label={`Rename ${team.name}`} onClick={() => setRenaming({ id: team.id, name: team.name })}>
-                <Pencil size={14} aria-hidden />
-              </IconButton>
-              {team.members === 0 && (
-                <IconButton
-                  label={`Delete ${team.name}`}
-                  onClick={() => router.delete(routeTo.team(team.id), { preserveScroll: true })}
-                >
-                  <Trash2 size={14} aria-hidden />
-                </IconButton>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {renaming && <RenameModal team={renaming} onClose={() => setRenaming(null)} />}
-    </Card>
-  )
-}
-
-function RenameModal({ team, onClose }: { team: { id: number; name: string }; onClose: () => void }) {
-  const [value, setValue] = useState(team.name)
-  const { errors } = usePage<SharedPageProps>().props
-
-  const save = () =>
-    router.put(routeTo.team(team.id), { name: value.trim() }, { preserveScroll: true, onSuccess: onClose })
-
-  return (
-    <Modal
-      isOpen
-      onClose={onClose}
-      title="Rename team"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button disabled={value.trim() === '' || value.trim() === team.name} onClick={save}>
-            Save name
-          </Button>
-        </>
-      }
-    >
-      <form
-        onSubmit={(event) => {
-          event.preventDefault()
-          save()
-        }}
-      >
-        <TextInput
-          id="rename-setup-team"
-          label="Team name"
-          autoFocus
-          maxLength={120}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          {...(errors['name'] ? { error: errors['name'] } : {})}
-        />
-      </form>
-    </Modal>
-  )
-}

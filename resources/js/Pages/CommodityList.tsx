@@ -2,6 +2,7 @@ import { Head, router, usePage } from '@inertiajs/react'
 import {
   Archive,
   ArrowDown,
+  ArrowLeft,
   ArrowUp,
   ArrowUpDown,
   Download,
@@ -21,6 +22,7 @@ import {
   Modal,
   MoreMenu,
   Pagination,
+  RequiredFieldsNotice,
   SelectField,
   TextInput,
 } from '@/components/common'
@@ -134,6 +136,9 @@ export default function CommodityList({
           className="mb-0 border-b border-hairline p-4 sm:p-5"
           actions={
             <>
+              <Button variant="secondary" leftIcon={ArrowLeft} onClick={() => window.history.back()}>
+                Back
+              </Button>
               <Button variant="outline" leftIcon={Upload} onClick={() => setImporting(true)}>
                 Upload List
               </Button>
@@ -282,7 +287,7 @@ export default function CommodityList({
                     <tr key={row.id} className={cn('hover:bg-white/4', row.archived && 'opacity-60')}>
                       <td className="px-4 py-2.5">{row.category}</td>
                       <td className="px-4 py-2.5 font-medium text-white">{row.itemCode}</td>
-                      <td className="px-4 py-2.5">{row.description}</td>
+                      <td className="px-4 py-2.5">{row.description || '—'}</td>
                       <td className="px-4 py-2.5">{row.unit}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{money(row.materialPrice)}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{money(row.laborHours)}</td>
@@ -427,6 +432,10 @@ function ItemModal({
           submit()
         }}
       >
+        <RequiredFieldsNotice
+          fields={['Category', 'Unit', 'Material price', 'Labor hours']}
+          className="sm:col-span-2"
+        />
         <div>
           <TextInput
             id="commodity-category"
@@ -455,7 +464,7 @@ function ItemModal({
         />
         <TextInput
           id="commodity-description"
-          label="Description"
+          label="Description (optional)"
           maxLength={255}
           className="sm:col-span-2"
           value={form.description}

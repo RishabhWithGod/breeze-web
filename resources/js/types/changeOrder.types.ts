@@ -5,7 +5,7 @@ export type ChangeOrderLineKind = 'material' | 'labor'
 export interface ChangeOrderSummary {
   readonly id: number
   readonly label: string
-  readonly description: string
+  readonly description: string | null
   readonly source: ChangeOrderSource
   readonly status: ChangeOrderStatus
   readonly reasonCode: string | null

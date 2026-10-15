@@ -16,6 +16,7 @@ import {
   Sparkles,
   Trash2,
   User,
+  Users,
 } from 'lucide-react'
 import {
   Alert,
@@ -33,7 +34,7 @@ import { ClientContactsCard, ClientSitesCard, type ClientContact, type ClientSit
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { useDisclosure, usePermissions } from '@/hooks'
 import { ROUTES, routeTo } from '@/constants'
-import type { SharedPageProps, TableColumn, TakeoffStatus, Tone } from '@/types'
+import type { ClientTeamMemberOption, SharedPageProps, TableColumn, TakeoffStatus, Tone } from '@/types'
 import {
   TAKEOFF_STATUS_LABEL,
   TAKEOFF_STATUS_TONE,
@@ -81,6 +82,8 @@ export interface ClientShowProps {
     readonly contacts: readonly ClientContact[]
     readonly addresses: readonly ClientSite[]
   }
+  /** Who normally works this client's sites — picked on Add Client, independent of any team. */
+  members: readonly ClientTeamMemberOption[]
   /** What this client has on. The reason the screen exists. */
   projects: readonly ClientProject[]
   /** At-a-glance counts over the list above. */
@@ -100,8 +103,15 @@ export interface ClientShowProps {
  * all belong to one of those projects rather than to the client, so none of
  * them appear at this level.
  */
+const MEMBER_ROLE_TONE: Record<string, Tone> = {
+  foreman: 'info',
+  journeyman: 'neutral',
+  apprentice: 'brand',
+}
+
 export default function ClientShow({
   client,
+  members,
   projects,
   projectSummary,
   outstandingBalance,
@@ -245,6 +255,35 @@ export default function ClientShow({
         <ClientContactsCard clientId={client.id} contacts={client.contacts} />
 
         <ClientSitesCard clientId={client.id} addresses={client.addresses} />
+
+        <Card padding="md" className="min-w-0">
+          <CardHeader
+            title={
+              <span className="flex items-center gap-2">
+                <Users size={18} aria-hidden className="text-white/70" />
+                Crew
+              </span>
+            }
+            className="border-b border-hairline pb-4"
+            titleClassName="text-lg font-semibold"
+          />
+
+          {members.length === 0 ? (
+            <p className="text-md text-white/70">No one on record yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {members.map((member) => (
+                <li
+                  key={member.id}
+                  className="flex items-center justify-between gap-3 rounded-panel border border-hairline bg-white/4 p-3"
+                >
+                  <span className="text-md font-medium text-white">{member.name}</span>
+                  <StatusChip hideDot tone={MEMBER_ROLE_TONE[member.role] ?? 'neutral'} label={member.roleLabel} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
 
       {/* ==================================== Summary + Balance row ====== */}

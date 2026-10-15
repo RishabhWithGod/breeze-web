@@ -32,7 +32,9 @@ function PlanForm({ subscription, onClose }: { subscription: SubscriptionSummary
   const [busy, setBusy] = useState(false)
 
   const plan = subscription.plans.find((option) => option.key === planKey)!
-  const quote = quotePlan(plan, cycle, subscription.annualDiscountPercent)
+  // Seats are the subscription's own, not the plan's — switching plans changes
+  // the per-seat rate and features, never how many seats were bought.
+  const quote = quotePlan(plan, cycle, subscription.annualDiscountPercent, subscription.seats.limit)
   const unchanged = planKey === subscription.plan.key && cycle === subscription.billingCycle
 
   const save = () =>
@@ -82,7 +84,11 @@ function PlanForm({ subscription, onClose }: { subscription: SubscriptionSummary
               cycle === option ? 'bg-blue-600 text-white' : 'bg-white/6 text-white/85 hover:bg-white/12',
             )}
           >
-            {option === 'yearly' ? `Annual · save ${subscription.annualDiscountPercent}%` : 'Monthly'}
+            {option === 'yearly'
+              ? subscription.annualDiscountPercent > 0
+                ? `Annual · save ${subscription.annualDiscountPercent}%`
+                : 'Annual'
+              : 'Monthly'}
           </button>
         ))}
       </div>
@@ -118,10 +124,10 @@ function PlanForm({ subscription, onClose }: { subscription: SubscriptionSummary
                 <span className="mt-1 text-sm text-white/75">{option.tagline}</span>
                 <span className="mt-2 text-white">
                   <strong className="text-2xl tabular-nums">${option.price}</strong>
-                  <span className="text-sm text-white/75"> /month</span>
+                  <span className="text-sm text-white/75"> /user/month</span>
                 </span>
                 <ul className="mt-3 space-y-1 text-sm text-white/90">
-                  {[option.usersLabel, ...option.highlights].map((line) => (
+                  {option.highlights.map((line) => (
                     <li key={line} className="flex items-start gap-2">
                       <Check size={14} aria-hidden className="mt-0.5 shrink-0 text-status-success" />
                       {line}
@@ -136,7 +142,8 @@ function PlanForm({ subscription, onClose }: { subscription: SubscriptionSummary
 
       <p className="mt-4 flex items-baseline justify-between gap-3 rounded-panel border border-hairline bg-white/4 px-4 py-3 text-md text-white/90">
         <span>
-          {plan.name} · {cycle === 'yearly' ? 'per year' : 'per month'}
+          {plan.name} · {quote.seats} {quote.seats === 1 ? 'seat' : 'seats'} ·{' '}
+          {cycle === 'yearly' ? 'per year' : 'per month'}
         </span>
         <strong className="text-lg text-white tabular-nums">{formatCents(quote.total)}</strong>
       </p>

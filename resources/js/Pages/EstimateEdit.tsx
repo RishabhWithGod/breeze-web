@@ -6,6 +6,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  RequiredFieldsNotice,
   SectionHeading,
   SelectField,
   TextArea,
@@ -156,6 +157,8 @@ export default function EstimateEdit({
         }
       />
 
+      <RequiredFieldsNotice fields={['Client']} className="mb-6" />
+
       <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
         <Card accent="brand" padding="lg" className="min-w-0">
           <SectionHeading
@@ -187,7 +190,7 @@ export default function EstimateEdit({
             />
             <SelectField
               id="estimate-project"
-              label="Project*"
+              label="Project"
               options={projectOptions}
               value={form.data.project_id}
               disabled={form.data.client_id === ''}

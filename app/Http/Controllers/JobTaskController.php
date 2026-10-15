@@ -52,7 +52,7 @@ class JobTaskController extends Controller
         $this->assertNotLocked($job);
 
         $schedule = $job->schedule ?? $this->builder->build($job, $request->user(), withTasks: false);
-        abort_unless($this->policy->createTask($request->user(), $schedule), 403);
+        abort_unless($this->policy->createTask($request->user(), $schedule), 403, "You can't add tasks to \"{$job->name}\" — it isn't your job.");
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
@@ -123,7 +123,7 @@ class JobTaskController extends Controller
 
     public function update(Request $request, JobTask $task): RedirectResponse
     {
-        abort_unless($this->policy->updateTask($request->user(), $task), 403);
+        abort_unless($this->policy->updateTask($request->user(), $task), 403, "You can't edit \"{$task->title}\" — it isn't on your job.");
         $this->assertNotLocked($task->job);
 
         $data = $request->validate([
@@ -208,7 +208,7 @@ class JobTaskController extends Controller
      */
     public function complete(Request $request, JobTask $task): RedirectResponse
     {
-        abort_unless($this->policy->completeTask($request->user(), $task), 403);
+        abort_unless($this->policy->completeTask($request->user(), $task), 403, "You can't complete \"{$task->title}\" — you aren't on it or its job.");
         $this->assertNotLocked($task->job);
 
         $data = $request->validate([
@@ -233,7 +233,7 @@ class JobTaskController extends Controller
      */
     public function delay(Request $request, JobTask $task): RedirectResponse
     {
-        abort_unless($this->policy->delayTask($request->user(), $task), 403);
+        abort_unless($this->policy->delayTask($request->user(), $task), 403, "You can't report a delay on \"{$task->title}\" — you aren't on it or its job.");
         $this->assertNotLocked($task->job);
 
         $data = $request->validate([
@@ -286,7 +286,7 @@ class JobTaskController extends Controller
      */
     public function move(Request $request, JobTask $task): RedirectResponse
     {
-        abort_unless($this->policy->updateTask($request->user(), $task), 403);
+        abort_unless($this->policy->updateTask($request->user(), $task), 403, "You can't reschedule \"{$task->title}\" — it isn't on your job.");
         $this->assertNotLocked($task->job);
 
         $data = $request->validate([
@@ -353,7 +353,7 @@ class JobTaskController extends Controller
     {
         $schedule = $job->schedule;
         abort_unless($schedule !== null, 404);
-        abort_unless($this->policy->reorder($request->user(), $schedule), 403);
+        abort_unless($this->policy->reorder($request->user(), $schedule), 403, "You can't reorder tasks on \"{$job->name}\" — it isn't your job.");
         $this->assertNotLocked($job);
 
         $data = $request->validate([
@@ -384,7 +384,7 @@ class JobTaskController extends Controller
 
     public function destroy(Request $request, JobTask $task): RedirectResponse
     {
-        abort_unless($this->policy->deleteTask($request->user(), $task), 403);
+        abort_unless($this->policy->deleteTask($request->user(), $task), 403, "You can't remove \"{$task->title}\" — it isn't on your job.");
         $this->assertNotLocked($task->job);
         abort_if($task->status === JobTask::STATUS_COMPLETED, 409, 'This task is already completed and can no longer be removed.');
 
@@ -412,7 +412,7 @@ class JobTaskController extends Controller
 
     public function assign(Request $request, JobTask $task): RedirectResponse
     {
-        abort_unless($this->policy->assign($request->user(), $task), 403);
+        abort_unless($this->policy->assign($request->user(), $task), 403, "You can't staff \"{$task->title}\" — it isn't on your job.");
         $this->assertNotLocked($task->job);
 
         $data = $request->validate([
@@ -458,7 +458,7 @@ class JobTaskController extends Controller
 
     public function unassign(Request $request, JobTask $task, int $assignment): RedirectResponse
     {
-        abort_unless($this->policy->assign($request->user(), $task), 403);
+        abort_unless($this->policy->assign($request->user(), $task), 403, "You can't unstaff \"{$task->title}\" — it isn't on your job.");
         $this->assertNotLocked($task->job);
 
         $row = $task->assignments()->with('member')->findOrFail($assignment);
@@ -486,7 +486,7 @@ class JobTaskController extends Controller
      */
     public function addDependency(Request $request, JobTask $task): RedirectResponse
     {
-        abort_unless($this->policy->updateTask($request->user(), $task), 403);
+        abort_unless($this->policy->updateTask($request->user(), $task), 403, "You can't edit \"{$task->title}\" — it isn't on your job.");
         $this->assertNotLocked($task->job);
 
         $data = $request->validate([
@@ -539,7 +539,7 @@ class JobTaskController extends Controller
 
     public function removeDependency(Request $request, JobTask $task, int $dependency): RedirectResponse
     {
-        abort_unless($this->policy->updateTask($request->user(), $task), 403);
+        abort_unless($this->policy->updateTask($request->user(), $task), 403, "You can't edit \"{$task->title}\" — it isn't on your job.");
         $this->assertNotLocked($task->job);
 
         $edge = $task->dependencies()->with('dependsOn')->findOrFail($dependency);
@@ -560,7 +560,7 @@ class JobTaskController extends Controller
 
     public function comment(Request $request, JobTask $task): RedirectResponse
     {
-        abort_unless($this->policy->comment($request->user(), $task), 403);
+        abort_unless($this->policy->comment($request->user(), $task), 403, "You can't comment on \"{$task->title}\" — you aren't on it or its job.");
         $this->assertNotLocked($task->job);
 
         $data = $request->validate([

@@ -60,7 +60,13 @@ class Ownership
             : $people->where('company_id', $user->company_id);
     }
 
-    /** Whether something made by `$ownerId` is `$user`'s to act on. */
+    /**
+     * Whether something made by `$ownerId` is `$user`'s to act on.
+     *
+     * Matches {@see peopleIds()}: an account with no company works alongside
+     * the others that have none, so this checks the same `whereNull`/`where`
+     * pair rather than refusing outright the moment `$user` has no company.
+     */
     public static function owns(User $user, ?int $ownerId): bool
     {
         if ($ownerId === null) {
@@ -71,8 +77,7 @@ class Ownership
             return true;
         }
 
-        return $user->company_id !== null
-            && User::query()->whereKey($ownerId)->where('company_id', $user->company_id)->exists();
+        return self::peopleIds($user)->whereKey($ownerId)->exists();
     }
 
     /** Whether `$otherUserId` works alongside `$user` — the same company (or both none). */

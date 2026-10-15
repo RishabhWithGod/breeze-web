@@ -15,17 +15,18 @@ class PlanPricing
 {
     /**
      * @return array{
-     *     plan: string, cycle: string, months: int,
+     *     plan: string, cycle: string, months: int, seats: int,
      *     subtotal: int, annualDiscountPercent: int, annualDiscount: int, total: int
      * }
      */
-    public function quote(string $planKey, string $cycle): array
+    public function quote(string $planKey, string $cycle, int $seats = 1): array
     {
         $plan = config("subscription.plans.{$planKey}")
             ?? throw new InvalidArgumentException("Unknown plan [{$planKey}].");
 
+        $seats = max(1, $seats);
         $months = $cycle === 'yearly' ? 12 : 1;
-        $subtotal = (int) round($plan['price'] * 100) * $months;
+        $subtotal = (int) round($plan['price'] * 100) * $months * $seats;
 
         $annualPercent = $cycle === 'yearly' ? (int) config('subscription.annual_discount_percent') : 0;
         $annual = (int) round($subtotal * $annualPercent / 100);
@@ -34,6 +35,7 @@ class PlanPricing
             'plan' => $planKey,
             'cycle' => $cycle,
             'months' => $months,
+            'seats' => $seats,
             'subtotal' => $subtotal,
             'annualDiscountPercent' => $annualPercent,
             'annualDiscount' => $annual,

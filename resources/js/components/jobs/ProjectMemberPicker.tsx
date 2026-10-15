@@ -38,6 +38,21 @@ export interface ProjectMemberPickerProps {
    * added that way is on no team; the team is assigned later.
    */
   allowNoTeam?: boolean
+  /**
+   * Who is actually staffed to this project on record right now, as opposed
+   * to `value` — which also includes anyone checked (by default or by hand)
+   * in this still-unsaved form. Omit on a form with nothing to compare
+   * against yet, e.g. Add Project. When given, a member outside this list
+   * carries a "Not assigned yet" tag, checked or not.
+   */
+  assignedIds?: readonly string[]
+  /**
+   * Invited but not yet on the register — shown so whoever is picking knows
+   * someone is already on their way in, without inviting them twice. Not
+   * selectable: there is nothing on the register to put on this client until
+   * they actually accept.
+   */
+  pendingMembers?: readonly { readonly id: number; readonly name: string; readonly roleLabel: string }[]
 }
 
 /**
@@ -61,6 +76,8 @@ export function ProjectMemberPicker({
   required = false,
   error,
   allowNoTeam = false,
+  assignedIds,
+  pendingMembers = [],
 }: ProjectMemberPickerProps) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
@@ -115,10 +132,20 @@ export function ProjectMemberPicker({
       return
     }
 
+    const trimmedName = name.trim()
+    /*
+     * Set before the request, not in `onSuccess`: Inertia swaps in the
+     * refreshed `members` prop — which is what the matching effect above
+     * watches — as part of resolving the visit, before `onSuccess` ever
+     * runs. Setting it there was always one render too late, so the new
+     * member showed up on the list but was never checked off.
+     */
+    justAdded.current = trimmedName
+
     router.post(
       ROUTES.foremen,
       {
-        name: name.trim(),
+        name: trimmedName,
         role,
         team_id: teamId,
         email: email.trim(),
@@ -135,11 +162,11 @@ export function ProjectMemberPicker({
           setSaving(true)
           setAddErrors({})
         },
-        onSuccess: () => {
-          justAdded.current = name.trim()
-          reset()
+        onSuccess: () => reset(),
+        onError: (errors) => {
+          justAdded.current = null
+          setAddErrors(errors as Record<string, string>)
         },
-        onError: (errors) => setAddErrors(errors as Record<string, string>),
         onFinish: () => setSaving(false),
       },
     )
@@ -170,11 +197,16 @@ export function ProjectMemberPicker({
                     onChange={() => toggle(String(member.id))}
                     disabled={disabled}
                   />
-                  <StatusChip
-                    hideDot
-                    tone={ROLE_TONE[member.role] ?? 'neutral'}
-                    label={member.roleLabel}
-                  />
+                  <span className="flex items-center gap-2">
+                    {assignedIds && !assignedIds.includes(String(member.id)) && (
+                      <StatusChip hideDot tone="warning" label="Not assigned yet" />
+                    )}
+                    <StatusChip
+                      hideDot
+                      tone={ROLE_TONE[member.role] ?? 'neutral'}
+                      label={member.roleLabel}
+                    />
+                  </span>
                 </div>
               ))}
             </div>
@@ -182,6 +214,26 @@ export function ProjectMemberPicker({
             <p className="text-sm text-white/60">
               {teamName ? `No one is on “${teamName}” yet.` : 'No members yet — add one below.'}
             </p>
+          )}
+
+          {pendingMembers.length > 0 && (
+            <div className="mt-2.5 space-y-2.5 rounded-panel border border-dashed border-hairline bg-white/2 p-4">
+              {pendingMembers.map((member) => (
+                <div key={`pending-${member.id}`} className="flex items-center justify-between gap-3">
+                  <Checkbox
+                    id={`project-member-pending-${member.id}`}
+                    label={member.name}
+                    checked={false}
+                    onChange={() => {}}
+                    disabled
+                  />
+                  <span className="flex items-center gap-2">
+                    <StatusChip hideDot tone="info" label="Pending invite" />
+                    <StatusChip hideDot tone={ROLE_TONE[member.roleLabel.toLowerCase()] ?? 'neutral'} label={member.roleLabel} />
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
 
           {allowInlineAdd &&

@@ -2,7 +2,7 @@ import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { ArrowLeft, ArrowRight, CloudUpload, Mail, Phone, Save } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AddressField, Button, ButtonLink, Checkbox, TextInput } from '@/components/common'
+import { AddressField, Button, ButtonLink, Checkbox, RequiredFieldsNotice, TextInput } from '@/components/common'
 import { appLayout, PageTransition } from '@/components/layout'
 import type { SelectOption } from '@/types'
 import { cn, formatUsPhone } from '@/utils'
@@ -108,7 +108,12 @@ export default function CompanySetup({ company, defaults, timezones, editing }: 
       return
     }
 
-    post('/company-setup', { forceFormData: true, preserveScroll: true })
+    // Keep scroll only on a validation-error re-render of this same page —
+    // success moves on to Terms, which should open at the top.
+    post('/company-setup', {
+      forceFormData: true,
+      preserveScroll: (page) => Object.keys(page.props.errors ?? {}).length > 0,
+    })
   }
 
   return (
@@ -120,12 +125,30 @@ export default function CompanySetup({ company, defaults, timezones, editing }: 
         noValidate
         className="mx-auto max-w-5xl rounded-card border border-l-4 border-brand/40 border-l-brand glass p-6 shadow-glow sm:p-9"
       >
+        {!editing && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            leftIcon={ArrowLeft}
+            className="mb-4"
+            onClick={() => window.history.back()}
+          >
+            Back
+          </Button>
+        )}
+
         <h1 className="text-4xl font-bold text-white">{editing ? 'Edit Company Profile' : 'Company Profile'}</h1>
         <p className="mt-2 text-md text-white/85">
           {editing
             ? 'Correct your company details. They are used across your account.'
             : "Let’s get your company set up. This information will be used across your account."}
         </p>
+
+        <RequiredFieldsNotice
+          fields={['Company Name', 'Business Address', 'Primary Contact', 'Phone', 'Email', 'Time Zone']}
+          className="mt-6"
+        />
 
         <div className="mt-8 grid gap-5 md:grid-cols-2">
           <FieldCard>

@@ -15,6 +15,7 @@ use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\Project;
 use App\Models\ProjectActivity;
+use App\Models\Team;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Estimating\ProjectRateBookImporter;
@@ -130,6 +131,8 @@ class ProjectController extends Controller
     {
         return Inertia::render('ProjectCreate', [
             'clients' => $this->clients->options($request->user()),
+            // The crew register, for the Team field — same one Edit Client offers.
+            'teams' => Team::query()->orderBy('name')->get(['id', 'name']),
             /*
              * Opened from a client's own screen, that client is the answer and
              * the form should not ask again. Checked against the owner rather
@@ -158,6 +161,10 @@ class ProjectController extends Controller
         $data = $request->validated();
 
         $client = $request->user()->clients()->with('primaryAddress')->findOrFail($data['client_id']);
+
+        // Which crew normally works this client's sites — the same field
+        // Edit Client's own Team field sets.
+        $client->update(['team_id' => $data['team_id'] ?? null]);
 
         /*
          * The project's location is the client's primary site, snapshotted. A
@@ -190,14 +197,7 @@ class ProjectController extends Controller
          * ids the form posted, in case the client was switched after the
          * roster was drawn from a different one.
          */
-        if ($client->team_id !== null) {
-            $project->members()->sync(
-                Foreman::query()
-                    ->where('team_id', $client->team_id)
-                    ->whereIn('id', $data['member_ids'] ?? [])
-                    ->pluck('id'),
-            );
-        }
+        $project->members()->sync($this->eligibleMemberIds($client, $data['member_ids'] ?? []));
 
         // The takeoff starts here: this project's drawing is the next step, and
         // the resume button follows it until its job has tasks.
@@ -407,6 +407,8 @@ class ProjectController extends Controller
                 'memberIds' => $project->members->pluck('id'),
             ],
             'clients' => $this->clients->options($request->user()),
+            // The crew register, for the Team field — same one Edit Client offers.
+            'teams' => Team::query()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -426,6 +428,11 @@ class ProjectController extends Controller
         $data = $request->validated();
 
         $client = $request->user()->clients()->with('primaryAddress')->findOrFail($data['client_id']);
+
+        // Which crew normally works this client's sites — the same field
+        // Edit Client's own Team field sets.
+        $client->update(['team_id' => $data['team_id'] ?? null]);
+
         $site = $client->primaryAddress;
 
         $project->update([
@@ -448,14 +455,7 @@ class ProjectController extends Controller
          * member kept from before an edit that switched clients would be
          * someone off the new client's own crew.
          */
-        $project->members()->sync(
-            $client->team_id === null
-                ? []
-                : Foreman::query()
-                    ->where('team_id', $client->team_id)
-                    ->whereIn('id', $data['member_ids'] ?? [])
-                    ->pluck('id'),
-        );
+        $project->members()->sync($this->eligibleMemberIds($client, $data['member_ids'] ?? []));
 
         $flash = ['success' => "“{$project->name}” was updated."];
 
@@ -479,5 +479,25 @@ class ProjectController extends Controller
         return redirect()
             ->route('projects.index')
             ->with('warning', "“{$project->name}” was deleted.");
+    }
+
+    /**
+     * Which of the posted `member_ids` are actually this client's people —
+     * either picked directly on Add Client, or on the client's own team.
+     * Never trusts the form's ids on their own: someone off a different
+     * client's crew entirely must not end up staffed to this project.
+     *
+     * @param  list<int|string>  $memberIds
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    private function eligibleMemberIds(Client $client, array $memberIds): \Illuminate\Support\Collection
+    {
+        $clientMemberIds = $client->members()->pluck('foremen.id');
+
+        $teamMemberIds = $client->team_id === null
+            ? collect()
+            : Foreman::query()->where('team_id', $client->team_id)->pluck('id');
+
+        return $clientMemberIds->merge($teamMemberIds)->unique()->intersect($memberIds)->values();
     }
 }

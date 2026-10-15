@@ -23,6 +23,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFolderController;
 use App\Http\Controllers\DrawingDetailsController;
+use App\Http\Controllers\ElectricalToolsController;
 use App\Http\Controllers\EstimateBuilderController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\EstimateDetailController;
@@ -178,6 +179,12 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
             ->name('uploads.store');
         // Polled by the upload screen; never blocks a render.
         Route::get('engine-status', [UploadController::class, 'engineStatus'])->name('ai.engine-status');
+    });
+
+    // Electrical Tools: a preview of the calculation tools, ahead of the real engine.
+    Route::prefix('electrical-tools')->group(function () {
+        Route::get('/', [ElectricalToolsController::class, 'index'])->name('electrical-tools.index');
+        Route::get('{tool}', [ElectricalToolsController::class, 'show'])->name('electrical-tools.show');
     });
 
     Route::delete('takeoffs/{project}', [TakeoffHistoryController::class, 'destroy'])->name('takeoffs.destroy');
@@ -462,7 +469,9 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
     Route::get('teams/managers/{manager}/edit', [CompanyManagerController::class, 'edit'])->name('managers.edit');
 
     // The old address, kept so a bookmark or an old link still lands somewhere.
-    Route::redirect('foremen', '/teams')->name('foremen.index');
+    // Route::get, not Route::redirect: the latter registers every HTTP verb
+    // on this URI, which shadows foremen.store's POST just below.
+    Route::get('foremen', fn () => redirect()->route('teams.index'))->name('foremen.index');
     Route::get('foremen/create', [ForemanController::class, 'create'])->name('foremen.create');
     // After `create`, so the literal segment is not read as a foreman's id.
     Route::get('foremen/{foreman}', [ForemanController::class, 'show'])->name('foremen.show');

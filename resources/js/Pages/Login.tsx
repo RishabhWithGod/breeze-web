@@ -216,13 +216,6 @@ export default function Login({ rememberedEmail }: LoginProps) {
             {processing ? 'Signing In…' : 'Sign In'}
           </button>
         </form>
-
-        <p className="mt-6 text-center text-sm font-medium text-white/70">
-          Don&apos;t have an account?{' '}
-          <Link href={ROUTES.signup} className="font-semibold text-brand transition-colors hover:text-white">
-            Sign Up
-          </Link>
-        </p>
       </motion.div>
     </div>
   )

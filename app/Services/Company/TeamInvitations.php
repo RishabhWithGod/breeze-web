@@ -29,21 +29,33 @@ class TeamInvitations
 
     /**
      * Where the company stands on seats: people with an account, invitations still open
-     * (each holds a seat), and what is left. A plan with no limit has no `available`.
+     * (each holds a seat), and what is left — against the seats actually bought
+     * (`Subscription::seats`), not a figure the plan itself caps at.
      *
-     * @return array{used: int, pending: int, limit: ?int, available: ?int}
+     * @return array{used: int, pending: int, limit: int, available: int, byRole: list<array{role: string, count: int}>}
      */
     public function seats(User $user): array
     {
-        $limit = config('subscription.plans.'.Subscription::forUser($user)->plan.'.max_users');
-        $used = User::query()->where('company_id', $user->company_id)->where('status', User::STATUS_ACTIVE)->count();
+        $limit = Subscription::forUser($user)->seats;
+        $activeUsers = User::query()->where('company_id', $user->company_id)->where('status', User::STATUS_ACTIVE);
+        $used = (clone $activeUsers)->count();
         $pending = $this->openInvitations($user->company_id)->count();
+
+        $byRole = (clone $activeUsers)
+            ->selectRaw('role, count(*) as count')
+            ->groupBy('role')
+            ->orderByDesc('count')
+            ->get()
+            ->map(fn ($row) => ['role' => $row->role ?? 'Unassigned', 'count' => (int) $row->count])
+            ->values()
+            ->all();
 
         return [
             'used' => $used,
             'pending' => $pending,
             'limit' => $limit,
-            'available' => $limit === null ? null : max(0, $limit - $used - $pending),
+            'available' => max(0, $limit - $used - $pending),
+            'byRole' => $byRole,
         ];
     }
 
@@ -62,11 +74,11 @@ class TeamInvitations
     {
         $available = $this->seats($inviter)['available'];
 
-        if ($available !== null && count($rows) > $available) {
+        if (count($rows) > $available) {
             throw ValidationException::withMessages([
                 'invitations' => $available === 0
-                    ? 'Your plan has no seats left. Upgrade your plan to invite more people.'
-                    : "Your plan has {$available} ".Str::plural('seat', $available).' left, and you are inviting '.count($rows).'. Remove '.(count($rows) - $available).' or upgrade your plan.',
+                    ? 'No seats left. Buy more seats before inviting more people.'
+                    : "Only {$available} ".Str::plural('seat', $available).' left, and you are inviting '.count($rows).'. Remove '.(count($rows) - $available).' or buy more seats.',
             ]);
         }
 
@@ -142,11 +154,11 @@ class TeamInvitations
             }
 
             $company = CompanyProfile::query()->findOrFail($invitation->company_id);
-            $limit = config('subscription.plans.'.Subscription::forUser($company->user)->plan.'.max_users');
+            $limit = Subscription::forUser($company->user)->seats;
             $used = User::query()->where('company_id', $company->id)->where('status', User::STATUS_ACTIVE)->count();
 
-            if ($limit !== null && $used >= $limit) {
-                throw ValidationException::withMessages(['invitation' => 'This company\'s plan has no seat left. Ask them to upgrade their plan.']);
+            if ($used >= $limit) {
+                throw ValidationException::withMessages(['invitation' => 'This company has no seats left. Ask them to buy more seats first.']);
             }
 
             $user = User::create([

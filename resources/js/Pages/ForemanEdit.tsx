@@ -2,7 +2,17 @@ import type { FormDataKeys, FormDataValues } from '@inertiajs/core'
 import { Head, useForm } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Save } from 'lucide-react'
-import { Alert, Button, ButtonLink, Card, CardHeader, SelectField, TextArea, TextInput } from '@/components/common'
+import {
+  Alert,
+  Button,
+  ButtonLink,
+  Card,
+  CardHeader,
+  RequiredFieldsNotice,
+  SelectField,
+  TextArea,
+  TextInput,
+} from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import { formatUsPhone, toTitleCase } from '@/utils'
@@ -119,6 +129,7 @@ export default function ForemanEdit({ foreman, teams, roles, manager }: ForemanE
       />
 
       <form onSubmit={submit} noValidate className="space-y-6">
+        <RequiredFieldsNotice fields={['Member Name', 'Role']} />
         <AnimatePresence initial={false}>
           {hasErrors && (
             <Alert key="form-error" tone="danger" title="Check the form">

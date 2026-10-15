@@ -7,6 +7,7 @@ import {
   ButtonLink,
   Card,
   ConfirmDialog,
+  RequiredFieldsNotice,
   SectionHeading,
   SelectField,
   TextInput,
@@ -129,6 +130,11 @@ export default function JobTaskEdit({
         }
       />
 
+      <RequiredFieldsNotice
+        fields={estimateLines.length > 0 ? ['Task name', 'Estimate lines', 'Members'] : ['Task name', 'Members']}
+        className="mb-6"
+      />
+
       {hasErrors && (
         <Alert tone="danger" title="Check the task" className="mb-6">
           Something below needs attention before this task can be saved.
@@ -157,7 +163,9 @@ export default function JobTaskEdit({
 
               {/* What the task is the work for, taken from the estimate. */}
               <div>
-                <p className="mb-2 text-md font-medium text-white">Estimate lines</p>
+                <p className="mb-2 text-md font-medium text-white">
+                  Estimate lines{estimateLines.length > 0 && <span className="text-red-300">*</span>}
+                </p>
                 <TaskLinePicker
                   lines={estimateLines}
                   value={lineIds}

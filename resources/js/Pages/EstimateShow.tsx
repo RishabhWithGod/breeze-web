@@ -277,15 +277,15 @@ export default function EstimateShow({
               }
             />
             {/*
-              Always available here, never nested in a card — this is the one
-              addendum action the screen offers, for as long as a job has not
-              been raised yet.
+              Hidden for now, PM's call. Was always available here, never
+              nested in a card, as the one addendum action the screen offers
+              for as long as a job has not been raised yet:
+              {beforeJob && (
+                <ButtonLink href={routeTo.uploadAddendumFor(estimate.id)} size="sm" leftIcon={UploadCloud}>
+                  Upload Addendum
+                </ButtonLink>
+              )}
             */}
-            {beforeJob && (
-              <ButtonLink href={routeTo.uploadAddendumFor(estimate.id)} size="sm" leftIcon={UploadCloud}>
-                Upload Addendum
-              </ButtonLink>
-            )}
             {estimate.kind === 'addendum' && estimate.parentEstimate && (
               <ButtonLink
                 href={routeTo.estimate(estimate.parentEstimate.id)}

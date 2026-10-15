@@ -11,6 +11,7 @@ use App\Models\TimeEntry;
 use App\Models\TimeTrackingSetting;
 use App\Notifications\AttendanceRecorded;
 use App\Services\Mobile\ElectricianJobAccess;
+use App\Support\UploadLimits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -372,7 +373,7 @@ class AttendanceController extends Controller
             'point.accuracy' => ['required', 'numeric'],
             'method' => ['required', 'in:manual,automatic,photo'],
             'client_id' => ['nullable', 'string', 'max:191'],
-            'photo' => ['nullable', 'image', 'max:20480'],
+            'photo' => ['nullable', 'image', 'max:'.(UploadLimits::effectiveMb() * 1024)],
             // When it happened on the phone. A check-in or checkout saved offline arrives later but
             // keeps its own time; a clock set ahead is clamped, one set a week back is refused.
             'occurred_at' => ['nullable', 'date', 'after_or_equal:-8 days'],

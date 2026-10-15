@@ -26,7 +26,7 @@ class JobApprenticeAssignmentController extends Controller
     /** Removes an apprentice from the job. A manager correcting a foreman's assignment, not making one. */
     public function destroy(Request $request, Job $job, JobApprenticeAssignment $assignment): RedirectResponse
     {
-        abort_unless($this->policy->assignApprentice($request->user(), $job), 403);
+        abort_unless($this->policy->assignApprentice($request->user(), $job), 403, "You can't staff \"{$job->name}\" — it isn't your job.");
         abort_unless($assignment->job_id === $job->id, 404);
         $job->assertNotLocked();
 

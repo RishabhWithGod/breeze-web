@@ -23,12 +23,13 @@ class JobDetailResource extends JsonResource
             'name' => $this->name,
             'client' => $this->client,
             /*
-             * Who the work is for, and which of their projects it is on. The
-             * job carries the project; the client is read through it, because
-             * a project cannot belong to two clients and the edit form must
-             * open on the pair the job actually has.
+             * Who the work is for, and which of their projects it is on. Read
+             * through the project when there is one — a project cannot belong
+             * to two clients, so that is the authoritative pair — and falls
+             * back to the job's own `client_id` for a job that has a client
+             * but no project yet.
              */
-            'clientId' => $this->project?->client_id,
+            'clientId' => $this->project?->client_id ?? $this->client_id,
             'projectId' => $this->project_id,
             /*
              * The drawing the work is taken off, read back through the takeoff

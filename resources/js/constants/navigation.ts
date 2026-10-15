@@ -15,6 +15,7 @@ import {
   Sparkles,
   Users,
   ListChecks,
+  Zap,
 } from 'lucide-react'
 import { ROUTES } from './routes'
 import type { NavItem } from '@/types'
@@ -104,6 +105,8 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
       // },
     ],
   },
+  // A static preview of the calculation tools, ahead of the real engine.
+  { label: 'Electrical Tools', href: ROUTES.electricalTools, icon: Zap },
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock, permission: 'time_tracking.view' },
   { label: 'Billing', href: ROUTES.billing, icon: ReceiptText, permission: 'billing.view' },
   // { label: 'Analytics', href: ROUTES.jobCosting, icon: ChartColumn },
@@ -114,5 +117,4 @@ export const FOOTER_LINKS: readonly { label: string; href: string }[] = [
   { label: 'Release notes', href: '#' },
   { label: 'Privacy', href: '#' },
   { label: 'Terms', href: '#' },
-  { label: 'Status', href: '#' },
 ]
