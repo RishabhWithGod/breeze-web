@@ -6,11 +6,13 @@ use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Models\CrewShift;
 use App\Models\Job;
+use App\Services\Scheduling\CrewBoard;
 use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * The Unassigned Queue and "Book crew" action — mobile's counterpart to
@@ -23,16 +25,64 @@ class SchedulingController extends Controller
 {
     use ApiResponses;
 
+    /**
+     * The crew calendar — mobile's counterpart to web's own
+     * `SchedulingController::calendar()`. The same `CrewBoard` web draws, so
+     * the two never disagree about which job sits on which crew's day.
+     */
+    public function calendar(Request $request): JsonResponse
+    {
+        $filters = $request->validate([
+            'view' => ['nullable', Rule::in(['month', 'week', 'day'])],
+            'date' => ['nullable', 'date'],
+        ]);
+
+        $anchor = isset($filters['date'])
+            ? Carbon::parse($filters['date'])->startOfDay()
+            : Carbon::today();
+
+        return $this->ok([
+            'anchor' => $anchor->toDateString(),
+            'today' => Carbon::today()->toDateString(),
+            'board' => app(CrewBoard::class)->build($request->user(), $filters['view'] ?? 'month', $anchor),
+        ]);
+    }
+
+    /**
+     * Jobs that still need a crew — the same queue as web's own
+     * `SchedulingController::unassigned()`: raised but not yet broken into
+     * tasks, with the same search, type tab and sort, and the per-type
+     * counts its tabs show.
+     */
     public function unassigned(Request $request): JsonResponse
     {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'type' => ['nullable', Rule::in(['all', ...Job::TYPES])],
+            'sort' => ['nullable', Rule::in(Job::SCHEDULING_SORTS)],
+        ]);
+
+        $user = $request->user();
+        $type = $filters['type'] ?? 'all';
+
         $jobs = Job::query()
-            ->ownedBy($request->user())
+            ->ownedBy($user)
             ->with(['team:id,name', 'tasks.foreman', 'tasks.supervisor', 'foreman'])
-            ->unscheduled()
-            ->orderByRaw('start_date is null')
-            ->orderByDesc('start_date')
-            ->orderByDesc('id')
+            ->withoutCrew()
+            ->search($filters['search'] ?? null)
+            ->when($type !== 'all', fn ($query) => $query->where('job_type', $type))
+            ->sortedForScheduling($filters['sort'] ?? 'start-desc')
             ->paginate(min((int) $request->integer('per_page', 20), 50));
+
+        // Counted without the type filter, so the tabs keep the whole queue's shape.
+        $counts = Job::query()
+            ->ownedBy($user)
+            ->reorder()
+            ->withoutCrew()
+            ->search($filters['search'] ?? null)
+            ->selectRaw('job_type, count(*) as total')
+            ->groupBy('job_type')
+            ->pluck('total', 'job_type');
 
         return $this->ok([
             'jobs' => $jobs->getCollection()->map(fn (Job $job) => [
@@ -41,13 +91,23 @@ class SchedulingController extends Controller
                 'client' => $job->client,
                 'location' => $job->location,
                 'jobType' => $job->job_type,
+                'priority' => $job->priority ?? 'medium',
                 'startDate' => $job->start_date?->toDateString(),
                 'endDate' => $job->end_date?->toDateString(),
+                'createdAt' => $job->created_at?->toDateString(),
                 'estimatedHours' => $job->estimated_hours === null ? null : (float) $job->estimated_hours,
+                'value' => $job->budget === null ? null : (float) $job->budget,
+                'requiredSkills' => $job->required_skills ?? [],
                 'teamName' => $job->team?->name,
                 'foremen' => $job->assignedForemen(),
                 'supervisors' => $job->assignedSupervisors(),
             ])->all(),
+            'counts' => [
+                'all' => (int) $counts->sum(),
+                'residential' => (int) ($counts['residential'] ?? 0),
+                'commercial' => (int) ($counts['commercial'] ?? 0),
+                'industrial' => (int) ($counts['industrial'] ?? 0),
+            ],
             'meta' => [
                 'currentPage' => $jobs->currentPage(),
                 'lastPage' => $jobs->lastPage(),

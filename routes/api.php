@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\AddressLookupController;
 use App\Http\Controllers\Api\V1\AttendanceController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BillingController;
+use App\Http\Controllers\Api\V1\ChangeOrderController;
 use App\Http\Controllers\Api\V1\ClientAddressController;
 use App\Http\Controllers\Api\V1\ClientController;
 use App\Http\Controllers\Api\V1\DocumentController;
@@ -27,11 +28,15 @@ use App\Http\Controllers\Api\V1\JobTaskController;
 use App\Http\Controllers\Api\V1\JobTaskNoteController;
 use App\Http\Controllers\Api\V1\JobTaskSetupController;
 use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\OfficeCommodityController;
+use App\Http\Controllers\Api\V1\OfficeJobController;
+use App\Http\Controllers\Api\V1\OfficePaymentSettingsController;
 use App\Http\Controllers\Api\V1\ProcessingController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ScheduleController;
 use App\Http\Controllers\Api\V1\SchedulingController;
+use App\Http\Controllers\Api\V1\SecurityController;
 use App\Http\Controllers\Api\V1\SymbolReviewController;
 use App\Http\Controllers\Api\V1\TakeoffController;
 use App\Http\Controllers\Api\V1\TakeoffFlowController;
@@ -98,6 +103,17 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('auth/two-factor/disable', [AuthController::class, 'disableTwoFactor'])
             ->middleware('throttle:two-factor')->name('auth.two-factor.disable');
         Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
+
+        // Security Settings — web's own `SecuritySettingsController`, for the app.
+        Route::get('security', [SecurityController::class, 'show'])->name('security.show');
+        Route::post('security/recovery-codes', [SecurityController::class, 'regenerateRecoveryCodes'])
+            ->middleware('throttle:two-factor')->name('security.recovery-codes');
+        Route::post('security/email/challenge', [SecurityController::class, 'sendEmailChallenge'])
+            ->middleware('throttle:two-factor')->name('security.email.challenge');
+        Route::post('security/email/confirm', [SecurityController::class, 'confirmEmail'])
+            ->middleware('throttle:two-factor')->name('security.email.confirm');
+        Route::put('security/notifications/{eventType}', [SecurityController::class, 'updateNotificationPreference'])
+            ->name('security.notifications.update');
 
         Route::middleware('account.active')->group(function () {
             // The floating "Resume" button — read on every screen (mobile's
@@ -304,6 +320,61 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 Route::get('jobs/{job}/documents', [JobDocumentController::class, 'index'])->name('jobs.documents.index');
                 Route::get('jobs/{job}/documents/{document}/download', [JobDocumentController::class, 'download'])->name('jobs.documents.download');
 
+                // The office's Payment Settings ("Settings") — web's own `PaymentSettingsController`.
+                Route::prefix('office/settings')->name('office.settings.')
+                    ->controller(OfficePaymentSettingsController::class)->group(function () {
+                        Route::get('/', 'show')->name('show');
+                        Route::get('transactions', 'transactions')->name('transactions');
+                        Route::put('billing', 'updateBilling')->name('billing');
+                        Route::put('subscription', 'changePlan')->name('subscription');
+                        Route::post('processors/{processor}/connect', 'connect')->name('processors.connect');
+                        Route::post('processors/{processor}/test', 'test')->name('processors.test');
+                        Route::delete('processors/{processor}', 'disconnect')->name('processors.disconnect');
+                    });
+
+                // The office's Commodity List — web's own `CommodityListController`.
+                Route::prefix('office/commodities')->name('office.commodities.')
+                    ->whereNumber('item')->controller(OfficeCommodityController::class)->group(function () {
+                        Route::get('/', 'index')->name('index');
+                        Route::post('/', 'store')->name('store');
+                        Route::post('import', 'import')->name('import');
+                        Route::put('{item}', 'update')->name('update');
+                        Route::post('{item}/archive', 'archive')->name('archive');
+                    });
+
+                // The office's Job Detail — web's own `JobController::show()` and its panels.
+                Route::prefix('office/jobs/{job}')->name('office.jobs.')
+                    ->controller(OfficeJobController::class)->group(function () {
+                        Route::get('/', 'show')->name('show');
+                        Route::delete('/', 'destroy')->name('destroy');
+                        Route::post('status', 'changeStatus')->name('status');
+                        Route::post('notes', 'storeNote')->name('notes.store');
+                        Route::delete('notes/{note}', 'destroyNote')->name('notes.destroy');
+                        Route::post('attachments', 'storeAttachment')->name('attachments.store');
+                        Route::get('attachments/{attachment}', 'downloadAttachment')->name('attachments.download');
+                        Route::delete('attachments/{attachment}', 'destroyAttachment')->name('attachments.destroy');
+                        Route::delete('apprentices/{assignment}', 'destroyApprentice')->name('apprentices.destroy');
+                    });
+
+                // The office's Change Orders screens — web's own `ChangeOrderController`,
+                // apart from the field crew's per-job "Additional Work" above.
+                Route::prefix('office/change-orders')->name('office.change-orders.')
+                    ->whereNumber(['changeOrder', 'attachment'])->controller(ChangeOrderController::class)->group(function () {
+                        Route::get('/', 'index')->name('index');
+                        Route::get('options', 'options')->name('options');
+                        Route::post('/', 'store')->name('store');
+                        Route::get('{changeOrder}', 'show')->name('show');
+                        Route::put('{changeOrder}', 'update')->name('update');
+                        Route::delete('{changeOrder}', 'destroy')->name('destroy');
+                        Route::post('{changeOrder}/submit', 'submit')->name('submit');
+                        Route::post('{changeOrder}/withdraw', 'withdraw')->name('withdraw');
+                        Route::post('{changeOrder}/approve', 'approve')->name('approve');
+                        Route::post('{changeOrder}/reject', 'reject')->name('reject');
+                        Route::post('{changeOrder}/attachments', 'attach')->name('attach');
+                        Route::get('{changeOrder}/attachments/{attachment}', 'download')->name('download');
+                        Route::delete('{changeOrder}/attachments/{attachment}', 'detach')->name('detach');
+                    });
+
                 Route::get('jobs/{job}/tasks', [JobTaskController::class, 'index'])->name('jobs.tasks.index');
                 // Cross-job "My Tasks" feed — every task on every job this
                 // user can access, mirroring the per-job endpoint's own
@@ -335,6 +406,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
                 // Unassigned Queue → "Book crew" — mobile's counterpart to
                 // web's own Scheduling calendar's booking action.
+                // The crew calendar — web's own Scheduling → Calendar board.
+                Route::get('scheduling/calendar', [SchedulingController::class, 'calendar'])->name('scheduling.calendar');
                 Route::get('scheduling/unassigned', [SchedulingController::class, 'unassigned'])->name('scheduling.unassigned');
                 Route::post('scheduling/schedules', [SchedulingController::class, 'store'])->name('scheduling.schedules.store');
 
