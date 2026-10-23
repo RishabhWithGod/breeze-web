@@ -180,6 +180,64 @@ class Permissions
         return "{$target}.{$action}";
     }
 
+    /**
+     * The permission a mobile API request needs. Only the office-management routes are governed;
+     * what a person does in the field — their timer, attendance, reading the jobs and tasks they are
+     * on, task progress, job photos, materials and messages, their own schedule — stays open to every active account, since the
+     * phone is how crew work. Returns null for those.
+     */
+    public function requiredForApi(Route $route, string $method): ?string
+    {
+        $name = preg_replace('/^api\.v1\./', '', (string) $route->getName());
+        if ($name === '') {
+            return null;
+        }
+        $isRead = in_array($method, ['GET', 'HEAD'], true);
+        $segments = explode('.', $name);
+        $first = $segments[0];
+        $last = end($segments);
+
+        $crud = function (string $module, bool $createOnStore = true) use ($method, $isRead, $last, $segments): string {
+            $top = count($segments) <= 2;
+            $action = match (true) {
+                $method === 'DELETE' => $top ? 'delete' : 'edit',
+                $last === 'create-options', $last === 'store' && $top => 'create',
+                $last === 'edit-options' => 'edit',
+                $isRead => 'view',
+                default => 'edit',
+            };
+
+            return "{$module}.{$action}";
+        };
+
+        return match (true) {
+            $first === 'roles' => 'admin.manage_roles',
+            $name === 'office.settings.show', str_starts_with($name, 'office.settings.') => 'admin.system_settings',
+            $first === 'clients' => $crud('clients'),
+            $first === 'projects' => $crud('projects'),
+            $first === 'takeoffs' && in_array($last, ['upload', 'upload-options'], true),
+            $name === 'takeoffs.documents.store', $name === 'takeoffs.job.store' => 'takeoff.create',
+            $first === 'takeoffs', $first === 'takeoff-flow', $first === 'ai' => $isRead ? 'takeoff.view' : ($method === 'DELETE' ? 'takeoff.delete' : 'takeoff.edit'),
+            $first === 'estimates', $first === 'addenda', $first === 'commodities', $name === 'office.commodities.index',
+            str_starts_with($name, 'office.commodities.') => $crud('estimates'),
+            $first === 'invoices', $first === 'billing' => $crud('billing'),
+            $first === 'team', $first === 'teams', $first === 'technicians' => $crud('crew'),
+            $name === 'jobs.store' => 'jobs.create',
+            $name === 'jobs.update' => 'jobs.edit',
+            $name === 'office.jobs.show', $name === 'office.jobs.schedule.show' => 'jobs.view',
+            str_starts_with($name, 'schedule-tasks.') => 'tasks.edit',
+            $name === 'office.jobs.destroy' => 'jobs.delete',
+            str_starts_with($name, 'office.jobs.') => 'jobs.edit',
+            $first === 'documents' => $isRead ? 'jobs.view' : ($method === 'DELETE' ? 'jobs.delete' : 'jobs.edit'),
+            str_starts_with($name, 'jobs.task-setup.') => 'tasks.create',
+            $name === 'tasks.update', $name === 'tasks.edit-options' => 'tasks.edit',
+            $name === 'tasks.destroy' => 'tasks.delete',
+            str_starts_with($name, 'office.change-orders.') => $crud('change_orders'),
+            $first === 'scheduling' => $isRead ? 'schedule.view' : 'schedule.manage',
+            default => null,
+        };
+    }
+
     /** The label of the module a permission belongs to, for telling someone what they cannot open. */
     public function moduleLabel(string $permission): string
     {

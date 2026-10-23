@@ -6,6 +6,7 @@ use App\Models\ChangeOrder;
 use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\User;
+use App\Services\Access\Permissions;
 use App\Services\Company\ManagerRegistrar;
 use App\Support\Ownership;
 use Illuminate\Database\Eloquent\Builder;
@@ -83,21 +84,27 @@ class ChangeOrderAccess
 
     public function canEdit(User $user, ChangeOrder $co): bool
     {
-        return $co->isEditable() && ($this->isManager($user) || $co->created_by === $user->id);
+        return $co->isEditable() && ($this->isManager($user) || $co->created_by === $user->id) && $this->allows($user, 'change_orders.edit');
     }
 
     public function canWithdraw(User $user, ChangeOrder $co): bool
     {
-        return $co->status === ChangeOrder::STATUS_SUBMITTED && ($this->isManager($user) || $co->created_by === $user->id);
+        return $co->status === ChangeOrder::STATUS_SUBMITTED && ($this->isManager($user) || $co->created_by === $user->id) && $this->allows($user, 'change_orders.edit');
     }
 
     public function canDecide(User $user, ChangeOrder $co): bool
     {
-        return $co->status === ChangeOrder::STATUS_SUBMITTED && $this->isManager($user);
+        return $co->status === ChangeOrder::STATUS_SUBMITTED && $this->isManager($user) && $this->allows($user, 'change_orders.edit');
     }
 
     public function canDelete(User $user, ChangeOrder $co): bool
     {
-        return $co->status === ChangeOrder::STATUS_DRAFT && ($this->isManager($user) || $co->created_by === $user->id);
+        return $co->status === ChangeOrder::STATUS_DRAFT && ($this->isManager($user) || $co->created_by === $user->id) && $this->allows($user, 'change_orders.delete');
+    }
+
+    /** The company's Roles & Permissions apply on top of who owns what. */
+    public function allows(User $user, string $permission): bool
+    {
+        return app(Permissions::class)->allows($user, $permission);
     }
 }

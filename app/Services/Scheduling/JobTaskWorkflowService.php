@@ -56,6 +56,15 @@ class JobTaskWorkflowService
         event(new ScheduleChanged($task->job_id, 'task_completed', $description));
 
         $this->notifier->taskChanged($task, TaskScheduleChanged::COMPLETED, except: $actor);
+        if ($task->job) {
+            app(\App\Services\Notifications\CrewWorkNotifier::class)->tell(
+                $task->job,
+                $actor,
+                'Task completed',
+                "{$actor->name} completed \"{$task->title}\" on {$task->job->name}.",
+                'task-crew-completed',
+            );
+        }
         JobTaskCompleted::dispatch($task, $actor);
 
         return ['task' => $task, 'unblocked' => $unblocked];
@@ -69,7 +78,7 @@ class JobTaskWorkflowService
      *
      * @param  array{completion_pct: int, actual_hours?: float|null, notes?: string|null}  $data
      */
-    public function updateProgress(JobTask $task, array $data): JobTask
+    public function updateProgress(JobTask $task, array $data, ?User $actor = null): JobTask
     {
         $task->fill([
             'completion_pct' => $data['completion_pct'],
@@ -84,6 +93,16 @@ class JobTaskWorkflowService
         $description = "Progress on \"{$task->title}\" updated to {$data['completion_pct']}%";
         $task->job?->recordActivity('task_progress_updated', $description);
         event(new ScheduleChanged($task->job_id, 'task_progress_updated', $description));
+
+        if ($actor && $task->job) {
+            app(\App\Services\Notifications\CrewWorkNotifier::class)->tell(
+                $task->job,
+                $actor,
+                'Task progress updated',
+                "{$actor->name} updated \"{$task->title}\" to {$data['completion_pct']}% on {$task->job->name}.",
+                'task-crew-progress',
+            );
+        }
 
         return $task;
     }

@@ -60,6 +60,17 @@ return [
         'secret' => env('STRIPE_SECRET'),
     ],
 
+    /*
+     * Firebase Cloud Messaging — push notifications to the mobile app. Leave unset and nothing is
+     * pushed (the in-app inbox is unaffected). `credentials` is the path to the Firebase service
+     * account JSON (Project settings → Service accounts → Generate new private key), relative to
+     * the project root or absolute. Keep that file out of git.
+     */
+    'fcm' => [
+        'project_id' => env('FCM_PROJECT_ID'),
+        'credentials' => env('FCM_CREDENTIALS'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

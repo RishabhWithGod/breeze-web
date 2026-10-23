@@ -78,7 +78,7 @@ class ChangeOrderController extends Controller
             ])->all(),
             'jobs' => $this->access->visible(ChangeOrder::query(), $user)->with('job:id,name')->get()->pluck('job')->filter()->unique('id')->sortBy('name')
                 ->map(fn (Job $job) => ['id' => $job->id, 'name' => $job->name])->values()->all(),
-            'canCreate' => $this->access->jobs($user)->exists(),
+            'canCreate' => $this->access->jobs($user)->exists() && $this->access->allows($user, 'change_orders.create'),
             'meta' => [
                 'currentPage' => $orders->currentPage(),
                 'lastPage' => $orders->lastPage(),

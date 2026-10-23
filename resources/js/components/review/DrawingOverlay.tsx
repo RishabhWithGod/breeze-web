@@ -173,12 +173,13 @@ export function DrawingOverlay({
   const contentWidth = viewportWidth * scale
   const contentHeight = baseHeight * scale
 
-  // Resets the image's own load state whenever the page or result changes —
-  // synchronizing local UI state to an external prop change, not deriving
-  // state from render.
+  // Forgets the previous page's aspect when the page or result changes. The
+  // load status is deliberately NOT reset here: this effect runs after the
+  // one above, so resetting it would overwrite a 'loaded' it had just read off
+  // an already-cached image, and no onLoad would ever fire to correct it —
+  // leaving "Loading drawing…" over a drawing that is plainly there.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setImageStatus('loading')
     setImageAspect(null)
   }, [activePage, resultId])
 

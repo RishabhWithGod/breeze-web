@@ -15,15 +15,20 @@ use App\Models\Estimate;
 use App\Models\FinalSymbol;
 use App\Models\Job;
 use App\Models\PanelSchedule;
+use App\Models\ClientAddress;
 use App\Models\Project;
+use App\Models\Team;
 use App\Models\SymbolReview;
 use App\Models\Upload;
 use App\Models\WireSize;
 use App\Services\Ai\ArtefactStore;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\JobSites;
+use App\Services\Export\AnnotatedPdfWriter;
+use App\Services\Clients\ProjectDirectory;
 use App\Services\Takeoff\CompleteReview;
 use App\Services\Takeoff\EstimateBuilder;
+use App\Services\Takeoff\EstimateMergeJobBuilder;
 use App\Services\Takeoff\JobFactory;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Support\CompanyRule;
@@ -55,13 +60,50 @@ class TakeoffController extends Controller
 
     public function __construct(private readonly ArtefactStore $store) {}
 
+    /**
+     * The takeoff history — web's `TakeoffHistoryController::index`: only
+     * takeoffs under way or done (a draft or failed project is not a takeoff
+     * yet), with search, status / client / project filters and sort all
+     * running in the database. Also returns the real options for the client
+     * and project filters.
+     */
     public function index(Request $request): JsonResponse
     {
-        $projects = Project::query()
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'status' => ['nullable', Rule::in(['all', 'processing', 'ready-for-review', 'completed', 'converted'])],
+            'client' => ['nullable', 'string', 'max:160'],
+            'project' => ['nullable', 'string', 'max:20'],
+            'sort' => ['nullable', Rule::in(['date-desc', 'date-asc', 'name-asc'])],
+        ]);
+
+        $status = $filters['status'] ?? 'all';
+        $client = $filters['client'] ?? 'all';
+        $project = $filters['project'] ?? 'all';
+        $sort = $filters['sort'] ?? 'date-desc';
+
+        $finished = fn () => Project::query()
             ->ownedBy($request->user())
+            ->whereIn('status', ['processing', 'completed', 'converted']);
+
+        $projects = $finished()
             ->withCount('sheets')
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
+            ->search($filters['search'] ?? null)
+            ->when($status !== 'all', function ($query) use ($status) {
+                // Not a stored column — `review_status` read a different way.
+                if ($status === 'ready-for-review') {
+                    return $query->whereIn('review_status', ['pending', 'in-review']);
+                }
+
+                return $query->where('status', $status);
+            })
+            ->when($client !== 'all', fn ($query) => $query->where('client', $client))
+            ->when($project !== 'all', fn ($query) => $query->whereKey((int) $project))
+            ->tap(fn ($query) => match ($sort) {
+                'date-asc' => $query->orderBy('created_at')->orderBy('id'),
+                'name-asc' => $query->orderBy('name')->orderBy('id'),
+                default => $query->orderByDesc('created_at')->orderByDesc('id'),
+            })
             ->paginate(min((int) $request->integer('per_page', 20), 50));
 
         return $this->ok([
@@ -71,6 +113,18 @@ class TakeoffController extends Controller
                 'clientName' => $project->client,
                 'drawingFileName' => $project->drawing_name,
                 'status' => $project->status,
+                // Read off `status` and `review_status` together — a review
+                // pending or in progress says more than the status once started.
+                'reviewStatus' => match (true) {
+                    $project->status === 'processing' => 'processing',
+                    $project->status === 'failed' => 'failed',
+                    $project->status === 'converted' => 'converted',
+                    in_array($project->review_status, ['pending', 'in-review'], true) => 'ready-for-review',
+                    $project->status === 'completed' => 'completed',
+                    default => 'draft',
+                },
+                'format' => $project->takeoffDrawing()?->format,
+                'pageCount' => $project->page_count,
                 'uploadedAt' => ($project->completed_at ?? $project->created_at)?->toISOString(),
                 'sheetCount' => $project->sheets_count,
                 'symbolsDetected' => $project->items_count,
@@ -81,7 +135,33 @@ class TakeoffController extends Controller
                 'perPage' => $projects->perPage(),
                 'total' => $projects->total(),
             ],
+            // Real options for the filter dropdowns, not a guess at what exists.
+            'clients' => $finished()->whereNotNull('client')->distinct()->orderBy('client')->pluck('client')->values(),
+            'projectOptions' => $finished()->orderBy('name')->get(['id', 'name'])
+                ->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->values(),
         ]);
+    }
+
+    /** `DELETE /takeoffs/{project}` — soft delete, which is what makes Undo a real restore. */
+    public function destroy(Request $request, Project $project): JsonResponse
+    {
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
+
+        $project->delete();
+
+        return $this->ok(['id' => $project->id], "\"{$project->name}\" was deleted.");
+    }
+
+    /** `POST /takeoffs/{project}/restore` — Undo for the delete above. */
+    public function restore(Request $request, int $project): JsonResponse
+    {
+        $trashed = Project::onlyTrashed()->findOrFail($project);
+
+        abort_unless(Ownership::owns($request->user(), $trashed->user_id), 403);
+
+        $trashed->restore();
+
+        return $this->ok(['id' => $trashed->id], "\"{$trashed->name}\" was restored.");
     }
 
     /**
@@ -158,6 +238,9 @@ class TakeoffController extends Controller
             'fileSizeBytes' => $upload?->size_bytes,
             'fileFormat' => $upload?->format,
             'hasDrawing' => $upload !== null && $this->store->exists($upload->path),
+            // The drawing stamped with every reviewed decision — only once one exists.
+            'hasAnnotatedPdf' => $result !== null && $upload !== null && $this->store->exists($upload->annotated_path),
+            'notes' => $project->notes,
 
             // The engine's own automatic read of the drawing — available
             // the moment analysis finishes, well before a human reviews or
@@ -267,6 +350,28 @@ class TakeoffController extends Controller
         return $this->store->disk()->response($upload->path, $upload->name, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.addslashes($upload->name).'"',
+        ]);
+    }
+
+    /**
+     * `GET /takeoffs/{project}/annotated` — web's `finals.annotated`: the drawing
+     * stamped with every reviewed decision, served inline. Written on first ask,
+     * and again with `?refresh=1` after further review.
+     */
+    public function annotated(Request $request, Project $project, AnnotatedPdfWriter $writer): StreamedResponse
+    {
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
+
+        $result = $this->resultFor($project);
+        $path = $result->upload?->annotated_path;
+
+        if ($request->boolean('refresh') || ! $this->store->exists($path)) {
+            $path = $writer->write($result);
+        }
+
+        return $this->store->disk()->response($path, 'annotated-'.str($project->name)->slug().'.pdf', [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="annotated-'.addslashes(str($project->name)->slug()).'.pdf"',
         ]);
     }
 
@@ -603,6 +708,73 @@ class TakeoffController extends Controller
      * needs it). Builds the job from final_response.json, then prices it
      * straight away — one action, exactly as web's does it.
      */
+    /**
+     * `GET /takeoffs/{project}/job-form` — web's `FinalSymbols` (the "Job" step)
+     * props: the job as it stands once raised (so the form is the same form
+     * before and after), the takeoff's own client/project with its sites, the
+     * crews it can be handed to, and any addenda selected to fold in
+     * (`?merge_estimates=1,2`).
+     */
+    public function jobForm(Request $request, Project $project): JsonResponse
+    {
+        abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
+
+        $result = $this->resultFor($project);
+
+        app(TakeoffFlow::class)->remember($project, $request->user());
+
+        $mergeIds = Estimate::query()
+            ->whereIn('id', $this->parseEstimateIds($request->input('merge_estimates')))
+            ->whereIn('user_id', Ownership::userIds($request->user()))
+            ->where('kind', '!=', Estimate::KIND_MERGED)
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+
+        // A merge starts a brand-new job, so the takeoff's own is not what is edited.
+        $workJob = $mergeIds === [] ? $result->workJob()->with('addresses')->first() : null;
+        $result->loadMissing('estimate');
+
+        $option = app(ProjectDirectory::class)
+            ->options($request->user())
+            ->firstWhere('id', $project->id);
+
+        return $this->ok([
+            'result' => [
+                'id' => $project->id,
+                'projectName' => $project->name,
+                'drawingName' => $project->drawing_name,
+                'isFinalised' => $result->isFinalised(),
+                'finalisedAt' => $result->finalised_at?->toISOString(),
+                'workJobId' => $workJob?->id,
+                'workJobName' => $workJob?->name,
+                'job' => $workJob === null ? null : [
+                    'name' => $workJob->name,
+                    'addressIds' => $workJob->addresses->pluck('id')->map(fn ($id) => (string) $id)->all(),
+                    'description' => $workJob->description,
+                    'jobType' => $workJob->job_type,
+                    'teamId' => $workJob->team_id === null ? null : (string) $workJob->team_id,
+                    'startDate' => $workJob->start_date?->toDateString(),
+                    'endDate' => $workJob->end_date?->toDateString(),
+                ],
+                'estimateId' => $result->estimate_id,
+                'estimateNumber' => $result->estimate?->number,
+            ],
+            'project' => $option,
+            'teams' => Team::orderBy('name')->get(['id', 'name'])
+                ->map(fn ($team) => ['id' => (string) $team->id, 'name' => $team->name])->all(),
+            'mergeEstimateIds' => $mergeIds,
+        ]);
+    }
+
+    /** @return array<int> */
+    private function parseEstimateIds(mixed $raw): array
+    {
+        $ids = is_array($raw) ? $raw : explode(',', (string) $raw);
+
+        return collect($ids)->map(fn ($id) => (int) trim((string) $id))->filter()->unique()->values()->all();
+    }
+
     public function storeJob(
         Request $request,
         Project $project,
@@ -610,6 +782,7 @@ class TakeoffController extends Controller
         EstimateBuilder $estimateBuilder,
         JobSites $sites,
         ClientDirectory $clients,
+        EstimateMergeJobBuilder $mergeBuilder,
     ): JsonResponse {
         abort_unless(Ownership::owns($request->user(), $project->user_id), 403);
 
@@ -619,10 +792,25 @@ class TakeoffController extends Controller
             return $this->fail('Please finish reviewing the drawing before creating a job.', 422);
         }
 
+        // Addenda selected to fold in: a brand-new job from exactly those, as web does.
+        $mergeIds = $this->parseEstimateIds($request->input('estimate_ids'));
+
+        if ($mergeIds !== []) {
+            return $this->storeMergedJob($request, $mergeIds, $mergeBuilder);
+        }
+
+        // Whether this client already has a site on file decides whether one must be picked.
+        $candidateProjectId = (int) ($request->input('project_id') ?: $result->project_id);
+        $candidateClientId = (int) Project::whereKey($candidateProjectId)->value('client_id');
+        $clientHasSites = $candidateClientId !== 0
+            && ClientAddress::where('client_id', $candidateClientId)->exists();
+
         $attributes = $request->validate([
             'name' => ['nullable', 'string', 'max:160'],
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
-            'address_ids' => ['nullable', 'array', 'max:1'],
+            'address_ids' => $clientHasSites
+                ? ['nullable', 'array', 'max:1']
+                : ['required', 'array', 'min:1', 'max:1'],
             'address_ids.*' => ['integer', 'distinct', 'exists:client_addresses,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'job_type' => ['nullable', Rule::in(Job::TYPES)],
@@ -630,6 +818,8 @@ class TakeoffController extends Controller
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
         ], [
+            'address_ids.required' => 'This client has no site on file yet — add one below.',
+            'address_ids.min' => 'This client has no site on file yet — add one below.',
             'team_id.required' => 'Pick the crew this job is handed to',
             'start_date.required' => 'Pick the day this job starts',
             'end_date.required' => 'Pick the day this job is due to finish',
@@ -678,6 +868,58 @@ class TakeoffController extends Controller
                 'estimateId' => null,
             ], "\"{$job->name}\" was created from the reviewed takeoff. The estimate could not be generated: {$e->getMessage()}");
         }
+    }
+
+    /** @param array<int> $estimateIds */
+    private function storeMergedJob(Request $request, array $estimateIds, EstimateMergeJobBuilder $builder): JsonResponse
+    {
+        $userIds = Ownership::userIdList($request->user());
+
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'min:3', 'max:160'],
+            'address_ids' => ['nullable', 'array', 'max:1'],
+            'address_ids.*' => [
+                'integer', 'distinct',
+                Rule::exists('client_addresses', 'id')->where(
+                    fn ($query) => $query->whereIn('client_id', fn ($sub) => $sub->select('id')->from('clients')->whereIn('user_id', $userIds))
+                ),
+            ],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'job_type' => ['nullable', Rule::in(Job::TYPES)],
+            'team_id' => ['required', 'integer', CompanyRule::exists('teams')],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+        ], [
+            'name.required' => 'Job name is required',
+            'team_id.required' => 'Pick the crew this job is handed to',
+            'start_date.required' => 'Pick the day this job starts',
+            'end_date.required' => 'Pick the day this job is due to finish',
+            'end_date.after_or_equal' => 'End date must be on or after the start date',
+        ]);
+
+        $sources = Estimate::query()
+            ->whereIn('id', $estimateIds)
+            ->whereIn('user_id', $userIds)
+            ->where('kind', '!=', Estimate::KIND_MERGED)
+            ->with('items')
+            ->get();
+
+        if ($sources->count() !== count($estimateIds)) {
+            return $this->fail('One of the selected estimates could not be used — it may already be a merged estimate.', 422);
+        }
+
+        $job = $builder->build($sources, $attributes, $request->user());
+
+        // A job raised from the selected estimates is where this takeoff's run
+        // ends: it never attaches to the takeoff's own result, so without this
+        // the Resume button would keep asking for a job that already exists.
+        app(\App\Services\Takeoff\TakeoffFlow::class)->forget($request->user());
+
+        return $this->created([
+            'jobId' => $job->id,
+            'jobName' => $job->name,
+            'estimateId' => null,
+        ], "\"{$job->name}\" was created from the selected estimates.");
     }
 
     /** The takeoff's own analysis result, or a 404 — every action below needs one to exist. */

@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TimeEntryResource;
+use App\Models\Job;
 use App\Models\JobAttendance;
 use App\Models\JobTask;
+use App\Models\TeamMember;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Policies\TimeEntryPolicy;
 use App\Services\TimeTracking\DailyTimesheetBuilder;
+use App\Services\TimeTracking\SessionLogBuilder;
 use App\Services\TimeTracking\TimesheetWeekBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -97,6 +100,86 @@ class TimeTrackingController extends Controller
             ],
             'can' => app(TimeEntryPolicy::class)->abilities($user),
         ]);
+    }
+
+    /**
+     * The Time Log, one row per session — web's `TimeEntries` page (`SessionLogBuilder`): filters,
+     * the exceptions queue (a check-in never closed, a rejected entry), per-row Approve and Check out.
+     */
+    public function log(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $canViewCrew = (bool) $user->can('viewCrew', TimeEntry::class);
+
+        $raw = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'job_id' => ['nullable', 'integer'],
+            'team_member_id' => ['nullable', 'integer'],
+            'task_type' => ['nullable', Rule::in(JobTask::CATEGORIES)],
+            'status' => ['nullable', Rule::in(TimeEntry::STATUSES)],
+            'billable' => ['nullable', Rule::in(['yes', 'no'])],
+            'exceptions' => ['nullable', 'boolean'],
+        ]);
+        $filters = [
+            'search' => $raw['search'] ?? '',
+            'from' => $raw['from'] ?? '',
+            'to' => $raw['to'] ?? '',
+            'job' => $raw['job_id'] ?? '',
+            'team_member' => $raw['team_member_id'] ?? '',
+            'task_type' => $raw['task_type'] ?? 'all',
+            'status' => $raw['status'] ?? 'all',
+            'billable' => $raw['billable'] ?? 'all',
+            'exceptions' => (bool) ($raw['exceptions'] ?? false),
+        ];
+
+        $builder = app(SessionLogBuilder::class);
+        $log = $builder->paginate(
+            $filters,
+            $canViewCrew,
+            $user->id,
+            min((int) $request->integer('per_page', 20), 50),
+            (int) $request->integer('page', 1),
+            $filters['exceptions'],
+            $user,
+        );
+
+        return $this->ok([
+            'sessions' => $log->items(),
+            'exceptionCount' => $builder->exceptionCount($filters, $canViewCrew, $user->id),
+            'meta' => [
+                'currentPage' => $log->currentPage(),
+                'lastPage' => $log->lastPage(),
+                'total' => $log->total(),
+            ],
+            'jobs' => Job::query()->inCompanyOf($user)->active()->orderBy('name')->get(['id', 'name']),
+            'teamMembers' => $canViewCrew ? TeamMember::orderBy('name')->get(['id', 'name', 'role']) : [],
+            'taskTypes' => JobTask::CATEGORIES,
+            'statuses' => TimeEntry::STATUSES,
+            'can' => app(TimeEntryPolicy::class)->abilities($user),
+        ]);
+    }
+
+    /** A manager closing a check-in nobody closed — web's `TimeEntryController::checkOutAttendance()`. */
+    public function checkOut(Request $request, JobAttendance $attendance): JsonResponse
+    {
+        abort_unless(app(TimeEntryPolicy::class)->closeAttendance($request->user(), $attendance), 403);
+
+        $data = $request->validate([
+            'check_out_at' => ['required', 'date', 'before_or_equal:now', 'after:'.$attendance->check_in_at?->toDateTimeString()],
+        ], [
+            'check_out_at.after' => 'The checkout has to be after the check-in.',
+            'check_out_at.before_or_equal' => 'The checkout cannot be in the future.',
+        ]);
+
+        $attendance->update([
+            'status' => JobAttendance::STATUS_CHECKED_OUT,
+            'check_out_at' => Carbon::parse($data['check_out_at']),
+            'check_out_method' => JobAttendance::METHOD_MANUAL,
+        ]);
+
+        return $this->ok(null, 'Checked out.');
     }
 
     /**

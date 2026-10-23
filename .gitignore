@@ -34,3 +34,6 @@ yarn-error.log
 
 # Logs
 *.log
+
+# Firebase service account (push notifications)
+/storage/app/firebase*.json

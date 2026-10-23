@@ -3,6 +3,7 @@
 namespace App\Notifications\Channels;
 
 use App\Events\NotificationCreated;
+use App\Jobs\SendPushNotification;
 use App\Models\AppNotification;
 use Illuminate\Notifications\Notification;
 
@@ -20,6 +21,10 @@ class AppNotificationChannel
     public function send(mixed $notifiable, Notification $notification): ?AppNotification
     {
         if (! method_exists($notification, 'toAppNotification')) {
+            return null;
+        }
+
+        if (self::isSuppressed($notification)) {
             return null;
         }
 
@@ -41,6 +46,26 @@ class AppNotificationChannel
 
         event(new NotificationCreated($notification));
 
+        // The same alert, to the user's phones. Queued so a slow FCM never delays the request.
+        SendPushNotification::dispatch($notification->id)->afterCommit();
+
         return $notification;
+    }
+
+    /**
+     * Notices the app does not raise: signing in and an estimate simply being
+     * drafted are the person's own doing, so they are not told about them.
+     */
+    private static function isSuppressed(Notification $notification): bool
+    {
+        if ($notification instanceof \App\Notifications\EstimateReady) {
+            return true;
+        }
+
+        return $notification instanceof \App\Notifications\SecurityAlertRaised
+            && in_array($notification->event->type, [
+                \App\Models\SecurityEvent::LOGIN_SUCCESS,
+                \App\Models\SecurityEvent::NEW_DEVICE_LOGIN,
+            ], true);
     }
 }

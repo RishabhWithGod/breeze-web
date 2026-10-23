@@ -140,4 +140,27 @@ class MobileScheduleAndNotificationTest extends TestCase
         $this->assertSame(0, AppNotification::where('user_id', $user->id)->whereNull('read_at')->count());
         $this->assertNull($othersNotification->fresh()->read_at);
     }
+
+    public function test_notifications_filter_by_tab_category_and_search_with_counts_and_targets(): void
+    {
+        $user = User::factory()->create();
+        AppNotification::create(['user_id' => $user->id, 'type' => 'job-assigned', 'title' => 'New job: Roof', 'detail' => 'x', 'link' => '/jobs/9', 'data' => ['actions' => [['label' => 'View Job', 'href' => '/jobs/9'], ['label' => 'Bucks', 'href' => '/breeze-bucks']]]]);
+        AppNotification::create(['user_id' => $user->id, 'type' => 'security-login_success', 'title' => 'Sign-in', 'detail' => 'y', 'read_at' => now()]);
+        AppNotification::create(['user_id' => $user->id, 'type' => 'technician-pending', 'title' => 'Approve Sam', 'detail' => 'z']);
+
+        $headers = ['Authorization' => 'Bearer '.$user->createToken('t')->plainTextToken];
+
+        $all = $this->getJson('/api/v1/notifications', $headers)->assertOk();
+        $this->assertSame(['all' => 3, 'unread' => 2, 'read' => 1, 'approvals' => 1], $all->json('data.tabCounts'));
+        $this->assertEqualsCanonicalizing(['jobs', 'security', 'teams'], array_column($all->json('data.categories'), 'value'));
+
+        $this->assertSame(['Sign-in'], array_column($this->getJson('/api/v1/notifications?tab=read', $headers)->json('data.notifications'), 'title'));
+        $this->assertSame(['Approve Sam'], array_column($this->getJson('/api/v1/notifications?tab=approvals', $headers)->json('data.notifications'), 'title'));
+        $this->assertSame(['New job: Roof'], array_column($this->getJson('/api/v1/notifications?category=jobs', $headers)->json('data.notifications'), 'title'));
+        $this->assertSame(['New job: Roof'], array_column($this->getJson('/api/v1/notifications?search=Roof', $headers)->json('data.notifications'), 'title'));
+
+        $job = collect($all->json('data.notifications'))->firstWhere('title', 'New job: Roof');
+        $this->assertSame(['screen' => 'job', 'id' => '9'], $job['actions'][0]['target']);
+        $this->assertNull($job['actions'][1]['target']);
+    }
 }

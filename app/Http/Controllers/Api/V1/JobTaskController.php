@@ -129,7 +129,7 @@ class JobTaskController extends Controller
             return $clash;
         }
 
-        $task = $this->workflow->updateProgress($task, $data);
+        $task = $this->workflow->updateProgress($task, $data, $request->user());
 
         return $this->ok((new JobTaskResource($task))->resolve($request), 'Progress updated.');
     }

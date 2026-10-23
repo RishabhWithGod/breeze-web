@@ -16,6 +16,7 @@ use App\Services\Clients\JobSites;
 use App\Services\Mobile\ElectricianJobAccess;
 use App\Services\TimeTracking\TimerService;
 use App\Support\CompanyRule;
+use App\Support\JobCrew;
 use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,19 +42,60 @@ class JobController extends Controller
         private readonly JobSites $sites,
     ) {}
 
+    /**
+     * The mobile job list — web's `JobController::index` filters and sort, run
+     * in the database: search, status, type, archive view and sort. A manager
+     * lists every job of their company; anyone else only the work they are
+     * staffed on. Each row also carries the list's own figures (project,
+     * progress, open tasks, crew).
+     */
     public function index(Request $request): JsonResponse
     {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'status' => ['nullable', Rule::in(['all', ...Job::STATUSES])],
+            'type' => ['nullable', Rule::in(['all', ...Job::TYPES])],
+            'sort' => ['nullable', Rule::in(Job::SORTS)],
+            'view' => ['nullable', Rule::in(['active', 'archived', 'all'])],
+        ]);
+
+        $status = $filters['status'] ?? 'all';
+        $type = $filters['type'] ?? 'all';
+        $view = $filters['view'] ?? 'all';
+        $sort = $filters['sort'] ?? null;
+
         $jobs = $this->access->listedJobsQuery($request->user())
-            ->with(['foreman:id,name,initials,role', 'addresses:id'])
+            ->with(['foreman:id,name,initials,role', 'addresses:id', 'project:id,name'])
             ->withSum('timeEntries', 'hours')
-            // Newest first — the mobile list is a feed of what's current,
-            // not a schedule to work through chronologically.
-            ->orderByDesc('start_date')
-            ->orderByDesc('id')
+            ->withCount([
+                'tasks',
+                'tasks as tasks_done_count' => fn ($q) => $q->where('status', JobTask::STATUS_COMPLETED),
+                'tasks as tasks_open_count' => fn ($q) => $q->whereNotIn('status', [JobTask::STATUS_COMPLETED, JobTask::STATUS_CANCELLED]),
+            ])
+            ->search($filters['search'] ?? null)
+            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
+            ->when($type !== 'all', fn ($q) => $q->where('job_type', $type))
+            ->when($view === 'active', fn ($q) => $q->active())
+            ->when($view === 'archived', fn ($q) => $q->archived())
+            // The default stays "newest first" — the mobile list is a feed of what's current.
+            ->when($sort === null, fn ($q) => $q->orderByDesc('start_date')->orderByDesc('id'), fn ($q) => $q->sorted($sort))
             ->paginate(min((int) $request->integer('per_page', 20), 50));
 
+        $crew = JobCrew::countsFor($jobs->pluck('id')->all());
+
         return $this->ok([
-            'jobs' => $jobs->getCollection()->map(fn (Job $job) => $this->summarize($job, $request))->all(),
+            'jobs' => $jobs->getCollection()->map(fn (Job $job) => [
+                ...$this->summarize($job, $request),
+                'projectName' => $job->project?->name,
+                'isArchived' => $job->archived_at !== null,
+                'isLocked' => $job->isLocked(),
+                'budget' => $job->budget === null ? null : (float) $job->budget,
+                'openTasks' => (int) ($job->tasks_open_count ?? 0),
+                'progress' => ($job->tasks_count ?? 0) > 0
+                    ? (int) round(($job->tasks_done_count ?? 0) / $job->tasks_count * 100)
+                    : null,
+                'crewCount' => (int) ($crew[$job->id] ?? 0),
+            ])->all(),
             'meta' => [
                 'currentPage' => $jobs->currentPage(),
                 'lastPage' => $jobs->lastPage(),
@@ -97,7 +139,8 @@ class JobController extends Controller
             // The workspace tiles' own live numbers.
             'unreadMessages' => $job->unreadMessageCountFor($request->user()),
             // Server-decided so the pencil only shows for who `update()` accepts.
-            'canEdit' => Ownership::owns($request->user(), $job->user_id) && ! $job->isLocked(),
+            'canEdit' => Ownership::owns($request->user(), $job->user_id) && ! $job->isLocked()
+                && app(\App\Services\Access\Permissions::class)->allows($request->user(), 'jobs.edit'),
             'jobTypes' => Job::TYPES,
             'documentsCount' => $job->documentsFor($request->user())->count(),
             'changeOrdersCount' => \App\Models\ChangeOrder::where('job_id', $job->id)->count(),

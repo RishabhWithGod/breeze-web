@@ -8,10 +8,13 @@ use App\Http\Controllers\TechnicianController;
 use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\JobTask;
+use App\Models\CompanyProfile;
 use App\Models\Team;
 use App\Models\User;
 use App\Rules\UsPhoneNumber;
+use App\Services\Billing\SubscriptionSummary;
 use App\Services\BreezeBucks\BreezeBucksLedger;
+use App\Services\Company\ManagerRegistrar;
 use App\Services\TimeTracking\TeamMemberResolver;
 use App\Support\CompanyRule;
 use App\Support\UsPhone;
@@ -43,6 +46,9 @@ class TeamController extends Controller
     use ApiResponses;
 
     private const MANAGER_ROLES = ['project manager', 'admin', 'owner'];
+
+    /** The one role on the Add Member form that is not a crew role. */
+    private const MANAGER_ROLE = 'manager';
 
     public function __construct(private readonly BreezeBucksLedger $ledger) {}
 
@@ -103,11 +109,20 @@ class TeamController extends Controller
              * (`TechnicianController::ROLES`, capitalised — the approve
              * picker's own vocabulary).
              */
-            'memberRoles' => array_map(
-                fn (string $role) => ['value' => $role, 'label' => ucfirst($role)],
-                Foreman::ROLES,
-            ),
+            'memberRoles' => [
+                ...array_map(
+                    fn (string $role) => ['value' => $role, 'label' => ucfirst($role)],
+                    Foreman::ROLES,
+                ),
+                ...(app(ManagerRegistrar::class)->canAdd($request->user())
+                    ? [['value' => self::MANAGER_ROLE, 'label' => 'Manager']]
+                    : []),
+            ],
             'canManage' => $this->canManage($request->user()),
+            // The company's managers, for the Managers section — the owner's to see.
+            'managers' => $this->managers($request->user()),
+            // How many seats are left, so Add Member can say so before it is filled in.
+            'seats' => $this->seats($request->user()),
             'meta' => [
                 'currentPage' => $members->currentPage(),
                 'lastPage' => $members->lastPage(),
@@ -189,6 +204,14 @@ class TeamController extends Controller
         abort_unless($this->canManage($request->user()), 403);
 
         $data = $this->validated($request);
+
+        // A manager is not crew: they get a login into the company, and no place on the crew register.
+        if (($data['role'] ?? null) === self::MANAGER_ROLE) {
+            $manager = app(ManagerRegistrar::class)->add($request->user(), $data, 'email');
+
+            return $this->created(['id' => null, 'managerId' => $manager->id], "\u{201c}{$manager->name}\u{201d} was added as a manager.");
+        }
+
         $data['started_on'] ??= now()->toDateString();
 
         $member = Foreman::create([
@@ -267,6 +290,93 @@ class TeamController extends Controller
         return $this->ok(['id' => $team->id, 'name' => $team->name], "\u{201c}{$team->name}\u{201d} was added.");
     }
 
+    /** @return array{used: int, limit: int, byRole: array<int, mixed>}|null */
+    private function seats(User $user): ?array
+    {
+        try {
+            $seats = app(SubscriptionSummary::class)->build($user)['seats'];
+
+            return ['used' => (int) $seats['used'], 'limit' => (int) $seats['limit'], 'byRole' => $seats['byRole']];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** `PUT /teams/{team}` — renames a crew. */
+    public function updateTeam(Request $request, Team $team): JsonResponse
+    {
+        abort_unless($this->canManage($request->user()), 403);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:120', CompanyRule::unique('teams', 'name')->ignore($team)],
+        ], [
+            'name.required' => 'Name this team',
+            'name.unique' => 'A team with that name already exists',
+        ]);
+
+        $team->update(['name' => $data['name']]);
+
+        return $this->ok(['id' => $team->id, 'name' => $team->name], "\u{201c}{$team->name}\u{201d} was renamed.");
+    }
+
+    /**
+     * `DELETE /teams/{team}` — only an empty crew, so nobody is stripped of their
+     * team. Work it was on is kept; it just stops naming a crew.
+     */
+    public function destroyTeam(Request $request, Team $team): JsonResponse
+    {
+        abort_unless($this->canManage($request->user()), 403);
+
+        if ($team->members()->exists()) {
+            return $this->fail("\u{201c}{$team->name}\u{201d} still has people on it. Move or remove them first.", 422);
+        }
+
+        $clients = \App\Models\Client::query()->where('team_id', $team->id)->count();
+        $jobs = Job::query()->where('team_id', $team->id)->count();
+
+        $name = $team->name;
+        $team->delete();
+
+        $left = collect([
+            $jobs > 0 ? $jobs.' '.str('job')->plural($jobs) : null,
+            $clients > 0 ? $clients.' '.str('client')->plural($clients) : null,
+        ])->filter()->implode(' and ');
+
+        return $this->ok(null, "\u{201c}{$name}\u{201d} was deleted.".($left === '' ? '' : " {$left} that had this crew now have none."));
+    }
+
+    /**
+     * Everyone who manages this person's company, the one who set it up first.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function managers(User $viewer): array
+    {
+        if (! app(ManagerRegistrar::class)->canAdd($viewer)) {
+            return [];
+        }
+
+        $ownerId = CompanyProfile::query()->whereKey($viewer->company_id)->value('user_id');
+
+        return User::query()
+            ->where('company_id', $viewer->company_id)
+            ->whereRaw('lower(trim(role)) in (?, ?, ?)', self::MANAGER_ROLES)
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn (User $manager) => [
+                'id' => $manager->id,
+                'name' => $manager->name,
+                'email' => $manager->email,
+                'phone' => $manager->phone,
+                'role' => $manager->role,
+                'isOwner' => $manager->id === $ownerId,
+                'isYou' => $manager->id === $viewer->id,
+            ])
+            ->sortByDesc('isOwner')
+            ->values()
+            ->all();
+    }
+
     /** @return Collection<int, object> */
     private function workload(bool $closed): Collection
     {
@@ -306,7 +416,10 @@ class TeamController extends Controller
                 'required', 'string', 'min:2', 'max:120',
                 CompanyRule::unique('foremen', 'name')->ignore($member),
             ],
-            'role' => ['required', Rule::in(Foreman::ROLES)],
+            // A manager joins the company rather than a crew — offered only to someone who has a company to add them to.
+            'role' => ['required', Rule::in($isCreate && app(ManagerRegistrar::class)->canAdd($request->user())
+                ? [...Foreman::ROLES, self::MANAGER_ROLE]
+                : Foreman::ROLES)],
             'team_id' => ['nullable', 'integer', CompanyRule::exists('teams')],
             'phone' => ['nullable', 'string', 'max:40', new UsPhoneNumber],
             'email' => $isCreate

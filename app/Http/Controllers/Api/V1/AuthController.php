@@ -11,6 +11,7 @@ use App\Models\CompanyProfile;
 use App\Models\SecurityEvent;
 use App\Models\User;
 use App\Models\UserSecuritySetting;
+use App\Services\Access\Permissions;
 use App\Services\Security\DeviceRecognizer;
 use App\Services\Security\OtpChallengeService;
 use App\Services\Security\SecurityEventLogger;
@@ -284,6 +285,9 @@ class AuthController extends Controller
             'role' => $user->role,
             'initials' => $user->initials,
             'status' => $user->status,
+            // null = the matrix does not govern this person (everything open).
+            'permissions' => app(Permissions::class)->for($user),
+            'onboarding' => OnboardingController::statusFor($user),
             // Read-only on the phone: changing either goes through the web's verified flow.
             'phone' => $user->maskedPhone(),
             'twoFactorEnabled' => UserSecuritySetting::forUser($user)->app_two_factor_enabled,
@@ -331,7 +335,7 @@ class AuthController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function issueSession(User $user, Request $request): array
+    public function issueSession(User $user, Request $request): array
     {
         $isNewDevice = app(DeviceRecognizer::class)->recognize($user, $request);
 
@@ -357,6 +361,8 @@ class AuthController extends Controller
                 'role' => $user->role,
                 'initials' => $user->initials,
                 'status' => $user->status,
+                'permissions' => app(Permissions::class)->for($user),
+                'onboarding' => OnboardingController::statusFor($user),
             ],
             'twoFactorEnabled' => UserSecuritySetting::forUser($user)->app_two_factor_enabled,
         ];

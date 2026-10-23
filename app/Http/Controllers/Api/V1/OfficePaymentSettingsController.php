@@ -54,6 +54,9 @@ class OfficePaymentSettingsController extends Controller
             'subscription' => $summary->build($user),
             'subscriptionPayment' => $this->subscriptionPayment($user),
             'company' => $this->companyDetails($user),
+            // Only the company's owner may correct these; the screen offers Edit to them alone.
+            'canEditCompany' => $user->company_id !== null
+                && \App\Models\CompanyProfile::query()->whereKey($user->company_id)->value('user_id') === $user->id,
             'processor' => $this->presentProcessor($stripe),
             'billingSettings' => [
                 'autoSendInvoices' => $billing->auto_send_invoices,

@@ -254,4 +254,63 @@ class MobileTimeLogViewerTest extends TestCase
             ->getJson("/api/v1/attendance/{$attendance->id}/photo")
             ->assertStatus(404);
     }
+
+    // --- Session log (one row per session) -----------------------------------
+
+    public function test_the_session_log_lists_every_session_flags_exceptions_and_lets_a_manager_check_out(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $tech = User::factory()->create(['role' => 'Journeyman']);
+        $job = $this->makeJob(['user_id' => $manager->id]);
+
+        $open = JobAttendance::create([
+            'job_id' => $job->id, 'user_id' => $tech->id, 'date' => now()->subDay()->toDateString(),
+            'status' => JobAttendance::STATUS_CHECKED_IN,
+            'check_in_at' => now()->subDay()->subHours(6), 'check_in_method' => 'automatic',
+            'banked_seconds' => 0,
+        ]);
+        $pending = TimeEntry::create([
+            'job_id' => $job->id, 'user_id' => $tech->id, 'date' => now()->toDateString(),
+            'start_time' => '08:00:00', 'end_time' => '12:00:00', 'hours' => 4,
+            'status' => TimeEntry::STATUS_SUBMITTED, 'source' => TimeEntry::SOURCE_TIMER,
+        ]);
+
+        $headers = ['Authorization' => 'Bearer '.$this->tokenFor($manager)];
+
+        $all = $this->getJson('/api/v1/time-tracking/log', $headers)->assertOk();
+        $this->assertCount(2, $all->json('data.sessions'));
+        $this->assertSame(1, $all->json('data.exceptionCount'));
+        $byKey = collect($all->json('data.sessions'))->keyBy('key');
+        $this->assertTrue($byKey["entry-{$pending->id}"]['canApprove']);
+        $this->assertTrue($byKey["attendance-{$open->id}"]['canCheckOut']);
+        $this->assertSame('missing-checkout', $byKey["attendance-{$open->id}"]['status']);
+
+        $this->app['auth']->forgetGuards();
+        $only = $this->getJson('/api/v1/time-tracking/log?exceptions=1', $headers)->assertOk();
+        $this->assertSame(["attendance-{$open->id}"], array_column($only->json('data.sessions'), 'key'));
+
+        $this->app['auth']->forgetGuards();
+        $this->postJson("/api/v1/attendance/{$open->id}/check-out", ['check_out_at' => now()->subDay()->subHours(7)->toDateTimeString()], $headers)
+            ->assertStatus(422);
+
+        $this->app['auth']->forgetGuards();
+        $this->postJson("/api/v1/attendance/{$open->id}/check-out", ['check_out_at' => now()->subDay()->toDateTimeString()], $headers)
+            ->assertOk();
+        $this->assertFalse($open->fresh()->isCheckedIn());
+    }
+
+    public function test_a_technician_cannot_check_someone_out(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $tech = User::factory()->create(['role' => 'Journeyman']);
+        $job = $this->makeJob(['user_id' => $manager->id]);
+        $open = JobAttendance::create([
+            'job_id' => $job->id, 'user_id' => $tech->id, 'date' => now()->subDay()->toDateString(),
+            'status' => JobAttendance::STATUS_CHECKED_IN, 'check_in_at' => now()->subDay()->subHours(6),
+            'banked_seconds' => 0,
+        ]);
+
+        $this->postJson("/api/v1/attendance/{$open->id}/check-out", ['check_out_at' => now()->subDay()->toDateTimeString()], ['Authorization' => 'Bearer '.$this->tokenFor($tech)])
+            ->assertForbidden();
+    }
 }

@@ -128,6 +128,17 @@ Route::middleware('guest')->group(function () {
 |--------------------------------------------------------------------------
 */
 
+// Where Stripe sends a phone's browser back to — nothing to do here but say so;
+// the app confirms the payment itself with the API.
+Route::get('mobile/payment-return', function (\Illuminate\Http\Request $request) {
+    $paid = $request->query('status') === 'success';
+
+    return response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+        .'<title>Breeze.Ai</title><body style="font-family:-apple-system,system-ui,sans-serif;background:#0a1424;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0;text-align:center;padding:24px">'
+        .'<div><h2>'.($paid ? 'Payment received' : 'Payment cancelled').'</h2>'
+        .'<p>'.($paid ? 'You can close this page and return to the Breeze app to finish setup.' : 'Nothing was charged. Return to the Breeze app to try again.').'</p></div></body>');
+})->name('mobile.payment.return');
+
 // An emailed invitation: public, since the person has no account yet.
 Route::get('invitations/{token}', [InvitationAcceptanceController::class, 'show'])->name('invitations.show');
 Route::post('invitations/{token}', [InvitationAcceptanceController::class, 'accept'])->middleware('throttle:10,1')->name('invitations.accept');

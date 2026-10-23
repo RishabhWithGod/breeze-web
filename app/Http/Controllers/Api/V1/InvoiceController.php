@@ -124,6 +124,7 @@ class InvoiceController extends Controller
                 ->ownedBy($user)
                 ->whereIn('status', ['sent', 'approved'])
                 ->whereDoesntHave('invoices')
+                ->with('items')
                 ->orderByDesc('issued_on')
                 ->get(['id', 'number', 'client', 'client_id', 'job_id', 'grand_total'])
                 ->map(fn (Estimate $estimate) => [
@@ -133,6 +134,13 @@ class InvoiceController extends Controller
                     'client_id' => $estimate->client_id,
                     'job_id' => $estimate->job_id,
                     'grand_total' => (float) $estimate->grand_total,
+                    // Its lines, so the screen can show and adjust what will be billed.
+                    'items' => $estimate->items->map(fn ($item) => [
+                        'description' => $item->description,
+                        'source_category' => $this->estimateSync->categoryFor($item->category),
+                        'quantity' => (float) $item->quantity,
+                        'unit_price' => (float) $item->unit_cost,
+                    ])->values()->all(),
                 ]),
         ]);
     }
@@ -162,6 +170,26 @@ class InvoiceController extends Controller
         }
 
         $data = $this->clients->withClientSnapshot($data, $user);
+        $lines = $request->validate([
+            'items' => ['nullable', 'array', 'max:200'],
+            'items.*.description' => ['required', 'string', 'max:255'],
+            'items.*.source_category' => ['nullable', Rule::in([
+                InvoiceItem::CATEGORY_LABOR,
+                InvoiceItem::CATEGORY_MATERIAL,
+                InvoiceItem::CATEGORY_EQUIPMENT,
+                InvoiceItem::CATEGORY_OTHER,
+            ])],
+            'items.*.source' => ['nullable', Rule::in([InvoiceItem::SOURCE_ESTIMATE, InvoiceItem::SOURCE_MANUAL])],
+            'items.*.quantity' => ['required', 'numeric', 'min:0', 'max:1000000'],
+            'items.*.unit_price' => ['required', 'numeric', 'min:0', 'max:100000000'],
+            'issue' => ['nullable', 'boolean'],
+        ], [
+            'items.*.description.required' => 'Every line needs a description',
+        ]);
+
+        if ($request->boolean('issue') && is_array($request->input('items')) && count($request->input('items')) === 0) {
+            throw ValidationException::withMessages(['items' => 'Add at least one line item before issuing this invoice.']);
+        }
 
         $invoice = Invoice::create([
             ...$data,
@@ -170,8 +198,35 @@ class InvoiceController extends Controller
             'created_by' => $user->id,
         ]);
 
-        if ($estimate !== null) {
+        if (is_array($request->input('items'))) {
+            // The lines as the screen had them — an estimate's, edited, plus any typed.
+            foreach (array_values($lines['items'] ?? []) as $position => $line) {
+                $invoice->items()->create([
+                    'description' => $line['description'],
+                    'source_category' => $line['source_category'] ?? null,
+                    'source' => $line['source'] ?? InvoiceItem::SOURCE_MANUAL,
+                    'quantity' => $line['quantity'],
+                    'unit_price' => $line['unit_price'],
+                    'total' => round((float) $line['quantity'] * (float) $line['unit_price'], 2),
+                    'position' => $position,
+                ]);
+            }
+            $invoice->recalculateTotals();
+        } elseif ($estimate !== null) {
             $this->estimateSync->sync($invoice);
+        }
+
+        // What has been approved as added work on this job is billed with it.
+        app(\App\Services\ChangeOrders\ChangeOrderBilling::class)->attachApprovedTo($invoice);
+
+        // "Issue Invoice": sent straight away, by the same rules as Send.
+        if ($request->boolean('issue')) {
+            if ($invoice->items()->doesntExist()) {
+                throw ValidationException::withMessages(['items' => 'Add at least one line item before issuing this invoice.']);
+            }
+            $invoice->update(['status' => Invoice::STATUS_SENT, 'sent_at' => now()]);
+
+            return $this->created($this->detail($invoice->fresh(), $request), "{$invoice->invoice_number} was issued to {$invoice->client}.");
         }
 
         return $this->created($this->detail($invoice->fresh(), $request), "{$invoice->invoice_number} was created.");

@@ -2,14 +2,18 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\AppNotification;
 use App\Models\CrewShift;
 use App\Models\Foreman;
 use App\Models\Job;
+use App\Models\JobApprenticeAssignment;
 use App\Models\JobTask;
+use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
 use App\Services\Scheduling\ScheduleBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -152,6 +156,54 @@ class MobileTasksAndScheduleTest extends TestCase
         $this->assertFalse($rows[$theirs->id]['isMine']);
     }
 
+    public function test_a_foreman_sees_the_crews_tasks_under_crew_tasks_and_a_journeyman_sees_their_apprentices(): void
+    {
+        $team = Team::create(['name' => 'Crew One']);
+        $person = function (string $role, string $name) use ($team): array {
+            $user = User::factory()->create(['name' => $name, 'role' => ucfirst($role), 'registration_source' => User::SOURCE_MOBILE]);
+            $row = Foreman::create(['name' => $name, 'initials' => substr($name, 0, 2), 'role' => $role, 'team_id' => $team->id]);
+            $row->forceFill(['user_id' => $user->id])->save();
+
+            return [$user, $row];
+        };
+        [$foremanUser, $foreman] = $person('foreman', 'Sam');
+        [$journeymanUser, $journeyman] = $person('journeyman', 'Robert');
+        [, $apprentice] = $person('apprentice', 'Chris');
+
+        $job = $this->makeJob(['name' => 'Hierarchy Job']);
+        $job->apprenticeAssignments()->create(['journeyman_id' => $journeyman->id, 'apprentice_id' => $apprentice->id]);
+        $schedule = app(ScheduleBuilder::class)->build($job, User::factory()->create(['role' => 'Project Manager']), withTasks: false);
+        $make = fn (string $title, Foreman $runner) => tap($schedule->tasks()->create(['job_id' => $job->id, 'title' => $title]), function (JobTask $t) use ($runner, $foreman) {
+            $t->forceFill(['foreman_id' => $runner->id, 'supervisor_id' => $foreman->id])->save();
+        });
+        $jTask = $make('Journeyman task', $journeyman);
+        $aTask = $make('Apprentice task', $apprentice);
+        $fTask = $make('Foreman own task', $foreman);
+
+        $rows = fn (User $u) => collect($this->withHeader('Authorization', 'Bearer '.$this->tokenFor($u))
+            ->getJson('/api/v1/tasks?per_page=100')->assertOk()->json('data.tasks'))->keyBy('id');
+
+        // A task given to the foreman — to run or to oversee — is theirs; and one their crew runs
+        // is the crew's as well, so it appears under both tabs.
+        $foremanRows = $rows($foremanUser);
+        $this->assertTrue($foremanRows[$fTask->id]['isMine']);
+        $this->assertFalse($foremanRows[$fTask->id]['isCrew']);
+        $this->assertTrue($foremanRows[$jTask->id]['isMine']);
+        $this->assertTrue($foremanRows[$jTask->id]['isCrew']);
+        $this->assertTrue($foremanRows[$aTask->id]['isMine']);
+        $this->assertTrue($foremanRows[$aTask->id]['isCrew']);
+        $this->assertSame('Robert', $foremanRows[$aTask->id]['underName']);
+
+        // A fresh guard per request: the same process serves both.
+        $this->app['auth']->forgetGuards();
+        $journeymanRows = $rows($journeymanUser);
+        $this->assertTrue($journeymanRows[$jTask->id]['isMine']);
+        $this->assertFalse($journeymanRows[$jTask->id]['isCrew']);
+        $this->assertFalse($journeymanRows[$aTask->id]['isMine']);
+        $this->assertTrue($journeymanRows[$aTask->id]['isCrew']);
+        $this->assertArrayNotHasKey($fTask->id, $journeymanRows->all());
+    }
+
     public function test_tasks_pagination_is_capped_at_100(): void
     {
         [$user, $member] = $this->makeMobileJourneyman();
@@ -206,7 +258,7 @@ class MobileTasksAndScheduleTest extends TestCase
             'start_date' => $monday->toDateString(),
             'end_date' => $monday->copy()->addDays(4)->toDateString(), // Mon–Fri
         ]);
-        \Illuminate\Support\Facades\DB::table('job_assignments')->insert([
+        DB::table('job_assignments')->insert([
             'job_id' => $job->id, 'user_id' => $user->id, 'role' => 'electrician',
             'name' => $user->name, 'assigned_at' => now(), 'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -263,8 +315,8 @@ class MobileTasksAndScheduleTest extends TestCase
 
     public function test_the_task_feed_shows_each_role_only_the_crew_it_is_meant_to(): void
     {
-        $team = \App\Models\Team::create(['name' => 'Crew A']);
-        $other = \App\Models\Team::create(['name' => 'Crew B']);
+        $team = Team::create(['name' => 'Crew A']);
+        $other = Team::create(['name' => 'Crew B']);
         $person = function (string $name, string $role, $teamId) {
             $user = User::factory()->create(['name' => $name, 'role' => ucfirst($role), 'registration_source' => User::SOURCE_MOBILE]);
             $row = Foreman::create(['name' => $name, 'initials' => 'XX', 'role' => $role, 'team_id' => $teamId]);
@@ -278,7 +330,7 @@ class MobileTasksAndScheduleTest extends TestCase
         [, $outsider] = $person('Oz', 'journeyman', $other->id);
         $managerUser = User::factory()->create(['role' => 'Project Manager']);
 
-        \App\Models\JobApprenticeAssignment::create([
+        JobApprenticeAssignment::create([
             'job_id' => ($job = $this->makeJob())->id, 'journeyman_id' => $journeyman->id, 'apprentice_id' => $apprentice->id,
         ]);
 
@@ -332,7 +384,7 @@ class MobileTasksAndScheduleTest extends TestCase
         $this->actingAs($office ??= User::factory()->create(['role' => 'Project Manager']), 'web');
         $shift->update(['start_time' => '10:00:00']);
         $read("?from={$day}&to={$day}")->assertJsonPath('data.shifts.0.changed', true);
-        $this->assertTrue(\App\Models\AppNotification::where('user_id', $user->id)->where('type', 'schedule-changed')->exists());
+        $this->assertTrue(AppNotification::where('user_id', $user->id)->where('type', 'schedule-changed')->exists());
 
         $this->travel(5)->seconds(); // timestamps are whole seconds
         $this->app['auth']->forgetGuards();

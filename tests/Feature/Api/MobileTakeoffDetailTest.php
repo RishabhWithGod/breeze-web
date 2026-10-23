@@ -380,4 +380,46 @@ class MobileTakeoffDetailTest extends TestCase
         $this->assertSame(2, $response->json('data.approvedCount'));
         $this->assertSame(0, $result->reviews()->where('status', SymbolReview::STATUS_PENDING)->count());
     }
+
+    // --- annotated(): the drawing stamped with the reviewed decisions ---------
+
+    public function test_show_flags_an_annotated_pdf_and_it_streams_inline(): void
+    {
+        Storage::fake('local');
+        $owner = $this->owner();
+        $project = $this->makeProject($owner);
+        $result = $this->makeResult($project, $owner);
+        $auth = ['Authorization' => 'Bearer '.$this->tokenFor($owner)];
+
+        $this->assertFalse($this->withHeaders($auth)->getJson("/api/v1/takeoffs/{$project->id}")->json('data.hasAnnotatedPdf'));
+
+        $path = 'takeoffs/'.$project->id.'/annotated.pdf';
+        Storage::disk('local')->put($path, '%PDF-1.4 annotated');
+        $result->upload->update(['annotated_path' => $path]);
+
+        $this->assertTrue($this->withHeaders($auth)->getJson("/api/v1/takeoffs/{$project->id}")->json('data.hasAnnotatedPdf'));
+
+        $response = $this->withHeaders($auth)->get("/api/v1/takeoffs/{$project->id}/annotated");
+        $response->assertOk();
+        $this->assertSame('application/pdf', $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('inline', $response->headers->get('Content-Disposition'));
+    }
+
+    public function test_annotated_is_forbidden_for_a_non_owner(): void
+    {
+        $owner = $this->owner();
+        $project = $this->makeProject($owner);
+        $this->makeResult($project, $owner);
+
+        $stranger = $this->owner();
+        $company = \App\Models\CompanyProfile::create([
+            'user_id' => $stranger->id, 'name' => 'Other Co', 'business_address' => '1 Main St', 'primary_contact' => 'A',
+            'phone' => '(512) 555-0142', 'email' => 'other@x.test', 'timezone' => 'America/Chicago',
+        ]);
+        $stranger->forceFill(['company_id' => $company->id])->save();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($stranger->fresh()))
+            ->get("/api/v1/takeoffs/{$project->id}/annotated")
+            ->assertForbidden();
+    }
 }

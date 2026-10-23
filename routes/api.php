@@ -7,7 +7,9 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BillingController;
 use App\Http\Controllers\Api\V1\ChangeOrderController;
 use App\Http\Controllers\Api\V1\ClientAddressController;
+use App\Http\Controllers\Api\V1\ClientContactController;
 use App\Http\Controllers\Api\V1\ClientController;
+use App\Http\Controllers\Api\V1\DeviceTokenController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\EstimateController;
 use App\Http\Controllers\Api\V1\EstimateItemAttachmentController;
@@ -34,6 +36,7 @@ use App\Http\Controllers\Api\V1\OfficePaymentSettingsController;
 use App\Http\Controllers\Api\V1\ProcessingController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ProjectController;
+use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\ScheduleController;
 use App\Http\Controllers\Api\V1\SchedulingController;
 use App\Http\Controllers\Api\V1\SecurityController;
@@ -70,6 +73,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::get('companies', [AuthController::class, 'companies'])
         ->middleware('throttle:signup')
         ->name('companies.index');
+    // An emailed team invitation: public — the person has no account yet.
+    Route::get('invitations/{token}', [\App\Http\Controllers\Api\V1\InvitationController::class, 'show'])->name('invitations.show');
+    Route::post('invitations/{token}', [\App\Http\Controllers\Api\V1\InvitationController::class, 'accept'])
+        ->middleware('throttle:10,1')->name('invitations.accept');
     Route::post('auth/register', [AuthController::class, 'register'])
         ->middleware('throttle:signup')
         ->name('auth.register');
@@ -92,6 +99,29 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         // sign out. Everything else sits behind `account.active` below.
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
         Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');
+
+        // Realtime: a phone listens to the same private channels the web does (Reverb). Pusher's
+        // handshake asks this for a signature before it will subscribe — the same channel rules
+        // (`routes/channels.php`) decide, so a person only ever hears their own.
+        Route::post('broadcasting/auth', fn (\Illuminate\Http\Request $request) => \Illuminate\Support\Facades\Broadcast::auth($request))
+            ->name('broadcasting.auth');
+
+        // First-run setup — company, terms, plan, then Team Setup and Get Started.
+        Route::get('onboarding/status', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'status'])->name('onboarding.status');
+        Route::get('onboarding/company', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'company'])->name('onboarding.company');
+        Route::post('onboarding/company', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'storeCompany'])->name('onboarding.company.store');
+        Route::get('onboarding/terms', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'terms'])->name('onboarding.terms');
+        Route::post('onboarding/terms', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'storeTerms'])->name('onboarding.terms.store');
+        Route::get('onboarding/payment', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'payment'])->name('onboarding.payment');
+        Route::post('onboarding/payment', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'startPayment'])->name('onboarding.payment.start');
+        Route::post('onboarding/payment/confirm', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'confirmPayment'])->name('onboarding.payment.confirm');
+        Route::get('onboarding/team', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'teamSetup'])->name('onboarding.team');
+        Route::post('onboarding/team/invitations', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'sendInvitations'])->name('onboarding.team.invitations.store');
+        Route::post('onboarding/team/invitations/{invitation}/resend', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'resendInvitation'])->name('onboarding.team.invitations.resend');
+        Route::delete('onboarding/team/invitations/{invitation}', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'cancelInvitation'])->name('onboarding.team.invitations.cancel');
+        Route::get('onboarding/get-started', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'getStarted'])->name('onboarding.get-started');
+        Route::post('onboarding/get-started/skip/{step}', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'skipStep'])->name('onboarding.get-started.skip');
+        Route::post('onboarding/get-started/finish', [\App\Http\Controllers\Api\V1\OnboardingController::class, 'finish'])->name('onboarding.get-started.finish');
         Route::get('auth/sessions', [AuthController::class, 'sessions'])->name('auth.sessions');
         Route::post('auth/sessions/revoke-others', [AuthController::class, 'revokeOtherSessions'])->name('auth.sessions.revoke-others');
         Route::put('auth/password', [AuthController::class, 'updatePassword'])->name('auth.password.update');
@@ -115,12 +145,16 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::put('security/notifications/{eventType}', [SecurityController::class, 'updateNotificationPreference'])
             ->name('security.notifications.update');
 
-        Route::middleware('account.active')->group(function () {
+        Route::middleware(['account.active', 'permissions'])->group(function () {
             // The floating "Resume" button — read on every screen (mobile's
             // own `ShellController`), same as web's own `takeoffFlow` prop
             // shared on every Inertia response.
             Route::get('takeoff-flow', [TakeoffFlowController::class, 'show'])->name('takeoff-flow.show');
             Route::delete('takeoff-flow', [TakeoffFlowController::class, 'destroy'])->name('takeoff-flow.destroy');
+
+            // The phone's push token — any active account, apprentices included.
+            Route::post('device-tokens', [DeviceTokenController::class, 'store'])->name('device-tokens.store');
+            Route::delete('device-tokens', [DeviceTokenController::class, 'destroy'])->name('device-tokens.destroy');
 
             // `jobs.index`/`jobs.show` stay reachable for an apprentice —
             // `Api\V1\JobController` itself trims the response to basic
@@ -136,8 +170,14 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // for a field crew account with no estimates of their own, so
             // this needs no extra role gate beyond `account.active`.
             Route::get('estimates', [EstimateController::class, 'index'])->name('estimates.index');
+            Route::get('estimates/create-options', [EstimateController::class, 'createOptions'])->name('estimates.create-options');
+            Route::post('estimates', [EstimateController::class, 'store'])->name('estimates.store');
+            Route::post('estimates/{estimate}/restore', [EstimateController::class, 'restore'])->whereNumber('estimate')->name('estimates.restore');
             Route::get('estimates/{estimate}', [EstimateController::class, 'show'])->name('estimates.show');
+            Route::delete('estimates/{estimate}', [EstimateController::class, 'destroy'])->name('estimates.destroy');
             Route::put('estimates/{estimate}', [EstimateController::class, 'update'])->name('estimates.update');
+            Route::get('estimates/{estimate}/edit-options', [EstimateController::class, 'editOptions'])->name('estimates.edit-options');
+            Route::put('estimates/{estimate}/labor-rate', [EstimateController::class, 'updateLaborRate'])->name('estimates.labor-rate');
             Route::post('estimates/{estimate}/items', [EstimateController::class, 'storeItem'])->name('estimates.items.store');
             Route::put('estimates/{estimate}/items/{item}', [EstimateController::class, 'updateItem'])->name('estimates.items.update');
             Route::delete('estimates/{estimate}/items/{item}', [EstimateController::class, 'destroyItem'])->name('estimates.items.destroy');
@@ -152,9 +192,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // no staffing/company concept at all — self-limiting the same
             // way estimates already are.
             Route::get('clients', [ClientController::class, 'index'])->name('clients.index');
+            // Before `clients/{client}` so `create-options` is not read as a client id.
+            Route::get('clients/create-options', [ClientController::class, 'createOptions'])->name('clients.create-options');
             Route::post('clients', [ClientController::class, 'store'])->name('clients.store');
             Route::get('clients/{client}', [ClientController::class, 'show'])->name('clients.show');
             Route::put('clients/{client}', [ClientController::class, 'update'])->name('clients.update');
+            Route::delete('clients/{client}', [ClientController::class, 'destroy'])->name('clients.destroy');
+            Route::post('clients/{client}/contacts', [ClientContactController::class, 'store'])->name('clients.contacts.store');
+            Route::put('clients/{client}/contacts/{contact}', [ClientContactController::class, 'update'])->name('clients.contacts.update');
+            Route::delete('clients/{client}/contacts/{contact}', [ClientContactController::class, 'destroy'])->name('clients.contacts.destroy');
             Route::post('clients/{client}/addresses', [ClientAddressController::class, 'store'])->name('clients.addresses.store');
             Route::put('clients/{client}/addresses/{address}', [ClientAddressController::class, 'update'])->name('clients.addresses.update');
             Route::delete('clients/{client}/addresses/{address}', [ClientAddressController::class, 'destroy'])->name('clients.addresses.destroy');
@@ -168,13 +214,24 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 ->middleware('throttle:address-lookup')
                 ->name('address-lookup.place');
             Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
+            // Before `projects/{project}` so `create-options` is not read as a project id.
+            Route::get('projects/create-options', [ProjectController::class, 'createOptions'])->name('projects.create-options');
             Route::get('projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
+            Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
             Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');
             Route::put('projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
 
             Route::get('takeoffs', [TakeoffController::class, 'index'])->name('takeoffs.index');
+            // Registered ahead of `takeoffs/{project}` so `upload-options` is not read as a project id.
+            Route::get('takeoffs/upload-options', [UploadController::class, 'options'])->name('takeoffs.upload-options');
             Route::get('takeoffs/{project}', [TakeoffController::class, 'show'])->name('takeoffs.show');
+            Route::delete('takeoffs/{project}', [TakeoffController::class, 'destroy'])->name('takeoffs.destroy');
+            Route::post('takeoffs/{project}/restore', [TakeoffController::class, 'restore'])->whereNumber('project')->name('takeoffs.restore');
+            // AI Review: web's `AiReviewController::show()` for the app, a page at a time, and the crops.
+            Route::get('takeoffs/{project}/review', [ReviewController::class, 'show'])->name('takeoffs.review');
+            Route::get('takeoffs/{project}/symbols/{review}/crop', [ReviewController::class, 'crop'])->name('takeoffs.symbols.crop');
             Route::get('takeoffs/{project}/pdf', [TakeoffController::class, 'pdf'])->name('takeoffs.pdf');
+            Route::get('takeoffs/{project}/annotated', [TakeoffController::class, 'annotated'])->name('takeoffs.annotated');
             Route::get('takeoffs/{project}/overlay', [TakeoffController::class, 'overlay'])->name('takeoffs.overlay');
             Route::get('takeoffs/{project}/pages/{page}', [TakeoffController::class, 'page'])
                 ->whereNumber('page')
@@ -183,6 +240,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // Upload Drawing → the start of a run. Mobile's counterpart to
             // web's own single Upload/Processing screens; the client polls
             // `processing` below for progress instead of waiting here.
+            Route::get('ai/engine-status', [UploadController::class, 'engineStatus'])->name('ai.engine-status');
             Route::post('takeoffs/{project}/upload', [UploadController::class, 'store'])->name('takeoffs.upload');
             Route::get('takeoffs/{project}/processing', [ProcessingController::class, 'status'])->name('takeoffs.processing.status');
             Route::post('takeoffs/{project}/processing/retry', [ProcessingController::class, 'retry'])->name('takeoffs.processing.retry');
@@ -213,6 +271,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // Signing off the review, and carrying it forward into a job.
             Route::post('takeoffs/{project}/finalise', [TakeoffController::class, 'finalise'])->name('takeoffs.finalise');
             Route::post('takeoffs/{project}/reopen', [TakeoffController::class, 'reopen'])->name('takeoffs.reopen');
+            Route::get('takeoffs/{project}/job-form', [TakeoffController::class, 'jobForm'])->name('takeoffs.job.form');
             Route::post('takeoffs/{project}/job', [TakeoffController::class, 'storeJob'])->name('takeoffs.job.store');
 
             // A takeoff's own paperwork — Drawing Details' "Documents"
@@ -221,6 +280,13 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('takeoffs/{project}/documents', [DocumentController::class, 'index'])->name('takeoffs.documents.index');
             Route::post('takeoffs/{project}/documents', [DocumentController::class, 'store'])->name('takeoffs.documents.store');
             Route::delete('documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+            Route::get('documents/{document}/file', [DocumentController::class, 'file'])->name('documents.file');
+            Route::get('documents/{document}/history', [DocumentController::class, 'history'])->name('documents.history');
+            Route::post('documents/{document}/versions', [DocumentController::class, 'storeVersion'])->name('documents.versions.store');
+            Route::post('documents/{document}/favorite', [DocumentController::class, 'favorite'])->name('documents.favorite');
+            Route::post('documents/{document}/archive', [DocumentController::class, 'archive'])->name('documents.archive');
+            Route::post('documents/{document}/restore', [DocumentController::class, 'restore'])->name('documents.restore');
+            Route::post('documents/{document}/share', [DocumentController::class, 'share'])->name('documents.share');
 
             // Breaking a job into tasks, straight after it is raised — from
             // the takeoff flow or from any other job the manager owns.
@@ -235,6 +301,23 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // editing or removing a member is manager-only, enforced inside
             // each action rather than here — same reasoning the
             // approve/reject routes below give.
+            Route::get('dashboard', [\App\Http\Controllers\Api\V1\DashboardController::class, 'index'])->name('dashboard.index');
+            Route::get('invoices/export', [\App\Http\Controllers\Api\V1\ExportController::class, 'invoices'])->name('invoices.export');
+            Route::get('estimates/{estimate}/export/csv', [\App\Http\Controllers\Api\V1\ExportController::class, 'estimate'])->name('estimates.export');
+            Route::get('takeoffs/{project}/final/export/{format}', [\App\Http\Controllers\Api\V1\ExportController::class, 'finalTakeoff'])->whereIn('format', ['json', 'csv', 'xlsx'])->name('takeoffs.final.export');
+            Route::get('office/jobs/{job}/schedule', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'show'])->name('office.jobs.schedule.show');
+            Route::put('office/jobs/{job}/schedule', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'update'])->name('office.jobs.schedule.update');
+            Route::post('schedule-tasks/{task}/delay', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'delay'])->name('schedule-tasks.delay');
+            Route::post('schedule-tasks/{task}/move', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'move'])->name('schedule-tasks.move');
+            Route::post('schedule-tasks/{task}/assignments', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'assign'])->name('schedule-tasks.assign');
+            Route::delete('schedule-tasks/{task}/assignments/{assignment}', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'unassign'])->name('schedule-tasks.unassign');
+            Route::post('schedule-tasks/{task}/dependencies', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'addDependency'])->name('schedule-tasks.dependencies.store');
+            Route::delete('schedule-tasks/{task}/dependencies/{dependency}', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'removeDependency'])->name('schedule-tasks.dependencies.destroy');
+            Route::post('office/jobs/{job}/schedule/reorder', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'reorder'])->name('office.jobs.schedule.reorder');
+            Route::get('office/settings/company', [\App\Http\Controllers\Api\V1\OfficeCompanyController::class, 'show'])->name('office.settings.company.show');
+            Route::post('office/settings/company', [\App\Http\Controllers\Api\V1\OfficeCompanyController::class, 'update'])->name('office.settings.company.update');
+            Route::get('roles-permissions', [\App\Http\Controllers\Api\V1\RolePermissionController::class, 'show'])->name('roles.show');
+            Route::put('roles-permissions', [\App\Http\Controllers\Api\V1\RolePermissionController::class, 'update'])->name('roles.update');
             Route::get('team', [TeamController::class, 'index'])->name('team.index');
             Route::get('team/{member}', [TeamController::class, 'show'])->name('team.show');
             Route::post('team', [TeamController::class, 'store'])->name('team.store');
@@ -242,6 +325,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::delete('team/{member}', [TeamController::class, 'destroy'])->name('team.destroy');
             // The crew group itself (a name), distinct from a person on one.
             Route::post('teams', [TeamController::class, 'storeTeam'])->name('teams.store');
+            Route::put('teams/{team}', [TeamController::class, 'updateTeam'])->name('teams.update');
+            Route::delete('teams/{team}', [TeamController::class, 'destroyTeam'])->name('teams.destroy');
 
             // Same `InvoiceSummaryCalculator` the web Dashboard's Billing
             // Snapshot uses — there was no mobile billing surface at all
@@ -343,6 +428,16 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                     });
 
                 // The office's Job Detail — web's own `JobController::show()` and its panels.
+                // Not under `{job}`: act on several jobs at once, or bring one back from the trash.
+                Route::post('office/jobs/bulk', [OfficeJobController::class, 'bulk'])->name('office.jobs.bulk');
+                Route::post('office/jobs/{job}/restore', [OfficeJobController::class, 'restore'])->whereNumber('job')->name('office.jobs.restore');
+                Route::post('office/jobs/{job}/archive', [OfficeJobController::class, 'archive'])->name('office.jobs.archive');
+                Route::post('office/jobs/{job}/unarchive', [OfficeJobController::class, 'unarchive'])->name('office.jobs.unarchive');
+
+                Route::put('office/jobs/{job}/field-materials/{material}', [OfficeJobController::class, 'updateFieldMaterial'])->whereNumber(['job', 'material'])->name('office.jobs.field-materials.update');
+                Route::post('office/jobs/{job}/field-materials/{material}/approve', [OfficeJobController::class, 'approveFieldMaterial'])->whereNumber(['job', 'material'])->name('office.jobs.field-materials.approve');
+                Route::delete('office/jobs/{job}/field-materials/{material}', [OfficeJobController::class, 'destroyFieldMaterial'])->whereNumber(['job', 'material'])->name('office.jobs.field-materials.destroy');
+
                 Route::prefix('office/jobs/{job}')->name('office.jobs.')
                     ->controller(OfficeJobController::class)->group(function () {
                         Route::get('/', 'show')->name('show');
@@ -439,6 +534,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 // merging in GPS attendance alongside timer/manual entries
                 // (`DailyTimesheetBuilder`), same as web's own list.
                 Route::get('time-tracking/days', [TimeTrackingController::class, 'days'])->name('time-tracking.days');
+                Route::get('time-tracking/log', [TimeTrackingController::class, 'log'])->name('time-tracking.log');
+                Route::get('time-tracking/entries/export/{format}', [\App\Http\Controllers\Api\V1\ExportController::class, 'timeEntries'])->whereIn('format', ['csv', 'xlsx'])->name('time-tracking.entries.export');
+                Route::get('time-tracking/reports/export/{format}', [\App\Http\Controllers\Api\V1\ExportController::class, 'timeReport'])->whereIn('format', ['csv', 'xlsx'])->name('time-tracking.reports.export');
+                Route::post('attendance/{attendance}/check-out', [TimeTrackingController::class, 'checkOut'])->name('attendance.check-out');
                 Route::get('time-tracking/days/{user}/{date}', [TimeTrackingController::class, 'day'])->name('time-tracking.day');
                 // Manager-only (`viewReports`/`manageSettings`), enforced
                 // inside each controller same as everywhere else in this file.
@@ -457,6 +556,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // into one GPS check-in/out record. Same crew-visibility rule
             // as everywhere else here (own record, or `viewCrew`).
             Route::get('attendance/{attendance}', [AttendanceController::class, 'show'])->name('attendance.show');
+            Route::post('attendance/{attendance}/corrections/{correction}/resolve', [AttendanceController::class, 'resolveCorrection'])->name('attendance.corrections.resolve');
             Route::get('attendance/{attendance}/photo', [AttendanceController::class, 'photo'])->name('attendance.photo');
 
             Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');

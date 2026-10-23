@@ -48,6 +48,17 @@ class JobScheduleController extends Controller
 
     public function show(Request $request, Job $job): Response
     {
+        return Inertia::render('JobSchedule', $this->board($request, $job));
+    }
+
+    /**
+     * Everything the Job Schedule screen shows, as plain data — the web page and the phone's
+     * schedule board both read this, so they cannot disagree.
+     *
+     * @return array<string, mixed>
+     */
+    public function board(Request $request, Job $job): array
+    {
         $this->authorize('view', $job);
 
         $schedule = $job->schedule ?? $this->builder->build($job, $request->user());
@@ -60,7 +71,7 @@ class JobScheduleController extends Controller
         $graph = TaskDependencyGraph::for($schedule);
         $today = Carbon::today();
 
-        return Inertia::render('JobSchedule', [
+        return [
             'job' => [
                 'id' => $job->id,
                 'name' => $job->name,
@@ -113,7 +124,7 @@ class JobScheduleController extends Controller
             ],
             'can' => $this->policy->abilities($request->user(), $schedule),
             'today' => $today->toDateString(),
-        ]);
+        ];
     }
 
     /**

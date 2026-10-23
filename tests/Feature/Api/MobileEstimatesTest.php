@@ -154,22 +154,18 @@ class MobileEstimatesTest extends TestCase
         $this->assertSame([$newer->id, $older->id], $ids->all());
     }
 
-    public function test_a_pending_approval_mobile_technician_sees_an_empty_list_not_an_error(): void
+    public function test_a_journeyman_is_refused_estimates_by_the_roles_matrix(): void
     {
-        // Estimates are inherently manager-owned data (ownedBy scope) — a
-        // field technician account naturally has none of their own, so this
-        // route needs no extra role gate beyond auth:sanctum+account.active
-        // (see routes/api.php's comment on the estimates.index route).
+        // Estimates sit behind the same Roles & Permissions matrix as on web: a journeyman
+        // starts without `estimates.view`.
         $technician = User::factory()->create([
             'role' => 'Journeyman',
             'status' => User::STATUS_ACTIVE,
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($technician))
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($technician))
             ->getJson('/api/v1/estimates')
-            ->assertOk();
-
-        $this->assertSame([], $response->json('data.estimates'));
+            ->assertForbidden();
     }
 
     // --- update() / item CRUD ------------------------------------------------
@@ -326,5 +322,153 @@ class MobileEstimatesTest extends TestCase
 
         $this->assertDatabaseMissing('estimate_items', ['id' => $item->id]);
         $this->assertEquals(0, $estimate->fresh()->grand_total);
+    }
+
+    public function test_labor_rate_reprices_every_labor_line_here_and_on_addenda(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $estimate = $this->makeEstimate($manager);
+        $addendum = $this->makeEstimate($manager, ['kind' => Estimate::KIND_ADDENDUM, 'parent_estimate_id' => $estimate->id, 'addendum_number' => 1]);
+
+        foreach ([$estimate, $addendum] as $target) {
+            $target->items()->create([
+                'category' => EstimateItem::CATEGORY_LABOR, 'description' => 'Install labor', 'unit' => 'hr',
+                'quantity' => 10, 'unit_cost' => 50, 'total' => 500, 'position' => 1,
+            ]);
+        }
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($manager))
+            ->putJson("/api/v1/estimates/{$estimate->id}/labor-rate", ['labor_rate' => 80])
+            ->assertOk()
+            ->assertJsonPath('data.laborRate', 80);
+
+        $this->assertEquals(80, $estimate->items()->first()->fresh()->unit_cost);
+        $this->assertEquals(80, $addendum->items()->first()->fresh()->unit_cost);
+    }
+
+    public function test_show_carries_the_labor_rate_before_job_flag_and_addendum_lines(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $estimate = $this->makeEstimate($manager);
+        $addendum = $this->makeEstimate($manager, ['kind' => Estimate::KIND_ADDENDUM, 'parent_estimate_id' => $estimate->id, 'addendum_number' => 1]);
+        $estimate->items()->create([
+            'category' => EstimateItem::CATEGORY_LABOR, 'description' => 'Install labor', 'unit' => 'hr',
+            'quantity' => 4, 'unit_cost' => 65, 'total' => 260, 'position' => 1,
+        ]);
+        $addendum->items()->create([
+            'category' => EstimateItem::CATEGORY_MATERIAL, 'description' => 'Box', 'unit' => 'ea',
+            'quantity' => 2, 'unit_cost' => 5, 'total' => 10, 'position' => 1,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($manager))
+            ->getJson("/api/v1/estimates/{$estimate->id}")
+            ->assertOk();
+
+        $this->assertTrue($response->json('data.beforeJob'));
+        $this->assertEquals(65, $response->json('data.laborRate'));
+        $this->assertSame('Box', $response->json('data.addenda.0.lineItems.0.description'));
+    }
+
+    public function test_labor_rate_is_forbidden_for_a_non_owner(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        // Someone in a different company (company-less managers share ownership).
+        $stranger = User::factory()->create(['role' => 'Project Manager']);
+        $company = \App\Models\CompanyProfile::create([
+            'user_id' => $stranger->id, 'name' => 'Other Co', 'business_address' => '1 Main St', 'primary_contact' => 'A',
+            'phone' => '(512) 555-0142', 'email' => 'other@x.test', 'timezone' => 'America/Chicago',
+        ]);
+        $stranger->forceFill(['company_id' => $company->id])->save();
+        $estimate = $this->makeEstimate($manager);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($stranger->fresh()))
+            ->putJson("/api/v1/estimates/{$estimate->id}/labor-rate", ['labor_rate' => 80])
+            ->assertForbidden();
+    }
+
+    public function test_edit_options_lists_clients_and_projects_and_update_can_move_the_estimate(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $apex = \App\Models\Client::create(['user_id' => $manager->id, 'name' => 'Apex']);
+        $harbor = \App\Models\Client::create(['user_id' => $manager->id, 'name' => 'Harbor']);
+        $tower = \App\Models\Project::create(['user_id' => $manager->id, 'client_id' => $harbor->id, 'name' => 'Tower', 'client' => 'Harbor', 'status' => 'draft']);
+        $estimate = $this->makeEstimate($manager, ['client_id' => $apex->id]);
+        $auth = ['Authorization' => 'Bearer '.$this->tokenFor($manager)];
+
+        $options = $this->withHeaders($auth)->getJson("/api/v1/estimates/{$estimate->id}/edit-options")->assertOk();
+        $this->assertSame($apex->id, $options->json('data.clientId'));
+        $this->assertSame(['Apex', 'Harbor'], array_column($options->json('data.clients'), 'name'));
+        $this->assertSame('Tower', $options->json('data.projects.0.name'));
+
+        // Moving it to a project rewrites the client and project snapshots from that project.
+        $this->withHeaders($auth)->putJson("/api/v1/estimates/{$estimate->id}", [
+            'project_id' => $tower->id, 'status' => 'draft', 'issued_on' => '2026-10-01', 'markup_pct' => 10, 'tax_pct' => 5,
+        ])->assertOk();
+
+        $fresh = $estimate->fresh();
+        $this->assertSame($tower->id, $fresh->project_id);
+        $this->assertSame($harbor->id, $fresh->client_id);
+        $this->assertSame('Harbor', $fresh->client);
+        $this->assertSame('Tower', $fresh->project);
+
+        // Without project_id the client/project are left alone.
+        $this->withHeaders($auth)->putJson("/api/v1/estimates/{$estimate->id}", [
+            'status' => 'approved', 'issued_on' => '2026-10-01', 'markup_pct' => 10, 'tax_pct' => 5,
+        ])->assertOk();
+        $this->assertSame($tower->id, $estimate->fresh()->project_id);
+    }
+
+    public function test_the_list_filters_and_reports_the_options_for_them(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $this->makeEstimate($manager, ['number' => 'EST-1', 'client' => 'Apex', 'project' => 'Tower', 'status' => 'draft', 'amount' => 500]);
+        $this->makeEstimate($manager, ['number' => 'EST-2', 'client' => 'Beta', 'project' => 'Mall', 'status' => 'sent', 'amount' => 900]);
+        $h = ['Authorization' => 'Bearer '.$this->tokenFor($manager)];
+
+        $all = $this->getJson('/api/v1/estimates', $h)->assertOk();
+        $this->assertEqualsCanonicalizing(['Apex', 'Beta'], $all->json('data.clients'));
+        $this->assertEqualsCanonicalizing(['Tower', 'Mall'], $all->json('data.projects'));
+
+        $this->app['auth']->forgetGuards();
+        $this->assertSame(['EST-2'], array_column($this->getJson('/api/v1/estimates?status=sent', $h)->json('data.estimates'), 'number'));
+        $this->app['auth']->forgetGuards();
+        $this->assertSame(['EST-1'], array_column($this->getJson('/api/v1/estimates?client=Apex', $h)->json('data.estimates'), 'number'));
+        $this->app['auth']->forgetGuards();
+        $this->assertSame(['EST-2', 'EST-1'], array_column($this->getJson('/api/v1/estimates?sort=amount-desc', $h)->json('data.estimates'), 'number'));
+    }
+
+    public function test_an_estimate_can_be_raised_deleted_and_restored(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $client = \App\Models\Client::create(['user_id' => $manager->id, 'name' => 'Apex']);
+        $project = \App\Models\Project::create(['user_id' => $manager->id, 'client_id' => $client->id, 'client' => 'Apex', 'name' => 'Tower', 'status' => 'completed']);
+        $h = ['Authorization' => 'Bearer '.$this->tokenFor($manager)];
+
+        $opts = $this->getJson('/api/v1/estimates/create-options', $h)->assertOk();
+        $this->assertSame('Apex', $opts->json('data.clients.0.name'));
+        $this->assertSame($project->id, $opts->json('data.projects.0.id'));
+
+        $this->app['auth']->forgetGuards();
+        $this->postJson('/api/v1/estimates', ['issued_on' => now()->toDateString(), 'amount' => 1200, 'status' => 'draft'], $h)
+            ->assertCreated();
+
+        $this->app['auth']->forgetGuards();
+        $made = $this->postJson('/api/v1/estimates', [
+            'issued_on' => now()->toDateString(), 'amount' => 1200, 'status' => 'draft', 'project_id' => $project->id, 'client_id' => $client->id,
+        ], $h)->assertCreated();
+        $this->assertSame('Apex', $made->json('data.client'));
+        $this->assertSame('Tower', $made->json('data.project'));
+        $id = $made->json('data.id');
+
+        $this->app['auth']->forgetGuards();
+        $this->postJson('/api/v1/estimates', ['status' => 'draft'], $h)->assertStatus(422);
+
+        $this->app['auth']->forgetGuards();
+        $this->deleteJson("/api/v1/estimates/{$id}", [], $h)->assertOk();
+        $this->assertSoftDeleted('estimates', ['id' => $id]);
+
+        $this->app['auth']->forgetGuards();
+        $this->postJson("/api/v1/estimates/{$id}/restore", [], $h)->assertOk();
+        $this->assertNotSoftDeleted('estimates', ['id' => $id]);
     }
 }

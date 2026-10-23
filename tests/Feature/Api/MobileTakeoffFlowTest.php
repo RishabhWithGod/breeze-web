@@ -61,6 +61,11 @@ class MobileTakeoffFlowTest extends TestCase
 
     private function makeProject(User $owner, array $attributes = []): Project
     {
+        // A project always has a client with a site on file, as on web.
+        if (! array_key_exists('client_id', $attributes)) {
+            $attributes['client_id'] = $this->makeClient($owner)->id;
+        }
+
         return Project::create([
             'user_id' => $owner->id,
             'name' => 'Data Hall',
@@ -156,6 +161,55 @@ class MobileTakeoffFlowTest extends TestCase
         $this->assertDatabaseHas('uploads', ['project_id' => $project->id, 'format' => 'PDF']);
         Queue::assertPushed(RenderDrawingPreviews::class);
         Queue::assertPushed(ProcessTakeoffRun::class);
+    }
+
+    public function test_upload_options_name_projects_with_their_client_and_carry_the_limits(): void
+    {
+        $owner = $this->owner();
+        $client = $this->makeClient($owner);
+        $project = $this->makeProject($owner, ['client_id' => $client->id]);
+        $this->makeProject($this->owner(), ['name' => 'Someone Elses']);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->getJson("/api/v1/takeoffs/upload-options?project={$project->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.projects')
+            ->assertJsonPath('data.projects.0.clientName', 'Harborview LLC')
+            ->assertJsonPath('data.selectedProjectId', $project->id)
+            ->assertJsonPath('data.addendumFor', null)
+            ->assertJsonPath('data.limits.maxFiles', 1)
+            ->assertJsonStructure(['data' => ['limits' => ['maxFileSizeMb', 'extensions'], 'aiConfigured', 'unfinishedTakeoff']]);
+    }
+
+    public function test_an_addendum_upload_keeps_its_reason_and_affected_sheets(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        $owner = $this->owner();
+        $project = $this->makeProject($owner, ['status' => 'draft']);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->postJson("/api/v1/takeoffs/{$project->id}/upload", [
+                'project_id' => $project->id,
+                'addendum_reason' => 'Revised panel schedule',
+                'affected_sheets' => 'E-101, E-102',
+                'files' => [UploadedFile::fake()->create('addendum.pdf', 100, 'application/pdf')],
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('uploads', [
+            'project_id' => $project->id,
+            'addendum_reason' => 'Revised panel schedule',
+            'affected_sheets' => 'E-101, E-102',
+        ]);
+    }
+
+    public function test_the_engine_status_reports_whether_it_is_configured_and_online(): void
+    {
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($this->owner()))
+            ->getJson('/api/v1/ai/engine-status')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['configured', 'online']]);
     }
 
     public function test_upload_rejects_another_managers_project(): void
@@ -298,6 +352,59 @@ class MobileTakeoffFlowTest extends TestCase
             'status' => SymbolReview::STATUS_PENDING, 'confidence' => 0.9, 'ai_count' => 3, 'final_count' => 3,
             ...$attributes,
         ]);
+    }
+
+    public function test_the_review_is_paged_with_a_tally_and_crop_paths(): void
+    {
+        $owner = $this->owner();
+        $project = $this->makeProject($owner);
+        $result = $this->makeResult($project, $owner);
+
+        foreach (range(1, 26) as $i) {
+            $this->makeReview($result, $project, [
+                'name' => "Symbol {$i}",
+                'status' => $i === 1 ? SymbolReview::STATUS_REJECTED : SymbolReview::STATUS_APPROVED,
+                'crop_path' => $i === 2 ? 'crops/symbol-2.png' : null,
+            ]);
+        }
+
+        $first = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->getJson("/api/v1/takeoffs/{$project->id}/review")
+            ->assertOk()
+            ->assertJsonCount(24, 'data.symbols')
+            ->assertJsonPath('data.meta.total', 26)
+            ->assertJsonPath('data.meta.lastPage', 2)
+            ->assertJsonPath('data.tally.rejected', 1)
+            ->assertJsonPath('data.tally.approved', 25)
+            ->assertJsonPath('data.result.isFinalised', false)
+            ->assertJsonStructure(['data' => ['estimating', 'result' => ['pageCount', 'estimateId']]]);
+
+        $withCrop = collect($first->json('data.symbols'))->firstWhere('name', 'Symbol 2');
+        $this->assertSame("/takeoffs/{$project->id}/symbols/{$withCrop['id']}/crop", $withCrop['cropUrl']);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->getJson("/api/v1/takeoffs/{$project->id}/review?page=2")
+            ->assertOk()
+            ->assertJsonCount(2, 'data.symbols');
+    }
+
+    public function test_the_review_is_refused_for_another_managers_takeoff(): void
+    {
+        $owner = $this->owner();
+        $project = $this->makeProject($owner);
+        $this->makeResult($project, $owner);
+
+        // Someone in a different company.
+        $stranger = $this->owner();
+        $company = \App\Models\CompanyProfile::create([
+            'user_id' => $stranger->id, 'name' => 'Other Co', 'business_address' => '1 Main St', 'primary_contact' => 'A',
+            'phone' => '(512) 555-0142', 'email' => 'other@x.test', 'timezone' => 'America/Chicago',
+        ]);
+        $stranger->forceFill(['company_id' => $company->id])->save();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($stranger->fresh()))
+            ->getJson("/api/v1/takeoffs/{$project->id}/review")
+            ->assertForbidden();
     }
 
     public function test_reset_returns_a_decided_review_to_pending(): void
@@ -692,6 +799,75 @@ class MobileTakeoffFlowTest extends TestCase
         unset($result);
     }
 
+    public function test_job_form_gives_the_project_sites_crews_and_no_job_yet(): void
+    {
+        $owner = $this->owner();
+        $project = $this->makeProject($owner);
+        Team::create(['name' => 'Crew A']);
+        $this->makeResult($project, $owner, [], ['review_status' => AiResult::REVIEW_FINALISED, 'finalised_at' => now(), 'final_payload' => ['final_counts' => ['Duplex Receptacle' => 5]]]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->getJson("/api/v1/takeoffs/{$project->id}/job-form")
+            ->assertOk();
+
+        $this->assertTrue($response->json('data.result.isFinalised'));
+        $this->assertNull($response->json('data.result.job'));
+        $this->assertSame('Harborview LLC', $response->json('data.project.clientName'));
+        $this->assertCount(1, $response->json('data.project.addresses'));
+        $this->assertSame(['Crew A'], array_column($response->json('data.teams'), 'name'));
+        $this->assertSame([], $response->json('data.mergeEstimateIds'));
+    }
+
+    public function test_job_form_carries_the_raised_job_so_it_is_the_same_form_after(): void
+    {
+        $owner = $this->owner();
+        $project = $this->makeProject($owner);
+        $team = Team::create(['name' => 'Crew A']);
+        [$job] = $this->makeJobWithEstimate($owner, $project, $team);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->getJson("/api/v1/takeoffs/{$project->id}/job-form")
+            ->assertOk();
+
+        $this->assertSame($job->id, $response->json('data.result.workJobId'));
+        $this->assertSame((string) $team->id, $response->json('data.result.job.teamId'));
+        $this->assertSame('2026-10-01', $response->json('data.result.job.startDate'));
+        $this->assertNotNull($response->json('data.result.estimateId'));
+    }
+
+    public function test_job_form_is_not_readable_by_someone_else(): void
+    {
+        $owner = $this->owner();
+        $project = $this->makeProject($owner);
+        $this->makeResult($project, $owner);
+        $stranger = $this->owner();
+        $company = \App\Models\CompanyProfile::create([
+            'user_id' => $stranger->id, 'name' => 'Other Co', 'business_address' => '1 Main St', 'primary_contact' => 'A',
+            'phone' => '(512) 555-0142', 'email' => 'other@x.test', 'timezone' => 'America/Chicago',
+        ]);
+        $stranger->forceFill(['company_id' => $company->id])->save();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($stranger->fresh()))
+            ->getJson("/api/v1/takeoffs/{$project->id}/job-form")
+            ->assertForbidden();
+    }
+
+    public function test_store_job_needs_a_site_when_the_client_has_none(): void
+    {
+        $owner = $this->owner();
+        $clientWithoutSite = Client::create(['user_id' => $owner->id, 'name' => 'No Site Co']);
+        $project = $this->makeProject($owner, ['client_id' => $clientWithoutSite->id]);
+        $team = Team::create(['name' => 'Crew A']);
+        $this->makeResult($project, $owner, [], ['review_status' => AiResult::REVIEW_FINALISED, 'finalised_at' => now(), 'final_payload' => ['final_counts' => ['Duplex Receptacle' => 5]]]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->postJson("/api/v1/takeoffs/{$project->id}/job", [
+                'team_id' => $team->id, 'start_date' => '2026-10-01', 'end_date' => '2026-10-15',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('address_ids');
+    }
+
     // --- Job task setup -------------------------------------------------------
 
     private function makeJobWithEstimate(User $owner, Project $project, Team $team): array
@@ -726,8 +902,8 @@ class MobileTakeoffFlowTest extends TestCase
             ->getJson("/api/v1/jobs/{$job->id}/task-setup")
             ->assertOk();
 
-        $this->assertSame('Jamie Lin', $response->json('data.foremen.0.name'));
-        $this->assertSame('Sam Ortiz', $response->json('data.supervisors.0.name'));
+        $this->assertSame(['Jamie Lin', 'Sam Ortiz'], array_column($response->json('data.members'), 'name'));
+        $this->assertSame(['Journeyman', 'Foreman'], array_column($response->json('data.members'), 'roleLabel'));
         $this->assertSame('Crew A', $response->json('data.team.name'));
         $this->assertNotEmpty($response->json('data.estimateLines'));
     }
@@ -751,8 +927,7 @@ class MobileTakeoffFlowTest extends TestCase
             ->postJson("/api/v1/jobs/{$job->id}/task-setup", [
                 'tasks' => [[
                     'title' => 'Install receptacles',
-                    'foreman_id' => $journeyman->id,
-                    'supervisor_id' => $foreman->id,
+                    'member_ids' => [$journeyman->id, $foreman->id],
                     'estimate_item_ids' => $lineIds,
                 ]],
             ])
@@ -761,6 +936,55 @@ class MobileTakeoffFlowTest extends TestCase
         $this->assertCount(1, $response->json('data.taskIds'));
         $this->assertDatabaseHas('job_tasks', ['job_id' => $job->id, 'title' => 'Install receptacles', 'foreman_id' => $journeyman->id, 'supervisor_id' => $foreman->id]);
         $this->assertDatabaseHas('estimate_items', ['id' => $lineIds[0], 'job_task_id' => $response->json('data.taskIds.0')]);
+    }
+
+    public function test_task_setup_gives_a_task_to_every_member_picked(): void
+    {
+        $owner = $this->owner();
+        $project = $this->makeProject($owner);
+        $team = Team::create(['name' => 'Crew A']);
+        $first = Foreman::create(['name' => 'Jamie Lin', 'initials' => 'JL', 'team_id' => $team->id, 'role' => Foreman::ROLE_JOURNEYMAN]);
+        $second = Foreman::create(['name' => 'Kim Park', 'initials' => 'KP', 'team_id' => $team->id, 'role' => Foreman::ROLE_JOURNEYMAN]);
+        [$job] = $this->makeJobWithEstimate($owner, $project, $team);
+
+        $lineIds = EstimateItem::whereIn('estimate_id', $job->estimates()->pluck('id'))
+            ->where('category', EstimateItem::CATEGORY_LABOR)->pluck('id')->all();
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->postJson("/api/v1/jobs/{$job->id}/task-setup", [
+                'tasks' => [[
+                    'title' => 'Rough-in',
+                    'member_ids' => [$first->id, $second->id],
+                    'estimate_item_ids' => $lineIds,
+                ]],
+            ])
+            ->assertCreated();
+
+        $task = \App\Models\JobTask::find($response->json('data.taskIds.0'));
+        $this->assertEqualsCanonicalizing([$first->id, $second->id], $task->runnerIds()->all());
+    }
+
+    public function test_task_setup_refuses_an_apprentice_on_a_task(): void
+    {
+        $owner = $this->owner();
+        $project = $this->makeProject($owner);
+        $team = Team::create(['name' => 'Crew A']);
+        $apprentice = Foreman::create(['name' => 'Al New', 'initials' => 'AN', 'team_id' => $team->id, 'role' => Foreman::ROLE_APPRENTICE]);
+        [$job] = $this->makeJobWithEstimate($owner, $project, $team);
+
+        $lineIds = EstimateItem::whereIn('estimate_id', $job->estimates()->pluck('id'))
+            ->where('category', EstimateItem::CATEGORY_LABOR)->pluck('id')->all();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->postJson("/api/v1/jobs/{$job->id}/task-setup", [
+                'tasks' => [[
+                    'title' => 'Rough-in',
+                    'member_ids' => [$apprentice->id],
+                    'estimate_item_ids' => $lineIds,
+                ]],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('tasks.0.member_ids');
     }
 
     public function test_task_setup_store_refuses_staff_off_the_jobs_crew(): void
@@ -777,8 +1001,7 @@ class MobileTakeoffFlowTest extends TestCase
             ->postJson("/api/v1/jobs/{$job->id}/task-setup", [
                 'tasks' => [[
                     'title' => 'Install receptacles',
-                    'foreman_id' => $offCrewJourneyman->id,
-                    'supervisor_id' => $foreman->id,
+                    'member_ids' => [$offCrewJourneyman->id, $foreman->id],
                     'estimate_item_ids' => [],
                 ]],
             ])
@@ -823,8 +1046,7 @@ class MobileTakeoffFlowTest extends TestCase
             ->postJson("/api/v1/jobs/{$job->id}/task-setup", [
                 'tasks' => [[
                     'title' => 'Install receptacles',
-                    'foreman_id' => $journeyman->id,
-                    'supervisor_id' => $foreman->id,
+                    'member_ids' => [$journeyman->id, $foreman->id],
                     'estimate_item_ids' => $lineIds,
                 ]],
             ])
@@ -835,22 +1057,21 @@ class MobileTakeoffFlowTest extends TestCase
             ->getJson("/api/v1/tasks/{$taskId}/edit")
             ->assertOk();
         $this->assertSame('Install receptacles', $editOptions->json('data.task.title'));
-        $this->assertSame($journeyman->id, $editOptions->json('data.task.foremanId'));
+        $this->assertEqualsCanonicalizing([$journeyman->id, $foreman->id], $editOptions->json('data.task.memberIds'));
         $this->assertNotEmpty($editOptions->json('data.task.lineIds'));
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
             ->putJson("/api/v1/tasks/{$taskId}", [
                 'title' => 'Install receptacles — updated',
                 'status' => 'in-progress',
-                'foreman_id' => $secondJourneyman->id,
-                'supervisor_id' => $foreman->id,
+                'member_ids' => [$secondJourneyman->id, $foreman->id],
                 'estimate_item_ids' => $lineIds,
             ])
             ->assertOk();
 
         $response->assertJsonPath('data.title', 'Install receptacles — updated');
         $response->assertJsonPath('data.status', 'in-progress');
-        $response->assertJsonPath('data.foremanId', $secondJourneyman->id);
+        $this->assertEqualsCanonicalizing([$secondJourneyman->id, $foreman->id], $response->json('data.memberIds'));
 
         $this->assertDatabaseHas('job_tasks', [
             'id' => $taskId,
@@ -879,8 +1100,7 @@ class MobileTakeoffFlowTest extends TestCase
             ->postJson("/api/v1/jobs/{$job->id}/task-setup", [
                 'tasks' => [[
                     'title' => 'Install receptacles',
-                    'foreman_id' => $journeyman->id,
-                    'supervisor_id' => $foreman->id,
+                    'member_ids' => [$journeyman->id, $foreman->id],
                     'estimate_item_ids' => $lineIds,
                 ]],
             ])
@@ -893,8 +1113,7 @@ class MobileTakeoffFlowTest extends TestCase
             ->putJson("/api/v1/tasks/{$taskId}", [
                 'title' => 'Hijacked',
                 'status' => 'in-progress',
-                'foreman_id' => $journeyman->id,
-                'supervisor_id' => $foreman->id,
+                'member_ids' => [$journeyman->id, $foreman->id],
                 'estimate_item_ids' => [],
             ])
             ->assertForbidden();

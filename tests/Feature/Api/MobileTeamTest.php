@@ -265,4 +265,68 @@ class MobileTeamTest extends TestCase
             ->postJson('/api/v1/teams', ['name' => 'Crew Delta'])
             ->assertStatus(422);
     }
+
+    public function test_a_manager_can_rename_a_team_and_only_an_empty_one_can_be_deleted(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $team = Team::create(['name' => 'Crew A']);
+        $busy = Team::create(['name' => 'Crew B']);
+        Foreman::create(['name' => 'Jamie Lin', 'initials' => 'JL', 'team_id' => $busy->id, 'role' => Foreman::ROLE_JOURNEYMAN]);
+        $auth = ['Authorization' => 'Bearer '.$this->tokenFor($manager)];
+
+        $this->withHeaders($auth)->putJson("/api/v1/teams/{$team->id}", ['name' => 'Crew Alpha'])->assertOk();
+        $this->assertSame('Crew Alpha', $team->fresh()->name);
+
+        $this->withHeaders($auth)->putJson("/api/v1/teams/{$team->id}", ['name' => 'Crew B'])
+            ->assertStatus(422)->assertJsonValidationErrors(['name']);
+
+        $this->withHeaders($auth)->deleteJson("/api/v1/teams/{$busy->id}")->assertStatus(422);
+        $this->assertNotNull(Team::find($busy->id));
+
+        $this->withHeaders($auth)->deleteJson("/api/v1/teams/{$team->id}")->assertOk();
+        $this->assertNull(Team::find($team->id));
+    }
+
+    public function test_a_technician_cannot_rename_or_delete_a_team(): void
+    {
+        $technician = User::factory()->create(['role' => 'Electrician']);
+        $team = Team::create(['name' => 'Crew A']);
+        $auth = ['Authorization' => 'Bearer '.$this->tokenFor($technician)];
+
+        $this->withHeaders($auth)->putJson("/api/v1/teams/{$team->id}", ['name' => 'Renamed'])->assertForbidden();
+        $this->withHeaders($auth)->deleteJson("/api/v1/teams/{$team->id}")->assertForbidden();
+    }
+
+    public function test_the_roster_carries_the_managers_list_and_seats(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($manager))
+            ->getJson('/api/v1/team')
+            ->assertOk();
+
+        $this->assertIsArray($response->json('data.managers'));
+        $this->assertArrayHasKey('seats', $response->json('data'));
+    }
+
+    public function test_a_manager_can_be_added_as_a_manager_and_gets_no_crew_row(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+
+        $roles = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($manager))->getJson('/api/v1/team')
+            ->assertOk()->json('data.memberRoles');
+        $this->assertContains('manager', array_column($roles, 'value'));
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($manager))
+            ->postJson('/api/v1/team', [
+                'name' => 'New Boss',
+                'role' => 'manager',
+                'email' => 'boss@example.com',
+                'password' => 'Password!234',
+                'password_confirmation' => 'Password!234',
+            ])->assertSuccessful();
+
+        $this->assertDatabaseHas('users', ['email' => 'boss@example.com']);
+        $this->assertDatabaseMissing('foremen', ['name' => 'New Boss']);
+    }
 }

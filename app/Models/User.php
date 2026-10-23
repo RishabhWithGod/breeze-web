@@ -189,6 +189,12 @@ class User extends Authenticatable
     }
 
     /** @return HasMany<AppNotification, $this> */
+    /** @return HasMany<DeviceToken, $this> */
+    public function deviceTokens(): HasMany
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
+
     public function appNotifications(): HasMany
     {
         return $this->hasMany(AppNotification::class);

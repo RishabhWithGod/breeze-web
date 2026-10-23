@@ -9,6 +9,7 @@ use App\Models\EstimateItem;
 use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\JobTask;
+use App\Notifications\TaskScheduleChanged;
 use App\Services\Scheduling\ScheduleBuilder;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Support\CompanyRule;
@@ -47,7 +48,7 @@ class JobTaskSetupController extends Controller
             $this->flow->remember($job->project, $request->user());
         }
 
-        $job->loadMissing(['schedule.tasks.foreman', 'schedule.tasks.estimateItems']);
+        $job->loadMissing(['schedule.tasks.foreman', 'schedule.tasks.crew', 'schedule.tasks.estimateItems']);
 
         return $this->ok([
             'job' => [
@@ -58,13 +59,16 @@ class JobTaskSetupController extends Controller
                 'startDate' => $job->start_date?->toDateString(),
                 'endDate' => $job->end_date?->toDateString(),
                 'fromTakeoff' => $job->ai_result_id !== null,
+                // The takeoff (project) this job was raised from — the step before.
+                'takeoffId' => $job->ai_result_id !== null ? $job->project_id : null,
                 'isLocked' => $job->isLocked(),
             ],
             'estimateLines' => $this->lines($job),
             'existingTasks' => $job->schedule?->tasks->map(fn (JobTask $task) => [
                 'id' => $task->id,
                 'title' => $task->title,
-                'foreman' => $task->foreman?->name,
+                // Everyone the task is given to, by name.
+                'foreman' => $task->crew->pluck('name')->unique()->implode(', ') ?: $task->foreman?->name,
                 'supervisor' => $task->supervisor?->name,
                 'lineCount' => $task->estimateItems->count(),
             ])->values() ?? [],
@@ -83,8 +87,9 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'tasks' => ['required', 'array', 'min:1', 'max:50'],
             'tasks.*.title' => ['required', 'string', 'max:200'],
-            'tasks.*.foreman_id' => ['required', 'integer', CompanyRule::exists('foremen')],
-            'tasks.*.supervisor_id' => ['required', 'integer', CompanyRule::exists('foremen')],
+            // Everyone the task is given to: journeymen run it, foremen are over it.
+            'tasks.*.member_ids' => ['required', 'array', 'min:1', 'max:30'],
+            'tasks.*.member_ids.*' => ['integer', CompanyRule::exists('foremen')],
             'tasks.*.estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],
@@ -92,16 +97,19 @@ class JobTaskSetupController extends Controller
         ], [
             'tasks.required' => 'A job needs at least one task.',
             'tasks.*.title.required' => 'Give the task a name, or remove the row.',
-            'tasks.*.foreman_id.required' => 'Pick the foreman running this task.',
-            'tasks.*.supervisor_id.required' => 'Pick the supervisor overseeing this task.',
+            'tasks.*.member_ids.required' => 'Pick the members this task is for.',
+            'tasks.*.member_ids.min' => 'Pick the members this task is for.',
             'tasks.*.estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
             'tasks.*.estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
 
-        $this->refuseOffCrew($job, array_merge(
-            array_column($data['tasks'], 'foreman_id'),
-            array_column($data['tasks'], 'supervisor_id'),
-        ));
+        // Each row's people against the project's members / the job's crew,
+        // then split into who runs the task and who is over it.
+        $crews = [];
+        foreach ($data['tasks'] as $index => $row) {
+            $this->refuseOffCrew($job, $row['member_ids'], "tasks.{$index}.member_ids");
+            $crews[$index] = $this->splitCrew($row['member_ids'], "tasks.{$index}.member_ids");
+        }
 
         $this->rejectDuplicateTitles($job->schedule?->tasks()->pluck('title') ?? collect(), $data['tasks']);
 
@@ -111,10 +119,10 @@ class JobTaskSetupController extends Controller
         $schedule = $job->schedule ?? $this->builder->build($job, $request->user(), withTasks: false);
         $createdTasks = [];
 
-        DB::transaction(function () use ($schedule, $job, $request, $data, &$createdTasks) {
+        DB::transaction(function () use ($schedule, $job, $request, $data, $crews, &$createdTasks) {
             $position = (int) $schedule->tasks()->max('position');
 
-            foreach ($data['tasks'] as $row) {
+            foreach ($data['tasks'] as $index => $row) {
                 $position++;
 
                 $laborLineIds = $row['estimate_item_ids'] ?? [];
@@ -127,13 +135,16 @@ class JobTaskSetupController extends Controller
                     'job_id' => $job->id,
                     'created_by' => $request->user()?->id,
                     'title' => trim($row['title']),
-                    'foreman_id' => $row['foreman_id'] ?? null,
-                    'supervisor_id' => $row['supervisor_id'] ?? null,
+                    'foreman_id' => $crews[$index]['runners'][0] ?? null,
+                    'supervisor_id' => $crews[$index]['overseers'][0] ?? null,
                     'estimated_hours' => $this->hoursOn($lineIds),
                     'priority' => 'medium',
                     'status' => JobTask::STATUS_PENDING,
                     'position' => $position,
                 ]);
+
+                // The whole crew, not just the first journeyman and foreman.
+                $task->assignCrew($crews[$index]['runners'], $crews[$index]['overseers']);
 
                 if ($lineIds !== []) {
                     EstimateItem::whereIn('id', $lineIds)->update(['job_task_id' => $task->id]);
@@ -142,9 +153,18 @@ class JobTaskSetupController extends Controller
                 $createdTasks[] = $task;
             }
 
-            $this->builder->realignWindow($schedule->refresh());
+            // Dates, dependency chain and the schedule's own window, laid out
+            // from what was just created — and the crew booked for those days.
+            $this->builder->scheduleTasks($schedule->refresh());
+            $this->builder->bookCrew($job, $schedule);
+
             $job->refreshEstimatedHours();
         });
+
+        // A freshly-created task's people are always newly assigned.
+        foreach ($createdTasks as $task) {
+            $this->notifyAssignment($task);
+        }
 
         $count = count($data['tasks']);
 
@@ -189,8 +209,7 @@ class JobTaskSetupController extends Controller
                 'id' => $task->id,
                 'title' => $task->title,
                 'status' => $task->status,
-                'foremanId' => $task->foreman_id,
-                'supervisorId' => $task->supervisor_id,
+                'memberIds' => $task->runnerIds()->merge($task->overseerIds())->unique()->map(fn ($id) => (int) $id)->values(),
                 'isCompleted' => $task->status === JobTask::STATUS_COMPLETED,
                 'lineIds' => $task->estimateItems()
                     ->where('category', EstimateItem::CATEGORY_LABOR)
@@ -223,21 +242,22 @@ class JobTaskSetupController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'status' => ['required', Rule::in(JobTask::STATUSES)],
-            'foreman_id' => ['required', 'integer', CompanyRule::exists('foremen')],
-            'supervisor_id' => ['required', 'integer', CompanyRule::exists('foremen')],
+            'member_ids' => ['required', 'array', 'min:1', 'max:30'],
+            'member_ids.*' => ['integer', CompanyRule::exists('foremen')],
             'estimate_item_ids' => $hasLines
                 ? ['required', 'array', 'min:1', 'max:200']
                 : ['nullable', 'array', 'max:200'],
             'estimate_item_ids.*' => ['integer'],
         ], [
             'title.required' => 'Give the task a name.',
-            'foreman_id.required' => 'Pick the foreman running this task.',
-            'supervisor_id.required' => 'Pick the supervisor overseeing this task.',
+            'member_ids.required' => 'Pick the members this task is for.',
+            'member_ids.min' => 'Pick the members this task is for.',
             'estimate_item_ids.required' => 'Pick the estimate lines this task covers.',
             'estimate_item_ids.min' => 'Pick the estimate lines this task covers.',
         ]);
 
-        $this->refuseOffCrew($job, [$data['foreman_id'], $data['supervisor_id']]);
+        $this->refuseOffCrew($job, $data['member_ids']);
+        $crew = $this->splitCrew($data['member_ids'], 'member_ids');
 
         $title = trim($data['title']);
 
@@ -272,20 +292,17 @@ class JobTaskSetupController extends Controller
             $this->pairedMaterialLines($job, $laborIds, $task->id),
         )));
 
-        $oldRunner = $task->foreman_id;
-        $oldOverseer = $task->supervisor_id;
+        // Who was on the task before, so only people newly given it are told.
+        $before = $task->runnerIds()->merge($task->overseerIds())->unique();
 
-        DB::transaction(function () use ($task, $job, $title, $data, $ids, $oldRunner, $oldOverseer) {
+        DB::transaction(function () use ($task, $job, $title, $data, $ids, $crew) {
             $task->update([
                 'title' => $title,
                 'status' => $data['status'],
-                'foreman_id' => $data['foreman_id'],
-                'supervisor_id' => $data['supervisor_id'],
                 'estimated_hours' => $this->hoursOn($ids),
             ]);
 
-            // The app names one person per slot; anyone else the task was given to stays.
-            $task->replacePrimaries($oldRunner, $oldOverseer);
+            $task->assignCrew($crew['runners'], $crew['overseers']);
 
             // Dropped lines go back into the picker for another task to take.
             EstimateItem::query()
@@ -299,6 +316,11 @@ class JobTaskSetupController extends Controller
 
             $job->refreshEstimatedHours();
         });
+
+        $added = $task->runnerIds()->merge($task->overseerIds())->unique()->diff($before)->values();
+        if ($added->isNotEmpty()) {
+            $this->notifyAssignment($task, $added);
+        }
 
         return $this->ok(
             $this->present($task->fresh(['foreman', 'supervisor', 'estimateItems'])),
@@ -339,31 +361,50 @@ class JobTaskSetupController extends Controller
             'jobId' => $task->job_id,
             'title' => $task->title,
             'status' => $task->status,
-            'foremanId' => $task->foreman_id,
+            'memberIds' => $task->runnerIds()->merge($task->overseerIds())->unique()->map(fn ($id) => (int) $id)->values(),
             'foremanName' => $task->foreman?->name,
-            'supervisorId' => $task->supervisor_id,
             'supervisorName' => $task->supervisor?->name,
             'estimatedHours' => $task->estimated_hours === null ? null : (float) $task->estimated_hours,
             'estimateItemIds' => $task->estimateItems->pluck('id')->values(),
         ];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Who a task on this job can be given to — the job's project members when
+     * its project has any picked, otherwise the job's team, otherwise the
+     * whole register. Journeymen run the work and foremen are over it; which
+     * side someone lands on follows their role. Apprentices are never offered.
+     *
+     * @return array<string, mixed>
+     */
     private function staffing(Job $job): array
     {
         $team = $job->team;
+        $projectMemberIds = $job->projectMemberIds();
+
+        if ($projectMemberIds !== null) {
+            $journeymen = Foreman::whereIn('id', $projectMemberIds)->where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name');
+            $supervisors = Foreman::whereIn('id', $projectMemberIds)->where('role', Foreman::ROLE_FOREMAN)->orderBy('name');
+        } elseif ($team !== null) {
+            $journeymen = $team->journeymen();
+            $supervisors = $team->foremen();
+        } else {
+            $journeymen = Foreman::where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name');
+            $supervisors = Foreman::where('role', Foreman::ROLE_FOREMAN)->orderBy('name');
+        }
+
+        $runners = $journeymen->get(['id', 'name', 'initials', 'role']);
+        $overseers = $supervisors->get(['id', 'name', 'initials', 'role']);
 
         return [
-            'foremen' => ($team === null
-                ? Foreman::where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name')->get(['id', 'name', 'initials', 'role'])
-                : $team->journeymen()->get(['id', 'name', 'initials', 'role']))
-                ->map(fn (Foreman $f) => ['id' => $f->id, 'name' => $f->name, 'initials' => $f->initials, 'role' => $f->role])
-                ->values(),
-            'supervisors' => ($team === null
-                ? Foreman::where('role', Foreman::ROLE_FOREMAN)->orderBy('name')->get(['id', 'name', 'initials', 'role'])
-                : $team->foremen()->get(['id', 'name', 'initials', 'role']))
-                ->map(fn (Foreman $f) => ['id' => $f->id, 'name' => $f->name, 'initials' => $f->initials, 'role' => $f->role])
-                ->values(),
+            'members' => $runners->concat($overseers)->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values()
+                ->map(fn (Foreman $person) => [
+                    'id' => $person->id,
+                    'name' => $person->name,
+                    'initials' => $person->initials,
+                    'role' => $person->role,
+                    'roleLabel' => $person->roleLabel(),
+                ])->all(),
             'team' => $team === null ? null : ['id' => $team->id, 'name' => $team->name],
         ];
     }
@@ -466,21 +507,95 @@ class JobTaskSetupController extends Controller
             ->all();
     }
 
-    /** @param  array<int, int|null>  $ids */
-    private function refuseOffCrew(Job $job, array $ids): void
+    /**
+     * Refuses anyone {@see staffing()} does not offer — the project's own
+     * members when it has any, the job's crew otherwise.
+     *
+     * @param  array<int, int|null>  $ids
+     */
+    private function refuseOffCrew(Job $job, array $ids, string $errorKey = 'member_ids'): void
     {
-        $team = $job->team;
         $given = array_values(array_filter($ids));
 
-        if ($team === null || $given === []) {
+        if ($given === []) {
+            return;
+        }
+
+        $projectMemberIds = $job->projectMemberIds();
+
+        if ($projectMemberIds !== null) {
+            if (array_diff($given, $projectMemberIds->all()) !== []) {
+                throw ValidationException::withMessages([$errorKey => 'That person is not staffed to this project.']);
+            }
+
+            return;
+        }
+
+        $team = $job->team;
+
+        if ($team === null) {
             return;
         }
 
         $onCrew = Foreman::whereKey($given)->where('team_id', $team->id)->pluck('id')->all();
 
         if (array_diff($given, $onCrew) !== []) {
-            throw ValidationException::withMessages(['foreman_id' => "That person is not on {$team->name}."]);
+            throw ValidationException::withMessages([$errorKey => "That person is not on {$team->name}."]);
         }
+    }
+
+    /**
+     * Splits the people picked into who runs the task (journeymen) and who is
+     * over it (foremen). One of either is enough; an apprentice is refused.
+     *
+     * @param  array<int, int|string>  $memberIds
+     * @return array{runners: list<int>, overseers: list<int>}
+     */
+    private function splitCrew(array $memberIds, string $errorKey): array
+    {
+        $people = Foreman::query()->whereKey($memberIds)->get()->keyBy('id');
+        $runners = [];
+        $overseers = [];
+
+        foreach (array_unique(array_map('intval', $memberIds)) as $id) {
+            $person = $people->get($id);
+
+            if ($person === null) {
+                continue;
+            }
+
+            if ($person->role === Foreman::ROLE_JOURNEYMAN) {
+                $runners[] = $id;
+            } elseif ($person->role === Foreman::ROLE_FOREMAN) {
+                $overseers[] = $id;
+            } else {
+                throw ValidationException::withMessages([
+                    $errorKey => "{$person->name} is an apprentice. Apprentices go on the job under a journeyman, not on a task.",
+                ]);
+            }
+        }
+
+        if ($runners === [] && $overseers === []) {
+            throw ValidationException::withMessages([$errorKey => 'Pick at least one journeyman or foreman for this task.']);
+        }
+
+        return ['runners' => $runners, 'overseers' => $overseers];
+    }
+
+    /**
+     * Tells whoever is newly running or overseeing a task.
+     *
+     * @param  ?Collection<int, int>  $only  Foreman ids to tell; everyone on the task when null.
+     */
+    private function notifyAssignment(JobTask $task, ?Collection $only = null): void
+    {
+        $ids = $only ?? $task->runnerIds()->merge($task->overseerIds())->unique();
+
+        Foreman::query()->with('user')->whereKey($ids)->get()
+            ->map(fn (Foreman $person) => $person->user)
+            ->filter()
+            ->unique('id')
+            ->each(fn ($user) => $user->notify(new TaskScheduleChanged($task, TaskScheduleChanged::ASSIGNED)));
     }
 
     /**

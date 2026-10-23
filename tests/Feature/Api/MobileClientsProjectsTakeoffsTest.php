@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Client;
+use App\Models\Foreman;
 use App\Models\Job;
 use App\Models\Project;
 use App\Models\Team;
@@ -82,11 +83,16 @@ class MobileClientsProjectsTakeoffsTest extends TestCase
     public function test_a_client_can_be_created_with_addresses(): void
     {
         $owner = User::factory()->create(['role' => 'Project Manager']);
+        $member = Foreman::create(['name' => 'Jamie Lin', 'initials' => 'JL', 'role' => Foreman::ROLE_JOURNEYMAN]);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
             ->postJson('/api/v1/clients', [
                 'name' => 'Harborview Data Hall',
                 'labor_rate' => 65,
+                'website' => 'harborview.example',
+                'contact_email' => 'dana@example.com',
+                'contact_phone' => '(415) 555-0134',
+                'member_ids' => [$member->id],
                 'addresses' => [
                     ['label' => 'Main building', 'address' => '123 Main St', 'site_type' => 'commercial'],
                 ],
@@ -97,8 +103,81 @@ class MobileClientsProjectsTakeoffsTest extends TestCase
         $response->assertJsonPath('data.laborRate', 65);
         $response->assertJsonPath('data.addresses.0.label', 'Main building');
         $response->assertJsonPath('data.addresses.0.isPrimary', true);
+        $response->assertJsonPath('data.website', 'https://harborview.example');
+        $response->assertJsonPath('data.contactEmail', 'dana@example.com');
+        $response->assertJsonPath('data.members.0.name', 'Jamie Lin');
+        $response->assertJsonPath('data.contacts.0.isPrimary', true);
 
         $this->assertDatabaseHas('clients', ['user_id' => $owner->id, 'name' => 'Harborview Data Hall']);
+    }
+
+    public function test_adding_a_client_needs_at_least_one_member(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->postJson('/api/v1/clients', ['name' => 'No Crew Co'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['member_ids']);
+    }
+
+    public function test_create_options_lists_the_register_and_pending_invitees(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        Foreman::create(['name' => 'Jamie Lin', 'initials' => 'JL', 'role' => Foreman::ROLE_JOURNEYMAN]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->getJson('/api/v1/clients/create-options')
+            ->assertOk();
+
+        $this->assertSame(['Jamie Lin'], array_column($response->json('data.members'), 'name'));
+        $this->assertSame('Journeyman', $response->json('data.members.0.roleLabel'));
+        $this->assertEquals((float) config('ai.estimating.labor_rate'), $response->json('data.defaultLaborRate'));
+        $this->assertSame([], $response->json('data.pendingMembers'));
+    }
+
+    public function test_a_clients_contacts_can_be_added_edited_and_removed_and_the_primary_is_promoted(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $client = Client::create(['user_id' => $owner->id, 'name' => 'Apex Builders']);
+        $auth = ['Authorization' => 'Bearer '.$this->tokenFor($owner)];
+
+        $first = $this->withHeaders($auth)->postJson("/api/v1/clients/{$client->id}/contacts", [
+            'name' => 'Dana Ruiz', 'role' => 'Owner', 'email' => 'dana@example.com', 'phone' => '(415) 555-0134',
+        ])->assertCreated();
+        $this->assertTrue($first->json('data.isPrimary'));
+
+        $second = $this->withHeaders($auth)->postJson("/api/v1/clients/{$client->id}/contacts", ['name' => 'Sam Ortiz'])->assertCreated();
+        $this->assertFalse($second->json('data.isPrimary'));
+
+        $this->withHeaders($auth)->putJson("/api/v1/clients/{$client->id}/contacts/{$second->json('data.id')}", [
+            'name' => 'Sam Ortiz', 'role' => 'PM',
+        ])->assertOk()->assertJsonPath('data.role', 'PM');
+
+        $this->withHeaders($auth)->deleteJson("/api/v1/clients/{$client->id}/contacts/{$first->json('data.id')}")->assertOk();
+        $this->assertTrue($client->contacts()->first()->is_primary);
+
+        $this->withHeaders($auth)->postJson("/api/v1/clients/{$client->id}/contacts", ['name' => ''])
+            ->assertStatus(422)->assertJsonValidationErrors(['name']);
+    }
+
+    public function test_client_show_carries_summary_balance_and_activity_and_a_client_can_be_deleted(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $client = Client::create(['user_id' => $owner->id, 'name' => 'Apex Builders']);
+        Project::create(['user_id' => $owner->id, 'client_id' => $client->id, 'name' => 'Phase 1', 'client' => 'Apex Builders', 'status' => 'completed']);
+        Project::create(['user_id' => $owner->id, 'client_id' => $client->id, 'name' => 'Phase 2', 'client' => 'Apex Builders', 'status' => 'processing']);
+        $auth = ['Authorization' => 'Bearer '.$this->tokenFor($owner)];
+
+        $show = $this->withHeaders($auth)->getJson("/api/v1/clients/{$client->id}")->assertOk();
+        $this->assertSame(2, $show->json('data.projectSummary.total'));
+        $this->assertSame(1, $show->json('data.projectSummary.completed'));
+        $this->assertSame(1, $show->json('data.projectSummary.active'));
+        $this->assertEquals(0, $show->json('data.outstandingBalance'));
+        $this->assertSame([], $show->json('data.activity'));
+
+        $this->withHeaders($auth)->deleteJson("/api/v1/clients/{$client->id}")->assertOk();
+        $this->assertSoftDeleted('clients', ['id' => $client->id]);
     }
 
     public function test_client_name_is_required_and_unique_per_owner(): void
@@ -290,6 +369,155 @@ class MobileClientsProjectsTakeoffsTest extends TestCase
 
         $ids = collect($response->json('data.takeoffs'))->pluck('id');
         $this->assertSame([$newer->id, $older->id], $ids->all());
+    }
+
+    public function test_takeoff_history_leaves_out_drafts_and_filters_sorts_and_lists_options(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $mk = fn (string $name, string $client, string $status, array $extra = []) => Project::create([
+            'user_id' => $owner->id, 'name' => $name, 'client' => $client, 'status' => $status, ...$extra,
+        ]);
+        $alpha = $mk('Alpha Hall', 'Apex', 'completed', ['review_status' => 'pending', 'created_at' => now()->subDays(2)]);
+        $bravo = $mk('Bravo Tower', 'Harbor', 'converted', ['created_at' => now()->subDay()]);
+        $mk('Charlie Draft', 'Apex', 'draft');
+        $run = $mk('Delta Run', 'Apex', 'processing', ['created_at' => now()]);
+
+        $call = fn (string $query) => $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->getJson('/api/v1/takeoffs'.$query)->assertOk();
+
+        $all = $call('');
+        $this->assertSame([$run->id, $bravo->id, $alpha->id], collect($all->json('data.takeoffs'))->pluck('id')->all());
+        $this->assertSame(['Apex', 'Harbor'], $all->json('data.clients'));
+        $this->assertSame(['Alpha Hall', 'Bravo Tower', 'Delta Run'], array_column($all->json('data.projectOptions'), 'name'));
+
+        $this->assertSame([$alpha->id], collect($call('?status=ready-for-review')->json('data.takeoffs'))->pluck('id')->all());
+        $this->assertSame('ready-for-review', $call('?status=ready-for-review')->json('data.takeoffs.0.reviewStatus'));
+        $this->assertSame([$bravo->id], collect($call('?client=Harbor')->json('data.takeoffs'))->pluck('id')->all());
+        $this->assertSame([$alpha->id], collect($call('?project='.$alpha->id)->json('data.takeoffs'))->pluck('id')->all());
+        $this->assertSame([$alpha->id, $bravo->id, $run->id], collect($call('?sort=name-asc')->json('data.takeoffs'))->pluck('id')->all());
+        $this->assertSame([$alpha->id, $bravo->id, $run->id], collect($call('?sort=date-asc')->json('data.takeoffs'))->pluck('id')->all());
+        $this->assertSame([$bravo->id], collect($call('?search=Tower')->json('data.takeoffs'))->pluck('id')->all());
+    }
+
+    public function test_a_takeoff_can_be_deleted_and_the_delete_undone(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $project = Project::create(['user_id' => $owner->id, 'name' => 'Alpha Hall', 'client' => 'Apex', 'status' => 'completed']);
+        $auth = ['Authorization' => 'Bearer '.$this->tokenFor($owner)];
+
+        $this->withHeaders($auth)->deleteJson("/api/v1/takeoffs/{$project->id}")->assertOk();
+        $this->assertSoftDeleted('projects', ['id' => $project->id]);
+        $this->assertSame([], $this->withHeaders($auth)->getJson('/api/v1/takeoffs')->json('data.takeoffs'));
+
+        $this->withHeaders($auth)->postJson("/api/v1/takeoffs/{$project->id}/restore")->assertOk();
+        $this->assertNotSoftDeleted('projects', ['id' => $project->id]);
+        $this->assertCount(1, $this->withHeaders($auth)->getJson('/api/v1/takeoffs')->json('data.takeoffs'));
+    }
+
+    public function test_deleting_or_restoring_someone_elses_takeoff_is_forbidden(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $project = Project::create(['user_id' => $owner->id, 'name' => 'Alpha Hall', 'client' => 'Apex', 'status' => 'completed']);
+
+        $stranger = User::factory()->create(['role' => 'Project Manager']);
+        $company = \App\Models\CompanyProfile::create([
+            'user_id' => $stranger->id, 'name' => 'Other Co', 'business_address' => '1 Main St', 'primary_contact' => 'A',
+            'phone' => '(512) 555-0142', 'email' => 'other@x.test', 'timezone' => 'America/Chicago',
+        ]);
+        $stranger->forceFill(['company_id' => $company->id])->save();
+        $auth = ['Authorization' => 'Bearer '.$this->tokenFor($stranger->fresh())];
+
+        $this->withHeaders($auth)->deleteJson("/api/v1/takeoffs/{$project->id}")->assertForbidden();
+
+        $project->delete();
+        $this->withHeaders($auth)->postJson("/api/v1/takeoffs/{$project->id}/restore")->assertForbidden();
+    }
+
+    public function test_project_create_options_lists_clients_with_sites_members_and_teams(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $team = Team::create(['name' => 'Crew A']);
+        $client = Client::create(['user_id' => $owner->id, 'name' => 'Apex Builders', 'team_id' => $team->id]);
+        $client->addresses()->create(['label' => 'HQ', 'address' => '1 Apex Way', 'is_primary' => true, 'position' => 0, 'site_type' => 'commercial']);
+        $member = Foreman::create(['name' => 'Jamie Lin', 'initials' => 'JL', 'role' => Foreman::ROLE_JOURNEYMAN]);
+        $client->members()->sync([$member->id]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->getJson('/api/v1/projects/create-options')
+            ->assertOk();
+
+        $this->assertSame('Apex Builders', $response->json('data.clients.0.name'));
+        $this->assertSame('commercial', $response->json('data.clients.0.addresses.0.siteType'));
+        $this->assertSame('Jamie Lin', $response->json('data.clients.0.members.0.name'));
+        $this->assertSame(['Crew A'], array_column($response->json('data.teams'), 'name'));
+    }
+
+    public function test_a_project_is_opened_with_every_field_and_staffed_only_from_the_clients_crew(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $team = Team::create(['name' => 'Crew A']);
+        $client = Client::create(['user_id' => $owner->id, 'name' => 'Apex Builders']);
+        $mine = Foreman::create(['name' => 'Jamie Lin', 'initials' => 'JL', 'role' => Foreman::ROLE_JOURNEYMAN]);
+        $stranger = Foreman::create(['name' => 'Not Theirs', 'initials' => 'NT', 'role' => Foreman::ROLE_JOURNEYMAN]);
+        $client->members()->sync([$mine->id]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->postJson('/api/v1/projects', [
+                'client_id' => $client->id,
+                'name' => 'Harborview Phase 2',
+                'description' => 'Second floor fit-out',
+                'project_type' => 'commercial',
+                'start_date' => '2026-11-01',
+                'end_date' => '2026-12-01',
+                'estimate_target_total' => 24850,
+                'team_id' => $team->id,
+                'member_ids' => [$mine->id, $stranger->id],
+            ])
+            ->assertCreated();
+
+        $project = Project::findOrFail($response->json('data.id'));
+        $this->assertSame('Second floor fit-out', $project->description);
+        $this->assertSame('commercial', $project->project_type);
+        $this->assertSame('2026-11-01', $project->started_at->toDateString());
+        $this->assertSame([$mine->id], $project->members()->pluck('foremen.id')->all());
+        $this->assertSame($team->id, $client->fresh()->team_id);
+    }
+
+    public function test_a_project_needs_a_team_when_members_are_picked_and_dates_must_be_in_order(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $client = Client::create(['user_id' => $owner->id, 'name' => 'Apex Builders']);
+        $member = Foreman::create(['name' => 'Jamie Lin', 'initials' => 'JL', 'role' => Foreman::ROLE_JOURNEYMAN]);
+        $client->members()->sync([$member->id]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($owner))
+            ->postJson('/api/v1/projects', [
+                'client_id' => $client->id, 'name' => 'Phase 3', 'member_ids' => [$member->id],
+                'start_date' => '2026-12-01', 'end_date' => '2026-11-01',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['team_id', 'end_date']);
+    }
+
+    public function test_project_show_carries_the_workspace_tabs_and_a_project_can_be_deleted(): void
+    {
+        $owner = User::factory()->create(['role' => 'Project Manager']);
+        $client = Client::create(['user_id' => $owner->id, 'name' => 'Apex Builders']);
+        $project = Project::create([
+            'user_id' => $owner->id, 'client_id' => $client->id, 'name' => 'Phase 1', 'client' => 'Apex Builders',
+            'status' => 'draft', 'description' => 'Shell and core',
+        ]);
+        $auth = ['Authorization' => 'Bearer '.$this->tokenFor($owner)];
+
+        $show = $this->withHeaders($auth)->getJson("/api/v1/projects/{$project->id}")->assertOk();
+        $this->assertSame('Shell and core', $show->json('data.description'));
+        $this->assertSame(0, $show->json('data.drawingCount'));
+        $this->assertSame([], $show->json('data.members'));
+        $this->assertSame([], $show->json('data.invoices'));
+        $this->assertSame([], $show->json('data.documents'));
+
+        $this->withHeaders($auth)->deleteJson("/api/v1/projects/{$project->id}")->assertOk();
+        $this->assertSoftDeleted('projects', ['id' => $project->id]);
     }
 
     // --- Jobs (Edit) ---------------------------------------------------------

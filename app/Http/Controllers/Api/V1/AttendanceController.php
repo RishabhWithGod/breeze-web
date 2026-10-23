@@ -9,7 +9,6 @@ use App\Models\Job;
 use App\Models\JobAttendance;
 use App\Models\TimeEntry;
 use App\Models\TimeTrackingSetting;
-use App\Notifications\AttendanceRecorded;
 use App\Services\Mobile\ElectricianJobAccess;
 use App\Support\UploadLimits;
 use Illuminate\Http\JsonResponse;
@@ -89,7 +88,7 @@ class AttendanceController extends Controller
         $canViewCrew = (bool) $request->user()->can('viewCrew', TimeEntry::class);
         abort_unless($canViewCrew || $attendance->user_id === $request->user()->id, 403);
 
-        $attendance->load(['job', 'user']);
+        $attendance->load(['job', 'user', 'corrections.user:id,name']);
         $job = $attendance->job;
 
         return $this->ok([
@@ -105,6 +104,20 @@ class AttendanceController extends Controller
             ] : null,
             'hours' => round($attendance->workingSeconds() / 3600, 2),
             'bankedSeconds' => $attendance->banked_seconds,
+            // Saved on the phone and sent later, and anything a person should look at.
+            'recordedOffline' => $attendance->checkInWasOffline() || $attendance->checkOutWasOffline(),
+            'reviewFlag' => (bool) $attendance->review_flag,
+            'reviewReason' => $attendance->review_reason,
+            'canResolve' => app(\App\Policies\TimeEntryPolicy::class)->resolveCorrection($request->user(), $attendance),
+            'corrections' => $attendance->corrections->map(fn ($c) => [
+                'id' => $c->id,
+                'kind' => $c->kind,
+                'message' => $c->message,
+                'status' => $c->status,
+                'by' => $c->user?->name,
+                'at' => $c->created_at?->toISOString(),
+                'resolutionNote' => $c->resolution_note,
+            ])->values()->all(),
             'checkIn' => [
                 'at' => $attendance->check_in_at?->toISOString(),
                 'method' => $attendance->check_in_method,
@@ -123,6 +136,24 @@ class AttendanceController extends Controller
                 'lng' => $attendance->check_out_lng !== null ? (float) $attendance->check_out_lng : null,
             ],
         ]);
+    }
+
+    /** A manager closing out a technician's reported problem — web's `TimeEntryController::resolveCorrection()`. */
+    public function resolveCorrection(Request $request, JobAttendance $attendance, \App\Models\AttendanceCorrection $correction): JsonResponse
+    {
+        abort_unless(app(\App\Policies\TimeEntryPolicy::class)->resolveCorrection($request->user(), $attendance), 403);
+        abort_unless($correction->job_attendance_id === $attendance->id && $correction->kind === \App\Models\AttendanceCorrection::CORRECTION, 404);
+
+        $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
+
+        $correction->update([
+            'status' => 'resolved',
+            'resolved_by' => $request->user()->id,
+            'resolved_at' => now(),
+            'resolution_note' => filled($data['note'] ?? null) ? trim($data['note']) : null,
+        ]);
+
+        return $this->ok(null, 'Marked resolved.');
     }
 
     /** The check-in selfie, when one exists — same crew-visibility rule as {@see show()}. */
@@ -217,10 +248,13 @@ class AttendanceController extends Controller
         ]);
         $row->save();
 
-        // An automatic one is the phone's doing, not theirs: tell them, so it is never a surprise.
-        if ($data['method'] === JobAttendance::METHOD_AUTOMATIC) {
-            $request->user()->notify(new AttendanceRecorded($job, AttendanceRecorded::CHECK_IN, $data['occurred_at']));
-        }
+        app(\App\Services\Notifications\CrewWorkNotifier::class)->tell(
+            $job,
+            $request->user(),
+            'Checked in',
+            "{$request->user()->name} checked in at {$job->name}.",
+            'job-crew-checkin',
+        );
 
         return $this->created($this->present($row, $job), 'Checked in.');
     }
@@ -269,9 +303,13 @@ class AttendanceController extends Controller
         ]);
         $row->save();
 
-        if ($data['method'] === JobAttendance::METHOD_AUTOMATIC) {
-            $request->user()->notify(new AttendanceRecorded($job, AttendanceRecorded::CHECK_OUT, $at));
-        }
+        app(\App\Services\Notifications\CrewWorkNotifier::class)->tell(
+            $job,
+            $request->user(),
+            'Checked out',
+            "{$request->user()->name} checked out of {$job->name}.",
+            'job-crew-checkout',
+        );
 
         return $this->ok($this->present($row, $job), 'Checked out.');
     }

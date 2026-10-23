@@ -19,6 +19,8 @@ use App\Services\JobCosting\JobCostSummary;
 use App\Services\Mobile\ElectricianJobAccess;
 use App\Services\Mobile\JobFieldMaterialsSummary;
 use App\Services\Scheduling\ApprenticeAssignmentService;
+use App\Models\JobFieldMaterial;
+use App\Services\Billing\FieldMaterialEstimateSync;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -103,6 +105,7 @@ class OfficeJobController extends Controller
         ]);
 
         $user = $request->user();
+        $permissions = app(\App\Services\Access\Permissions::class);
         $canViewTimeCosts = (bool) $user->can('viewJobCosts', TimeEntry::class);
         $jobCosting = $this->costSummary->for($job);
 
@@ -111,11 +114,13 @@ class OfficeJobController extends Controller
             'canViewTimeCosts' => $canViewTimeCosts,
             'jobCosting' => $canViewTimeCosts ? $jobCosting : JobCostSummary::redact($jobCosting),
             'canPlanWork' => $this->schedulePolicy
-                ->createTask($user, $job->schedule ?? new JobSchedule(['job_id' => $job->id])),
+                ->createTask($user, $job->schedule ?? new JobSchedule(['job_id' => $job->id]))
+                && $permissions->allows($user, 'tasks.create'),
             'canManageApprentices' => $this->schedulePolicy->assignApprentice($user, $job),
-            'canCreateInvoice' => app(InvoicePolicy::class)->create($user),
-            'canEdit' => ! $job->isLocked() && $this->canManage($request, $job),
-            'canDelete' => ! $job->isLocked() && $this->canManage($request, $job),
+            'canCreateInvoice' => app(InvoicePolicy::class)->create($user) && $permissions->allows($user, 'billing.create'),
+            // The role's Roles & Permissions apply on top of ownership, as on web's JobShow.
+            'canEdit' => ! $job->isLocked() && $this->canManage($request, $job) && $permissions->allows($user, 'jobs.edit'),
+            'canDelete' => ! $job->isLocked() && $this->canManage($request, $job) && $permissions->allows($user, 'jobs.delete'),
             'changeOrders' => $this->changeOrdersFor($request, $job),
             'fieldMaterials' => app(JobFieldMaterialsSummary::class)->for($job),
             'apprenticeAssignments' => $job->apprenticeAssignments()
@@ -145,6 +150,128 @@ class OfficeJobController extends Controller
         $job->changeStatus($validated['status']);
 
         return $this->ok(['status' => $job->fresh()->status], "Status set to {$validated['status']}.");
+    }
+
+    /** Web's `JobFieldMaterialController::update()` — correct what the crew added, while it is pending. */
+    public function updateFieldMaterial(Request $request, Job $job, JobFieldMaterial $material): JsonResponse
+    {
+        $this->authoriseFieldMaterial($request, $job, $material);
+
+        $data = $request->validate([
+            'kind' => ['required', Rule::in([JobFieldMaterial::MATERIAL, JobFieldMaterial::LABOR])],
+            'description' => ['required', 'string', 'max:255'],
+            'quantity' => ['required', 'numeric', 'gt:0', 'max:99999999'],
+            'unit_price' => ['required', 'numeric', 'min:0', 'max:9999999'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $material->update([
+            'kind' => $data['kind'],
+            'description' => trim($data['description']),
+            'unit' => $data['kind'] === JobFieldMaterial::LABOR ? 'hr' : ($material->unit ?: 'ea'),
+            'actual_quantity' => $data['quantity'],
+            'unit_price' => $data['unit_price'],
+            'total' => round((float) $data['quantity'] * (float) $data['unit_price'], 2),
+            'reason' => filled($data['reason'] ?? null) ? trim($data['reason']) : null,
+        ]);
+
+        return $this->ok(null, 'Entry updated.');
+    }
+
+    /** Web's `approve()` — onto the estimate and billing. */
+    public function approveFieldMaterial(Request $request, Job $job, JobFieldMaterial $material, FieldMaterialEstimateSync $sync): JsonResponse
+    {
+        $this->authoriseFieldMaterial($request, $job, $material);
+
+        $sync->approve($material, $request->user());
+        $job->recordActivity('field_material_approved', "Added “{$material->description}” to the estimate");
+
+        return $this->ok(null, 'Added to the estimate and billing.');
+    }
+
+    public function destroyFieldMaterial(Request $request, Job $job, JobFieldMaterial $material): JsonResponse
+    {
+        $this->authoriseFieldMaterial($request, $job, $material);
+
+        $material->delete();
+
+        return $this->ok(null, 'Entry removed.');
+    }
+
+    private function authoriseFieldMaterial(Request $request, Job $job, JobFieldMaterial $material): void
+    {
+        abort_unless($material->job_id === $job->id && $material->isAdded(), 404);
+        abort_unless($this->changeOrders->isManager($request->user()), 403);
+        abort_if($job->isLocked(), 409, 'This job is already completed and can no longer be changed.');
+        abort_if($material->isApproved(), 409, 'This entry is already on the estimate.');
+    }
+
+    /** Web's `JobController::archive()` — hides the job from pickers, keeps it listed. */
+    public function archive(Request $request, Job $job): JsonResponse
+    {
+        $this->mayManage($request, $job);
+
+        $job->update(['archived_at' => now()]);
+        $job->recordActivity('archived', 'Job archived');
+
+        return $this->ok(null, "“{$job->name}” was archived.");
+    }
+
+    public function unarchive(Request $request, Job $job): JsonResponse
+    {
+        $this->mayManage($request, $job);
+
+        $job->update(['archived_at' => null]);
+        $job->recordActivity('unarchived', 'Job restored from the archive');
+
+        return $this->ok(null, "“{$job->name}” was moved out of the archive.");
+    }
+
+    /** Web's `JobController::restore()` — Undo for a delete. */
+    public function restore(Request $request, int $job): JsonResponse
+    {
+        $trashed = Job::onlyTrashed()->ownedBy($request->user())->findOrFail($job);
+        $this->mayManage($request, $trashed);
+
+        $trashed->restore();
+        $trashed->recordActivity('restored', 'Job restored');
+
+        return $this->ok(['id' => $trashed->id], "“{$trashed->name}” was restored.");
+    }
+
+    /**
+     * Web's `JobController::bulk()` — delete or set a status on several jobs
+     * at once. A completed job is locked, so it is skipped and the rest still go through.
+     */
+    public function bulk(Request $request): JsonResponse
+    {
+        abort_unless($this->changeOrders->isManager($request->user()), 403, 'Only a manager can change a job.');
+
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer'],
+            'action' => ['required', Rule::in(['delete', 'status'])],
+            'status' => ['nullable', Rule::in(Job::STATUSES), 'required_if:action,status'],
+        ]);
+
+        $jobs = Job::whereIn('id', $data['ids'])->ownedBy($request->user())->get();
+        [$locked, $jobs] = $jobs->partition(fn (Job $job) => $job->isLocked());
+
+        foreach ($jobs as $job) {
+            if ($data['action'] === 'delete') {
+                $job->recordActivity('deleted', 'Job deleted in a bulk action');
+                $job->delete();
+            } else {
+                $job->changeStatus($data['status']);
+            }
+        }
+
+        $note = $locked->isNotEmpty() ? " {$locked->count()} completed job(s) were left as they are." : '';
+
+        return $this->ok(
+            ['count' => $jobs->count(), 'skipped' => $locked->count(), 'ids' => $jobs->pluck('id')->all()],
+            $jobs->count().' job(s) '.($data['action'] === 'delete' ? 'deleted.' : "set to {$data['status']}.").$note,
+        );
     }
 
     /** Web's `JobController::destroy()`. */

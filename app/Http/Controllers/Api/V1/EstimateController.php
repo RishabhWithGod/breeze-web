@@ -6,8 +6,11 @@ use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
+use App\Models\Project;
+use App\Services\Clients\ProjectDirectory;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Support\Ownership;
+use App\Models\Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -32,11 +35,31 @@ class EstimateController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $estimates = Estimate::query()
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'status' => ['nullable', Rule::in(['all', ...Estimate::STATUSES])],
+            'client' => ['nullable', 'string', 'max:120'],
+            'project' => ['nullable', 'string', 'max:120'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+            'sort' => ['nullable', Rule::in(Estimate::SORTS)],
+        ]);
+        $status = $filters['status'] ?? 'all';
+        $client = $filters['client'] ?? 'all';
+        $project = $filters['project'] ?? 'all';
+
+        $base = fn () => Estimate::query()
             ->ownedBy($request->user())
-            ->where('kind', '!=', Estimate::KIND_ADDENDUM)
-            ->orderByDesc('issued_on')
-            ->orderByDesc('id')
+            ->where('kind', '!=', Estimate::KIND_ADDENDUM);
+
+        $estimates = $base()
+            ->withCount('addenda')
+            ->search($filters['search'] ?? null)
+            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
+            ->when($client !== 'all', fn ($q) => $q->where('client', $client))
+            ->when($project !== 'all', fn ($q) => $q->where('project', $project))
+            ->issuedBetween($filters['date_from'] ?? null, $filters['date_to'] ?? null)
+            ->sorted($filters['sort'] ?? 'date-desc')
             ->paginate(min((int) $request->integer('per_page', 20), 50));
 
         return $this->ok([
@@ -48,7 +71,10 @@ class EstimateController extends Controller
                 'issuedOn' => $estimate->issued_on->toDateString(),
                 'amount' => (float) $estimate->amount,
                 'status' => $estimate->status,
+                'addendaCount' => (int) $estimate->addenda_count,
             ])->all(),
+            'clients' => $base()->distinct()->orderBy('client')->pluck('client'),
+            'projects' => $base()->whereNotNull('project')->distinct()->orderBy('project')->pluck('project'),
             'meta' => [
                 'currentPage' => $estimates->currentPage(),
                 'lastPage' => $estimates->lastPage(),
@@ -56,6 +82,108 @@ class EstimateController extends Controller
                 'total' => $estimates->total(),
             ],
         ]);
+    }
+
+    /** What the Create Estimate form needs: the reference, who it can be for, their projects and drawings. */
+    public function createOptions(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $defaultProjectId = $user->projects()->whereKey($request->integer('project'))->value('id');
+
+        return $this->ok([
+            'nextNumber' => Estimate::nextNumber($user),
+            'clients' => app(\App\Services\Clients\ClientDirectory::class)->options($user)->map(fn (array $c) => [
+                'id' => $c['id'],
+                'name' => $c['name'],
+            ])->values()->all(),
+            'projects' => app(ProjectDirectory::class)->options($user)->map(fn (array $p) => [
+                'id' => $p['id'],
+                'clientId' => $p['clientId'],
+                'name' => $p['name'],
+                'defaultUploadId' => $p['defaultUploadId'] ?? null,
+            ])->values()->all(),
+            'uploads' => app(\App\Services\Takeoff\TakeoffLinkOptions::class)->uploads()->map(fn (array $u) => [
+                'id' => $u['id'],
+                'name' => $u['name'],
+                'projectId' => $u['projectId'],
+                'estimate' => $u['estimate'] ?? null,
+            ])->values()->all(),
+            'defaultProjectId' => $defaultProjectId,
+        ]);
+    }
+
+    /** Raise an estimate — web's `EstimateController::store()`. */
+    public function store(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $userIds = Ownership::userIdList($user);
+
+        $data = $request->validate([
+            'issued_on' => ['required', 'date'],
+            'amount' => ['required', 'numeric', 'min:0', 'max:99999999'],
+            'status' => ['required', Rule::in(Estimate::STATUSES)],
+            'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', $userIds)],
+            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userIds)],
+            'upload_id' => [
+                'nullable', 'integer',
+                Rule::exists('uploads', 'id')->where(
+                    fn ($query) => $query->whereIn('project_id', fn ($sub) => $sub->select('id')->from('projects')->whereIn('user_id', $userIds))
+                ),
+            ],
+        ], [
+            'client_id.exists' => 'Pick a client from the list',
+            'issued_on.required' => 'Date is required',
+            'amount.required' => 'Amount is required',
+        ]);
+
+        $upload = isset($data['upload_id']) ? \App\Models\Upload::find($data['upload_id']) : null;
+        $aiResult = $upload?->latestAiResult;
+
+        // The drawing already has an estimate — nothing to create, only to open.
+        if ($aiResult?->estimate) {
+            return $this->fail("{$upload->label()} already has estimate {$aiResult->estimate->number}.", 422, [
+                'upload_id' => ["{$upload->label()} already has estimate {$aiResult->estimate->number}."],
+            ]);
+        }
+        unset($data['upload_id']);
+
+        // Both name snapshots are read from the project, never trusted from the form.
+        $project = Project::whereIn('user_id', Ownership::userIds($user))->with('clientRecord:id,name')->find($data['project_id'] ?? null);
+        $data['client_id'] = $project?->client_id;
+        $data['client'] = $project?->clientRecord?->name ?? $project?->client ?? 'Unassigned';
+        $data['project'] = $project?->name ?? $data['client'];
+
+        $estimate = Estimate::create([
+            ...$data,
+            'ai_result_id' => $aiResult?->id,
+            'number' => Estimate::nextNumber($user),
+        ]);
+        $aiResult?->update(['estimate_id' => $estimate->id]);
+
+        return $this->created([
+            'id' => $estimate->id,
+            'number' => $estimate->number,
+            'client' => $estimate->client,
+            'project' => $estimate->project,
+        ], "{$estimate->number} was created.");
+    }
+
+    public function destroy(Request $request, Estimate $estimate): JsonResponse
+    {
+        abort_unless(Ownership::owns($request->user(), $estimate->user_id), 403);
+
+        $estimate->delete();
+
+        return $this->ok(null, "{$estimate->number} was deleted.");
+    }
+
+    /** Undo for the delete above. */
+    public function restore(Request $request, int $estimate): JsonResponse
+    {
+        $trashed = Estimate::onlyTrashed()->ownedBy($request->user())->findOrFail($estimate);
+        $trashed->restore();
+
+        return $this->ok(['id' => $trashed->id], "{$trashed->number} was restored.");
     }
 
     /**
@@ -80,7 +208,7 @@ class EstimateController extends Controller
         // merged estimate: only a standalone estimate is something else can
         // be an addendum for.
         $addenda = $estimate->kind === Estimate::KIND_STANDALONE
-            ? $estimate->addenda()->get()
+            ? $estimate->addenda()->with('items')->get()
             : collect();
 
         $matchedCount = $estimate->items
@@ -96,6 +224,12 @@ class EstimateController extends Controller
             'projectId' => $estimate->project_id,
             'aiResultId' => $estimate->ai_result_id,
             'fromTakeoff' => $estimate->ai_result_id !== null,
+            // The takeoff (project) the estimate came out of — where "Review the symbols" and the flow's Job step live.
+            'takeoffId' => $estimate->ai_result_id !== null ? $estimate->project_id : null,
+            // The merge-selection workspace applies only before a job exists.
+            'beforeJob' => $estimate->kind === Estimate::KIND_STANDALONE && $estimate->job_id === null,
+            // What a labor line defaults to, and what the labor-rate field shows.
+            'laborRate' => $this->currentLaborRate($estimate),
             'jobId' => $estimate->job_id,
             'jobName' => $estimate->job?->name,
             'issuedOn' => $estimate->issued_on->toDateString(),
@@ -127,6 +261,20 @@ class EstimateController extends Controller
                 'amount' => (float) $addendum->amount,
                 'status' => $addendum->status,
                 'createdAt' => $addendum->created_at?->toISOString(),
+                // Each addendum's own saved lines — the pre-job merge workspace and
+                // the per-addendum breakdown cards read these.
+                'lineItems' => $addendum->items->sortBy(['category', 'position'])->map(fn (EstimateItem $item) => [
+                    'id' => $item->id,
+                    'category' => $item->category,
+                    'description' => $item->description,
+                    'unit' => $item->unit,
+                    'quantity' => (float) $item->quantity,
+                    'unitCost' => (float) $item->unit_cost,
+                    'total' => (float) $item->total,
+                    'source' => $item->source,
+                    'pricingSource' => $item->pricing_source,
+                    'pricingConfidence' => $item->pricing_confidence,
+                ])->values()->all(),
             ])->values(),
             'materialTotal' => (float) $estimate->material_total,
             'laborTotal' => (float) $estimate->labor_total,
@@ -202,13 +350,31 @@ class EstimateController extends Controller
     {
         abort_unless(Ownership::owns($request->user(), $estimate->user_id), 403);
 
+        $userIds = Ownership::userIdList($request->user());
+
         $validated = $request->validate([
+            // What the estimate is on / who it is for — optional, and applied only
+            // when sent (web's form always sends them). Must be this manager's own.
+            'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->whereIn('user_id', $userIds)],
+            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')->whereIn('user_id', $userIds)],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
             'issued_on' => ['required', 'date'],
             'markup_pct' => ['required', 'numeric', 'min:0', 'max:200'],
             'tax_pct' => ['required', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        // The two name snapshots the record prints from are read from the
+        // project, never trusted from the form — so the record cannot name one
+        // client and point at another one's project.
+        if ($request->has('project_id')) {
+            $project = Project::whereIn('user_id', $userIds)->with('clientRecord:id,name')->find($validated['project_id'] ?? null);
+            $validated['client_id'] = $project?->client_id;
+            $validated['client'] = $project?->clientRecord?->name ?? $project?->client ?? 'Unassigned';
+            $validated['project'] = $project?->name ?? $validated['client'];
+        } else {
+            unset($validated['project_id'], $validated['client_id']);
+        }
 
         $estimate->update($validated);
         $estimate->recalculateTotals();
@@ -221,6 +387,79 @@ class EstimateController extends Controller
         );
 
         return $this->ok(['id' => $estimate->id], "Estimate {$estimate->number} updated.");
+    }
+
+    /**
+     * `GET /estimates/{estimate}/edit-options` — what the Edit form's Client and
+     * Project pickers offer: this manager's own clients and projects, with the
+     * estimate's current ones (the client falls back to its project's).
+     */
+    public function editOptions(Request $request, Estimate $estimate): JsonResponse
+    {
+        abort_unless(Ownership::owns($request->user(), $estimate->user_id), 403);
+
+        $estimate->loadMissing('takeoffProject');
+
+        return $this->ok([
+            'clientId' => $estimate->client_id ?? $estimate->takeoffProject?->client_id,
+            'projectId' => $estimate->project_id,
+            'clientName' => $estimate->client,
+            'clients' => Client::whereIn('user_id', Ownership::userIdList($request->user()))
+                ->orderBy('name')->get(['id', 'name'])
+                ->map(fn ($client) => ['id' => $client->id, 'name' => $client->name])->values(),
+            'projects' => app(ProjectDirectory::class)->options($request->user())
+                ->map(fn ($project) => ['id' => $project['id'], 'clientId' => $project['clientId'], 'name' => $project['name']])
+                ->values(),
+        ]);
+    }
+
+    /**
+     * One labor rate for the whole estimate — web's `updateLaborRate`. Re-prices
+     * every labor line here and on its addenda, and the totals follow.
+     */
+    public function updateLaborRate(Request $request, Estimate $estimate): JsonResponse
+    {
+        abort_unless(Ownership::owns($request->user(), $estimate->user_id), 403);
+        abort_if($estimate->builder_managed && $estimate->status !== 'draft', 409, 'This estimate is with review and approval and can no longer be edited here.');
+
+        $validated = $request->validate([
+            'labor_rate' => ['required', 'numeric', 'min:0', 'max:100000'],
+        ]);
+
+        $rate = round((float) $validated['labor_rate'], 2);
+
+        collect([$estimate])->merge($estimate->addenda)->each(function (Estimate $target) use ($rate) {
+            $target->items()->where('category', EstimateItem::CATEGORY_LABOR)->get()
+                ->each(fn (EstimateItem $item) => $item->update(['unit_cost' => $rate]));
+
+            $target->recalculateTotals();
+            app(EstimateBuilder::class)->syncJobBudget($target);
+        });
+
+        $estimate->aiResult?->recordHistory(
+            'estimate_labor_rate_updated',
+            "Labor rate set to $".number_format($rate, 2)." on estimate {$estimate->number}",
+        );
+
+        return $this->ok(['laborRate' => $rate], 'Labor rate set to $'.number_format($rate, 2).' on every labor line.');
+    }
+
+    /**
+     * The one rate every labor line (addenda included) already carries when they
+     * all agree; otherwise the client's own rate, or the configured default.
+     */
+    private function currentLaborRate(Estimate $estimate): float
+    {
+        $rates = EstimateItem::query()
+            ->where('category', EstimateItem::CATEGORY_LABOR)
+            ->whereIn('estimate_id', collect([$estimate->id])->merge($estimate->addenda()->pluck('id')))
+            ->pluck('unit_cost')
+            ->map(fn ($rate) => round((float) $rate, 2))
+            ->unique();
+
+        return $rates->count() === 1
+            ? (float) $rates->first()
+            : ($estimate->clientRecord?->effectiveLaborRate() ?? (float) config('ai.estimating.labor_rate'));
     }
 
     /** `POST /estimates/{estimate}/items` — a manual line, same fields web's form takes. */

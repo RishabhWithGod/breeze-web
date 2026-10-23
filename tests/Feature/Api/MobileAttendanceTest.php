@@ -457,28 +457,57 @@ class MobileAttendanceTest extends TestCase
         $this->withHeaders($this->headersFor($apprentice))->getJson('/api/v1/time-log')->assertOk()->assertJsonCount(0, 'data.sessions');
     }
 
-    public function test_an_automatic_check_in_tells_the_technician_in_their_notifications(): void
+    public function test_a_crew_check_in_and_out_tells_the_manager_not_the_crew_member(): void
     {
-        $user = User::factory()->create(['role' => 'Electrician']);
-        $job = $this->makeJob();
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $user = User::factory()->create(['role' => 'Journeyman']);
+        $job = $this->makeJob(['user_id' => $manager->id]);
         $this->staffJob($job, $user);
         $h = $this->headersFor($user);
 
-        // A manual one is their own doing: no notification.
         $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", [...$this->onSitePoint(), 'method' => 'manual'])->assertCreated();
-        $this->assertSame(0, \App\Models\AppNotification::count());
         $this->app['auth']->forgetGuards();
         $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/check-out", [...$this->onSitePoint(), 'method' => 'manual'])->assertOk();
 
-        $this->app['auth']->forgetGuards();
-        $this->withHeaders($h)->postJson("/api/v1/jobs/{$job->id}/attendance/check-in", [...$this->onSitePoint(), 'method' => 'automatic'])->assertCreated();
+        // The crew member is never told about their own check-in.
+        $this->assertSame(0, \App\Models\AppNotification::where('user_id', $user->id)->count());
 
         $this->app['auth']->forgetGuards();
-        $this->withHeaders($h)->getJson('/api/v1/notifications')
+        $this->withHeaders($this->headersFor($manager))->getJson('/api/v1/notifications')
             ->assertOk()
-            ->assertJsonPath('data.notifications.0.type', 'attendance-checkin')
-            ->assertJsonPath('data.notifications.0.title', 'Checked in automatically')
+            ->assertJsonPath('data.notifications.0.type', 'job-crew-checkout')
             ->assertJsonPath('data.notifications.0.data.jobId', $job->id)
-            ->assertJsonPath('data.notifications.0.unread', true);
+            ->assertJsonPath('data.notifications.1.type', 'job-crew-checkin');
+    }
+
+    public function test_the_detail_carries_reports_and_a_manager_can_resolve_one(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $tech = User::factory()->create(['role' => 'Journeyman']);
+        $job = $this->makeJob(['user_id' => $manager->id]);
+        $attendance = JobAttendance::create([
+            'job_id' => $job->id, 'user_id' => $tech->id, 'date' => now()->toDateString(),
+            'status' => JobAttendance::STATUS_CHECKED_IN, 'check_in_at' => now()->subHours(2),
+            'check_in_method' => 'automatic', 'banked_seconds' => 0,
+        ]);
+        $correction = $attendance->corrections()->create([
+            'user_id' => $tech->id, 'kind' => 'correction', 'message' => 'Wrong site.', 'status' => 'open',
+        ]);
+
+        $detail = $this->withHeaders($this->headersFor($manager))->getJson("/api/v1/attendance/{$attendance->id}")->assertOk();
+        $this->assertTrue($detail->json('data.canResolve'));
+        $this->assertSame('Wrong site.', $detail->json('data.corrections.0.message'));
+        $this->assertSame('open', $detail->json('data.corrections.0.status'));
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($this->headersFor($tech))
+            ->postJson("/api/v1/attendance/{$attendance->id}/corrections/{$correction->id}/resolve")->assertForbidden();
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($this->headersFor($manager))
+            ->postJson("/api/v1/attendance/{$attendance->id}/corrections/{$correction->id}/resolve", ['note' => 'Confirmed with the supplier.'])
+            ->assertOk();
+        $this->assertSame('resolved', $correction->fresh()->status);
+        $this->assertSame('Confirmed with the supplier.', $correction->fresh()->resolution_note);
     }
 }

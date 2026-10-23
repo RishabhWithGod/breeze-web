@@ -461,4 +461,44 @@ class MobileInvoiceTest extends TestCase
             ->getJson("/api/v1/invoices/{$invoice->id}/pay/confirm")
             ->assertStatus(422);
     }
+
+    public function test_create_takes_the_lines_the_screen_built_and_can_issue_in_one_go(): void
+    {
+        $client = $this->makeClient($this->manager);
+        $headers = ['Authorization' => 'Bearer '.$this->tokenFor($this->manager)];
+        $base = [
+            'client_id' => $client->id, 'invoice_date' => now()->toDateString(), 'tax_pct' => 10,
+            'items' => [
+                ['description' => 'Rough-in labour', 'source_category' => 'labor', 'source' => 'manual', 'quantity' => 4, 'unit_price' => 50],
+                ['description' => 'Cable', 'source_category' => 'material', 'source' => 'manual', 'quantity' => 2, 'unit_price' => 25],
+            ],
+        ];
+
+        $draft = $this->postJson('/api/v1/invoices', $base, $headers)->assertCreated();
+        $this->assertSame('draft', $draft->json('data.status'));
+        $this->assertCount(2, $draft->json('data.items'));
+        $this->assertEqualsWithDelta(250.0, $draft->json('data.subtotal'), 0.001);
+
+        $this->app['auth']->forgetGuards();
+        $issued = $this->postJson('/api/v1/invoices', [...$base, 'issue' => true], $headers)->assertCreated();
+        $this->assertSame('sent', $issued->json('data.status'));
+
+        $this->app['auth']->forgetGuards();
+        $this->postJson('/api/v1/invoices', [...$base, 'items' => [], 'issue' => true], $headers)
+            ->assertStatus(422)->assertJsonValidationErrors('items');
+    }
+
+    public function test_create_options_carry_each_estimates_lines(): void
+    {
+        $client = $this->makeClient($this->manager);
+        $estimate = Estimate::create([
+            'user_id' => $this->manager->id, 'client_id' => $client->id, 'client' => $client->name,
+            'number' => 'EST-9', 'project' => 'Riverside', 'status' => 'approved', 'amount' => 100, 'grand_total' => 100, 'issued_on' => now()->toDateString(),
+        ]);
+        $estimate->items()->create(['description' => 'Panel', 'category' => 'material', 'quantity' => 1, 'unit_cost' => 100, 'unit' => 'ea']);
+
+        $response = $this->getJson('/api/v1/invoices/create-options', ['Authorization' => 'Bearer '.$this->tokenFor($this->manager)])->assertOk();
+        $this->assertSame('Panel', $response->json('data.estimates.0.items.0.description'));
+        $this->assertSame(100.0, (float) $response->json('data.estimates.0.items.0.unit_price'));
+    }
 }

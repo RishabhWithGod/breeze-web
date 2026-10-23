@@ -505,6 +505,11 @@ class FinalTakeoffController extends Controller
 
         $job = $builder->build($sources, $attributes, $request->user());
 
+        // The job raised from the selected estimates ends this takeoff's run —
+        // it never attaches to the takeoff's own result, so the Resume button
+        // would otherwise keep asking for a job that already exists.
+        app(\App\Services\Takeoff\TakeoffFlow::class)->forget($request->user());
+
         return redirect()
             ->route('jobs.tasks.setup', $job)
             ->with('success', "\"{$job->name}\" was created from the selected estimates.");

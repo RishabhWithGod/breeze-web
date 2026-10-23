@@ -27,7 +27,9 @@ class EnforcePermissions
             return $next($request);
         }
 
-        $needed = $this->permissions->required($route, $request->method());
+        $needed = str_starts_with((string) $route->getName(), 'api.v1.')
+            ? $this->permissions->requiredForApi($route, $request->method())
+            : $this->permissions->required($route, $request->method());
 
         if ($needed === null || $this->permissions->allows($user, $needed)) {
             return $next($request);
