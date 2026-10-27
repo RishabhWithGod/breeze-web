@@ -249,6 +249,61 @@ class MobileInvoiceTest extends TestCase
             ->assertJsonPath('data.notes', 'Net 14');
     }
 
+    public function test_show_carries_what_web_shows_beside_the_lines(): void
+    {
+        $client = $this->makeClient($this->manager);
+        $job = $this->makeJob($this->manager);
+        $invoice = $this->makeInvoice($this->manager, $client, ['job_id' => $job->id]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($this->manager))
+            ->getJson("/api/v1/invoices/{$invoice->id}")
+            ->assertOk()
+            ->assertJsonStructure(['data' => [
+                'projectName', 'billingAddress', 'estimateTotal', 'estimateItems',
+                'jobCostSummary' => ['estimatedLaborHours', 'actualLaborHours', 'estimatedTotalCost', 'actualTotalCost'],
+                'journeymanHours', 'can' => ['manageJobCosts'],
+            ]])
+            ->assertJsonPath('data.can.manageJobCosts', true);
+    }
+
+    public function test_an_invoice_with_no_job_has_no_cost_breakdown(): void
+    {
+        $client = $this->makeClient($this->manager);
+        $invoice = $this->makeInvoice($this->manager, $client);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($this->manager))
+            ->getJson("/api/v1/invoices/{$invoice->id}")
+            ->assertOk()
+            ->assertJsonPath('data.jobCostSummary', null)
+            ->assertJsonPath('data.journeymanHours', [])
+            ->assertJsonPath('data.can.manageJobCosts', false);
+    }
+
+    public function test_a_manager_can_save_a_persons_hours_from_the_invoice(): void
+    {
+        $client = $this->makeClient($this->manager);
+        $job = $this->makeJob($this->manager);
+        $invoice = $this->makeInvoice($this->manager, $client, ['job_id' => $job->id]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($this->manager))
+            ->putJson("/api/v1/invoices/{$invoice->id}/journeyman-hours/{$this->electrician->id}", ['hours' => 7.5])
+            ->assertOk()
+            ->assertJsonPath('data.journeymanHours.0.userId', $this->electrician->id)
+            ->assertJsonPath('data.journeymanHours.0.hours', 7.5)
+            ->assertJsonPath('data.journeymanHours.0.isOverridden', true);
+    }
+
+    public function test_someone_who_cannot_manage_job_costs_cannot_save_hours(): void
+    {
+        $client = $this->makeClient($this->manager);
+        $job = $this->makeJob($this->manager);
+        $invoice = $this->makeInvoice($this->manager, $client, ['job_id' => $job->id]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($this->electrician))
+            ->putJson("/api/v1/invoices/{$invoice->id}/journeyman-hours/{$this->electrician->id}", ['hours' => 7.5])
+            ->assertStatus(403);
+    }
+
     public function test_another_managers_invoice_is_not_visible(): void
     {
         $otherManager = User::factory()->create(['role' => 'Project Manager']);
@@ -301,6 +356,19 @@ class MobileInvoiceTest extends TestCase
         $this->assertEqualsWithDelta(300.0, $response->json('data.subtotal'), 0.001);
         $this->assertEqualsWithDelta(30.0, $response->json('data.taxTotal'), 0.001);
         $this->assertEqualsWithDelta(330.0, $response->json('data.total'), 0.001);
+    }
+
+    public function test_a_line_carries_its_type_and_is_marked_manual(): void
+    {
+        $invoice = $this->makeInvoice($this->manager, $this->makeClient($this->manager));
+
+        $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($this->manager))
+            ->postJson("/api/v1/invoices/{$invoice->id}/items", [
+                'description' => 'Rough-in labour', 'source_category' => 'labor', 'quantity' => 2, 'unit_price' => 50,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.items.0.sourceCategory', 'labor')
+            ->assertJsonPath('data.items.0.source', 'manual');
     }
 
     public function test_updating_and_deleting_an_item_recalculates_totals(): void

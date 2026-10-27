@@ -80,6 +80,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::post('auth/register', [AuthController::class, 'register'])
         ->middleware('throttle:signup')
         ->name('auth.register');
+    // Web's own sign-up, for the app: name, email, password — then company, terms and payment setup.
+    Route::post('auth/signup', [AuthController::class, 'signup'])
+        ->middleware('throttle:signup')
+        ->name('auth.signup');
     Route::post('auth/two-factor/verify', [AuthController::class, 'verifyTwoFactor'])
         ->middleware('throttle:two-factor')
         ->name('auth.two-factor.verify');
@@ -350,6 +354,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::delete('invoices/{invoice}/items/{item}', [InvoiceController::class, 'destroyItem'])->name('invoices.items.destroy');
             Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
             Route::post('invoices/{invoice}/mark-paid', [InvoiceController::class, 'markPaid'])->name('invoices.mark-paid');
+            Route::put('invoices/{invoice}/journeyman-hours/{user}', [InvoiceController::class, 'updateJourneymanHours'])->name('invoices.journeyman-hours.update');
             Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
             Route::post('invoices/{invoice}/pay', [InvoicePaymentController::class, 'checkout'])->name('invoices.pay');
             Route::get('invoices/{invoice}/pay/confirm', [InvoicePaymentController::class, 'confirm'])->name('invoices.pay.confirm');

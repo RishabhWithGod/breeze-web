@@ -4,19 +4,26 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\EstimateItemResource;
 use App\Http\Resources\InvoiceItemResource;
 use App\Http\Resources\InvoiceResource;
+use App\Models\ClientAddress;
 use App\Models\Estimate;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Job;
 use App\Models\PaymentProcessor;
 use App\Models\PaymentTransaction;
+use App\Models\TimeEntry;
+use App\Models\User;
 use App\Policies\InvoicePolicy;
+use App\Policies\JobCostingPolicy;
+use App\Services\Billing\ActualCostInvoiceSync;
 use App\Services\Billing\EstimateInvoiceSync;
 use App\Services\Billing\InvoiceSummaryCalculator;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Export\InvoicePdfWriter;
+use App\Services\JobCosting\JobCostSummary;
 use App\Support\Ownership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,10 +43,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *
  * Trimmed for mobile, deliberately: no activity-feed/notification
  * side-effects on send/markPaid (mirrors this API's own existing precedent
- * — `TimeEntryController`'s approve/reject don't send them either), and no
- * job-cost/journeyman-hours breakdown on the detail payload (that's
- * Job Costing content embedded on web's invoice page, not Invoice data
- * itself).
+ * — `TimeEntryController`'s approve/reject don't send them either). The
+ * detail payload carries everything web's invoice page shows — the estimate
+ * it was billed against, the job's cost breakdown and each person's hours.
  */
 class InvoiceController extends Controller
 {
@@ -49,6 +55,7 @@ class InvoiceController extends Controller
         private readonly InvoiceSummaryCalculator $summary,
         private readonly ClientDirectory $clients,
         private readonly EstimateInvoiceSync $estimateSync,
+        private readonly JobCostSummary $costSummary,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -277,6 +284,7 @@ class InvoiceController extends Controller
 
         $item = $invoice->items()->create([
             ...$validated,
+            'source' => InvoiceItem::SOURCE_MANUAL,
             'total' => round($validated['quantity'] * $validated['unit_price'], 2),
             'position' => (int) $invoice->items()->max('position') + 1,
         ]);
@@ -393,16 +401,72 @@ class InvoiceController extends Controller
     {
         return $request->validate([
             'description' => ['required', 'string', 'max:200'],
+            'source_category' => ['nullable', 'in:labor,material,equipment,other'],
             'quantity' => ['required', 'numeric', 'min:0', 'max:1000000'],
             'unit_price' => ['required', 'numeric', 'min:0', 'max:1000000'],
         ]);
     }
 
+    /**
+     * A person's total hours on the invoice's job, saved by hand — web's
+     * `JobCostingController::updateJourneymanHours`, reached from the invoice
+     * screen. The same saved figure replaces their raw total from then on, and
+     * the job's invoice lines are re-synced from it.
+     */
+    public function updateJourneymanHours(Request $request, Invoice $invoice, User $user, ActualCostInvoiceSync $invoiceSync): JsonResponse
+    {
+        $this->authorize('view', $invoice);
+        abort_unless($invoice->job_id !== null, 404);
+        abort_unless(app(JobCostingPolicy::class)->manage($request->user()), 403);
+
+        $validated = $request->validate([
+            'hours' => ['required', 'numeric', 'min:0', 'max:100000'],
+        ]);
+
+        $job = $invoice->job;
+        $job->journeymanHours()->updateOrCreate(
+            ['user_id' => $user->id],
+            ['hours' => $validated['hours'], 'updated_by' => $request->user()->id],
+        );
+
+        $invoiceSync->sync($job);
+
+        return $this->ok($this->detail($invoice->fresh(), $request), "{$user->name}'s hours were updated.");
+    }
+
+    /** Where the client is billed: their primary site, else the first on file. */
+    private function billingAddress(Invoice $invoice): ?string
+    {
+        if ($invoice->client_id === null) {
+            return null;
+        }
+
+        return ClientAddress::query()
+            ->where('client_id', $invoice->client_id)
+            ->orderByDesc('is_primary')
+            ->orderBy('id')
+            ->first()?->display();
+    }
+
     /** @return array<string, mixed> */
     private function detail(Invoice $invoice, Request $request): array
     {
-        $invoice->loadMissing(['job', 'estimate', 'items', 'creator']);
+        // The project is loaded whole: the cost summary reads its client's labour rate.
+        $invoice->loadMissing(['job.project', 'estimate', 'items', 'creator']);
         $abilities = app(InvoicePolicy::class);
+        $user = $request->user();
+
+        $jobCostSummary = null;
+        $journeymanHours = [];
+
+        if ($invoice->job !== null) {
+            $canViewJobCosts = (bool) $user->can('viewJobCosts', TimeEntry::class);
+            $summary = $this->costSummary->for($invoice->job);
+            $jobCostSummary = $canViewJobCosts ? $summary : JobCostSummary::redact($summary);
+            $journeymanHours = $canViewJobCosts
+                ? $this->costSummary->journeymanHours($invoice->job)->values()->all()
+                : [];
+        }
 
         return [
             'id' => $invoice->id,
@@ -411,8 +475,12 @@ class InvoiceController extends Controller
             'clientId' => $invoice->client_id,
             'jobId' => $invoice->job_id,
             'jobName' => $invoice->job?->name,
+            'projectName' => $invoice->job?->project?->name,
+            // Where the client is billed: their primary site, else the first on file.
+            'billingAddress' => $this->billingAddress($invoice),
             'estimateId' => $invoice->estimate_id,
             'estimateNumber' => $invoice->estimate?->number,
+            'estimateTotal' => $invoice->estimate === null ? null : (float) $invoice->estimate->grand_total,
             'invoiceDate' => $invoice->invoice_date->toDateString(),
             'dueDate' => $invoice->due_date?->toDateString(),
             'subtotal' => (float) $invoice->subtotal,
@@ -429,11 +497,21 @@ class InvoiceController extends Controller
             'createdBy' => $invoice->creator?->name,
             'createdAt' => $invoice->created_at->toISOString(),
             'items' => InvoiceItemResource::collection($invoice->items)->resolve($request),
+            // The whole estimate this was billed against, read-only — only for
+            // someone who may open that estimate themselves.
+            'estimateItems' => $invoice->estimate !== null && $user->can('view', $invoice->estimate)
+                ? EstimateItemResource::collection($invoice->estimate->items)->resolve($request)
+                : [],
+            // Estimated vs actual for the invoice's job; dollar figures are null for a role without cost visibility.
+            'jobCostSummary' => $jobCostSummary,
+            // Every person with time on the job and their total hours.
+            'journeymanHours' => $journeymanHours,
             'can' => [
-                'update' => $abilities->update($request->user(), $invoice),
-                'delete' => $abilities->delete($request->user(), $invoice),
-                'send' => $abilities->send($request->user(), $invoice),
-                'markPaid' => $abilities->markPaid($request->user(), $invoice),
+                'update' => $abilities->update($user, $invoice),
+                'delete' => $abilities->delete($user, $invoice),
+                'send' => $abilities->send($user, $invoice),
+                'markPaid' => $abilities->markPaid($user, $invoice),
+                'manageJobCosts' => $invoice->job !== null && app(JobCostingPolicy::class)->manage($user),
             ],
             'stripeConnected' => PaymentProcessor::query()
                 ->where('key', PaymentProcessor::STRIPE)

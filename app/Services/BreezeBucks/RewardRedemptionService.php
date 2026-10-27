@@ -24,6 +24,10 @@ class RewardRedemptionService
 
     public function redeem(User $user, RewardCatalogItem $reward): BreezeBucksRedemption
     {
+        if (! config('breeze_bucks.enabled')) {
+            throw ValidationException::withMessages(['reward' => 'Breeze Bucks is paused for now.']);
+        }
+
         return DB::transaction(function () use ($user, $reward) {
             $locked = RewardCatalogItem::where('id', $reward->id)->lockForUpdate()->first();
 

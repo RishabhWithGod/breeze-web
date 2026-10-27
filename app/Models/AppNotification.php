@@ -73,6 +73,21 @@ class AppNotification extends Model
         'general' => 'General',
     ];
 
+    /**
+     * While Breeze Bucks is paused (config/breeze_bucks.php) its notifications
+     * are out of sight everywhere — the web bell and list, the app's inbox, the
+     * unread count and the push badge — including ones sent before it was paused.
+     * They are hidden, not deleted: switching it back on brings them back.
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope('breeze-bucks-paused', function (Builder $query) {
+            if (! config('breeze_bucks.enabled')) {
+                $query->where($query->getModel()->qualifyColumn('type'), 'not like', 'breeze-bucks-%');
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return ['read_at' => 'datetime', 'data' => 'array'];

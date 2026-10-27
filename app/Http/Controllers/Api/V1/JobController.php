@@ -65,7 +65,7 @@ class JobController extends Controller
         $sort = $filters['sort'] ?? null;
 
         $jobs = $this->access->listedJobsQuery($request->user())
-            ->with(['foreman:id,name,initials,role', 'addresses:id', 'project:id,name'])
+            ->with(['foreman:id,name,initials,role', 'addresses:id', 'project:id,name', 'invoices:id,job_id'])
             ->withSum('timeEntries', 'hours')
             ->withCount([
                 'tasks',
@@ -82,6 +82,7 @@ class JobController extends Controller
             ->paginate(min((int) $request->integer('per_page', 20), 50));
 
         $crew = JobCrew::countsFor($jobs->pluck('id')->all());
+        $canCreateInvoice = app(\App\Policies\InvoicePolicy::class)->create($request->user());
 
         return $this->ok([
             'jobs' => $jobs->getCollection()->map(fn (Job $job) => [
@@ -89,6 +90,10 @@ class JobController extends Controller
                 'projectName' => $job->project?->name,
                 'isArchived' => $job->archived_at !== null,
                 'isLocked' => $job->isLocked(),
+                // Whether the job is already invoiced — the row menu offers "View invoice" instead of a second "Create invoice".
+                'hasInvoice' => $job->invoices->isNotEmpty(),
+                'invoiceId' => $job->invoices->first()?->id,
+                'canCreateInvoice' => $canCreateInvoice,
                 'budget' => $job->budget === null ? null : (float) $job->budget,
                 'openTasks' => (int) ($job->tasks_open_count ?? 0),
                 'progress' => ($job->tasks_count ?? 0) > 0
@@ -102,6 +107,7 @@ class JobController extends Controller
                 'perPage' => $jobs->perPage(),
                 'total' => $jobs->total(),
             ],
+            'canCreateInvoice' => $canCreateInvoice,
         ]);
     }
 

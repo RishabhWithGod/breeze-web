@@ -277,6 +277,8 @@ class ForemanController extends Controller
             'initials' => $this->initialsFor($data['name']),
         ]);
 
+        $this->syncLoginEmail($foreman, $data['email'] ?? null);
+
         return redirect()
             ->route('foremen.show', $foreman)
             ->with('success', "“{$foreman->name}” was updated.");
@@ -423,6 +425,35 @@ class ForemanController extends Controller
     }
 
     /**
+     * A member with a mobile login signs in with the email on this register, so
+     * correcting it here has to correct the login too — otherwise they would
+     * still have to sign in with the old address. A member without a login keeps
+     * it as a plain contact detail.
+     *
+     * @return list<\Illuminate\Validation\Rules\Unique>
+     */
+    private function loginEmailRules(?Foreman $member): array
+    {
+        return $member?->user_id
+            ? [Rule::unique('users', 'email')->ignore($member->user_id)]
+            : [];
+    }
+
+    private function syncLoginEmail(Foreman $member, ?string $email): void
+    {
+        if (! $member->user_id || blank($email)) {
+            return;
+        }
+
+        $user = $member->user;
+        $email = Str::lower($email);
+
+        if ($user && $user->email !== $email) {
+            $user->forceFill(['email' => $email])->save();
+        }
+    }
+
+    /**
      * The same rules whether the foreman is being added or corrected.
      *
      * @return array<string, mixed>
@@ -471,7 +502,7 @@ class ForemanController extends Controller
              */
             'email' => $isCreate
                 ? ['required', 'email', 'max:255', Rule::unique('users', 'email')]
-                : ['nullable', 'email', 'max:255'],
+                : ['nullable', 'email', 'max:255', ...$this->loginEmailRules($foreman)],
             'licence_number' => ['nullable', 'string', 'max:60'],
             'started_on' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],

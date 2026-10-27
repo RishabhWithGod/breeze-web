@@ -6,10 +6,12 @@ use App\Events\TechnicianRegistered;
 use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
+use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\RegisterTechnicianRequest;
 use App\Models\CompanyProfile;
 use App\Models\SecurityEvent;
 use App\Models\User;
+use App\Notifications\AccountCreated;
 use App\Models\UserSecuritySetting;
 use App\Services\Access\Permissions;
 use App\Services\Security\DeviceRecognizer;
@@ -105,6 +107,34 @@ class AuthController extends Controller
         TechnicianRegistered::dispatch($user);
 
         return $this->created($this->issueSession($user, $request), 'Account created — awaiting manager approval.');
+    }
+
+    /**
+     * Web's sign-up (`RegisteredUserController::store`), for the app: the
+     * same three fields, and the same first-run setup afterwards — describe
+     * the company, accept the terms, set up payment — which the app walks
+     * through with `/onboarding/*`.
+     */
+    public function signup(RegisterRequest $request): JsonResponse
+    {
+        $user = User::create([
+            'name' => $request->string('name')->toString(),
+            'email' => $request->string('email')->lower()->toString(),
+            'password' => Hash::make((string) $request->input('password')),
+        ]);
+
+        $user->forceFill([
+            'needs_company_setup' => true,
+            'needs_terms_acceptance' => true,
+            'needs_payment_setup' => true,
+        ])->save();
+
+        $user->notify(new AccountCreated($user));
+
+        // `create()` leaves the column defaults (status, role) unloaded; the app reads them from this response.
+        $user->refresh();
+
+        return $this->created($this->issueSession($user, $request), 'Account created.');
     }
 
     /**

@@ -632,7 +632,7 @@ class Job extends Model
      * Deliberately does not touch `status` itself — see the model's own
      * `casts()` comment on why this column exists instead of an 8th status.
      */
-    public function markReadyForReview(): void
+    public function markReadyForReview(bool $notify = true): void
     {
         // Direct assignment + save, not `update()` — `ready_for_review_at`
         // is deliberately not in `$fillable` (see the `casts()` comment),
@@ -646,17 +646,19 @@ class Job extends Model
             'Marked ready for supervisor review — every task is complete.',
         );
 
-        Notification::send(
-            $this->notifiableSupervisors(),
-            new JobReviewStatusChanged($this, JobReviewStatusChanged::READY_FOR_REVIEW),
-        );
+        if ($notify) {
+            Notification::send(
+                $this->notifiableSupervisors(),
+                new JobReviewStatusChanged($this, JobReviewStatusChanged::READY_FOR_REVIEW),
+            );
+        }
     }
 
     /**
      * Undoes a crew sign-off — a supervisor reopened a task while reviewing,
      * so the crew has to close it again before the job can complete.
      */
-    public function clearReadyForReview(): void
+    public function clearReadyForReview(bool $notify = true): void
     {
         if (! $this->isReadyForReview()) {
             return;
@@ -670,10 +672,12 @@ class Job extends Model
             'Sent back to the crew — a task was reopened after review.',
         );
 
-        Notification::send(
-            $this->notifiableForemen(),
-            new JobReviewStatusChanged($this, JobReviewStatusChanged::REVERTED),
-        );
+        if ($notify) {
+            Notification::send(
+                $this->notifiableForemen(),
+                new JobReviewStatusChanged($this, JobReviewStatusChanged::REVERTED),
+            );
+        }
     }
 
     /**
@@ -976,7 +980,8 @@ class Job extends Model
             // Every assigned foreman has now submitted their own portion —
             // bridge the legacy whole-job flag for the call sites that only
             // ever understood one shared review state (timer/notes/attachments).
-            $this->markReadyForReview();
+            // The supervisors are told once, just below.
+            $this->markReadyForReview(notify: false);
         }
 
         Notification::send(
@@ -1006,7 +1011,8 @@ class Job extends Model
 
         // The bridged whole-job flag only ever meant "everyone was ready" —
         // one foreman being sent back makes that no longer true.
-        $this->clearReadyForReview();
+        // The foreman sent back is told once, just below.
+        $this->clearReadyForReview(notify: false);
 
         Notification::send(
             $completion->foreman?->user !== null ? collect([$completion->foreman->user]) : collect(),

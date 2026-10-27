@@ -8,6 +8,7 @@ use App\Models\Job;
 use App\Models\JobMessage;
 use App\Models\User;
 use App\Services\Mobile\ElectricianJobAccess;
+use App\Services\Notifications\JobMessageNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,10 @@ class JobMessageController extends Controller
 {
     use ApiResponses;
 
-    public function __construct(private readonly ElectricianJobAccess $access) {}
+    public function __construct(
+        private readonly ElectricianJobAccess $access,
+        private readonly JobMessageNotifier $notifier,
+    ) {}
 
     /** Newest 100 by default; `after` returns only what arrived since that message id. */
     public function index(Request $request, Job $job): JsonResponse
@@ -77,6 +81,8 @@ class JobMessageController extends Controller
 
         // Your own message is never "new" to you.
         $this->markRead($request->user(), $job, (int) $message->id);
+
+        $this->notifier->tell($job, $message, $request->user());
 
         return $this->created($this->present($message, $request->user()));
     }

@@ -19,6 +19,11 @@ class RewardRuleService
 
     public function award(User $user, string $eventType, ?string $sourceType = null, ?int $sourceId = null): ?BreezeBucksTransaction
     {
+        // Paused (see config/breeze_bucks.php): no points, no ledger row, no notification.
+        if (! config('breeze_bucks.enabled')) {
+            return null;
+        }
+
         $rule = RewardRule::where('event_type', $eventType)->first();
 
         if (! $rule || ! $rule->enabled || ! $rule->allowsRole($user->role)) {

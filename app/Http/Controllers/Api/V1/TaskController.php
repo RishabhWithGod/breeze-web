@@ -69,8 +69,24 @@ class TaskController extends Controller
             ->get()
             ->keyBy(fn (JobApprenticeAssignment $a) => $a->job_id.':'.$a->apprentice_id);
 
+        // The apprentices on each job (the user's own crew only, unless they see everyone), so
+        // the Crew list can show the job's tasks beneath each apprentice's name.
+        $apprenticesByJob = JobApprenticeAssignment::query()
+            ->whereIn('job_id', $tasks->getCollection()->pluck('job_id')->unique())
+            ->when($scope !== null, fn ($q) => $q->whereIn('journeyman_id', $scope['journeymanIds']))
+            ->with(['journeyman:id,name', 'apprentice:id,name'])
+            ->get()
+            ->groupBy('job_id');
+
         return $this->ok([
             'tasks' => $tasks->getCollection()->map(fn (JobTask $task) => [
+                'apprentices' => ($apprenticesByJob[$task->job_id] ?? collect())
+                    ->filter(fn (JobApprenticeAssignment $a) => $a->apprentice !== null)
+                    ->map(fn (JobApprenticeAssignment $a) => [
+                        'id' => $a->apprentice_id,
+                        'name' => $a->apprentice->name,
+                        'underName' => $a->journeyman?->name,
+                    ])->unique('id')->values(),
                 // The journeyman an apprentice runner works under on this job, if the person
                 // on the task is an apprentice.
                 'underName' => $under->get($task->job_id.':'.$task->foreman_id)?->journeyman?->name,
@@ -127,7 +143,7 @@ class TaskController extends Controller
      * user themselves included. Null for a manager (everyone) or a user with no crew record
      * (an assignment-only electrician), who are not narrowed to a crew at all.
      *
-     * @return array{ids: Collection<int, int>, userIds: Collection<int, int>}|null
+     * @return array{ids: Collection<int, int>, userIds: Collection<int, int>, journeymanIds: Collection<int, int>, apprenticeJobIds: Collection<int, int>}|null
      */
     private function crewScope(User $user): ?array
     {
@@ -138,6 +154,7 @@ class TaskController extends Controller
         }
 
         $crewIds = collect([$me->id]);
+        $journeymen = collect();
 
         if ($me->role === Foreman::ROLE_FOREMAN) {
             $crew = Foreman::query()->whereIn('role', Foreman::WORKER_ROLES)
@@ -148,6 +165,7 @@ class TaskController extends Controller
                 JobApprenticeAssignment::query()->whereIn('journeyman_id', $journeymen)->pluck('apprentice_id'),
             );
         } elseif ($me->role === Foreman::ROLE_JOURNEYMAN) {
+            $journeymen = collect([$me->id]);
             $crewIds = $crewIds->merge(
                 JobApprenticeAssignment::query()->where('journeyman_id', $me->id)->pluck('apprentice_id'),
             );
@@ -156,7 +174,15 @@ class TaskController extends Controller
         $crewIds = $crewIds->unique()->values();
         $crewUserIds = Foreman::query()->whereIn('id', $crewIds)->whereNotNull('user_id')->pluck('user_id')->push($user->id)->unique()->values();
 
-        return ['ids' => $crewIds, 'userIds' => $crewUserIds];
+        // The jobs where one of these journeymen has an apprentice: every task on them is the
+        // apprentice's work too, whoever it is assigned to.
+        $apprenticeJobIds = JobApprenticeAssignment::query()
+            ->whereIn('journeyman_id', $journeymen)
+            ->pluck('job_id')
+            ->unique()
+            ->values();
+
+        return ['ids' => $crewIds, 'userIds' => $crewUserIds, 'journeymanIds' => $journeymen->values(), 'apprenticeJobIds' => $apprenticeJobIds];
     }
 
     /**
@@ -164,7 +190,7 @@ class TaskController extends Controller
      * else's task appears.
      *
      * @param  Builder<JobTask>  $query
-     * @param  array{ids: Collection<int, int>, userIds: Collection<int, int>}|null  $scope
+     * @param  array{ids: Collection<int, int>, userIds: Collection<int, int>, journeymanIds: Collection<int, int>, apprenticeJobIds: Collection<int, int>}|null  $scope
      */
     private function limitToCrew($query, User $user, ?array $scope): void
     {
@@ -174,7 +200,8 @@ class TaskController extends Controller
 
         $query->where(fn ($q) => $q
             ->where(fn ($held) => $held->heldByAny($scope['ids']))
-            ->orWhereHas('assignments.member', fn ($m) => $m->whereIn('user_id', $scope['userIds'])));
+            ->orWhereHas('assignments.member', fn ($m) => $m->whereIn('user_id', $scope['userIds']))
+            ->orWhereIn('job_id', $scope['apprenticeJobIds']));
     }
 
     /** A task given to the user — to run it, or to oversee it. */
@@ -192,7 +219,7 @@ class TaskController extends Controller
      * crew, is running it. For a user not narrowed to a crew (a manager, an electrician) it is any
      * task that isn't theirs, or one that has somebody else on it as well.
      *
-     * @param  array{ids: Collection<int, int>, userIds: Collection<int, int>}|null  $scope
+     * @param  array{ids: Collection<int, int>, userIds: Collection<int, int>, journeymanIds: Collection<int, int>, apprenticeJobIds: Collection<int, int>}|null  $scope
      */
     private function isCrew(JobTask $task, int $userId, ?int $foremanId, ?array $scope, bool $mine): bool
     {
@@ -204,7 +231,8 @@ class TaskController extends Controller
             return ! $mine || $otherRunners !== [] || $otherMembers !== [];
         }
 
-        return array_intersect($otherRunners, $ints($scope['ids'])) !== []
+        return $scope['apprenticeJobIds']->contains($task->job_id)
+            || array_intersect($otherRunners, $ints($scope['ids'])) !== []
             || array_intersect($otherMembers, $ints($scope['userIds'])) !== [];
     }
 

@@ -23,6 +23,11 @@ class BreezeBucksAwarded extends Notification
     /** @return list<string> */
     public function via(object $notifiable): array
     {
+        // Paused (see config/breeze_bucks.php): nothing about Breeze Bucks is sent.
+        if (! config('breeze_bucks.enabled')) {
+            return [];
+        }
+
         return [AppNotificationChannel::class];
     }
 

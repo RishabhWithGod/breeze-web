@@ -28,7 +28,10 @@ class BreezeBucksController extends Controller
         private readonly BreezeBucksLedger $ledger,
         private readonly RewardProgressCalculator $progress,
         private readonly RewardRedemptionService $redemptions,
-    ) {}
+    ) {
+        // Paused (see config/breeze_bucks.php).
+        abort_unless(config('breeze_bucks.enabled'), 404);
+    }
 
     public function index(Request $request): Response
     {

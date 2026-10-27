@@ -195,6 +195,29 @@ class MobileJobsAndTasksTest extends TestCase
         }
     }
 
+    public function test_the_job_list_says_whether_a_job_is_invoiced_and_whether_one_may_be_raised(): void
+    {
+        $manager = User::factory()->create(['role' => 'Project Manager']);
+        $invoiced = $this->makeJob(['name' => 'Invoiced', 'status' => 'completed']);
+        $open = $this->makeJob(['name' => 'Not invoiced yet']);
+        $client = \App\Models\Client::create(['user_id' => $manager->id, 'name' => 'Apex']);
+        $invoice = \App\Models\Invoice::create([
+            'user_id' => $manager->id, 'client_id' => $client->id, 'client' => 'Apex', 'job_id' => $invoiced->id,
+            'invoice_number' => 'INV-1', 'invoice_date' => now()->toDateString(), 'status' => 'draft', 'created_by' => $manager->id,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($manager))
+            ->getJson('/api/v1/jobs')->assertOk();
+
+        $rows = collect($response->json('data.jobs'))->keyBy('id');
+        $this->assertTrue($rows[$invoiced->id]['hasInvoice']);
+        $this->assertSame($invoice->id, $rows[$invoiced->id]['invoiceId']);
+        $this->assertFalse($rows[$open->id]['hasInvoice']);
+        $this->assertNull($rows[$open->id]['invoiceId']);
+        $this->assertTrue($rows[$open->id]['canCreateInvoice']);
+        $response->assertJsonPath('data.canCreateInvoice', true);
+    }
+
     public function test_every_manager_level_role_lists_all_jobs_and_everyone_else_only_assigned_ones(): void
     {
         $assigned = $this->makeJob(['name' => 'Assigned']);

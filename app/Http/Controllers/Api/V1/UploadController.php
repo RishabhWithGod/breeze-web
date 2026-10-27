@@ -47,6 +47,16 @@ class UploadController extends Controller
         $requested = $addendumFor?->project_id ?? ($request->integer('project') ?: null);
         $preselected = $requested === null ? null : $user->projects()->whereKey($requested)->value('id');
 
+        // Read before this screen records itself below, so the notice about
+        // some *other* takeoff on the go is not wiped out by opening this one.
+        $unfinished = $this->unfinished($user, $flow, $preselected);
+
+        // Opening the screen for a project is the start of its takeoff: remembered, so
+        // leaving it here leaves a Resume button behind — web's `UploadController::create()`.
+        if ($preselected !== null) {
+            $flow->remember($user->projects()->findOrFail($preselected), $user);
+        }
+
         return $this->ok([
             'projects' => $user->projects()
                 ->with('clientRecord:id,name')
@@ -64,7 +74,7 @@ class UploadController extends Controller
                 'projectName' => $addendumFor->project,
                 'nextNumber' => Estimate::nextAddendumNumber($addendumFor->id),
             ],
-            'unfinishedTakeoff' => $this->unfinished($user, $flow, $preselected),
+            'unfinishedTakeoff' => $unfinished,
             'limits' => [
                 'maxFiles' => config('takeoff.uploads.max_files'),
                 'maxFileSizeMb' => UploadLimits::effectiveMb(),

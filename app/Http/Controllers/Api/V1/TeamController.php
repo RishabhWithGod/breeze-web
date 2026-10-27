@@ -238,6 +238,8 @@ class TeamController extends Controller
             'initials' => $this->initialsFor($data['name']),
         ]);
 
+        $this->syncLoginEmail($member, $data['email'] ?? null);
+
         return $this->ok(message: "\u{201c}{$member->name}\u{201d} was updated.");
     }
 
@@ -406,6 +408,35 @@ class TeamController extends Controller
         app(TeamMemberResolver::class)->resolveFor($user)->update(['team_id' => $member->team_id]);
     }
 
+    /**
+     * A member with a mobile login signs in with the email on this register, so
+     * correcting it here has to correct the login too — otherwise they would
+     * still have to sign in with the old address. A member without a login keeps
+     * it as a plain contact detail.
+     *
+     * @return list<\Illuminate\Validation\Rules\Unique>
+     */
+    private function loginEmailRules(?Foreman $member): array
+    {
+        return $member?->user_id
+            ? [Rule::unique('users', 'email')->ignore($member->user_id)]
+            : [];
+    }
+
+    private function syncLoginEmail(Foreman $member, ?string $email): void
+    {
+        if (! $member->user_id || blank($email)) {
+            return;
+        }
+
+        $user = $member->user;
+        $email = Str::lower($email);
+
+        if ($user && $user->email !== $email) {
+            $user->forceFill(['email' => $email])->save();
+        }
+    }
+
     /** @return array<string, mixed> */
     private function validated(Request $request, ?Foreman $member = null): array
     {
@@ -424,7 +455,7 @@ class TeamController extends Controller
             'phone' => ['nullable', 'string', 'max:40', new UsPhoneNumber],
             'email' => $isCreate
                 ? ['required', 'email', 'max:255', Rule::unique('users', 'email')]
-                : ['nullable', 'email', 'max:255'],
+                : ['nullable', 'email', 'max:255', ...$this->loginEmailRules($member)],
             'licence_number' => ['nullable', 'string', 'max:60'],
             'started_on' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],
