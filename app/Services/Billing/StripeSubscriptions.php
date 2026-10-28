@@ -111,6 +111,96 @@ class StripeSubscriptions
         return ['url' => $response['url'], 'id' => $response['id']];
     }
 
+    /**
+     * Sets how many seats a live subscription bills for, charging the pro-rata difference now.
+     *
+     * The saved payment method is charged straight away (`always_invoice`); if that payment
+     * fails the quantity is not changed (`error_if_incomplete`), so a seat is never given that
+     * was not paid for.
+     *
+     * @return array{quantity: int, charged: int|null} `charged` in cents, when Stripe says what was billed
+     */
+    public function setSeatQuantity(string $subscriptionId, int $quantity): array
+    {
+        $current = Http::withToken($this->requireKey())->timeout(20)->get(self::API."/subscriptions/{$subscriptionId}");
+
+        if (! $current->successful()) {
+            throw new RuntimeException($current->json('error.message') ?? 'Stripe could not find this subscription.');
+        }
+
+        $item = $current->json('items.data.0.id');
+        if (! is_string($item)) {
+            throw new RuntimeException('This subscription has no seat line to change.');
+        }
+
+        $updated = $this->post("/subscriptions/{$subscriptionId}", [
+            'items' => [['id' => $item, 'quantity' => $quantity]],
+            'proration_behavior' => 'always_invoice',
+            'payment_behavior' => 'error_if_incomplete',
+            'expand' => ['latest_invoice'],
+        ]);
+
+        $paid = $updated['latest_invoice']['amount_paid'] ?? null;
+
+        return [
+            'quantity' => (int) ($updated['items']['data'][0]['quantity'] ?? $quantity),
+            'charged' => is_numeric($paid) ? (int) $paid : null,
+        ];
+    }
+
+    /**
+     * Moves a live subscription onto another plan and/or billing cycle, keeping its seat count.
+     *
+     * The difference for the rest of the period is invoiced and charged now (`always_invoice`):
+     * an upgrade costs the pro-rata extra, a downgrade is credited. If the payment fails nothing
+     * changes (`error_if_incomplete`), so a plan is never given that was not paid for.
+     *
+     * @return array{charged: int|null, renewsOn: string|null} `charged` in cents; `renewsOn` as Stripe now has it
+     */
+    public function setPlan(string $subscriptionId, string $plan, string $cycle, int $seats): array
+    {
+        $current = Http::withToken($this->requireKey())->timeout(20)->get(self::API."/subscriptions/{$subscriptionId}");
+
+        if (! $current->successful()) {
+            throw new RuntimeException($current->json('error.message') ?? 'Stripe could not find this subscription.');
+        }
+
+        $item = $current->json('items.data.0.id');
+        if (! is_string($item)) {
+            throw new RuntimeException('This subscription has no plan line to change.');
+        }
+
+        // Same per-seat unit amount a new checkout would charge — worked out here, never taken from the browser.
+        $perSeat = $this->pricing->quote($plan, $cycle, 1)['total'];
+        $name = config("subscription.plans.{$plan}.name");
+        $product = $this->post('/products', ['name' => "Breeze.Ai {$name} — ".($cycle === 'yearly' ? 'Annual' : 'Monthly')]);
+
+        $updated = $this->post("/subscriptions/{$subscriptionId}", [
+            'items' => [[
+                'id' => $item,
+                'quantity' => max(1, $seats),
+                'price_data' => [
+                    'currency' => 'usd',
+                    'product' => $product['id'] ?? throw new RuntimeException('Stripe did not create the plan.'),
+                    'unit_amount' => $perSeat,
+                    'recurring' => ['interval' => $cycle === 'yearly' ? 'year' : 'month'],
+                ],
+            ]],
+            'proration_behavior' => 'always_invoice',
+            'payment_behavior' => 'error_if_incomplete',
+            'metadata' => ['plan' => $plan, 'cycle' => $cycle, 'seats' => (string) $seats],
+            'expand' => ['latest_invoice'],
+        ]);
+
+        $paid = $updated['latest_invoice']['amount_paid'] ?? null;
+        $end = $updated['current_period_end'] ?? $updated['items']['data'][0]['current_period_end'] ?? null;
+
+        return [
+            'charged' => is_numeric($paid) ? max(0, (int) $paid) : null,
+            'renewsOn' => is_numeric($end) ? \Illuminate\Support\Carbon::createFromTimestampUTC((int) $end)->toDateString() : null,
+        ];
+    }
+
     /** A Stripe Customer for this person, with a United States address to start from. */
     private function createUsCustomer(User $user): string
     {

@@ -21,6 +21,11 @@ class Permissions
     /** The matrix role a user falls under, or null when the matrix does not govern them. */
     public function roleOf(User $user): ?string
     {
+        // The company's owner holds the locked, all-powerful role whatever their title is.
+        if ($user->isCompanyOwner()) {
+            return 'manager';
+        }
+
         return match (mb_strtolower(trim((string) $user->role))) {
             'project manager', 'admin', 'owner' => 'manager',
             'foreman' => 'foreman',

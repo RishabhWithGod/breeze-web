@@ -22,7 +22,7 @@ class LeaveRequests
 
     public static function isManager(?User $user): bool
     {
-        return $user !== null && in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true);
+        return $user !== null && ($user->isCompanyOwner() || in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true));
     }
 
     /**

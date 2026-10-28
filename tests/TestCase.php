@@ -21,8 +21,11 @@ abstract class TestCase extends BaseTestCase
         $role = $permissions->roleOf($user);
 
         if ($user->company_id === null) {
+            // The company belongs to someone else: a person given a few permissions is not its owner,
+            // and the owner is the one who may do everything.
+            $owner = User::factory()->create(['role' => 'Owner']);
             $company = CompanyProfile::create([
-                'user_id' => $user->id, 'name' => 'Test Co '.$user->id, 'business_address' => '1 Main St', 'primary_contact' => 'A',
+                'user_id' => $owner->id, 'name' => 'Test Co '.$user->id, 'business_address' => '1 Main St', 'primary_contact' => 'A',
                 'phone' => '(512) 555-0142', 'email' => "co{$user->id}@x.test", 'timezone' => 'America/Chicago',
             ]);
             $user->forceFill(['company_id' => $company->id])->save();

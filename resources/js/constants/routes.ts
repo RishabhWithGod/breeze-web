@@ -117,6 +117,12 @@ export const ROUTES = {
 
   profile: '/profile',
   settings: '/settings',
+  /** Everything about the plan the company is on. */
+  planDetails: '/settings/plan',
+  /** The plans side by side, and moving to another. */
+  changePlan: '/settings/plan/change',
+  /** Change Plan, opened from Settings: Back and Cancel return there. */
+  changePlanFromSettings: '/settings/plan/change?from=settings',
   estimateBuilder: '/estimate-builder',
   companyEdit: '/settings/company/edit',
   security: '/security',
@@ -429,6 +435,8 @@ export const routeTo = {
   paymentProcessorDisconnect: (processorId: number) => `/settings/payment/processors/${processorId}`,
   paymentMethodsStore: '/settings/payment/methods',
   subscriptionChange: '/settings/payment/subscription',
+  /** Where a seat purchase is posted. */
+  seatsBuy: '/settings/payment/seats',
   paymentMethodDefault: (methodId: number) => `/settings/payment/methods/${methodId}/default`,
   paymentMethodDestroy: (methodId: number) => `/settings/payment/methods/${methodId}`,
   billingSettingsUpdate: '/settings/payment/billing',

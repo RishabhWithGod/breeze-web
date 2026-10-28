@@ -6,6 +6,8 @@ export interface AuthUser {
   readonly name: string
   readonly email: string
   readonly role: string
+  /** The person who owns the company: everything is theirs, whatever their title. */
+  readonly isOwner: boolean
   readonly initials: string
 }
 

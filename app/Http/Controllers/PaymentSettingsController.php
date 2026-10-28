@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Notifications\PaymentProcessorStatusChanged;
 use App\Policies\PaymentSettingsPolicy;
 use App\Services\Billing\PlanPricing;
+use App\Services\Billing\SeatPurchases;
 use App\Services\Billing\SubscriptionSummary;
 use App\Services\Payments\PaymentMethodService;
 use App\Services\Payments\PaymentProcessorService;
@@ -87,6 +88,8 @@ class PaymentSettingsController extends Controller
         return Inertia::render('PaymentSettings', [
             // The company's plan, and how much of it is used.
             'subscription' => app(SubscriptionSummary::class)->build($request->user()),
+            // What one more seat costs and how it would be paid, for the Buy Seats dialog.
+            'seatOffer' => app(SeatPurchases::class)->offer($request->user()),
             // What this account pays Breeze.Ai with — from its own Stripe payment.
             'subscriptionPayment' => $this->subscriptionPayment($request->user()),
             // Who the company is — what was entered when it was set up.
@@ -218,10 +221,53 @@ class PaymentSettingsController extends Controller
     }
 
     /**
+     * Plan Details: one screen for everything about the plan the company is on — what it costs, what it
+     * includes and allows, how much of that is used, who holds the seats, and how it is paid.
+     */
+    public function plan(Request $request, SubscriptionSummary $summary): Response
+    {
+        $this->authorizeManage($request);
+
+        $subscription = Subscription::forUser($request->user());
+
+        return Inertia::render('PlanDetails', [
+            'subscription' => $summary->build($request->user()),
+            'seatOffer' => app(SeatPurchases::class)->offer($request->user()),
+            // The card on the subscription and what it is charged, when it was paid through Stripe.
+            'payment' => $this->subscriptionPayment($request->user()),
+            'receipt' => [
+                'confirmationNumber' => $subscription->confirmation_number,
+                'url' => $subscription->receipt_url,
+            ],
+        ]);
+    }
+
+    /**
+     * Change Plan: the plans side by side, and what moving onto one would mean. A plan the company has
+     * outgrown is shown with the reason it cannot be chosen yet, not hidden.
+     */
+    public function changePlanScreen(Request $request, SubscriptionSummary $summary): Response
+    {
+        $this->authorizeManage($request);
+
+        $built = $summary->build($request->user());
+
+        return Inertia::render('ChangePlan', [
+            // Where the person came from, so Back and Cancel return there: Settings, or Plan Details.
+            'origin' => $request->query('from') === 'settings' ? 'settings' : 'plan',
+            'subscription' => $built,
+            'seatOffer' => app(SeatPurchases::class)->offer($request->user()),
+            'blockers' => collect($built['plans'])
+                ->mapWithKeys(fn (array $plan) => [$plan['key'] => $summary->blockersFor($plan['key'], $request->user())])
+                ->all(),
+        ]);
+    }
+
+    /**
      * Moves the company onto another plan.
      *
-     * Nothing is charged here — the plan is what the company is on, and this changes
-     * which. It is refused while the company uses more than the new plan holds, so
+     * On a paid Stripe subscription the pro-rata difference is charged or credited to the card
+     * on file. It is refused while the company uses more than the new plan holds, so
      * a downgrade never leaves it over a limit it did not choose.
      */
     public function changePlan(Request $request, SubscriptionSummary $summary): RedirectResponse
@@ -231,6 +277,7 @@ class PaymentSettingsController extends Controller
         $data = $request->validate([
             'plan' => ['required', Rule::in(array_keys(config('subscription.plans')))],
             'billing_cycle' => ['required', Rule::in(Subscription::CYCLES)],
+            'return_to' => ['sometimes', Rule::in(['plan', 'settings'])],
         ]);
 
         $name = config("subscription.plans.{$data['plan']}.name");
@@ -243,20 +290,58 @@ class PaymentSettingsController extends Controller
             ]);
         }
 
-        $subscription = Subscription::forUser($request->user());
-        $cycleChanged = $subscription->billing_cycle !== $data['billing_cycle'];
+        try {
+            $result = app(\App\Services\Billing\PlanChanges::class)->change($request->user(), $data['plan'], $data['billing_cycle']);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['plan' => $e->getMessage()]);
+        }
 
-        $subscription->update([
-            'plan' => $data['plan'],
-            'billing_cycle' => $data['billing_cycle'],
-            // A different cycle length starts a fresh period from today.
-            ...($cycleChanged
-                ? ['renews_on' => $data['billing_cycle'] === 'yearly' ? now()->addYear() : now()->addMonth()]
-                : []),
-            'updated_by' => $request->user()->id,
+        $note = $result['charged'] !== null && $result['charged'] > 0
+            ? ' '.number_format($result['charged'] / 100, 2).' USD was charged to your card on file for the rest of this period.'
+            : ($result['via'] === \App\Services\Billing\SeatPurchases::VIA_LOCAL ? ' (Test mode — nothing was charged.)' : '');
+
+        // Changed from its own screen: the result is read where they came from, not back on the form.
+        if (($data['return_to'] ?? null) === 'settings') {
+            return redirect()->route('settings.payment.index', ['tab' => 'subscription'])->with('success', "You're now on the {$name} plan.{$note}");
+        }
+        if (($data['return_to'] ?? null) === 'plan') {
+            return redirect()->route('settings.plan.show')->with('success', "You're now on the {$name} plan.{$note}");
+        }
+
+        return back()->with('success', "You're now on the {$name} plan.{$note}");
+    }
+
+    /**
+     * Buys more seats on the current plan. `seats` is how many to ADD, not the new total.
+     *
+     * Charged through Stripe when the plan was paid that way; the seats only count once the
+     * payment has gone through.
+     */
+    public function buySeats(Request $request, SeatPurchases $purchases): RedirectResponse
+    {
+        $this->authorizeManage($request);
+
+        $data = $request->validate([
+            'seats' => ['required', 'integer', 'min:1', 'max:'.SeatPurchases::MAX_ADD],
+        ], [
+            'seats.required' => 'Enter how many seats to add.',
+            'seats.integer' => 'Enter a whole number of seats.',
+            'seats.min' => 'Add at least 1 seat.',
+            'seats.max' => 'Add at most '.SeatPurchases::MAX_ADD.' seats at a time.',
         ]);
 
-        return back()->with('success', "You're now on the {$name} plan.");
+        try {
+            $result = $purchases->buy($request->user(), (int) $data['seats']);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['seats' => $e->getMessage()]);
+        }
+
+        $word = $result['added'] === 1 ? 'seat' : 'seats';
+        $paid = $result['charged'] !== null && $result['charged'] > 0
+            ? ' '.number_format($result['charged'] / 100, 2).' USD was charged to your card on file.'
+            : ($result['via'] === SeatPurchases::VIA_LOCAL ? ' (Test mode — nothing was charged.)' : '');
+
+        return back()->with('success', "{$result['added']} {$word} added. You now have {$result['seats']} seats.{$paid}");
     }
 
     public function updateBillingSettings(Request $request): RedirectResponse
@@ -292,10 +377,10 @@ class PaymentSettingsController extends Controller
             return null;
         }
 
-        $quote = app(PlanPricing::class)->quote($subscription->plan, $subscription->billing_cycle, $subscription->seats);
+        $quote = app(PlanPricing::class)->quote($subscription->planKey(), $subscription->billing_cycle, $subscription->seats);
 
         return [
-            'planName' => config("subscription.plans.{$subscription->plan}.name"),
+            'planName' => config("subscription.plans.{$subscription->planKey()}.name"),
             'billingCycle' => $subscription->billing_cycle,
             'amount' => $quote['total'],
             'renewsOn' => $subscription->renews_on->toDateString(),

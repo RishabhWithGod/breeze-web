@@ -76,6 +76,25 @@ class User extends Authenticatable
         ];
     }
 
+    /** Per-instance answer to {@see isCompanyOwner()}; a request asks it many times. */
+    private ?bool $companyOwner = null;
+
+    /**
+     * Whether this person owns the company they work in — the one who set it up. The owner may do
+     * everything in it, whatever their job title says: every "who may manage" check lets them through.
+     */
+    public function isCompanyOwner(): bool
+    {
+        if ($this->company_id === null) {
+            return false;
+        }
+
+        return $this->companyOwner ??= CompanyProfile::query()
+            ->whereKey($this->company_id)
+            ->where('user_id', $this->id)
+            ->exists();
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;

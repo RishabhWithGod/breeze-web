@@ -66,6 +66,10 @@ class TeamSetupController extends Controller
                 ->map(fn (Team $team) => ['id' => $team->id, 'name' => $team->name, 'members' => $team->members_count]),
             'roles' => $this->invitableRoles($request),
             'seats' => $this->invitations->seats($request->user()),
+            'canBuySeats' => app(\App\Policies\PaymentSettingsPolicy::class)->manage($request->user()),
+            'seatOffer' => app(\App\Policies\PaymentSettingsPolicy::class)->manage($request->user())
+                ? app(\App\Services\Billing\SeatPurchases::class)->offer($request->user())
+                : null,
             'members' => Foreman::query()->count(),
         ]);
     }

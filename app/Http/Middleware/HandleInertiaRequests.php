@@ -60,6 +60,8 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->name,
                     'email' => $user->email,
                     'role' => $user->role,
+                    // The company's owner: every menu entry and action is theirs, whatever their title.
+                    'isOwner' => $user->isCompanyOwner(),
                     'initials' => $user->initials,
                 ] : null,
             ],

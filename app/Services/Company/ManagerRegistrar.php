@@ -24,7 +24,7 @@ class ManagerRegistrar
     /** Whether this account holds a manager role. */
     public function isManager(User $user): bool
     {
-        return in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true);
+        return ($user->isCompanyOwner() || in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true));
     }
 
     /**

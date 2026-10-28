@@ -117,6 +117,6 @@ class TechnicianController extends Controller
     private function canManage(?User $user): bool
     {
         return $user !== null
-            && in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true);
+            && ($user->isCompanyOwner() || in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true));
     }
 }

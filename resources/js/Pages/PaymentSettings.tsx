@@ -36,7 +36,7 @@ import {
   Switch,
   Table,
 } from '@/components/common'
-import { AddPaymentMethodModal, ChangePlanModal, ManageProcessorsModal, ProcessorMark } from '@/components/payments'
+import { AddPaymentMethodModal, BuySeatsModal, ManageProcessorsModal, ProcessorMark } from '@/components/payments'
 import { appLayout, CompanyMark, PageHeader, PageTransition } from '@/components/layout'
 import {
   PAYMENT_PROCESSOR_STATUS_LABEL,
@@ -53,6 +53,7 @@ import type {
   PaymentMethod,
   PaymentProcessor,
   PaymentTransactionsPage,
+  SeatOffer,
   SelectOption,
   SubscriptionPayment,
   SubscriptionSummary,
@@ -63,6 +64,8 @@ import { cn, formatCalendarDate, formatCents, formatCurrency, formatModified } f
 
 export interface PaymentSettingsProps {
   subscription: SubscriptionSummary
+  /** What one more seat costs and how it would be paid. */
+  seatOffer: SeatOffer
   /** Null until this account has paid for its subscription through Stripe. */
   subscriptionPayment: SubscriptionPayment | null
   /** The company this account belongs to, as entered at setup; null when it has none. */
@@ -87,6 +90,7 @@ export interface PaymentSettingsProps {
  */
 export default function PaymentSettings({
   subscription,
+  seatOffer,
   subscriptionPayment,
   company,
   canEditCompany,
@@ -114,7 +118,10 @@ export default function PaymentSettings({
   }
 
   const manageProcessors = useDisclosure()
-  const changePlan = useDisclosure()
+  // "Buy more seats" elsewhere in the app lands here with the dialog already open.
+  const buySeats = useDisclosure(
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('buy') === 'seats',
+  )
   const addMethod = useDisclosure()
 
   const notice = flash.success ?? flash.warning ?? null
@@ -254,7 +261,13 @@ export default function PaymentSettings({
                 <p className="mt-3 max-w-md text-sm text-white/85">{subscription.plan.description}</p>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <Button variant="blue" size="md" fullWidth leftIcon={Layers} onClick={changePlan.open}>
+                  <Button
+                    variant="blue"
+                    size="md"
+                    fullWidth
+                    leftIcon={Layers}
+                    onClick={() => router.visit(ROUTES.changePlanFromSettings)}
+                  >
                     Change Plan
                   </Button>
                   <Button
@@ -262,7 +275,7 @@ export default function PaymentSettings({
                     size="md"
                     fullWidth
                     leftIcon={BarChart3}
-                    onClick={() => scrollTo('plan-details')}
+                    onClick={() => router.visit(ROUTES.planDetails)}
                   >
                     View Plan Details
                   </Button>
@@ -289,10 +302,15 @@ export default function PaymentSettings({
                     icon={UsersRound}
                     label="Users"
                     value={
-                      <span
-                        className={subscription.seats.used > subscription.seats.limit ? 'text-red-300' : undefined}
-                      >
-                        {subscription.seats.used} of {subscription.seats.limit}
+                      <span className="flex flex-wrap items-center justify-end gap-3">
+                        <span
+                          className={subscription.seats.used > subscription.seats.limit ? 'text-red-300' : undefined}
+                        >
+                          {subscription.seats.used} of {subscription.seats.limit}
+                        </span>
+                        <Button size="sm" variant="secondary" leftIcon={UsersRound} onClick={buySeats.open}>
+                          Buy seats
+                        </Button>
                       </span>
                     }
                   />
@@ -532,7 +550,12 @@ export default function PaymentSettings({
         onClose={addMethod.close}
         connectedProcessors={connectedProcessors}
       />
-      <ChangePlanModal isOpen={changePlan.isOpen} onClose={changePlan.close} subscription={subscription} />
+      <BuySeatsModal
+        isOpen={buySeats.isOpen}
+        onClose={buySeats.close}
+        offer={seatOffer}
+        used={subscription.seats.used}
+      />
     </PageTransition>
   )
 }

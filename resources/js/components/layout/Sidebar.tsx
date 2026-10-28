@@ -97,9 +97,10 @@ function activeHref(pathname: string): string | null {
 const allowed = (
   item: NavItem,
   role: string,
+  isOwner: boolean,
   permissions: SharedPageProps['permissions'],
 ): boolean =>
-  (item.roles === undefined || item.roles.includes(role)) &&
+  (item.roles === undefined || isOwner || item.roles.includes(role)) &&
   // What the role's permissions open (Roles & Permissions); null means the role is not governed by them.
   (item.permission === undefined || permissions === null || permissions.includes(item.permission))
 
@@ -151,13 +152,14 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
   const active = activeHref(pathname)
   const { auth, permissions } = usePage<SharedPageProps>().props
   const role = (auth.user?.role ?? '').trim().toLowerCase()
+  const isOwner = auth.user?.isOwner === true
 
   // A group its role cannot open still shows the entries under it that it can — an apprentice has
   // no Jobs, but has Tasks — as rows of their own.
   const visibleItems = SIDEBAR_ITEMS.flatMap((item): readonly NavItem[] =>
-    allowed(item, role, permissions)
+    allowed(item, role, isOwner, permissions)
       ? [item]
-      : (item.children ?? []).filter((child) => allowed(child, role, permissions)),
+      : (item.children ?? []).filter((child) => allowed(child, role, isOwner, permissions)),
   )
 
   // Groups start open, as the reference draws them. Two different clicks:
@@ -195,7 +197,7 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
       <ul>
         {visibleItems.map((item: NavItem) => {
           // Some entries are for particular roles only.
-          const children = (item.children ?? []).filter((child) => allowed(child, role, permissions))
+          const children = (item.children ?? []).filter((child) => allowed(child, role, isOwner, permissions))
           const holdsActive = children.some((child) => child.href === active)
           const isOpen = holdsActive || !folded.has(item.label)
 

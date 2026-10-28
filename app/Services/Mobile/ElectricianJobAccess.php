@@ -83,7 +83,7 @@ class ElectricianJobAccess
 
     private function listsEveryJob(User $user): bool
     {
-        return in_array(mb_strtolower(trim((string) $user->role)), self::LIST_ALL, true);
+        return ($user->isCompanyOwner() || in_array(mb_strtolower(trim((string) $user->role)), self::LIST_ALL, true));
     }
 
     /**
@@ -159,6 +159,6 @@ class ElectricianJobAccess
             return false;
         }
 
-        return in_array(mb_strtolower(trim((string) $user->role)), self::UNRESTRICTED, true);
+        return ($user->isCompanyOwner() || in_array(mb_strtolower(trim((string) $user->role)), self::UNRESTRICTED, true));
     }
 }

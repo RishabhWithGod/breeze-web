@@ -149,3 +149,21 @@ export interface CompanyDetails {
   readonly timezone: string
   readonly logoUrl: string | null
 }
+
+/** What buying more seats costs and how it would be paid — the Buy Seats dialog reads this. */
+export interface SeatOffer {
+  readonly planName: string
+  readonly cycle: 'monthly' | 'yearly'
+  /** Cents, per seat, per billing cycle. */
+  readonly perSeatCents: number
+  /** False on a plan that is no longer sold: the real rate is Stripe's, so no price is shown. */
+  readonly priceKnown: boolean
+  readonly seats: number
+  readonly renewsOn: string | null
+  /** The part of the current period still to run, 0 to 1. */
+  readonly periodShare: number
+  /** `stripe` when the card on the subscription is charged; `local` outside production; null when seats cannot be added here. */
+  readonly via: 'stripe' | 'local' | null
+  readonly canBuy: boolean
+  readonly maxAdd: number
+}

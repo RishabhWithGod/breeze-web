@@ -4,7 +4,9 @@ import { useMemo, useState } from 'react'
 import { Alert, Button, Card, ConfirmDialog, RequiredFieldsNotice, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import type { SeatsByRole, SharedPageProps } from '@/types'
+import { BuySeatsModal } from '@/components/payments'
+import { useDisclosure } from '@/hooks'
+import type { SeatOffer, SeatsByRole, SharedPageProps } from '@/types'
 import { cn, formatUsPhone } from '@/utils'
 
 interface InvitationRow {
@@ -45,6 +47,10 @@ export interface TeamSetupProps {
   }
   /** Crew already on the register. */
   members: number
+  /** True for the people who may open Settings and buy more seats. */
+  canBuySeats: boolean
+  /** What one more seat costs, so the popup opens here; null for anyone who may not buy. */
+  seatOffer: SeatOffer | null
 }
 
 let counter = 0
@@ -86,7 +92,17 @@ const CONTROL =
  * Sent invitations can be sent again or withdrawn. The teams themselves are managed on the same screen.
  * Once setup is finished the Teams register takes over.
  */
-export default function TeamSetup({ invitations, teams, roles, seats, members }: TeamSetupProps) {
+export default function TeamSetup({
+  invitations,
+  teams,
+  roles,
+  seats,
+  members,
+  canBuySeats,
+  seatOffer,
+}: TeamSetupProps) {
+  // Buying seats opens as a popup over the invite list, so nobody is sent away mid-way.
+  const buySeats = useDisclosure()
   const { flash, errors } = usePage<SharedPageProps>().props
   const defaultRole = roles.includes('Journeyman') ? 'Journeyman' : (roles[0] ?? 'Journeyman')
 
@@ -211,7 +227,13 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
       )}
 
       {/* ------------------------------------------------------------------ seats -- */}
-      <SeatStrip seats={seats} members={members} adding={filled.length} />
+      <SeatStrip
+        seats={seats}
+        members={members}
+        adding={filled.length}
+        canBuy={canBuySeats && seatOffer !== null}
+        onBuy={buySeats.open}
+      />
 
       {/* ------------------------------------------------------------- invitations -- */}
       <Card padding="md" className="mt-4">
@@ -443,6 +465,9 @@ export default function TeamSetup({ invitations, teams, roles, seats, members }:
         }}
         onCancel={() => setCancelling(null)}
       />
+      {canBuySeats && seatOffer !== null && (
+        <BuySeatsModal isOpen={buySeats.isOpen} onClose={buySeats.close} offer={seatOffer} used={seats.used} />
+      )}
     </PageTransition>
   )
 }
@@ -490,7 +515,19 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
 }
 
 /** How many seats the plan has, how many are taken, and how many the list below would use. */
-function SeatStrip({ seats, members, adding }: { seats: TeamSetupProps['seats']; members: number; adding: number }) {
+function SeatStrip({
+  seats,
+  members,
+  adding,
+  canBuy,
+  onBuy,
+}: {
+  seats: TeamSetupProps['seats']
+  members: number
+  adding: number
+  canBuy: boolean
+  onBuy: () => void
+}) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-x-8 gap-y-2 rounded-card border border-hairline glass px-5 py-3 text-sm">
       <span className="font-semibold text-white">Seat availability</span>
@@ -508,6 +545,11 @@ function SeatStrip({ seats, members, adding }: { seats: TeamSetupProps['seats'];
       <span className={cn('ml-auto font-semibold', seats.available === 0 ? 'text-red-300' : 'text-brand')}>
         {seats.available} of {seats.limit} seats available
       </span>
+      {canBuy && (
+        <button type="button" onClick={onBuy} className="text-xs font-semibold text-brand underline">
+          Buy more seats
+        </button>
+      )}
       {members > 0 && (
         <span className="w-full text-xs text-white/60 sm:w-auto">{members} already on the crew register.</span>
       )}
@@ -525,4 +567,3 @@ function SeatStrip({ seats, members, adding }: { seats: TeamSetupProps['seats'];
     </div>
   )
 }
-

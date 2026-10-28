@@ -363,7 +363,7 @@ function PlanCard({ plan, selected, onSelect }: { plan: SubscriptionPlan; select
       </span>
 
       {plan.popular && (
-        <span className="absolute -top-2.5 right-11 rounded-full bg-status-success px-2.5 py-0.5 text-2xs font-bold text-ocean-950">
+        <span className="absolute -top-3 right-11 rounded-full bg-green-700 px-3 py-1 text-xs font-bold text-white ring-1 ring-white/40">
           Most Popular
         </span>
       )}

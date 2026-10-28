@@ -103,6 +103,12 @@ class TeamController extends Controller
                 ? LeaveRequest::query()->ofCompany($request->user()->company_id)->where('status', LeaveRequest::STATUS_PENDING)->count()
                 : 0,
             'canManageLeave' => LeaveRequests::isManager($request->user()),
+            // Seats are bought in Settings, which only the people who run the company's billing may open.
+            'canBuySeats' => app(\App\Policies\PaymentSettingsPolicy::class)->manage($request->user()),
+            // What one more seat costs, so the Buy Seats popup can open right here instead of sending them to Settings.
+            'seatOffer' => app(\App\Policies\PaymentSettingsPolicy::class)->manage($request->user())
+                ? app(\App\Services\Billing\SeatPurchases::class)->offer($request->user())
+                : null,
             /*
              * Technicians who signed up from the mobile app, on this same
              * page rather than a separate one — a manager approving someone
@@ -257,7 +263,7 @@ class TeamController extends Controller
     private function canApproveTechnicians(?User $user): bool
     {
         return $user !== null
-            && in_array(mb_strtolower(trim((string) $user->role)), self::TECHNICIAN_MANAGER_ROLES, true);
+            && ($user->isCompanyOwner() || in_array(mb_strtolower(trim((string) $user->role)), self::TECHNICIAN_MANAGER_ROLES, true));
     }
 
     public function create(Request $request): Response

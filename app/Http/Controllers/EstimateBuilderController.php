@@ -334,7 +334,7 @@ class EstimateBuilderController extends Controller
     private function authorizeRole(Request $request): void
     {
         abort_unless(
-            in_array(mb_strtolower(trim((string) $request->user()->role)), self::ROLES, true),
+            ($request->user()->isCompanyOwner() || in_array(mb_strtolower(trim((string) $request->user()->role)), self::ROLES, true)),
             403,
         );
     }

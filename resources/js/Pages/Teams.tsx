@@ -35,9 +35,10 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
-import { usePermissions } from '@/hooks'
-import type { LeaveStatus, Paginated, SharedPageProps, TableColumn } from '@/types'
+import { useDisclosure, usePermissions } from '@/hooks'
+import type { LeaveStatus, Paginated, SeatOffer, SharedPageProps, TableColumn } from '@/types'
 import { describeLeave, formatDate } from '@/utils'
+import { BuySeatsModal } from '@/components/payments'
 
 interface MemberRow {
   readonly id: number
@@ -128,6 +129,10 @@ export interface TeamsProps {
   pendingLeave: number
   /** True for the people who answer leave requests. */
   canManageLeave: boolean
+  /** True for the people who run the company's billing, and so may buy seats. */
+  canBuySeats: boolean
+  /** What one more seat costs, so the popup opens here; null for anyone who may not buy. */
+  seatOffer: SeatOffer | null
   /** Technicians who signed up from the mobile app, awaiting a decision. */
   pendingTechnicians: readonly TechnicianRow[]
   activeTechnicians: readonly TechnicianRow[]
@@ -148,7 +153,7 @@ export interface TeamsProps {
 const isAway = (member: MemberRow): boolean => member.inactive || member.leave?.state === 'on_leave'
 
 /** Seats in use against seats bought — what to check before inviting someone or switching an account back on. */
-function SeatUsageCard({ seats }: { seats: SeatUsage }) {
+function SeatUsageCard({ seats, canBuy, onBuy }: { seats: SeatUsage; canBuy: boolean; onBuy: () => void }) {
   const full = seats.available === 0
   const share = seats.limit > 0 ? Math.min(100, Math.round(((seats.used + seats.pending) / seats.limit) * 100)) : 100
 
@@ -168,10 +173,12 @@ function SeatUsageCard({ seats }: { seats: SeatUsage }) {
               : `${seats.available} ${seats.available === 1 ? 'seat' : 'seats'} free. A deactivated member does not hold one.`}
           </p>
         </div>
-        {full && (
-          <ButtonLink href={ROUTES.settings} variant="secondary" size="sm">
+        {canBuy ? (
+          <Button variant={full ? 'primary' : 'secondary'} size="sm" onClick={onBuy}>
             Buy more seats
-          </ButtonLink>
+          </Button>
+        ) : (
+          full && <span className="text-sm text-white/65">Ask an owner or admin to add seats.</span>
         )}
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10" role="presentation">
@@ -273,6 +280,8 @@ export default function Teams({
   seats,
   pendingLeave,
   canManageLeave,
+  canBuySeats,
+  seatOffer,
   pendingTechnicians,
   activeTechnicians,
   rejectedTechnicians,
@@ -283,6 +292,8 @@ export default function Teams({
   technicianRoleOptions,
 }: TeamsProps) {
   const { can } = usePermissions()
+  // Buying seats opens right here, over the page, so nobody is sent away to Settings and back.
+  const buySeats = useDisclosure()
   const [search, setSearch] = useState(filters.search)
   // Which tab is open lives in the URL, so a link or a reload lands on the same one.
   const [tab, setTab] = useState<'teams' | 'managers'>(() =>
@@ -503,7 +514,9 @@ export default function Teams({
         </Alert>
       )}
 
-      {seats !== null && <SeatUsageCard seats={seats} />}
+      {seats !== null && (
+        <SeatUsageCard seats={seats} canBuy={canBuySeats && seatOffer !== null} onBuy={buySeats.open} />
+      )}
 
       {canSeeManagers && (
         <FilterTabs
@@ -618,6 +631,9 @@ export default function Teams({
             />
           )}
         </>
+      )}
+      {canBuySeats && seatOffer !== null && seats !== null && (
+        <BuySeatsModal isOpen={buySeats.isOpen} onClose={buySeats.close} offer={seatOffer} used={seats.used} />
       )}
     </PageTransition>
   )

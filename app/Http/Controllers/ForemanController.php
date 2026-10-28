@@ -186,8 +186,9 @@ class ForemanController extends Controller
             'canDeactivate' => LeaveRequests::isManager($viewer)
                 && $user->company_id === $viewer->company_id
                 && $user->id !== $viewer->id
+                && ! $user->isCompanyOwner()
                 && $role !== 'owner'
-                && ($role !== 'admin' || mb_strtolower(trim((string) $viewer->role)) === 'owner'),
+                && ($role !== 'admin' || $viewer->isCompanyOwner() || mb_strtolower(trim((string) $viewer->role)) === 'owner'),
             'canReactivate' => LeaveRequests::isManager($viewer) && $user->company_id === $viewer->company_id,
             'isYou' => $user->id === $viewer->id,
         ];
@@ -251,6 +252,7 @@ class ForemanController extends Controller
          */
         $job = $this->jobFor($request);
         $seats = $summary->build($request->user())['seats'];
+        $held = app(\App\Services\Company\TeamInvitations::class)->seats($request->user());
 
         return Inertia::render('ForemanCreate', [
             ...$this->formProps(),
@@ -259,7 +261,17 @@ class ForemanController extends Controller
             'returnUrl' => $job === null ? null : route('jobs.tasks.setup', $job),
             // So the form can say how many seats are left before someone fills
             // the whole thing in and only then finds out there is no room.
-            'seats' => ['used' => $seats['used'], 'limit' => $seats['limit'], 'byRole' => $seats['byRole']],
+            // Seats held by open invitations are taken too, so the count here matches what is refused.
+            'seats' => [
+                'used' => $seats['used'],
+                'pending' => $held['pending'],
+                'limit' => $seats['limit'],
+                'byRole' => $seats['byRole'],
+            ],
+            'canBuySeats' => app(\App\Policies\PaymentSettingsPolicy::class)->manage($request->user()),
+            'seatOffer' => app(\App\Policies\PaymentSettingsPolicy::class)->manage($request->user())
+                ? app(\App\Services\Billing\SeatPurchases::class)->offer($request->user())
+                : null,
         ]);
     }
 
@@ -386,6 +398,13 @@ class ForemanController extends Controller
             $manager = app(ManagerRegistrar::class)->add($request->user(), $data, 'email');
 
             return redirect()->route('teams.index')->with('success', "“{$manager->name}” was added as a manager.");
+        }
+
+        // Everyone added here gets a login, and a login holds a seat on the plan.
+        if (! app(SubscriptionSummary::class)->hasSeatAvailable($request->user())) {
+            return back()->withInput()->withErrors([
+                'seats' => 'No seats left. Buy more seats to add '.$data['name'].'.',
+            ]);
         }
 
         // Left blank, this defaults to the day they're actually being

@@ -21,6 +21,6 @@ class PaymentSettingsPolicy
     /** @param  list<string>  $roles */
     private function holds(User $user, array $roles): bool
     {
-        return in_array(mb_strtolower(trim((string) $user->role)), $roles, true);
+        return $user->isCompanyOwner() || in_array(mb_strtolower(trim((string) $user->role)), $roles, true);
     }
 }

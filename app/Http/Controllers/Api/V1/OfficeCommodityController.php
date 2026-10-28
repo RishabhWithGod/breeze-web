@@ -243,7 +243,7 @@ class OfficeCommodityController extends Controller
 
         abort_unless(
             $user->company_id !== null
-                && in_array(mb_strtolower(trim((string) $user->role)), config('estimates.reviewer_roles'), true),
+                && ($user->isCompanyOwner() || in_array(mb_strtolower(trim((string) $user->role)), config('estimates.reviewer_roles'), true)),
             403,
             'Only the people who price work can use the commodity list.',
         );

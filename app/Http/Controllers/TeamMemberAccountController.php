@@ -37,7 +37,8 @@ class TeamMemberAccountController extends Controller
         }
 
         $role = mb_strtolower(trim((string) $user->role));
-        if ($role === 'owner' || ($role === 'admin' && mb_strtolower(trim((string) $actor->role)) !== 'owner')) {
+        $actorOwns = $actor->isCompanyOwner() || mb_strtolower(trim((string) $actor->role)) === 'owner';
+        if ($user->isCompanyOwner() || $role === 'owner' || ($role === 'admin' && ! $actorOwns)) {
             return back()->with('warning', "Only an owner can deactivate {$user->name}.");
         }
 

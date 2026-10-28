@@ -59,7 +59,7 @@ class EnsureCompanySetUp
             || $user->needs_terms_acceptance
             || $user->needs_payment_setup
             || $user->isFromMobile()
-            || ! in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true)) {
+            || ! ($user->isCompanyOwner() || in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true))) {
             return;
         }
 

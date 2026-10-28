@@ -24,12 +24,31 @@ class Subscription extends Model
     }
 
     /**
+     * The plan this subscription is priced and described by. A plan that has since been removed
+     * from the catalogue (the old unlimited "enterprise" one) reads as the default plan rather than
+     * failing every screen that needs a price.
+     */
+    public function planKey(): string
+    {
+        return array_key_exists((string) $this->plan, config('subscription.plans', []))
+            ? (string) $this->plan
+            : (string) config('subscription.default_plan');
+    }
+
+    /**
      * The subscription this person works under: their own if they bought one,
      * otherwise the company-wide row.
      */
     public static function forUser(?User $user): self
     {
         $own = $user ? static::query()->where('user_id', $user->id)->first() : null;
+
+        // A company has one plan, and it is the owner's. Anyone else in it — a project manager
+        // added later, a technician — works under that one, not under the company-wide default.
+        if ($own === null && $user?->company_id !== null) {
+            $ownerId = CompanyProfile::query()->whereKey($user->company_id)->value('user_id');
+            $own = $ownerId === null ? null : static::query()->where('user_id', $ownerId)->first();
+        }
 
         return static::rolledForward($own ?? static::legacy());
     }

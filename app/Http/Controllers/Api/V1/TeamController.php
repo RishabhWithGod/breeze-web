@@ -212,6 +212,13 @@ class TeamController extends Controller
             return $this->created(['id' => null, 'managerId' => $manager->id], "\u{201c}{$manager->name}\u{201d} was added as a manager.");
         }
 
+        // Everyone added here gets a login, and a login holds a seat on the plan.
+        if (! app(SubscriptionSummary::class)->hasSeatAvailable($request->user())) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'seats' => 'No seats left. Buy more seats to add '.$data['name'].'.',
+            ]);
+        }
+
         $data['started_on'] ??= now()->toDateString();
 
         $member = Foreman::create([
@@ -505,6 +512,6 @@ class TeamController extends Controller
     private function canManage(?User $user): bool
     {
         return $user !== null
-            && in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true);
+            && ($user->isCompanyOwner() || in_array(mb_strtolower(trim((string) $user->role)), self::MANAGER_ROLES, true));
     }
 }

@@ -695,6 +695,9 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
 
     // Payment Settings: processors, saved methods, billing defaults and the real transaction history.
     Route::get('settings', [PaymentSettingsController::class, 'index'])->name('settings.payment.index');
+    // The plan, on screens of their own: everything about it, and moving to another.
+    Route::get('settings/plan', [PaymentSettingsController::class, 'plan'])->name('settings.plan.show');
+    Route::get('settings/plan/change', [PaymentSettingsController::class, 'changePlanScreen'])->name('settings.plan.change');
     // The company's own details: read in Settings, corrected here by its owner.
     Route::get('settings/company/edit', [CompanyProfileController::class, 'edit'])->name('settings.company.edit');
     Route::put('settings/company', [CompanyProfileController::class, 'update'])->name('settings.company.update');
@@ -708,6 +711,7 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
         Route::put('billing', [PaymentSettingsController::class, 'updateBillingSettings'])->name('billing.update');
         Route::put('managers/{manager}', [CompanyManagerController::class, 'update'])->name('managers.update');
         Route::put('subscription', [PaymentSettingsController::class, 'changePlan'])->name('subscription.change');
+        Route::post('seats', [PaymentSettingsController::class, 'buySeats'])->name('seats.buy');
     });
 
     // Profile: the user's own name. Email/phone/password live on Security

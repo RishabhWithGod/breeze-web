@@ -123,7 +123,7 @@ class EstimateReviewController extends Controller
 
     private function isReviewer(Request $request): bool
     {
-        return in_array(mb_strtolower(trim((string) $request->user()->role)), config('estimates.reviewer_roles'), true);
+        return ($request->user()->isCompanyOwner() || in_array(mb_strtolower(trim((string) $request->user()->role)), config('estimates.reviewer_roles'), true));
     }
 
     /** Reviewers see any estimate of their company that has been sent; a foreman only an approved one. */

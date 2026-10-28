@@ -79,7 +79,15 @@ class SubscriptionSummary
     /** Whether one more person can hold an account on this person's plan today. */
     public function hasSeatAvailable(?User $user): bool
     {
-        return $this->seatsUsed($user) < Subscription::forUser($user)->seats;
+        // A seat promised to someone invited is as taken as one in use: approving or adding
+        // another person into it would leave the invitee with a link that no longer works.
+        $held = $user?->company_id === null ? 0 : \App\Models\TeamInvitation::withoutGlobalScopes()
+            ->where('company_id', $user->company_id)
+            ->where('status', \App\Models\TeamInvitation::STATUS_PENDING)
+            ->where('expires_at', '>', now())
+            ->count();
+
+        return $this->seatsUsed($user) + $held < Subscription::forUser($user)->seats;
     }
 
     /**

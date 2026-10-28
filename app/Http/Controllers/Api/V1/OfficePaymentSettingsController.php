@@ -169,8 +169,8 @@ class OfficePaymentSettingsController extends Controller
     }
 
     /**
-     * Web's `changePlan()`: nothing is charged here, and a plan the company has already outgrown
-     * is refused with the reason.
+     * Web's `changePlan()`: a paid Stripe subscription is moved at Stripe (pro-rata charged or credited),
+     * and a plan the company has already outgrown is refused with the reason.
      */
     public function changePlan(Request $request, SubscriptionSummary $summary): JsonResponse
     {
@@ -190,18 +190,11 @@ class OfficePaymentSettingsController extends Controller
             ]);
         }
 
-        $subscription = Subscription::forUser($request->user());
-        $cycleChanged = $subscription->billing_cycle !== $data['billing_cycle'];
-
-        $subscription->update([
-            'plan' => $data['plan'],
-            'billing_cycle' => $data['billing_cycle'],
-            // A different cycle length starts a fresh period from today.
-            ...($cycleChanged
-                ? ['renews_on' => $data['billing_cycle'] === 'yearly' ? now()->addYear() : now()->addMonth()]
-                : []),
-            'updated_by' => $request->user()->id,
-        ]);
+        try {
+            app(\App\Services\Billing\PlanChanges::class)->change($request->user(), $data['plan'], $data['billing_cycle']);
+        } catch (\RuntimeException $e) {
+            return $this->fail($e->getMessage(), 422, ['plan' => [$e->getMessage()]]);
+        }
 
         return $this->ok($summary->build($request->user()), "You're now on the {$name} plan.");
     }
