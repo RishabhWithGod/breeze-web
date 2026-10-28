@@ -58,6 +58,21 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // A deactivated account has the right password and still may not come in. Said plainly
+        // — the person has proven who they are, so there is nothing to hide — and logged.
+        if ($user->status === User::STATUS_INACTIVE) {
+            app(SecurityEventLogger::class)->log(
+                $user,
+                SecurityEvent::LOGIN_FAILED,
+                'A sign-in was refused: the account is deactivated.',
+                $this,
+            );
+
+            throw ValidationException::withMessages([
+                'email' => 'This account has been deactivated. Please contact your manager.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
 
         return UserSecuritySetting::forUser($user)->twoFactorEnabledFor($channel);

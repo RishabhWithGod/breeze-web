@@ -383,14 +383,14 @@ class JobTaskSetupController extends Controller
         $projectMemberIds = $job->projectMemberIds();
 
         if ($projectMemberIds !== null) {
-            $journeymen = Foreman::whereIn('id', $projectMemberIds)->where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name');
-            $supervisors = Foreman::whereIn('id', $projectMemberIds)->where('role', Foreman::ROLE_FOREMAN)->orderBy('name');
+            $journeymen = Foreman::assignable()->whereIn('id', $projectMemberIds)->where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name');
+            $supervisors = Foreman::assignable()->whereIn('id', $projectMemberIds)->where('role', Foreman::ROLE_FOREMAN)->orderBy('name');
         } elseif ($team !== null) {
-            $journeymen = $team->journeymen();
-            $supervisors = $team->foremen();
+            $journeymen = $team->journeymen()->assignable();
+            $supervisors = $team->foremen()->assignable();
         } else {
-            $journeymen = Foreman::where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name');
-            $supervisors = Foreman::where('role', Foreman::ROLE_FOREMAN)->orderBy('name');
+            $journeymen = Foreman::assignable()->where('role', Foreman::ROLE_JOURNEYMAN)->orderBy('name');
+            $supervisors = Foreman::assignable()->where('role', Foreman::ROLE_FOREMAN)->orderBy('name');
         }
 
         $runners = $journeymen->get(['id', 'name', 'initials', 'role']);

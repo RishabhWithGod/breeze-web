@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react'
 import type { LucideIcon } from 'lucide-react'
 import {
+  CalendarOff,
   Check,
   Eye,
   GraduationCap,
@@ -35,8 +36,8 @@ import {
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import { usePermissions } from '@/hooks'
-import type { Paginated, SharedPageProps, TableColumn } from '@/types'
-import { formatDate } from '@/utils'
+import type { LeaveStatus, Paginated, SharedPageProps, TableColumn } from '@/types'
+import { describeLeave, formatDate } from '@/utils'
 
 interface MemberRow {
   readonly id: number
@@ -57,6 +58,19 @@ interface MemberRow {
   readonly email: string | null
   readonly licenceNumber: string | null
   readonly joinedOn: string | null
+  /** A manager switched their account off: they cannot sign in and hold no seat. */
+  readonly inactive: boolean
+  /** Has a login, so can be switched off and on. */
+  readonly hasAccount: boolean
+  /** Their availability from approved leave; counts down each day. Null for a roster entry with no login. */
+  readonly leave: LeaveStatus | null
+}
+
+interface SeatUsage {
+  readonly used: number
+  readonly pending: number
+  readonly limit: number
+  readonly available: number
 }
 
 interface TeamGroup {
@@ -108,6 +122,12 @@ export interface TeamsProps {
   filters: { readonly search: string }
   /** False for anyone who cannot staff work — the register is still readable. */
   canManage: boolean
+  /** Seats bought, in use, and held by open invitations; null for anyone who cannot staff work. */
+  seats: SeatUsage | null
+  /** Leave requests waiting for an answer. */
+  pendingLeave: number
+  /** True for the people who answer leave requests. */
+  canManageLeave: boolean
   /** Technicians who signed up from the mobile app, awaiting a decision. */
   pendingTechnicians: readonly TechnicianRow[]
   activeTechnicians: readonly TechnicianRow[]
@@ -122,6 +142,43 @@ export interface TeamsProps {
   teamOptions: readonly TeamOption[]
   /** 'Foreman' / 'Journeyman' / 'Apprentice' — what a mobile signup can be corrected to. */
   technicianRoleOptions: readonly string[]
+}
+
+/** On leave today, or switched off: not someone work can be handed to right now. */
+const isAway = (member: MemberRow): boolean => member.inactive || member.leave?.state === 'on_leave'
+
+/** Seats in use against seats bought — what to check before inviting someone or switching an account back on. */
+function SeatUsageCard({ seats }: { seats: SeatUsage }) {
+  const full = seats.available === 0
+  const share = seats.limit > 0 ? Math.min(100, Math.round(((seats.used + seats.pending) / seats.limit) * 100)) : 100
+
+  return (
+    <Card padding="md" className="mb-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-white">
+            Seats: {seats.used} of {seats.limit} in use
+            {seats.pending > 0 && (
+              <span className="font-normal text-white/65"> · {seats.pending} held by invitations</span>
+            )}
+          </p>
+          <p className={full ? 'mt-0.5 text-sm text-status-warning' : 'mt-0.5 text-sm text-white/65'}>
+            {full
+              ? 'No seats left. Deactivate someone, or buy more, to add or bring back a member.'
+              : `${seats.available} ${seats.available === 1 ? 'seat' : 'seats'} free. A deactivated member does not hold one.`}
+          </p>
+        </div>
+        {full && (
+          <ButtonLink href={ROUTES.settings} variant="secondary" size="sm">
+            Buy more seats
+          </ButtonLink>
+        )}
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10" role="presentation">
+        <div className={full ? 'h-full bg-status-warning' : 'h-full bg-brand'} style={{ width: `${share}%` }} />
+      </div>
+    </Card>
+  )
 }
 
 /** The people who manage this company, its owner first. */
@@ -213,6 +270,9 @@ export default function Teams({
   unassigned,
   filters,
   canManage,
+  seats,
+  pendingLeave,
+  canManageLeave,
   pendingTechnicians,
   activeTechnicians,
   rejectedTechnicians,
@@ -320,6 +380,28 @@ export default function Teams({
       header: 'Availability',
       // One answer, not two: on a site now, carrying work, or free to be handed some.
       render: (row) => {
+        const leave = describeLeave(row.leave)
+        // Switched off, or away: the answer is that, whatever work they carry.
+        if (row.inactive) {
+          return (
+            <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/65 ring-1 ring-hairline">
+              <span className="size-2 rounded-full bg-white/40" aria-hidden />
+              Inactive
+            </span>
+          )
+        }
+        if (leave !== null && row.leave?.state === 'on_leave') {
+          return (
+            <span className="flex flex-col items-start gap-0.5">
+              <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-status-warning/12 px-3 py-1 text-xs font-semibold text-status-warning ring-1 ring-status-warning/40">
+                <CalendarOff size={13} aria-hidden />
+                {leave.label}
+              </span>
+              {leave.detail && <span className="pl-1 text-2xs text-white/55">{leave.detail}</span>}
+            </span>
+          )
+        }
+
         const state = row.onSite
           ? { label: 'On site', dot: 'bg-brand', chip: 'bg-brand/12 text-brand ring-brand/40' }
           : row.openTasks > 0
@@ -335,11 +417,14 @@ export default function Teams({
               }
 
         return (
-          <span
-            className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ring-1 ${state.chip}`}
-          >
-            <span className={`size-2 rounded-full ${state.dot}`} aria-hidden />
-            {state.label}
+          <span className="flex flex-col items-start gap-0.5">
+            <span
+              className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ring-1 ${state.chip}`}
+            >
+              <span className={`size-2 rounded-full ${state.dot}`} aria-hidden />
+              {state.label}
+            </span>
+            {leave !== null && <span className="pl-1 text-2xs text-white/60">{leave.label}</span>}
           </span>
         )
       },
@@ -374,11 +459,16 @@ export default function Teams({
         subtitle="The crews work is handed to, and how much each member is already carrying."
         breadcrumbs={[{ label: 'Clients', href: ROUTES.clients }, { label: 'Teams' }]}
         actions={
-          canManage || can('admin.manage_roles') ? (
+          canManage || canManageLeave || can('admin.manage_roles') ? (
             <>
               {can('admin.manage_roles') && (
                 <ButtonLink href={ROUTES.rolesPermissions} variant="secondary" leftIcon={ShieldCheck}>
                   Roles &amp; Permissions
+                </ButtonLink>
+              )}
+              {canManageLeave && (
+                <ButtonLink href={ROUTES.leave} variant="secondary" leftIcon={CalendarOff}>
+                  Manage Leave{pendingLeave > 0 ? ` (${pendingLeave})` : ''}
                 </ButtonLink>
               )}
               {canManage && (
@@ -412,6 +502,8 @@ export default function Teams({
           {errors['team_id']}
         </Alert>
       )}
+
+      {seats !== null && <SeatUsageCard seats={seats} />}
 
       {canSeeManagers && (
         <FilterTabs
@@ -672,11 +764,16 @@ function TeamCard({ teamId, name, description, members, columns, canManage, inde
           {members.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
               <span className="rounded-full bg-status-warning/12 px-3 py-1 text-status-warning ring-1 ring-status-warning/30">
-                {members.filter((member) => member.openTasks > 0).length} on work
+                {members.filter((member) => !isAway(member) && member.openTasks > 0).length} on work
               </span>
               <span className="rounded-full bg-status-success/12 px-3 py-1 text-status-success ring-1 ring-status-success/30">
-                {members.filter((member) => member.openTasks === 0).length} available
+                {members.filter((member) => !isAway(member) && member.openTasks === 0).length} available
               </span>
+              {members.some(isAway) && (
+                <span className="rounded-full bg-white/8 px-3 py-1 text-white/75 ring-1 ring-hairline">
+                  {members.filter(isAway).length} away
+                </span>
+              )}
             </div>
           )}
 

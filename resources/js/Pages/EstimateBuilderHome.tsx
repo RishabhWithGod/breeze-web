@@ -98,7 +98,7 @@ export default function EstimateBuilderHome({ estimates, projects }: EstimateBui
       <Card padding="md" className="mb-5">
         <h2 className="mb-1 text-lg font-semibold text-white">Start an estimate</h2>
         <p className="mb-4 text-sm text-white/70">
-          Pick the project it is for. You can copy a takeoff in, or price every item by hand.
+          Pick the project it is for. Its takeoff comes in with it — quantities, material prices and install labor — and you check and adjust from there.
         </p>
         {projects.length === 0 ? (
           <Alert tone="info">Add a project first — an estimate is always raised on one.</Alert>

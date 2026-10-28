@@ -96,7 +96,20 @@ class EstimateBuilderController extends Controller
             'exclusions' => config('estimates.default_exclusions'),
         ]);
 
-        return redirect()->route('estimate-builder.show', $estimate)->with('success', "{$estimate->number} is ready to build.");
+        // The project's takeoff comes in with it, so the estimator starts from the
+        // quantities the drawings gave rather than a blank sheet. Addenda are extra
+        // scope and are brought in on purpose, from Import Takeoff.
+        $imported = 0;
+        $sources = $this->importable($request, $estimate)->where('kind', Estimate::KIND_STANDALONE)->orderBy('id')->get();
+        foreach ($sources as $source) {
+            $imported += $this->worksheet->importTakeoff($estimate, $source);
+        }
+
+        $message = $imported > 0
+            ? "{$estimate->number} is ready — ".$imported.' '.str('item')->plural($imported).' came in from the project\'s takeoff. Check the prices and hours, then send it for review.'
+            : "{$estimate->number} is ready to build. This project has no takeoff yet, so add the items by hand or import one later.";
+
+        return redirect()->route('estimate-builder.show', $estimate)->with('success', $message);
     }
 
     public function show(Request $request, Estimate $estimate): Response
@@ -196,6 +209,15 @@ class EstimateBuilderController extends Controller
 
         $this->worksheet->save($estimate, $lines, $settings, $request->user());
 
+        // Quantity with no price is a gap, not a free item: the reviewer would be
+        // approving a number that is short. Name them so they can be found.
+        $unpriced = $this->unpriced($lines);
+        if ($unpriced !== []) {
+            $shown = implode(', ', array_slice($unpriced, 0, 3)).(count($unpriced) > 3 ? ' and '.(count($unpriced) - 3).' more' : '');
+
+            return back()->withErrors(['lines' => count($unpriced).' '.str('item')->plural(count($unpriced)).' still need a price or labor rate before approval: '.$shown.'.']);
+        }
+
         if ((float) $estimate->fresh()->grand_total <= 0) {
             return back()->withErrors(['lines' => 'Price at least one item before asking for approval.']);
         }
@@ -204,6 +226,23 @@ class EstimateBuilderController extends Controller
 
         return redirect()->route('estimates.review', $estimate)
             ->with('success', "{$estimate->number} was sent for review and approval.");
+    }
+
+    /**
+     * The rows that have a quantity but nothing to price it with — material with no
+     * unit price, or labor hours with no rate.
+     *
+     * @param  list<array<string, mixed>>  $lines
+     * @return list<string>
+     */
+    private function unpriced(array $lines): array
+    {
+        return collect($lines)
+            ->filter(fn (array $row) => ((float) ($row['material_qty'] ?? 0) > 0 && (float) ($row['material_unit_price'] ?? 0) <= 0)
+                || ((float) ($row['labor_hours'] ?? 0) > 0 && (float) ($row['labor_rate'] ?? 0) <= 0))
+            ->map(fn (array $row) => trim((string) $row['description']))
+            ->values()
+            ->all();
     }
 
     /** Copies another estimate's takeoff lines onto the worksheet. */

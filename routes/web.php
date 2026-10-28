@@ -25,6 +25,8 @@ use App\Http\Controllers\DocumentFolderController;
 use App\Http\Controllers\DrawingDetailsController;
 use App\Http\Controllers\ElectricalToolsController;
 use App\Http\Controllers\EstimateBuilderController;
+use App\Http\Controllers\LeaveController;
+use App\Http\Controllers\TeamMemberAccountController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\EstimateDetailController;
 use App\Http\Controllers\EstimateReviewController;
@@ -387,15 +389,13 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
     Route::get('price-book/{priceBookItem}', [PriceBookController::class, 'show'])->name('price-book.show');
 
     // The Estimate Builder: quantities into priced labor and material lines.
-    Route::middleware('feature:estimate_builder')->group(function () {
-        Route::get('estimate-builder', [EstimateBuilderController::class, 'index'])->name('estimate-builder.index');
-        Route::post('estimate-builder', [EstimateBuilderController::class, 'store'])->name('estimate-builder.store');
-        Route::get('estimate-builder/price-list', [EstimateBuilderController::class, 'priceList'])->name('estimate-builder.price-list');
-        Route::get('estimate-builder/{estimate}', [EstimateBuilderController::class, 'show'])->name('estimate-builder.show');
-        Route::put('estimate-builder/{estimate}', [EstimateBuilderController::class, 'save'])->name('estimate-builder.save');
-        Route::post('estimate-builder/{estimate}/request-approval', [EstimateBuilderController::class, 'requestApproval'])->name('estimate-builder.request-approval');
-        Route::post('estimate-builder/{estimate}/import', [EstimateBuilderController::class, 'import'])->name('estimate-builder.import');
-    });
+    Route::get('estimate-builder', [EstimateBuilderController::class, 'index'])->name('estimate-builder.index');
+    Route::post('estimate-builder', [EstimateBuilderController::class, 'store'])->name('estimate-builder.store');
+    Route::get('estimate-builder/price-list', [EstimateBuilderController::class, 'priceList'])->name('estimate-builder.price-list');
+    Route::get('estimate-builder/{estimate}', [EstimateBuilderController::class, 'show'])->name('estimate-builder.show');
+    Route::put('estimate-builder/{estimate}', [EstimateBuilderController::class, 'save'])->name('estimate-builder.save');
+    Route::post('estimate-builder/{estimate}/request-approval', [EstimateBuilderController::class, 'requestApproval'])->name('estimate-builder.request-approval');
+    Route::post('estimate-builder/{estimate}/import', [EstimateBuilderController::class, 'import'])->name('estimate-builder.import');
 
     Route::get('estimates', [EstimateController::class, 'index'])->name('estimates.index');
     Route::get('estimates/create', [EstimateController::class, 'create'])->name('estimates.create');
@@ -406,12 +406,10 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
     Route::post('estimates/{estimate}/restore', [EstimateController::class, 'restore'])->name('estimates.restore');
 
     // Estimate detail: header fields, editable line items and exports.
-    // Estimate Review and Approval — the builder's next step, hidden with it.
-    Route::middleware('feature:estimate_builder')->group(function () {
-        Route::get('estimates/{estimate}/review', [EstimateReviewController::class, 'show'])->name('estimates.review');
-        Route::post('estimates/{estimate}/approve', [EstimateReviewController::class, 'approve'])->name('estimates.approve');
-        Route::post('estimates/{estimate}/return', [EstimateReviewController::class, 'returnForEdits'])->name('estimates.return');
-    });
+    // Estimate Review and Approval — the builder's next step.
+    Route::get('estimates/{estimate}/review', [EstimateReviewController::class, 'show'])->name('estimates.review');
+    Route::post('estimates/{estimate}/approve', [EstimateReviewController::class, 'approve'])->name('estimates.approve');
+    Route::post('estimates/{estimate}/return', [EstimateReviewController::class, 'returnForEdits'])->name('estimates.return');
     Route::get('estimates/{estimate}', [EstimateDetailController::class, 'show'])->name('estimates.show');
     Route::get('estimates/{estimate}/edit', [EstimateDetailController::class, 'edit'])->name('estimates.edit');
     Route::put('estimates/{estimate}', [EstimateDetailController::class, 'update'])->name('estimates.update');
@@ -497,6 +495,14 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
      * `foremen` register — this old address just lands there now.
      */
     Route::redirect('technicians', '/teams')->name('technicians.index');
+    // Leave: what the crew asked for in the field app, and a manager's answer.
+    Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');
+    Route::post('leave/{leave}/approve', [LeaveController::class, 'approve'])->name('leave.approve');
+    Route::post('leave/{leave}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
+    Route::post('leave/{leave}/revoke', [LeaveController::class, 'revoke'])->name('leave.revoke');
+    // A member's account switched off and on — history kept, the seat freed.
+    Route::post('foremen/{foreman}/deactivate', [TeamMemberAccountController::class, 'deactivate'])->name('foremen.deactivate');
+    Route::post('foremen/{foreman}/reactivate', [TeamMemberAccountController::class, 'reactivate'])->name('foremen.reactivate');
     Route::post('technicians/{user}/approve', [TechnicianController::class, 'approve'])->name('technicians.approve');
     Route::post('technicians/{user}/reject', [TechnicianController::class, 'reject'])->name('technicians.reject');
     Route::put('technicians/{user}/team', [TechnicianController::class, 'assignTeam'])->name('technicians.team');

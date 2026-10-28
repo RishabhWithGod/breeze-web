@@ -5,12 +5,14 @@ import {
   ArrowLeft,
   BadgeCheck,
   Briefcase,
+  CalendarOff,
   CheckCheck,
   ClipboardList,
   Clock,
   Mail,
   Phone,
   PencilLine,
+  Power,
   Trash2,
   UsersRound,
   type LucideIcon,
@@ -30,8 +32,8 @@ import {
 import { appLayout, PageTransition } from '@/components/layout'
 import { ROUTES, TASK_STATUS_LABEL, TASK_STATUS_TONE, routeTo } from '@/constants'
 import { useDisclosure } from '@/hooks'
-import type { SharedPageProps, TableColumn, TaskStatus } from '@/types'
-import { formatDate, formatHours } from '@/utils'
+import type { LeaveRequestStatus, LeaveStatus, SharedPageProps, TableColumn, TaskStatus } from '@/types'
+import { describeLeave, formatDate, formatHours, LEAVE_STATUS_LABEL, leaveRange } from '@/utils'
 
 interface ForemanDetail {
   readonly id: number
@@ -67,12 +69,38 @@ interface ForemanTask {
   readonly heldAs: 'foreman' | 'journeyman' | 'apprentice'
 }
 
+interface AccountInfo {
+  /** `active`, `inactive`, `pending_approval` or `rejected`. */
+  readonly status: string
+  readonly canDeactivate: boolean
+  readonly canReactivate: boolean
+  readonly isYou: boolean
+}
+
+interface LeaveInfo {
+  readonly status: LeaveStatus
+  readonly requests: readonly {
+    readonly id: number
+    readonly typeLabel: string
+    readonly startDate: string
+    readonly endDate: string
+    readonly days: number
+    readonly status: LeaveRequestStatus
+    readonly reason: string | null
+    readonly decisionNote: string | null
+  }[]
+}
+
 export interface ForemanShowProps {
   foreman: ForemanDetail
   /** Open work only — what they are carrying now. */
   tasks: readonly ForemanTask[]
   /** False for anyone who cannot staff work — the record is still readable. */
   canManage: boolean
+  /** Their login; null for a roster entry that has none. */
+  account: AccountInfo | null
+  /** Their availability and every leave request; null when there is no login to ask from. */
+  leave: LeaveInfo | null
 }
 
 /** Tasks per page — enough to see what they are on without a long scroll. */
@@ -85,11 +113,13 @@ const PAGE_SIZE = 5
  * picked someone: how to reach them, where they are, and exactly which jobs their
  * open tasks are on.
  */
-export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowProps) {
-  const { flash } = usePage<SharedPageProps>().props
+export default function ForemanShow({ foreman, tasks, canManage, account, leave }: ForemanShowProps) {
+  const { flash, errors } = usePage<SharedPageProps>().props
   const deleteDialog = useDisclosure()
+  const accountDialog = useDisclosure()
   const [page, setPage] = useState(1)
   const isBusy = foreman.openTasks > 0
+  const awayLabel = describeLeave(leave?.status ?? null)
   const pageCount = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE))
   // Clamped, so a task finished elsewhere never leaves this on a page that is gone.
   const currentPage = Math.min(page, pageCount)
@@ -144,9 +174,7 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
     {
       key: 'status',
       header: 'Status',
-      render: (task) => (
-        <StatusChip pill tone={TASK_STATUS_TONE[task.status]} label={TASK_STATUS_LABEL[task.status]} />
-      ),
+      render: (task) => <StatusChip pill tone={TASK_STATUS_TONE[task.status]} label={TASK_STATUS_LABEL[task.status]} />,
     },
     ...(canManage
       ? [
@@ -193,12 +221,20 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
             <span className="inline-flex rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-medium text-brand">
               {foreman.roleLabel}
             </span>
-            <StatusChip pill tone={isBusy ? 'brand' : 'success'} label={isBusy ? 'On work' : 'Free'} />
-            <StatusChip
-              pill
-              tone={foreman.onSite ? 'info' : 'neutral'}
-              label={foreman.onSite ? 'On site' : 'Available'}
-            />
+            {account?.status === 'inactive' ? (
+              <StatusChip pill tone="neutral" label="Inactive" />
+            ) : awayLabel !== null && leave?.status.state === 'on_leave' ? (
+              <StatusChip pill tone="warning" label={awayLabel.label} />
+            ) : (
+              <>
+                <StatusChip pill tone={isBusy ? 'brand' : 'success'} label={isBusy ? 'On work' : 'Free'} />
+                <StatusChip
+                  pill
+                  tone={foreman.onSite ? 'info' : 'neutral'}
+                  label={foreman.onSite ? 'On site' : 'Available'}
+                />
+              </>
+            )}
           </div>
 
           <p className="mt-2 text-md text-white/85">
@@ -224,6 +260,11 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
         {flash.warning && (
           <Alert key={flash.warning} tone="warning" className="mt-4">
             {flash.warning}
+          </Alert>
+        )}
+        {errors['seats'] && (
+          <Alert key={errors['seats']} tone="danger" className="mb-4">
+            {errors['seats']}
           </Alert>
         )}
         {flash.success && (
@@ -337,9 +378,7 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
             <p className="text-sm text-white/70">Notes</p>
             <p
               className={
-                foreman.notes
-                  ? 'mt-1 text-md whitespace-pre-line text-white/90'
-                  : 'mt-1 text-md text-white/50'
+                foreman.notes ? 'mt-1 text-md whitespace-pre-line text-white/90' : 'mt-1 text-md text-white/50'
               }
             >
               {foreman.notes ?? 'Nothing recorded.'}
@@ -347,6 +386,40 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
           </div>
         </Card>
       </div>
+
+      {(account !== null || leave !== null) && (
+        <div className="mt-5 grid items-start gap-5 xl:grid-cols-2">
+          {leave !== null && <LeaveCard leave={leave} />}
+          {account !== null && <AccountCard account={account} busy={foreman.openTasks} onSwitch={accountDialog.open} />}
+        </div>
+      )}
+
+      {account !== null && (
+        <ConfirmDialog
+          isOpen={accountDialog.isOpen}
+          tone={account.status === 'inactive' ? 'brand' : 'danger'}
+          icon={Power}
+          title={account.status === 'inactive' ? `Bring back “${foreman.name}”?` : `Deactivate “${foreman.name}”?`}
+          description={
+            account.status === 'inactive'
+              ? 'They can sign in again and hold a seat on the plan. This needs a free seat.'
+              : `They are signed out everywhere and cannot sign in. Their tasks, hours and history are kept, and their seat is freed.${foreman.openTasks > 0 ? ` They still have ${foreman.openTasks} open ${foreman.openTasks === 1 ? 'task' : 'tasks'} to hand to someone else.` : ''} Leave that has not ended is cancelled.`
+          }
+          confirmLabel={account.status === 'inactive' ? 'Activate' : 'Deactivate'}
+          confirmVariant={account.status === 'inactive' ? 'primary' : 'danger'}
+          onConfirm={() => {
+            router.post(
+              account.status === 'inactive'
+                ? routeTo.foremanReactivate(foreman.id)
+                : routeTo.foremanDeactivate(foreman.id),
+              {},
+              { preserveScroll: true },
+            )
+            accountDialog.close()
+          }}
+          onCancel={accountDialog.close}
+        />
+      )}
 
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}
@@ -362,6 +435,97 @@ export default function ForemanShow({ foreman, tasks, canManage }: ForemanShowPr
         onCancel={deleteDialog.close}
       />
     </PageTransition>
+  )
+}
+
+/** Whether they can sign in, and the switch for it. */
+function AccountCard({ account, busy, onSwitch }: { account: AccountInfo; busy: number; onSwitch: () => void }) {
+  const inactive = account.status === 'inactive'
+  const label = inactive
+    ? 'Inactive'
+    : account.status === 'active'
+      ? 'Active'
+      : account.status === 'pending_approval'
+        ? 'Waiting for approval'
+        : 'Not approved'
+  const tone = inactive ? 'neutral' : account.status === 'active' ? 'success' : 'warning'
+
+  return (
+    <Card padding="md" className="min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-white">Account</h2>
+          <p className="mt-0.5 text-xs text-white/70">Whether they can sign in, and hold a seat on the plan</p>
+        </div>
+        <StatusChip pill tone={tone} label={label} />
+      </div>
+
+      <p className="mt-4 text-sm text-white/80">
+        {inactive
+          ? 'This account is switched off. Everything they did is kept; they cannot sign in until a manager activates it again.'
+          : 'Deactivating signs them out and frees their seat. Their history stays on record, so it can be switched back on later.'}
+      </p>
+      {!inactive && busy > 0 && (
+        <p className="mt-2 text-sm text-status-warning">
+          They have {busy} open {busy === 1 ? 'task' : 'tasks'} — hand them on after deactivating.
+        </p>
+      )}
+      {account.isYou && <p className="mt-2 text-sm text-white/60">This is your own account.</p>}
+
+      {(inactive ? account.canReactivate : account.canDeactivate) && (
+        <div className="mt-4 flex justify-end">
+          <Button variant={inactive ? 'primary' : 'secondary'} leftIcon={Power} onClick={onSwitch}>
+            {inactive ? 'Activate account' : 'Deactivate account'}
+          </Button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/** Where they stand on leave: how long until they are available, and every request they made. */
+function LeaveCard({ leave }: { leave: LeaveInfo }) {
+  const label = describeLeave(leave.status)
+
+  return (
+    <Card padding="md" className="min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-white">Leave</h2>
+          <p className="mt-0.5 text-xs text-white/70">Asked for in the field app, answered under Manage Leave</p>
+        </div>
+        {label ? (
+          <StatusChip pill tone={label.tone} label={label.label} />
+        ) : (
+          <StatusChip pill tone="success" label="Available" />
+        )}
+      </div>
+      {label?.detail && <p className="mt-2 text-sm text-white/70">{label.detail}</p>}
+
+      {leave.requests.length === 0 ? (
+        <p className="mt-4 flex items-center gap-2 text-sm text-white/60">
+          <CalendarOff size={15} aria-hidden /> No leave requested yet.
+        </p>
+      ) : (
+        <ul className="mt-4 divide-y divide-hairline">
+          {leave.requests.map((request) => {
+            const status = LEAVE_STATUS_LABEL[request.status]
+
+            return (
+              <li key={request.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5 text-sm">
+                <div>
+                  <p className="font-medium text-white">
+                    {request.typeLabel} · {leaveRange(request.startDate, request.endDate, request.days)}
+                  </p>
+                  {request.decisionNote && <p className="text-xs text-white/60">“{request.decisionNote}”</p>}
+                </div>
+                <StatusChip tone={status.tone} label={status.label} />
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Card>
   )
 }
 

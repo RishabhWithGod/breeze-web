@@ -10,6 +10,7 @@ use App\Models\JobActivity;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\Leave\LeaveAvailability;
 use App\Services\Scheduling\CrewBoard;
 use App\Support\CompanyRule;
 use Illuminate\Http\RedirectResponse;
@@ -532,10 +533,15 @@ class SchedulingController extends Controller
 
         $capacity = max(1, $workingDays) * 8;
 
-        return TeamMember::query()
-            ->orderBy('name')
-            ->get(['id', 'name', 'initials', 'role'])
-            ->map(function (TeamMember $member) use ($booked, $capacity) {
+        $members = TeamMember::query()->orderBy('name')->get(['id', 'name', 'initials', 'role', 'user_id']);
+        // Who is away today (and for how long), so planning never hands work to someone on leave.
+        $leave = app(LeaveAvailability::class)->statusMap(
+            $members->pluck('user_id')->filter()->map(fn ($id) => (int) $id)->values()->all(),
+            $user->company_id,
+        );
+
+        return $members
+            ->map(function (TeamMember $member) use ($booked, $capacity, $leave) {
                 $row = $booked->get($member->id);
                 $hours = (float) ($row->hours ?? 0);
 
@@ -551,6 +557,8 @@ class SchedulingController extends Controller
                     // be flagged by `isOverbooked`, not overflow it.
                     'utilisation' => $capacity > 0 ? min(100, (int) round($hours / $capacity * 100)) : 0,
                     'isOverbooked' => $hours > $capacity,
+                    // On leave now, starting soon, or available — from approved leave and today's date.
+                    'leave' => $member->user_id !== null ? ($leave[$member->user_id] ?? null) : null,
                 ];
             })
             ->all();

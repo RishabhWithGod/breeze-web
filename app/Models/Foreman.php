@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -105,6 +106,20 @@ class Foreman extends Model
         return $this->hasMany(self::class, 'team_id', 'team_id')
             ->where('role', self::ROLE_APPRENTICE)
             ->orderBy('name');
+    }
+
+    /**
+     * Who new work may be handed to: everyone except a member whose account a manager switched
+     * off. Their record and everything they did stay; they are just not offered again.
+     *
+     * @param  Builder<Foreman>  $query
+     * @return Builder<Foreman>
+     */
+    public function scopeAssignable(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $inner) => $inner
+            ->whereNull($query->qualifyColumn('user_id'))
+            ->orWhereNotIn($query->qualifyColumn('user_id'), User::query()->where('status', User::STATUS_INACTIVE)->select('id')));
     }
 
     protected static function booted(): void

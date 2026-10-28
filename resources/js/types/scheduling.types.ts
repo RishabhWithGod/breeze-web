@@ -1,3 +1,4 @@
+import type { LeaveStatus } from './leave.types'
 /**
  * Scheduling — the crew calendar and the queue of work still to be booked.
  *
@@ -155,6 +156,8 @@ export interface CrewAvailability extends CrewMember {
   /** Clamped to 100; read `isOverbooked` for the overflow. */
   readonly utilisation: number
   readonly isOverbooked: boolean
+  /** Approved leave, from today's date; null when the member has no login to ask from. */
+  readonly leave?: LeaveStatus | null
 }
 
 /** One of a crew member's shifts, as the availability screen lists it. */

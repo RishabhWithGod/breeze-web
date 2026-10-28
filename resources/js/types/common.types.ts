@@ -37,8 +37,6 @@ export interface NavItem {
   readonly roles?: readonly string[]
   /** The permission the signed-in role needs to see this entry (Roles & Permissions); unset shows it to everyone. */
   readonly permission?: string
-  /** A feature switch that has to be on for this entry to show — see `config/features.php`. */
-  readonly feature?: 'estimateBuilder'
 }
 
 export interface BreadcrumbItem {

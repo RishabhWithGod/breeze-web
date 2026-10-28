@@ -140,21 +140,40 @@ class EstimateWorksheet
      * Each keeps the id of the line it came from, so the source is never lost, and a
      * line already copied is not copied twice.
      *
+     * A takeoff prices a device and its install labor on two lines. The worksheet
+     * keeps them as one row — material and labor side by side — as an estimator reads
+     * them. A labor line with no material to go with stays a row of its own.
+     *
      * @return int how many rows were added
      */
     public function importTakeoff(Estimate $estimate, Estimate $source): int
     {
-        $already = $estimate->builderLines()->whereNotNull('source_estimate_item_id')->pluck('source_estimate_item_id')->all();
+        $existing = $estimate->builderLines()->get(['source_estimate_item_id', 'source_labor_item_id']);
+        $already = $existing->pluck('source_estimate_item_id')
+            ->merge($existing->pluck('source_labor_item_id'))
+            ->filter()->all();
         $position = (int) $estimate->builderLines()->max('position');
         $added = 0;
 
         DB::transaction(function () use ($estimate, $source, $already, &$position, &$added) {
-            foreach ($source->items()->reorder('position')->with('priceBookItem')->get() as $item) {
-                if (in_array($item->id, $already, true)) {
+            $items = $source->items()->reorder('position')->with('priceBookItem')->get()
+                ->reject(fn (EstimateItem $item) => in_array($item->id, $already, true))
+                ->values();
+
+            $labor = $items->filter(fn (EstimateItem $item) => $item->category === EstimateItem::CATEGORY_LABOR);
+            $claimed = [];
+
+            foreach ($items as $item) {
+                if (isset($claimed[$item->id])) {
                     continue;
                 }
 
                 $isLabor = $item->category === EstimateItem::CATEGORY_LABOR;
+                $partner = $isLabor ? null : $this->installLaborFor($item, $labor, $claimed);
+
+                if ($partner !== null) {
+                    $claimed[$partner->id] = true;
+                }
 
                 $estimate->builderLines()->create([
                     'position' => ++$position,
@@ -163,11 +182,12 @@ class EstimateWorksheet
                     'unit' => $isLabor ? 'HR' : ($item->unit ?: 'EA'),
                     'material_qty' => $isLabor ? 0 : $item->quantity,
                     'material_unit_price' => $isLabor ? 0 : $item->unit_cost,
-                    'labor_hours' => $isLabor ? $item->quantity : 0,
-                    'labor_rate' => $isLabor ? $item->unit_cost : 0,
+                    'labor_hours' => $isLabor ? $item->quantity : ($partner?->quantity ?? 0),
+                    'labor_rate' => $isLabor ? $item->unit_cost : ($partner?->unit_cost ?? 0),
                     'markup_pct' => $estimate->markup_pct,
                     'source' => EstimateBuilderLine::SOURCE_TAKEOFF,
                     'source_estimate_item_id' => $item->id,
+                    'source_labor_item_id' => $partner?->id,
                     'price_book_item_id' => $item->price_book_item_id,
                 ]);
                 $added++;
@@ -177,6 +197,24 @@ class EstimateWorksheet
         });
 
         return $added;
+    }
+
+    /**
+     * The install-labor line a takeoff wrote for this material line: the one named
+     * for it, or else the one raised for the same drawing symbol.
+     *
+     * @param  \Illuminate\Support\Collection<int, EstimateItem>  $labor
+     * @param  array<int, bool>  $claimed
+     */
+    private function installLaborFor(EstimateItem $material, $labor, array $claimed): ?EstimateItem
+    {
+        $free = $labor->reject(fn (EstimateItem $line) => isset($claimed[$line->id]));
+
+        return $free->first(fn (EstimateItem $line) => $line->description === 'Install labor — '.$material->description)
+            ?? ($material->final_symbol_id !== null
+                ? $free->first(fn (EstimateItem $line) => $line->final_symbol_id === $material->final_symbol_id
+                    && str_starts_with((string) $line->description, 'Install labor'))
+                : null);
     }
 
     /**

@@ -24,7 +24,7 @@ class EstimateBuilderLine extends Model
     protected $fillable = [
         'estimate_id', 'position', 'description', 'commodity', 'unit',
         'material_qty', 'material_unit_price', 'labor_hours', 'labor_rate', 'markup_pct',
-        'source', 'source_estimate_item_id', 'price_book_item_id',
+        'source', 'source_estimate_item_id', 'source_labor_item_id', 'price_book_item_id',
     ];
 
     protected function casts(): array

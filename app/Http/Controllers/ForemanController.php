@@ -7,12 +7,15 @@ use App\Models\Job;
 use App\Models\JobAttendance;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
+use App\Models\LeaveRequest;
 use App\Models\Team;
 use App\Models\User;
 use App\Policies\JobSchedulePolicy;
 use App\Rules\UsPhoneNumber;
 use App\Services\Billing\SubscriptionSummary;
 use App\Services\Company\ManagerRegistrar;
+use App\Services\Leave\LeaveAvailability;
+use App\Services\Leave\LeaveRequests;
 use App\Services\TimeTracking\TeamMemberResolver;
 use App\Support\CompanyRule;
 use App\Support\UsPhone;
@@ -158,7 +161,64 @@ class ForemanController extends Controller
                 'heldAs' => $foreman->role,
             ])->values(),
             'canManage' => $this->canManage(request()->user()),
+            // Their account (can it be switched off or on?) and their leave: how long until they
+            // are available again, and every request they have made.
+            'account' => $this->accountFor(request()->user(), $foreman),
+            'leave' => $this->leaveFor(request()->user(), $foreman),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>|null null for someone on the roster with no login
+     */
+    private function accountFor(User $viewer, Foreman $foreman): ?array
+    {
+        $user = $foreman->user_id === null ? null : User::query()->find($foreman->user_id);
+
+        if ($user === null) {
+            return null;
+        }
+
+        $role = mb_strtolower(trim((string) $user->role));
+
+        return [
+            'status' => $user->status,
+            'canDeactivate' => LeaveRequests::isManager($viewer)
+                && $user->company_id === $viewer->company_id
+                && $user->id !== $viewer->id
+                && $role !== 'owner'
+                && ($role !== 'admin' || mb_strtolower(trim((string) $viewer->role)) === 'owner'),
+            'canReactivate' => LeaveRequests::isManager($viewer) && $user->company_id === $viewer->company_id,
+            'isYou' => $user->id === $viewer->id,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function leaveFor(User $viewer, Foreman $foreman): ?array
+    {
+        if ($foreman->user_id === null) {
+            return null;
+        }
+
+        return [
+            'status' => app(LeaveAvailability::class)->statusFor($foreman->user_id, $viewer->company_id),
+            'requests' => LeaveRequest::query()
+                ->ofCompany($viewer->company_id)
+                ->where('user_id', $foreman->user_id)
+                ->orderByDesc('start_date')->orderByDesc('id')->limit(20)->get()
+                ->map(fn (LeaveRequest $leave) => [
+                    'id' => $leave->id,
+                    'typeLabel' => $leave->typeLabel(),
+                    'startDate' => $leave->start_date->toDateString(),
+                    'endDate' => $leave->end_date->toDateString(),
+                    'days' => $leave->days(),
+                    'status' => $leave->status,
+                    'reason' => $leave->reason,
+                    'decisionNote' => $leave->decision_note,
+                ])->values(),
+        ];
     }
 
     /**

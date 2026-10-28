@@ -71,10 +71,6 @@ class HandleInertiaRequests extends Middleware
             // The company this person works for — its name and logo, for the header.
             'company' => fn () => $this->company($user),
 
-            // Features that are switched on — the menu shows nothing that is off.
-            'features' => [
-                'estimateBuilder' => config('features.estimate_builder') === true,
-            ],
 
             // The bell shows a recent slice; the full, paginated, filterable
             // history lives at the Notification Center (`NotificationController::index`).

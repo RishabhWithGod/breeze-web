@@ -172,6 +172,18 @@
     scroll-behavior: smooth;
   }
 
+  /* Number fields are typed into, not stepped: no up/down arrows. */
+  input[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
   body {
     /* Fallback tone behind the artwork — also what shows before it decodes. */
     background-color: #081733;

@@ -66,6 +66,8 @@ export const ROUTES = {
      `/foremen` — see routes/web.php. */
   teams: '/teams',
   teamCreate: '/teams/create',
+  /** Manage Leave: what the crew asked for in the field app, and a manager's answer. */
+  leave: '/leave',
   /** Where a new member is posted. The register itself is `teams`. */
   foremen: '/foremen',
   foremanCreate: '/foremen/create',
@@ -220,6 +222,11 @@ export const routeTo = {
   /** Create Project, opened with this client already picked. */
   projectCreateForClient: (clientId: number) => `/projects/create?client=${clientId}`,
   foreman: (foremanId: number) => `/foremen/${foremanId}`,
+  foremanDeactivate: (foremanId: number) => `/foremen/${foremanId}/deactivate`,
+  foremanReactivate: (foremanId: number) => `/foremen/${foremanId}/reactivate`,
+  leaveApprove: (leaveId: number) => `/leave/${leaveId}/approve`,
+  leaveReject: (leaveId: number) => `/leave/${leaveId}/reject`,
+  leaveRevoke: (leaveId: number) => `/leave/${leaveId}/revoke`,
   team: (teamId: number) => `/teams/${teamId}`,
   commodityTemplate: '/commodities/template',
   commodityImport: '/commodities/import',

@@ -1,11 +1,13 @@
 import { Head, router, usePage } from '@inertiajs/react'
 import {
+  AlertTriangle,
   Copy,
   FileDown,
   ListFilter,
   Lock,
   Pencil,
   Plus,
+  Percent,
   Save,
   Search,
   Settings2,
@@ -31,15 +33,18 @@ import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { SharedPageProps, Tone } from '@/types'
 import {
+  allowanceRow,
   blankRow,
   builderTotals,
   cn,
   formatCurrency,
   round2,
+  rowIssue,
   rowLaborTotal,
   rowMaterialTotal,
   rowSubtotal,
   toPayload,
+  type AllowanceInput,
   type BuilderRow,
 } from '@/utils'
 
@@ -87,8 +92,16 @@ export interface EstimateBuilderProps {
     readonly scopeOfWork: string | null
     readonly exclusions: readonly string[]
     /** Set when a reviewer sent it back: what they wrote, who and when. */
-    readonly returned: { readonly notes: string | null; readonly by: string | null; readonly at: string } | null
-    readonly takeoffSource: { readonly id: number; readonly number: string; readonly project: string } | null
+    readonly returned: {
+      readonly notes: string | null
+      readonly by: string | null
+      readonly at: string
+    } | null
+    readonly takeoffSource: {
+      readonly id: number
+      readonly number: string
+      readonly project: string
+    } | null
   }
   lines: readonly ServerLine[]
   priceList: readonly PriceItem[]
@@ -164,7 +177,10 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
   const [showFilters, setShowFilters] = useState(false)
   const [search, setSearch] = useState('')
   const [commodityFilter, setCommodityFilter] = useState('')
-  const [modal, setModal] = useState<'settings' | 'import' | 'markup' | 'commodity' | 'approve' | null>(null)
+  const [onlyIssues, setOnlyIssues] = useState(false)
+  const [modal, setModal] = useState<'settings' | 'import' | 'markup' | 'commodity' | 'allowance' | 'approve' | null>(
+    null,
+  )
   const [busy, setBusy] = useState(false)
   const [priceSearch, setPriceSearch] = useState('')
   const [foundPrices, setFoundPrices] = useState<readonly PriceItem[] | null>(null)
@@ -197,8 +213,11 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
     [rows, priceList],
   )
 
+  const issueCount = useMemo(() => rows.filter((row) => rowIssue(row) !== null).length, [rows])
+
   const shown = rows.filter(
     (row) =>
+      (!onlyIssues || rowIssue(row) !== null) &&
       (search === '' || row.description.toLowerCase().includes(search.toLowerCase())) &&
       (commodityFilter === '' || row.commodity === commodityFilter),
   )
@@ -266,7 +285,10 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
     setPriceSearch(term)
     if (term.trim() === '') return setFoundPrices(null)
     const response = await fetch(`${routeTo.estimateBuilderPriceList}?search=${encodeURIComponent(term)}`, {
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
     })
     if (response.ok) setFoundPrices((await response.json()) as PriceItem[])
   }
@@ -313,8 +335,16 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
             <MoreMenu
               ariaLabel="More"
               items={[
-                { label: 'View estimate', icon: FileDown, onSelect: () => router.visit(routeTo.estimate(estimate.id)) },
-                { label: 'All builder estimates', icon: Pencil, onSelect: () => router.visit(ROUTES.estimateBuilder) },
+                {
+                  label: 'View estimate',
+                  icon: FileDown,
+                  onSelect: () => router.visit(routeTo.estimate(estimate.id)),
+                },
+                {
+                  label: 'All builder estimates',
+                  icon: Pencil,
+                  onSelect: () => router.visit(ROUTES.estimateBuilder),
+                },
               ]}
             />
           </>
@@ -403,13 +433,24 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
               <Button variant="secondary" leftIcon={Upload} onClick={() => setModal('import')}>
                 Import Takeoff
               </Button>
+              <Button variant="secondary" leftIcon={Percent} onClick={() => setModal('allowance')}>
+                Add Allowance
+              </Button>
               <MoreMenu
                 label="Bulk Actions"
                 ariaLabel="Bulk actions"
                 disabled={selected.size === 0}
                 items={[
-                  { label: `Set markup (${selected.size})`, icon: Pencil, onSelect: () => setModal('markup') },
-                  { label: `Set commodity (${selected.size})`, icon: Pencil, onSelect: () => setModal('commodity') },
+                  {
+                    label: `Set markup (${selected.size})`,
+                    icon: Pencil,
+                    onSelect: () => setModal('markup'),
+                  },
+                  {
+                    label: `Set commodity (${selected.size})`,
+                    icon: Pencil,
+                    onSelect: () => setModal('commodity'),
+                  },
                   {
                     label: `Delete (${selected.size})`,
                     icon: Trash2,
@@ -438,7 +479,10 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
               className="w-56"
               options={[
                 { value: '', label: 'All commodities' },
-                ...commodities.map((name) => ({ value: name, label: name })),
+                ...commodities.map((name) => ({
+                  value: name,
+                  label: name,
+                })),
               ]}
               value={commodityFilter}
               onChange={(event) => setCommodityFilter(event.target.value)}
@@ -468,7 +512,17 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
                 {...(!locked
                   ? {
                       actions: (
-                        <Button leftIcon={Plus} onClick={() => add(blankRow({ markupPct, laborRate }))}>
+                        <Button
+                          leftIcon={Plus}
+                          onClick={() =>
+                            add(
+                              blankRow({
+                                markupPct,
+                                laborRate,
+                              }),
+                            )
+                          }
+                        >
                           Add Item
                         </Button>
                       ),
@@ -476,179 +530,245 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
                   : {})}
               />
             ) : (
-              <div className="overflow-x-auto rounded-panel border border-hairline">
-                <table className="w-full min-w-[78rem] text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-hairline bg-white/4 text-xs text-white/80">
-                      <th className="w-10 px-3 py-3">
-                        <input
-                          type="checkbox"
-                          aria-label="Select all shown items"
-                          disabled={locked}
-                          checked={allShownSelected}
-                          onChange={() =>
-                            setSelected(allShownSelected ? new Set() : new Set(shown.map((row) => row.key)))
-                          }
-                          className="size-4 accent-[var(--color-brand)]"
-                        />
-                      </th>
-                      <th className="w-8 px-1 py-3 font-semibold">#</th>
-                      <th className="min-w-56 px-2 py-3 font-semibold">Description</th>
-                      <th className="min-w-36 px-2 py-3 font-semibold">Commodity</th>
-                      <th className="w-20 px-2 py-3 font-semibold">Unit</th>
-                      <th className="w-28 px-2 py-3 text-right font-semibold">Material Qty</th>
-                      <th className="w-28 px-2 py-3 text-right font-semibold">Material Unit $</th>
-                      <th className="w-28 px-2 py-3 text-right font-semibold">Material Total</th>
-                      <th className="w-28 px-2 py-3 text-right font-semibold">Labor Qty (Hrs)</th>
-                      <th className="w-28 px-2 py-3 text-right font-semibold">Labor Rate $</th>
-                      <th className="w-28 px-2 py-3 text-right font-semibold">Labor Total</th>
-                      <th className="w-24 px-2 py-3 text-right font-semibold">Markup %</th>
-                      <th className="w-32 px-2 py-3 text-right font-semibold">Subtotal</th>
-                      <th className="w-12 px-2 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-hairline">
-                    {shown.map((row) => {
-                      const index = rows.indexOf(row) + 1
+              <>
+                {issueCount > 0 && (
+                  <Alert
+                    tone="warning"
+                    className="mb-4"
+                    title={`${issueCount} ${issueCount === 1 ? 'item needs' : 'items need'} attention`}
+                  >
+                    A quantity with no price, or a row with no description, cannot go for approval.{' '}
+                    <button
+                      type="button"
+                      className="font-semibold text-brand underline"
+                      onClick={() => setOnlyIssues((on) => !on)}
+                    >
+                      {onlyIssues ? 'Show all items' : 'Show only these'}
+                    </button>
+                  </Alert>
+                )}
+                <div className="overflow-x-auto rounded-panel border border-hairline">
+                  <table className="w-full min-w-[78rem] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-hairline bg-white/4 text-xs text-white/80">
+                        <th className="w-10 px-3 py-3">
+                          <input
+                            type="checkbox"
+                            aria-label="Select all shown items"
+                            disabled={locked}
+                            checked={allShownSelected}
+                            onChange={() =>
+                              setSelected(allShownSelected ? new Set() : new Set(shown.map((row) => row.key)))
+                            }
+                            className="size-4 accent-[var(--color-brand)]"
+                          />
+                        </th>
+                        <th className="w-8 px-1 py-3 font-semibold">#</th>
+                        <th className="min-w-56 px-2 py-3 font-semibold">Description</th>
+                        <th className="min-w-36 px-2 py-3 font-semibold">Commodity</th>
+                        <th className="w-20 px-2 py-3 font-semibold">Unit</th>
+                        <th className="w-28 px-2 py-3 text-right font-semibold">Material Qty</th>
+                        <th className="w-28 px-2 py-3 text-right font-semibold">Material Unit $</th>
+                        <th className="w-28 px-2 py-3 text-right font-semibold">Material Total</th>
+                        <th className="w-28 px-2 py-3 text-right font-semibold">Labor Qty (Hrs)</th>
+                        <th className="w-28 px-2 py-3 text-right font-semibold">Labor Rate $</th>
+                        <th className="w-28 px-2 py-3 text-right font-semibold">Labor Total</th>
+                        <th className="w-24 px-2 py-3 text-right font-semibold">Markup %</th>
+                        <th className="w-32 px-2 py-3 text-right font-semibold">Subtotal</th>
+                        <th className="w-12 px-2 py-3" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-hairline">
+                      {shown.map((row) => {
+                        const index = rows.indexOf(row) + 1
 
-                      return (
-                        <tr
-                          key={row.key}
-                          className={cn('transition-colors hover:bg-white/4', selected.has(row.key) && 'bg-brand/8')}
-                        >
-                          <td className="px-3 py-2">
-                            <input
-                              type="checkbox"
-                              aria-label={`Select item ${index}`}
-                              disabled={locked}
-                              checked={selected.has(row.key)}
-                              onChange={() => toggle(row.key)}
-                              className="size-4 accent-[var(--color-brand)]"
-                            />
-                          </td>
-                          <td className="px-1 py-2 text-white/70 tabular-nums">{index}</td>
-                          <td className="px-2 py-1.5">
-                            <CellText
-                              label={`Description, item ${index}`}
-                              value={row.description}
-                              disabled={locked}
-                              onChange={(value) => change(row.key, { description: value })}
-                              placeholder="Describe the item"
-                            />
-                            {row.source === 'takeoff' && (
-                              <span className="ml-2 text-2xs text-brand/80">from takeoff</span>
+                        return (
+                          <tr
+                            key={row.key}
+                            className={cn(
+                              'transition-colors hover:bg-white/4',
+                              selected.has(row.key) && 'bg-brand/8',
+                              rowIssue(row) !== null && 'bg-amber-400/8',
                             )}
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <CellText
-                              label={`Commodity, item ${index}`}
-                              value={row.commodity}
-                              disabled={locked}
-                              onChange={(value) => change(row.key, { commodity: value })}
-                              list="builder-commodities"
-                            />
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <CellText
-                              label={`Unit, item ${index}`}
-                              value={row.unit}
-                              disabled={locked}
-                              onChange={(value) => change(row.key, { unit: value.toUpperCase() })}
-                              maxLength={20}
-                            />
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <CellNumber
-                              label={`Material quantity, item ${index}`}
-                              value={row.materialQty}
-                              disabled={locked}
-                              onChange={(value) => change(row.key, { materialQty: value })}
-                            />
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <CellNumber
-                              label={`Material unit price, item ${index}`}
-                              value={row.materialUnitPrice}
-                              money
-                              disabled={locked}
-                              onChange={(value) => change(row.key, { materialUnitPrice: value })}
-                            />
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums text-white/90">
-                            {formatCurrency(rowMaterialTotal(row), 2)}
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <CellNumber
-                              label={`Labor hours, item ${index}`}
-                              value={row.laborHours}
-                              disabled={locked}
-                              onChange={(value) => change(row.key, { laborHours: value })}
-                            />
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <CellNumber
-                              label={`Labor rate, item ${index}`}
-                              value={row.laborRate}
-                              money
-                              disabled={locked}
-                              onChange={(value) => change(row.key, { laborRate: value })}
-                            />
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums text-white/90">
-                            {formatCurrency(rowLaborTotal(row), 2)}
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <CellNumber
-                              label={`Markup percent, item ${index}`}
-                              value={row.markupPct}
-                              suffix="%"
-                              disabled={locked}
-                              onChange={(value) => change(row.key, { markupPct: value })}
-                            />
-                          </td>
-                          <td className="px-2 py-2 text-right font-semibold tabular-nums text-white">
-                            {formatCurrency(rowSubtotal(row), 2)}
-                          </td>
-                          <td className="px-2 py-1">
-                            {!locked && (
-                              <MoreMenu
-                                variant="minimal"
-                                ariaLabel={`Item ${index} actions`}
-                                items={[
-                                  {
-                                    label: 'Duplicate',
-                                    icon: Copy,
-                                    onSelect: () =>
-                                      add({ ...row, key: blankRow({ markupPct, laborRate }).key, id: null }),
-                                  },
-                                  {
-                                    label: 'Delete',
-                                    icon: Trash2,
-                                    destructive: true,
-                                    onSelect: () => remove(new Set([row.key])),
-                                  },
-                                ]}
+                          >
+                            <td className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                aria-label={`Select item ${index}`}
+                                disabled={locked}
+                                checked={selected.has(row.key)}
+                                onChange={() => toggle(row.key)}
+                                className="size-4 accent-[var(--color-brand)]"
                               />
-                            )}
+                            </td>
+                            <td className="px-1 py-2 text-white/70 tabular-nums">{index}</td>
+                            <td className="px-2 py-1.5">
+                              <CellText
+                                label={`Description, item ${index}`}
+                                value={row.description}
+                                disabled={locked}
+                                onChange={(value) =>
+                                  change(row.key, {
+                                    description: value,
+                                  })
+                                }
+                                placeholder="Describe the item"
+                              />
+                              {row.source === 'takeoff' && (
+                                <span className="ml-2 text-2xs text-brand/80">from takeoff</span>
+                              )}
+                              {rowIssue(row) !== null && (
+                                <span className="mt-1 flex items-center gap-1 text-2xs font-semibold text-amber-300">
+                                  <AlertTriangle size={12} aria-hidden /> {rowIssue(row)}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <CellText
+                                label={`Commodity, item ${index}`}
+                                value={row.commodity}
+                                disabled={locked}
+                                onChange={(value) =>
+                                  change(row.key, {
+                                    commodity: value,
+                                  })
+                                }
+                                list="builder-commodities"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <CellText
+                                label={`Unit, item ${index}`}
+                                value={row.unit}
+                                disabled={locked}
+                                onChange={(value) =>
+                                  change(row.key, {
+                                    unit: value.toUpperCase(),
+                                  })
+                                }
+                                maxLength={20}
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <CellNumber
+                                label={`Material quantity, item ${index}`}
+                                value={row.materialQty}
+                                disabled={locked}
+                                onChange={(value) =>
+                                  change(row.key, {
+                                    materialQty: value,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <CellNumber
+                                label={`Material unit price, item ${index}`}
+                                value={row.materialUnitPrice}
+                                money
+                                disabled={locked}
+                                onChange={(value) =>
+                                  change(row.key, {
+                                    materialUnitPrice: value,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right tabular-nums text-white/90">
+                              {formatCurrency(rowMaterialTotal(row), 2)}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <CellNumber
+                                label={`Labor hours, item ${index}`}
+                                value={row.laborHours}
+                                disabled={locked}
+                                onChange={(value) =>
+                                  change(row.key, {
+                                    laborHours: value,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <CellNumber
+                                label={`Labor rate, item ${index}`}
+                                value={row.laborRate}
+                                money
+                                disabled={locked}
+                                onChange={(value) =>
+                                  change(row.key, {
+                                    laborRate: value,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right tabular-nums text-white/90">
+                              {formatCurrency(rowLaborTotal(row), 2)}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <CellNumber
+                                label={`Markup percent, item ${index}`}
+                                value={row.markupPct}
+                                suffix="%"
+                                disabled={locked}
+                                onChange={(value) =>
+                                  change(row.key, {
+                                    markupPct: value,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right font-semibold tabular-nums text-white">
+                              {formatCurrency(rowSubtotal(row), 2)}
+                            </td>
+                            <td className="px-2 py-1">
+                              {!locked && (
+                                <MoreMenu
+                                  variant="minimal"
+                                  ariaLabel={`Item ${index} actions`}
+                                  items={[
+                                    {
+                                      label: 'Duplicate',
+                                      icon: Copy,
+                                      onSelect: () =>
+                                        add({
+                                          ...row,
+                                          key: blankRow({
+                                            markupPct,
+                                            laborRate,
+                                          }).key,
+                                          id: null,
+                                        }),
+                                    },
+                                    {
+                                      label: 'Delete',
+                                      icon: Trash2,
+                                      destructive: true,
+                                      onSelect: () => remove(new Set([row.key])),
+                                    },
+                                  ]}
+                                />
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {shown.length === 0 && (
+                        <tr>
+                          <td colSpan={14} className="px-4 py-8 text-center text-white/70">
+                            No item matches the filters.
                           </td>
                         </tr>
-                      )
-                    })}
-                    {shown.length === 0 && (
-                      <tr>
-                        <td colSpan={14} className="px-4 py-8 text-center text-white/70">
-                          No item matches the filters.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-                <datalist id="builder-commodities">
-                  {commodities.map((name) => (
-                    <option key={name} value={name} />
-                  ))}
-                </datalist>
-              </div>
+                      )}
+                    </tbody>
+                  </table>
+                  <datalist id="builder-commodities">
+                    {commodities.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                </div>
+              </>
             )}
 
             <div className="mt-5 flex flex-wrap items-start justify-between gap-5">
@@ -823,9 +943,19 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
           }}
         />
       )}
+      {modal === 'allowance' && (
+        <AllowanceModal
+          onClose={() => setModal(null)}
+          onAdd={(input) => {
+            add(allowanceRow({ laborRate }, input, rows))
+            setModal(null)
+          }}
+        />
+      )}
       {modal === 'approve' && (
         <ApproveModal
           number={estimate.number}
+          issueCount={issueCount}
           total={totals.total}
           firstVersion={estimate.revisions === 0}
           busy={busy}
@@ -879,7 +1009,12 @@ function SummaryTab({
   const byCommodity = [
     ...rows.reduce((map, row) => {
       const name = row.commodity || 'Uncategorised'
-      const entry = map.get(name) ?? { items: 0, material: 0, labor: 0, subtotal: 0 }
+      const entry = map.get(name) ?? {
+        items: 0,
+        material: 0,
+        labor: 0,
+        subtotal: 0,
+      }
       map.set(name, {
         items: entry.items + 1,
         material: round2(entry.material + rowMaterialTotal(row)),
@@ -1164,6 +1299,7 @@ function SettingsModal({
 /** Sending the estimate for approval: what it comes to, and what changed in this version. */
 function ApproveModal({
   number,
+  issueCount,
   total,
   firstVersion,
   busy,
@@ -1173,6 +1309,7 @@ function ApproveModal({
   onConfirm,
 }: {
   number: string
+  issueCount: number
   total: number
   firstVersion: boolean
   busy: boolean
@@ -1194,12 +1331,18 @@ function ApproveModal({
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button isLoading={busy} disabled={missingScope} onClick={() => onConfirm(note)}>
+          <Button isLoading={busy} disabled={missingScope || issueCount > 0} onClick={() => onConfirm(note)}>
             Review Estimate
           </Button>
         </>
       }
     >
+      {issueCount > 0 && (
+        <Alert tone="warning" className="mb-4">
+          {issueCount} {issueCount === 1 ? 'item still needs' : 'items still need'} a price, labor rate or description.
+          Close this and fix the highlighted rows first.
+        </Alert>
+      )}
       {missingScope && (
         <Alert tone="warning" className="mb-4">
           A reviewer verifies the scope, so it has to be written first.{' '}
@@ -1297,6 +1440,120 @@ function ImportModal({
           onChange={(event) => setSource(event.target.value)}
         />
       )}
+    </Modal>
+  )
+}
+
+const ALLOWANCE_PRESETS: readonly {
+  readonly name: string
+  readonly basis: AllowanceInput['basis']
+  readonly pct: number
+}[] = [
+  { name: 'Waste and scrap', basis: 'materials', pct: 5 },
+  { name: 'Small tools and consumables', basis: 'labor', pct: 3 },
+  { name: 'Contingency', basis: 'both', pct: 5 },
+  { name: 'Permits and fees', basis: 'fixed', pct: 0 },
+]
+
+/** An allowance — waste, tools, contingency, permits — added as one lump-sum row. */
+function AllowanceModal({ onClose, onAdd }: { onClose: () => void; onAdd: (input: AllowanceInput) => void }) {
+  const [name, setName] = useState(ALLOWANCE_PRESETS[0]!.name)
+  const [basis, setBasis] = useState<AllowanceInput['basis']>(ALLOWANCE_PRESETS[0]!.basis)
+  const [pct, setPct] = useState(String(ALLOWANCE_PRESETS[0]!.pct))
+  const [amount, setAmount] = useState('')
+
+  const fixed = basis === 'fixed'
+  const valid = name.trim() !== '' && (fixed ? Number(amount) > 0 : Number(pct) > 0 && Number(pct) <= 100)
+
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="Add an allowance"
+      description="A lump sum for what the takeoff cannot count. A percentage is worked out from the sheet as it is now and saved as a plain amount, which you can edit in the row."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            disabled={!valid}
+            onClick={() =>
+              onAdd({
+                name,
+                basis,
+                pct: Number(pct) || 0,
+                amount: Number(amount) || 0,
+              })
+            }
+          >
+            Add allowance
+          </Button>
+        </>
+      }
+    >
+      <div className="mb-4 flex flex-wrap gap-2">
+        {ALLOWANCE_PRESETS.map((preset) => (
+          <Button
+            key={preset.name}
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setName(preset.name)
+              setBasis(preset.basis)
+              setPct(String(preset.pct))
+            }}
+          >
+            {preset.name}
+          </Button>
+        ))}
+      </div>
+      <div className="space-y-4">
+        <TextInput
+          id="allowance-name"
+          label="Name"
+          maxLength={120}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+        <SelectField
+          id="allowance-basis"
+          label="Worked out as"
+          options={[
+            { value: 'materials', label: 'Percent of materials' },
+            { value: 'labor', label: 'Percent of labor' },
+            {
+              value: 'both',
+              label: 'Percent of materials and labor',
+            },
+            { value: 'fixed', label: 'Fixed amount' },
+          ]}
+          value={basis}
+          onChange={(event) => setBasis(event.target.value as AllowanceInput['basis'])}
+        />
+        {fixed ? (
+          <TextInput
+            id="allowance-amount"
+            label="Amount $"
+            type="number"
+            min={0}
+            step="any"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+          />
+        ) : (
+          <TextInput
+            id="allowance-pct"
+            label="Percent"
+            type="number"
+            min={0}
+            max={100}
+            step="any"
+            value={pct}
+            onChange={(event) => setPct(event.target.value)}
+          />
+        )}
+      </div>
     </Modal>
   )
 }

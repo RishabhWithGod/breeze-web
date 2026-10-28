@@ -39,7 +39,7 @@ class EstimateDetailController extends Controller
         $this->authorize('view', $estimate);
 
         // One the builder sent for approval is read on the review screen, where it is decided.
-        if (config('features.estimate_builder') && $estimate->builder_managed && $estimate->status === 'sent') {
+        if ($estimate->builder_managed && $estimate->status === 'sent') {
             return redirect()->route('estimates.review', $estimate);
         }
 

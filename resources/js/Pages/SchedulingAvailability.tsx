@@ -25,7 +25,7 @@ import type {
   ScheduleConflict,
   SchedulingActivity,
 } from '@/types'
-import { cn, formatRelative } from '@/utils'
+import { cn, describeLeave, formatRelative } from '@/utils'
 
 const TABS: readonly { label: string; value: AvailabilityTab }[] = [
   { label: 'Overview', value: 'overview' },
@@ -315,6 +315,11 @@ export default function SchedulingAvailability({
                           </span>
 
                           <span className="flex items-center gap-4">
+                            {member.leave?.state === 'on_leave' || member.leave?.state === 'upcoming' ? (
+                              <Badge tone={member.leave.state === 'on_leave' ? 'warning' : 'info'}>
+                                {describeLeave(member.leave)?.label}
+                              </Badge>
+                            ) : null}
                             {member.shifts === 0 && <Badge tone="neutral">Free</Badge>}
                             {member.isOverbooked && (
                               <Badge tone="warning" icon={AlertTriangle}>

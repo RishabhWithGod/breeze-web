@@ -2,6 +2,7 @@ import {
   Calculator,
   Briefcase,
   CalendarDays,
+  CalendarOff,
   // ChartColumn,
   ClipboardList,
   Clock,
@@ -43,6 +44,14 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
       // The people who run the work, and technicians who signed up from the
       // mobile app — a pending-approval section at the top of this screen.
       { label: 'Teams', href: ROUTES.teams, icon: Users, permission: 'crew.view' },
+      // Time off the crew asked for in the field app — approved or turned down here.
+      {
+        label: 'Leave',
+        href: ROUTES.leave,
+        icon: CalendarOff,
+        permission: 'crew.view',
+        roles: ['project manager', 'admin', 'owner'],
+      },
     ],
   },
   // Lands on the takeoff history, matching the reference product.
@@ -61,7 +70,6 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
         icon: Calculator,
         permission: 'estimates.view',
         roles: ['project manager', 'estimator', 'supervisor', 'admin', 'owner'],
-        feature: 'estimateBuilder',
       },
       // Extra scope raised against an existing estimate — its own screen.
       { label: 'Addendums', href: ROUTES.addenda, icon: FileStack, permission: 'estimates.view' },
@@ -109,7 +117,7 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   { label: 'Electrical Tools', href: ROUTES.electricalTools, icon: Zap },
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock, permission: 'time_tracking.view' },
   { label: 'Billing', href: ROUTES.billing, icon: ReceiptText, permission: 'billing.view' },
-  // { label: 'Analytics', href: ROUTES.jobCosting, icon: ChartColumn },
+  { label: 'Analytics', href: ROUTES.jobCosting, icon: ReceiptText },
 ]
 
 export const FOOTER_LINKS: readonly { label: string; href: string }[] = [

@@ -9,10 +9,14 @@ use App\Models\Job;
 use App\Models\JobAttendance;
 use App\Models\JobSchedule;
 use App\Models\JobTask;
+use App\Models\LeaveRequest;
 use App\Models\Team;
 use App\Models\User;
 use App\Policies\JobSchedulePolicy;
 use App\Services\Company\ManagerRegistrar;
+use App\Services\Company\TeamInvitations;
+use App\Services\Leave\LeaveAvailability;
+use App\Services\Leave\LeaveRequests;
 use App\Support\CompanyRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,6 +37,12 @@ use Inertia\Response;
  */
 class TeamController extends Controller
 {
+    /** @var array<int, array<string, mixed>> Leave status of every member with an account, by user id. */
+    private array $leave = [];
+
+    /** @var array<int, string> Account status of every member with an account, by user id. */
+    private array $accounts = [];
+
     public function __construct(private readonly JobSchedulePolicy $policy) {}
 
     public function index(Request $request): Response
@@ -40,6 +50,7 @@ class TeamController extends Controller
         $search = $request->string('search')->trim()->value();
 
         $open = $this->load(closed: false);
+        $this->loadAvailability($request->user());
 
         // A team earns its place by matching, or by having someone who does.
         $matching = fn ($query) => $query
@@ -84,6 +95,14 @@ class TeamController extends Controller
                 ->values(),
             'filters' => ['search' => $search],
             'canManage' => $this->canManage($request->user()),
+            // Seats bought, in use, and held by invitations still open — what a manager checks
+            // before inviting someone, or switching an account back on.
+            'seats' => $this->canManage($request->user()) ? app(TeamInvitations::class)->seats($request->user()) : null,
+            // Leave waiting for an answer, for the badge on Manage Leave.
+            'pendingLeave' => LeaveRequests::isManager($request->user())
+                ? LeaveRequest::query()->ofCompany($request->user()->company_id)->where('status', LeaveRequest::STATUS_PENDING)->count()
+                : 0,
+            'canManageLeave' => LeaveRequests::isManager($request->user()),
             /*
              * Technicians who signed up from the mobile app, on this same
              * page rather than a separate one — a manager approving someone
@@ -305,11 +324,26 @@ class TeamController extends Controller
             'jobs' => $this->assignedJobs()[$member->id] ?? [],
             // Checked in at a site right now, by the mobile app.
             'onSite' => $member->user_id !== null && in_array($member->user_id, $this->onSiteUserIds(), true),
+            // Whether they can sign in at all: false once a manager deactivated the account.
+            'inactive' => $member->user_id !== null && ($this->accounts[$member->user_id] ?? null) === User::STATUS_INACTIVE,
+            // Has an account that can be switched off and on (a roster entry with no login cannot).
+            'hasAccount' => $member->user_id !== null && isset($this->accounts[$member->user_id]),
+            // On leave, and for how many more days — worked out from today, so it counts down daily.
+            'leave' => $member->user_id !== null ? ($this->leave[$member->user_id] ?? null) : null,
             'phone' => $member->phone,
             'email' => $member->email,
             'licenceNumber' => $member->licence_number,
             'joinedOn' => $member->started_on?->toDateString(),
         ];
+    }
+
+    /** Everyone's leave and account status in two queries, for the rows below. */
+    private function loadAvailability(User $viewer): void
+    {
+        $ids = Foreman::query()->whereNotNull('user_id')->pluck('user_id')->map(fn ($id) => (int) $id)->all();
+
+        $this->accounts = User::query()->whereIn('id', $ids)->pluck('status', 'id')->all();
+        $this->leave = app(LeaveAvailability::class)->statusMap($ids, $viewer->company_id);
     }
 
     /**

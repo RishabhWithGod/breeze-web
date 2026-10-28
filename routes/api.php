@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\JobTaskAttachmentController;
 use App\Http\Controllers\Api\V1\JobTaskController;
 use App\Http\Controllers\Api\V1\JobTaskNoteController;
 use App\Http\Controllers\Api\V1\JobTaskSetupController;
+use App\Http\Controllers\Api\V1\LeaveController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OfficeCommodityController;
 use App\Http\Controllers\Api\V1\OfficeJobController;
@@ -563,6 +564,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('attendance/{attendance}', [AttendanceController::class, 'show'])->name('attendance.show');
             Route::post('attendance/{attendance}/corrections/{correction}/resolve', [AttendanceController::class, 'resolveCorrection'])->name('attendance.corrections.resolve');
             Route::get('attendance/{attendance}/photo', [AttendanceController::class, 'photo'])->name('attendance.photo');
+
+            // The person's own time off: ask, see the answer, take a request back. The
+            // manager's side (approve, reject) is on the web.
+            Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');
+            Route::post('leave', [LeaveController::class, 'store'])->name('leave.store');
+            Route::post('leave/{leave}/cancel', [LeaveController::class, 'cancel'])->name('leave.cancel');
 
             Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
             Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');

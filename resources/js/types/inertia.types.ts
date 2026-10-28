@@ -53,8 +53,6 @@ export interface SharedPageProps {
   readonly addressLookupEnabled: boolean
   readonly auth: { readonly user: AuthUser | null }
   /** The company this person works for; null when they have none. */
-  /** Features that are switched on. */
-  readonly features: { readonly estimateBuilder: boolean }
   /** What this person's role may do; null when their role is not governed by the matrix (everything). */
   readonly permissions: readonly string[] | null
   readonly company: { readonly name: string; readonly logoUrl: string | null } | null

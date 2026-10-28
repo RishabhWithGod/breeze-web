@@ -400,34 +400,62 @@ class EstimateBuilderTest extends TestCase
         $this->assertSame(1, $estimate->builderLines()->count());
     }
 
-    public function test_switched_off_the_builder_and_its_review_are_out_of_sight(): void
+    public function test_starting_an_estimate_brings_the_projects_takeoff_in_with_labor_beside_its_material(): void
+    {
+        [, $pm] = $this->company();
+        $project = $this->project($pm);
+
+        $takeoff = Estimate::create([
+            'user_id' => $pm->id, 'project_id' => $project->id, 'number' => 'EST-3001', 'client' => 'Acme', 'project' => 'Takeoff',
+            'issued_on' => '2026-01-01', 'amount' => 0, 'status' => 'draft', 'kind' => 'standalone',
+        ]);
+        $takeoff->items()->create(['category' => 'material', 'description' => 'Duplex receptacle', 'unit' => 'EA', 'quantity' => 40, 'unit_cost' => 4.5, 'position' => 1]);
+        $labor = $takeoff->items()->create(['category' => 'labor', 'description' => 'Install labor — Duplex receptacle', 'unit' => 'hr', 'quantity' => 8, 'unit_cost' => 70, 'position' => 2]);
+        $takeoff->items()->create(['category' => 'material', 'description' => 'EMT 3/4"', 'unit' => 'LF', 'quantity' => 300, 'unit_cost' => 1.2, 'position' => 3]);
+
+        // An addendum is extra scope: it is not brought in on its own.
+        $addendum = Estimate::create([
+            'user_id' => $pm->id, 'project_id' => $project->id, 'number' => 'EST-3002', 'client' => 'Acme', 'project' => 'Add',
+            'issued_on' => '2026-01-01', 'amount' => 0, 'status' => 'draft', 'kind' => 'addendum',
+        ]);
+        $addendum->items()->create(['category' => 'material', 'description' => 'Extra panel', 'unit' => 'EA', 'quantity' => 1, 'unit_cost' => 900, 'position' => 1]);
+
+        $this->actingAs($pm)->post(route('estimate-builder.store'), ['project_id' => $project->id])->assertRedirect();
+
+        $estimate = Estimate::where('builder_managed', true)->sole();
+        $lines = $estimate->builderLines()->get();
+
+        // Two rows, not three: the receptacle carries its own install labor.
+        $this->assertCount(2, $lines);
+        $this->assertSame('Duplex receptacle', $lines[0]->description);
+        $this->assertEquals(40, $lines[0]->material_qty);
+        $this->assertEquals(8, $lines[0]->labor_hours);
+        $this->assertEquals(70, $lines[0]->labor_rate);
+        $this->assertSame($labor->id, $lines[0]->source_labor_item_id);
+        $this->assertEquals(0, $lines[1]->labor_hours);
+
+        // Importing the same takeoff again copies neither line twice.
+        $this->actingAs($pm)->post(route('estimate-builder.import', $estimate), ['source_estimate_id' => $takeoff->id])->assertSessionHas('warning');
+        $this->assertSame(2, $estimate->builderLines()->count());
+    }
+
+    public function test_quantity_with_no_price_stops_the_request_for_approval_but_keeps_the_work(): void
     {
         [, $pm] = $this->company();
         $estimate = $this->builderEstimate($pm);
-        $this->actingAs($pm)->post(route('estimate-builder.request-approval', $estimate), $this->payload($this->twoLines()));
+
+        $lines = $this->twoLines();
+        $lines[1]['material_unit_price'] = 0;
+
+        $this->actingAs($pm)->post(route('estimate-builder.request-approval', $estimate), $this->payload($lines))
+            ->assertSessionHasErrors('lines');
+
+        $this->assertSame('draft', $estimate->fresh()->status);
+        $this->assertSame(2, $estimate->builderLines()->count());
+
+        // Priced, it goes.
+        $this->actingAs($pm)->post(route('estimate-builder.request-approval', $estimate), $this->payload($this->twoLines()))
+            ->assertSessionHasNoErrors();
         $this->assertSame('sent', $estimate->fresh()->status);
-
-        // On, it is offered in the menu.
-        $this->actingAs($pm)->get(route('estimates.index'))->assertInertia(fn (Assert $page) => $page->where('features.estimateBuilder', true));
-
-        config(['features.estimate_builder' => false]);
-
-        // Off, the menu does not offer it and none of its addresses answer.
-        $this->actingAs($pm)->get(route('estimates.index'))->assertInertia(fn (Assert $page) => $page->where('features.estimateBuilder', false));
-        $this->actingAs($pm)->get(route('estimate-builder.index'))->assertNotFound();
-        $this->actingAs($pm)->get(route('estimate-builder.show', $estimate))->assertNotFound();
-        $this->actingAs($pm)->put(route('estimate-builder.save', $estimate), $this->payload($this->twoLines()))->assertNotFound();
-        $this->actingAs($pm)->post(route('estimate-builder.store'), ['project_id' => Project::sole()->id])->assertNotFound();
-        $this->actingAs($pm)->getJson(route('estimate-builder.price-list'))->assertNotFound();
-        $this->actingAs($pm)->get(route('estimates.review', $estimate))->assertNotFound();
-        $this->actingAs($pm)->post(route('estimates.approve', $estimate))->assertNotFound();
-        $this->actingAs($pm)->post(route('estimates.return', $estimate), ['notes' => 'No'])->assertNotFound();
-
-        // Nothing was decided, and the estimate opens in the ordinary place.
-        $this->assertSame('sent', $estimate->fresh()->status);
-        $this->actingAs($pm)->get(route('estimates.show', $estimate))->assertOk();
-
-        // The rest of Estimates is untouched.
-        $this->actingAs($pm)->get(route('estimates.index'))->assertOk();
     }
 }

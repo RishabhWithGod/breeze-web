@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,7 +17,10 @@ class EnsureAccountIsActive
 {
     public function handle(Request $request, Closure $next): Response
     {
-        abort_unless($request->user()?->isActive(), 403, 'Your account is pending manager approval.');
+        $user = $request->user();
+
+        abort_if($user?->status === User::STATUS_INACTIVE, 403, 'Your account has been deactivated. Please contact your manager.');
+        abort_unless($user?->isActive(), 403, 'Your account is pending manager approval.');
 
         return $next($request);
     }
