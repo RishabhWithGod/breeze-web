@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Head, Link, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import type { LucideIcon } from 'lucide-react'
-import { ArrowLeft, Ban, Building2, FileText, FolderOpen, Hash, History, Layers, Layers2, Play, Ruler, Sparkles, TriangleAlert, UploadCloud } from 'lucide-react'
+import { ArrowLeft, Ban, Box, Building2, FileText, FolderOpen, Hash, History, Layers, Layers2, Play, Ruler, Sparkles, TriangleAlert, UploadCloud } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -407,9 +407,14 @@ export default function Upload({
         subtitle="Upload your project drawings to begin Ai-Powered Takeoff and Estimate Generation"
         breadcrumbs={[{ label: 'AI Takeoff', href: ROUTES.aiTakeoff }, { label: 'Upload Drawings' }]}
         actions={
-          <ButtonLink href={ROUTES.history} variant="secondary" leftIcon={History}>
-            History
-          </ButtonLink>
+          <>
+            <ButtonLink href={ROUTES.threeDSample} variant="secondary" leftIcon={Box}>
+              Explore sample 3D (optional)
+            </ButtonLink>
+            <ButtonLink href={ROUTES.history} variant="secondary" leftIcon={History}>
+              History
+            </ButtonLink>
+          </>
         }
       />
 

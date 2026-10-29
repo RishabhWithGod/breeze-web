@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\ClientContactController;
 use App\Http\Controllers\Api\V1\ClientController;
 use App\Http\Controllers\Api\V1\DeviceTokenController;
 use App\Http\Controllers\Api\V1\DocumentController;
+use App\Http\Controllers\Api\V1\EstimateBuilderController;
 use App\Http\Controllers\Api\V1\EstimateController;
 use App\Http\Controllers\Api\V1\EstimateItemAttachmentController;
 use App\Http\Controllers\Api\V1\EstimateItemController;
@@ -30,6 +31,7 @@ use App\Http\Controllers\Api\V1\JobTaskController;
 use App\Http\Controllers\Api\V1\JobTaskNoteController;
 use App\Http\Controllers\Api\V1\JobTaskSetupController;
 use App\Http\Controllers\Api\V1\LeaveController;
+use App\Http\Controllers\Api\V1\LeaveManagementController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OfficeCommodityController;
 use App\Http\Controllers\Api\V1\OfficeJobController;
@@ -174,6 +176,14 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             // Manager-owned data (`Estimate::scopeOwnedBy`) — self-limiting
             // for a field crew account with no estimates of their own, so
             // this needs no extra role gate beyond `account.active`.
+            // The Estimate Builder: quantities into priced labor and material lines.
+            Route::get('estimate-builder', [EstimateBuilderController::class, 'index'])->name('estimate-builder.index');
+            Route::post('estimate-builder', [EstimateBuilderController::class, 'store'])->name('estimate-builder.store');
+            Route::get('estimate-builder/price-list', [EstimateBuilderController::class, 'priceList'])->name('estimate-builder.price-list');
+            Route::get('estimate-builder/{estimate}', [EstimateBuilderController::class, 'show'])->whereNumber('estimate')->name('estimate-builder.show');
+            Route::put('estimate-builder/{estimate}', [EstimateBuilderController::class, 'save'])->whereNumber('estimate')->name('estimate-builder.save');
+            Route::post('estimate-builder/{estimate}/request-approval', [EstimateBuilderController::class, 'requestApproval'])->whereNumber('estimate')->name('estimate-builder.request-approval');
+            Route::post('estimate-builder/{estimate}/import', [EstimateBuilderController::class, 'import'])->whereNumber('estimate')->name('estimate-builder.import');
             Route::get('estimates', [EstimateController::class, 'index'])->name('estimates.index');
             Route::get('estimates/create-options', [EstimateController::class, 'createOptions'])->name('estimates.create-options');
             Route::post('estimates', [EstimateController::class, 'store'])->name('estimates.store');
@@ -328,6 +338,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::post('team', [TeamController::class, 'store'])->name('team.store');
             Route::put('team/{member}', [TeamController::class, 'update'])->name('team.update');
             Route::delete('team/{member}', [TeamController::class, 'destroy'])->name('team.destroy');
+            Route::post('team/{member}/deactivate', [TeamController::class, 'deactivate'])->name('team.deactivate');
+            Route::post('team/{member}/reactivate', [TeamController::class, 'reactivate'])->name('team.reactivate');
             // The crew group itself (a name), distinct from a person on one.
             Route::post('teams', [TeamController::class, 'storeTeam'])->name('teams.store');
             Route::put('teams/{team}', [TeamController::class, 'updateTeam'])->name('teams.update');
@@ -418,6 +430,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                         Route::get('transactions', 'transactions')->name('transactions');
                         Route::put('billing', 'updateBilling')->name('billing');
                         Route::put('subscription', 'changePlan')->name('subscription');
+                        Route::get('plan', 'plan')->name('plan');
+                        Route::post('seats', 'buySeats')->name('seats');
                         Route::post('processors/{processor}/connect', 'connect')->name('processors.connect');
                         Route::post('processors/{processor}/test', 'test')->name('processors.test');
                         Route::delete('processors/{processor}', 'disconnect')->name('processors.disconnect');
@@ -570,6 +584,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');
             Route::post('leave', [LeaveController::class, 'store'])->name('leave.store');
             Route::post('leave/{leave}/cancel', [LeaveController::class, 'cancel'])->name('leave.cancel');
+
+            // The manager's side: everyone's requests, and the answer to each.
+            Route::get('leave-requests', [LeaveManagementController::class, 'index'])->name('leave-requests.index');
+            Route::post('leave-requests/{leave}/approve', [LeaveManagementController::class, 'approve'])->whereNumber('leave')->name('leave-requests.approve');
+            Route::post('leave-requests/{leave}/reject', [LeaveManagementController::class, 'reject'])->whereNumber('leave')->name('leave-requests.reject');
+            Route::post('leave-requests/{leave}/revoke', [LeaveManagementController::class, 'revoke'])->whereNumber('leave')->name('leave-requests.revoke');
 
             Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
             Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');

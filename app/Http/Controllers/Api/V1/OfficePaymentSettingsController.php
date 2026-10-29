@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Notifications\PaymentProcessorStatusChanged;
 use App\Policies\PaymentSettingsPolicy;
 use App\Services\Billing\PlanPricing;
+use App\Services\Billing\SeatPurchases;
 use App\Services\Billing\SubscriptionSummary;
 use App\Services\Payments\PaymentProcessorService;
 use Illuminate\Http\JsonResponse;
@@ -71,6 +72,62 @@ class OfficePaymentSettingsController extends Controller
             'currencyOptions' => collect(config('payments.currencies'))
                 ->map(fn ($label, $value) => ['label' => $label, 'value' => $value])->values(),
         ]);
+    }
+
+    /**
+     * Plan Details and Change Plan in one call: what the plan costs and includes, how much is used, the seat
+     * offer, how it is paid, and — for each plan — what would stop the company moving onto it.
+     */
+    public function plan(Request $request, SubscriptionSummary $summary): JsonResponse
+    {
+        $this->authorizeManage($request);
+        $user = $request->user();
+        $built = $summary->build($user);
+        $subscription = Subscription::forUser($user);
+
+        return $this->ok([
+            'subscription' => $built,
+            'seatOffer' => app(SeatPurchases::class)->offer($user),
+            'payment' => $this->subscriptionPayment($user),
+            'receipt' => [
+                'confirmationNumber' => $subscription->confirmation_number,
+                'url' => $subscription->receipt_url,
+            ],
+            'blockers' => collect($built['plans'])
+                ->mapWithKeys(fn (array $plan) => [$plan['key'] => $summary->blockersFor($plan['key'], $user)])
+                ->all(),
+        ]);
+    }
+
+    /** Buys more seats on the current plan; `seats` is how many to ADD. Same rules as web's `buySeats`. */
+    public function buySeats(Request $request, SeatPurchases $purchases): JsonResponse
+    {
+        $this->authorizeManage($request);
+
+        $data = $request->validate([
+            'seats' => ['required', 'integer', 'min:1', 'max:'.SeatPurchases::MAX_ADD],
+        ], [
+            'seats.required' => 'Enter how many seats to add.',
+            'seats.integer' => 'Enter a whole number of seats.',
+            'seats.min' => 'Add at least 1 seat.',
+            'seats.max' => 'Add at most '.SeatPurchases::MAX_ADD.' seats at a time.',
+        ]);
+
+        try {
+            $result = $purchases->buy($request->user(), (int) $data['seats']);
+        } catch (\RuntimeException $e) {
+            return $this->fail($e->getMessage(), 422, ['seats' => [$e->getMessage()]]);
+        }
+
+        $word = $result['added'] === 1 ? 'seat' : 'seats';
+        $paid = $result['charged'] !== null && $result['charged'] > 0
+            ? ' '.number_format($result['charged'] / 100, 2).' USD was charged to your card on file.'
+            : ($result['via'] === SeatPurchases::VIA_LOCAL ? ' (Test mode — nothing was charged.)' : '');
+
+        return $this->ok(
+            ['subscription' => app(SubscriptionSummary::class)->build($request->user()), 'seatOffer' => $purchases->offer($request->user())],
+            "{$result['added']} {$word} added. You now have {$result['seats']} seats.{$paid}",
+        );
     }
 
     /** The payment history, a page at a time. */

@@ -33,6 +33,7 @@ class NotificationTarget
             str_starts_with($path, '/change-orders') => ['screen' => 'change_orders', 'id' => null],
             str_starts_with($path, '/security') => ['screen' => 'security', 'id' => null],
             str_starts_with($path, '/time-tracking') => ['screen' => 'time', 'id' => null],
+            str_starts_with($path, '/leave') => ['screen' => 'leave', 'id' => null],
             str_starts_with($path, '/teams'), str_starts_with($path, '/technicians') => ['screen' => 'teams', 'id' => null],
             str_starts_with($path, '/scheduling'), str_starts_with($path, '/schedule') => ['screen' => 'schedule', 'id' => null],
             default => null,

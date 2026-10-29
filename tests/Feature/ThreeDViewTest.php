@@ -288,8 +288,9 @@ class ThreeDViewTest extends TestCase
         $own = collect(app('router')->getRoutes())
             ->filter(fn ($route) => str_contains($route->getActionName(), 'ThreeDViewController'));
 
-        $this->assertCount(1, $own);
-        $this->assertSame(['GET', 'HEAD'], $own->first()->methods());
+        // The review's own 3D page, and the sample room: both read-only.
+        $this->assertCount(2, $own);
+        $own->each(fn ($route) => $this->assertSame(['GET', 'HEAD'], $route->methods()));
     }
 
     /* --------------------------------------------- what phase 3 added ---- */
@@ -414,5 +415,38 @@ class ThreeDViewTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->assertSame($before + 4, $this->result->fresh()->reviewTally()['approvedCount']);
+    }
+
+    public function test_it_carries_what_the_3d_review_needs_to_continue(): void
+    {
+        $this->symbol('LED Troffer', [['key' => 'a', 'bbox' => [100, 100, 40, 40], 'page' => 1, 'status' => 'approved', 'confidence' => 0.9]]);
+
+        $this->actingAs($this->user)->get(route('reviews.threeD', $this->result))->assertInertia(fn (Assert $page) => $page
+            ->component('ThreeDView')
+            ->where('result.projectId', $this->result->project_id)
+            ->where('result.reviewUrl', route('reviews.show', $this->result))
+            ->where('result.estimateId', null)
+            ->has('tally.approved')
+            ->has('tally.pending'));
+    }
+
+    public function test_the_sample_room_needs_no_takeoff_and_touches_none(): void
+    {
+        $this->actingAs($this->user)->get(route('threeD.sample'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('ThreeDView')
+            ->where('result', null)
+            ->where('tally', null)
+            ->where('overlaySymbols', [])
+            ->where('canEdit', false));
+
+        // Signed in is all it needs, and it writes nothing.
+        $this->assertSame(0, \App\Models\AiResult::count() - 1);
+    }
+
+    public function test_the_review_screen_offers_the_way_into_3d(): void
+    {
+        // Review in 3D (optional) sits beside Continue to Estimate; the route it opens exists and answers.
+        $this->actingAs($this->user)->get(route('reviews.show', $this->result))->assertOk();
+        $this->actingAs($this->user)->get(route('reviews.threeD', $this->result))->assertOk();
     }
 }

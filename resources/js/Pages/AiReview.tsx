@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
-import { CheckCheck, Combine, RotateCcw, Sparkles, X } from 'lucide-react'
+import { Box, CheckCheck, Combine, RotateCcw, Sparkles, X } from 'lucide-react'
 import {
   Alert,
   Badge,
   Button,
+  ButtonLink,
   Card,
   EmptyState,
   Pagination,
@@ -281,6 +282,12 @@ export default function AiReview({
         current="review"
         continueLabel="Continue to Estimate"
         isBusy={isFinalising}
+        // Optional: the same detections stood up in a room, to check them against where wire could run.
+        aside={
+          <ButtonLink href={routeTo.reviewThreeD(result.id)} variant="secondary" size="lg" leftIcon={Box}>
+            Review in 3D (optional)
+          </ButtonLink>
+        }
         {...(signedOff && result.estimateId
           // In the flow, so the estimate opens with its roadmap and its own way
           // forward — without this a signed-off review continued to a dead end.

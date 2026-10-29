@@ -53,13 +53,11 @@ interface Draft {
 
 const DEFAULT_BOX_FRACTION = 0.035
 /**
- * Whether the Drawing card offers a way into the spatial viewer.
+ * Whether the Drawing card offers a way into the 3D review.
  *
- * Off while that feature is parked. Everything behind it is intact — the route,
- * the page, the components, the tests — so turning this to `true` is the whole
- * of putting it back.
+ * On. It can be switched off here without touching the route, the page or the components.
  */
-const SHOW_THREE_D_ENTRY = false
+const SHOW_THREE_D_ENTRY = true
 
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
 const MIN_SCALE: number = ZOOM_STEPS[0] ?? 0.5
@@ -605,15 +603,9 @@ export function DrawingOverlay({
             <span className="ml-1 rounded-panel border border-hairline-strong bg-white/5 px-3 py-1 text-xs font-semibold text-white">
               {zoomPercent}%
             </span>
-            {/*
-              The way in to the spatial viewer, switched off for now.
-
-              Hidden, not removed: the route, the page and every `ThreeD*` component
-              are still there and still tested. Flip the flag above to put it back.
-            */}
             {SHOW_THREE_D_ENTRY && (
               <ButtonLink href={routeTo.reviewThreeD(resultId)} variant="secondary" size="sm" leftIcon={Box}>
-                3D View
+                3D Review
               </ButtonLink>
             )}
           </div>

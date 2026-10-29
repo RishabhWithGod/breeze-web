@@ -225,6 +225,7 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
      * source of truth. See ThreeDViewController.
      */
     Route::get('reviews/{result}/3d', [ThreeDViewController::class, 'show'])->name('reviews.threeD');
+    Route::get('ai-takeoff/3d-sample', [ThreeDViewController::class, 'sample'])->name('threeD.sample');
     Route::get('reviews/{result}/original.json', [AiReviewController::class, 'original'])->name('reviews.original');
     Route::get('reviews/{result}/crops/{review}', [AiReviewController::class, 'crop'])->name('reviews.crop');
     Route::get('reviews/{result}/pages/{page}', [AiReviewController::class, 'pagePreview'])->name('reviews.page');

@@ -92,7 +92,7 @@ return [
         'time-tracking' => 'time_tracking', 'time-entries' => 'time_tracking', 'timer' => 'time_tracking', 'attendance' => 'time_tracking',
         'invoices' => 'billing', 'billing' => 'billing',
         'takeoffs' => 'takeoff', 'uploads' => 'takeoff', 'processing' => 'takeoff', 'results' => 'takeoff', 'reviews' => 'takeoff',
-        'finals' => 'takeoff', 'drawings' => 'takeoff', 'takeoff-flow' => 'takeoff', 'ai' => 'takeoff',
+        'finals' => 'takeoff', 'drawings' => 'takeoff', 'takeoff-flow' => 'takeoff', 'ai' => 'takeoff', 'threeD' => 'takeoff',
         'teams' => 'crew', 'foremen' => 'crew', 'technicians' => 'crew', 'leave' => 'crew',
         'team-setup' => 'admin.manage_users', 'managers' => 'admin.manage_users',
         'roles' => 'admin.manage_roles',

@@ -14,7 +14,10 @@ use App\Models\User;
 use App\Rules\UsPhoneNumber;
 use App\Services\Billing\SubscriptionSummary;
 use App\Services\BreezeBucks\BreezeBucksLedger;
+use App\Models\LeaveRequest;
 use App\Services\Company\ManagerRegistrar;
+use App\Services\Leave\LeaveAvailability;
+use App\Services\Team\MemberAccounts;
 use App\Services\TimeTracking\TeamMemberResolver;
 use App\Support\CompanyRule;
 use App\Support\UsPhone;
@@ -62,6 +65,11 @@ class TeamController extends Controller
             ->orderByDesc('id')
             ->paginate(min((int) $request->integer('per_page', 20), 50));
 
+        // Who is off, and for how many more days; who has been switched off — one query each, not one per row.
+        $userIds = $members->getCollection()->pluck('user_id')->filter()->values()->all();
+        $leave = app(LeaveAvailability::class)->statusMap($userIds, $request->user()->company_id);
+        $statuses = User::query()->whereIn('id', $userIds)->pluck('status', 'id');
+
         $pendingApprovals = User::query()
             ->where('registration_source', User::SOURCE_MOBILE)
             ->where('status', User::STATUS_PENDING_APPROVAL)
@@ -98,6 +106,9 @@ class TeamController extends Controller
                 'openTasks' => (int) ($open[$member->id]->tasks ?? 0),
                 'openJobs' => (int) ($open[$member->id]->jobs ?? 0),
                 'openHours' => (float) ($open[$member->id]->hours ?? 0),
+                'hasLogin' => $member->user_id !== null,
+                'accountStatus' => $member->user_id !== null ? ($statuses[$member->user_id] ?? null) : null,
+                'availability' => $member->user_id !== null ? ($leave[$member->user_id] ?? null) : null,
             ])->all(),
             'pendingApprovals' => $pendingApprovals,
             'teamOptions' => Team::query()->orderBy('name')->get(['id', 'name']),
@@ -190,7 +201,73 @@ class TeamController extends Controller
                 'heldAs' => $member->role,
             ])->values(),
             'canManage' => $this->canManage($request->user()),
+            // Their account (can it be switched off or on?) and their leave: how long until they are
+            // available again, and every request they have made.
+            'account' => $member->user ? app(MemberAccounts::class)->describe($request->user(), $member->user) : null,
+            'leave' => $this->leaveFor($request->user(), $member),
         ]);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function leaveFor(User $viewer, Foreman $member): ?array
+    {
+        if ($member->user_id === null) {
+            return null;
+        }
+
+        return [
+            'status' => app(LeaveAvailability::class)->statusFor($member->user_id, $viewer->company_id),
+            'requests' => LeaveRequest::query()
+                ->ofCompany($viewer->company_id)
+                ->where('user_id', $member->user_id)
+                ->orderByDesc('start_date')->orderByDesc('id')->limit(20)->get()
+                ->map(fn (LeaveRequest $leave) => [
+                    'id' => $leave->id,
+                    'typeLabel' => $leave->typeLabel(),
+                    'startDate' => $leave->start_date->toDateString(),
+                    'endDate' => $leave->end_date->toDateString(),
+                    'days' => $leave->days(),
+                    'status' => $leave->status,
+                    'reason' => $leave->reason,
+                    'decisionNote' => $leave->decision_note,
+                ])->values(),
+        ];
+    }
+
+    /** `POST /team/{member}/deactivate` — switches the account off; history stays, the seat is freed. */
+    public function deactivate(Request $request, Foreman $member): JsonResponse
+    {
+        $accounts = app(MemberAccounts::class);
+        abort_unless(\App\Services\Leave\LeaveRequests::isManager($request->user()), 403);
+        $user = $accounts->accountOf($request->user(), $member);
+        abort_if($user === null, 404, 'This team member has no account to switch off.');
+
+        try {
+            $open = $accounts->deactivate($request->user(), $member, $user);
+        } catch (\RuntimeException $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+
+        $note = $open > 0 ? " They still have {$open} open ".($open === 1 ? 'task' : 'tasks').' to hand to someone else.' : '';
+
+        return $this->ok(message: "{$user->name} was deactivated. Their history is kept and their seat is free.{$note}");
+    }
+
+    /** `POST /team/{member}/reactivate` — switches it back on; needs a free seat. */
+    public function reactivate(Request $request, Foreman $member): JsonResponse
+    {
+        $accounts = app(MemberAccounts::class);
+        abort_unless(\App\Services\Leave\LeaveRequests::isManager($request->user()), 403);
+        $user = $accounts->accountOf($request->user(), $member);
+        abort_if($user === null, 404, 'This team member has no account to switch on.');
+
+        try {
+            $accounts->reactivate($request->user(), $user);
+        } catch (\RuntimeException $e) {
+            return $this->fail($e->getMessage(), 422, ['seats' => [$e->getMessage()]]);
+        }
+
+        return $this->ok(message: "{$user->name} is active again.");
     }
 
     /**

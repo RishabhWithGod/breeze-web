@@ -12,6 +12,8 @@ export interface StepWizardProps {
   hrefs?: Partial<Record<WorkflowStep, string>>
   /** Overrides the "Next: …" line, for a step whose successor has a better name. */
   nextLabel?: string
+  /** Names the step in hand differently from the rail — a side trip such as an optional 3D inspection. */
+  currentLabel?: string
   className?: string
 }
 
@@ -25,7 +27,7 @@ export interface StepWizardProps {
  * Only completed steps link. A step ahead has nothing to open, and making it look
  * clickable would promise a shortcut that does not exist.
  */
-export function StepWizard({ current, hrefs, nextLabel, className }: StepWizardProps) {
+export function StepWizard({ current, hrefs, nextLabel, currentLabel, className }: StepWizardProps) {
   const currentIndex = WORKFLOW_STEPS.findIndex((step) => step.key === current)
   const total = WORKFLOW_STEPS.length
   const stepNumber = currentIndex + 1
@@ -42,7 +44,7 @@ export function StepWizard({ current, hrefs, nextLabel, className }: StepWizardP
           Step <span className="font-semibold text-white">{stepNumber}</span> of {total}
           <span className="mx-2 text-white/25">·</span>
           <span className="font-semibold text-white">
-            {WORKFLOW_STEPS[currentIndex]?.label}
+            {currentLabel ?? WORKFLOW_STEPS[currentIndex]?.label}
           </span>
         </p>
 

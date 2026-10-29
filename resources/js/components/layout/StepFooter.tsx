@@ -17,6 +17,8 @@ export interface StepFooterProps {
   /** Overrides the button text when the next step has a better name here. */
   continueLabel?: string
   isBusy?: boolean
+  /** A secondary action beside the primary one — for an optional detour such as "Review in 3D". */
+  aside?: React.ReactNode
   className?: string
 }
 
@@ -38,6 +40,7 @@ export function StepFooter({
   blockedReason,
   continueLabel,
   isBusy = false,
+  aside,
   className,
 }: StepFooterProps) {
   const index = WORKFLOW_STEPS.findIndex((step) => step.key === current)
@@ -63,6 +66,8 @@ export function StepFooter({
       )}
     >
       {isBlocked && <p className="text-md text-white/90 sm:text-right">{blockedReason}</p>}
+
+      {aside}
 
       {href && !isBlocked ? (
         <ButtonLink href={href} size="lg" rightIcon={ArrowRight}>

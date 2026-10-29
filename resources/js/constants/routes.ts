@@ -27,6 +27,8 @@ export const ROUTES = {
   getStarted: '/get-started',
   /** AI Takeoff module landing screen — the takeoff history. */
   aiTakeoff: '/ai-takeoff',
+  /** A small room to explore in 3D without a drawing. */
+  threeDSample: '/ai-takeoff/3d-sample',
   /** Electrical Tools landing screen — the calculator catalog. */
   electricalTools: '/electrical-tools',
   /** Address suggestions for the Site / Location field. JSON, not a page. */

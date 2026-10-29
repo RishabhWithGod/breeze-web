@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\SymbolOverlayResource;
 use App\Models\AiResult;
+use App\Services\Review\SymbolIconMatcher;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -22,6 +23,22 @@ use Inertia\Response;
  */
 class ThreeDViewController extends Controller
 {
+    /**
+     * A small room to explore without a drawing — the "Explore sample 3D" on the upload screen. It has
+     * no takeoff behind it, so nothing here can touch one.
+     */
+    public function sample(): Response
+    {
+        return Inertia::render('ThreeDView', [
+            'result' => null,
+            'overlaySymbols' => [],
+            'symbolImages' => (object) [],
+            'pageDimensions' => (object) [],
+            'tally' => null,
+            'canEdit' => false,
+        ]);
+    }
+
     public function show(Request $request, AiResult $result): Response
     {
         $this->authorize('view', $result);
@@ -36,6 +53,16 @@ class ThreeDViewController extends Controller
          */
         $pageDimensions = $result->pageDimensions();
 
+        $rows = $result->reviews()->visible()->get();
+        $icons = app(SymbolIconMatcher::class);
+        $symbolImages = $rows->mapWithKeys(function ($row) use ($icons) {
+            $crop = ($row->crop_path || $row->image_path)
+                ? route('reviews.crop', ['result' => $row->ai_result_id, 'review' => $row->id])
+                : $row->crop_url;
+
+            return [$row->id => $crop ?: $icons->urlFor($row->name ?: $row->ai_name)];
+        })->all();
+
         return Inertia::render('ThreeDView', [
             'result' => [
                 'id' => $result->id,
@@ -44,15 +71,24 @@ class ThreeDViewController extends Controller
                 'pageCount' => (int) $result->page_count,
                 'isFinalised' => $result->isFinalised(),
                 'reviewUrl' => route('reviews.show', $result),
+                // The steps around it, so Back and Continue work as they do on the review screen.
+                'projectId' => $result->project_id,
+                'estimateId' => $result->estimate_id,
             ],
+            // How much of the review is decided: the same counts the review screen's footer reads.
+            'tally' => $result->reviewTally(),
             /*
              * The same resource the review overlay is given, unpaginated and
              * unfiltered — one row per category, each carrying every occurrence
              * with its own page, bbox, status and origin.
              */
-            'overlaySymbols' => SymbolOverlayResource::collection(
-                $result->reviews()->visible()->get()
-            )->resolve(),
+            'overlaySymbols' => SymbolOverlayResource::collection($rows)->resolve(),
+            /*
+             * What each symbol looks like, as the 2D review shows it: its own crop from the drawing when
+             * there is one, else the reference icon for that kind of symbol, else nothing. Keyed by the
+             * review row, so the 3D symbol list and the symbols in the scene carry the same pictures.
+             */
+            'symbolImages' => $symbolImages,
             'pageDimensions' => $pageDimensions,
             // Every category on the drawing, so colours are resolved across the
             // whole set exactly as the review screen resolves them.
