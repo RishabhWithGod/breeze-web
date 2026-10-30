@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\JobScope\ChangeSource;
+use App\Services\JobScope\JobScopeLog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,7 +37,35 @@ class JobCostEntry extends Model
         'incurred_on',
         'recorded_by',
         'notes',
+        'source',
+        'invoice_id',
+        'invoice_item_id',
     ];
+
+    protected static function booted(): void
+    {
+        // A cost logged (or withdrawn) changes what the job came to — remembered, broadcast, and billed.
+        $record = function (self $entry, string $verb): void {
+            $job = Job::find($entry->job_id);
+            if ($job === null) {
+                return;
+            }
+
+            $category = ucfirst($entry->category);
+            $amount = $verb === 'withdrawn' ? -(float) $entry->amount : (float) $entry->amount;
+            $fromInvoice = $entry->source === 'invoice';
+
+            app(JobScopeLog::class)->record($job, JobScopeChange::KIND_COST_ENTRY, "{$category} cost {$verb}: ".mb_substr((string) $entry->description, 0, 120), [
+                'amount' => $amount,
+                'source' => $fromInvoice ? ChangeSource::INVOICE : ChangeSource::current(),
+                'except_invoice_id' => $fromInvoice ? $entry->invoice_id : null,
+            ]);
+        };
+
+        static::created(fn (self $entry) => $record($entry, 'logged'));
+        static::updated(fn (self $entry) => $entry->wasChanged('amount') ? $record($entry, 'adjusted') : null);
+        static::deleted(fn (self $entry) => $record($entry, 'withdrawn'));
+    }
 
     protected function casts(): array
     {

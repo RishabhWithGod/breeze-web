@@ -26,7 +26,7 @@ class FieldMaterialEstimateSync
 
         $estimate = $this->estimateFor($entry);
 
-        DB::transaction(function () use ($entry, $by, $estimate) {
+        \App\Services\JobScope\ChangeSource::as(\App\Services\JobScope\ChangeSource::FIELD, fn () => DB::transaction(function () use ($entry, $by, $estimate) {
             $item = $estimate->items()->create([
                 'job_task_id' => $entry->job_task_id,
                 'category' => $entry->isLabor() ? EstimateItem::CATEGORY_LABOR : EstimateItem::CATEGORY_MATERIAL,
@@ -63,7 +63,7 @@ class FieldMaterialEstimateSync
                     ]);
                     $invoice->recalculateTotals();
                 });
-        });
+        }));
     }
 
     /** The estimate the job was built from: its newest standalone one, else any it has. */

@@ -37,3 +37,8 @@ Broadcast::channel('project.{id}', function (User $user, int $id) {
 Broadcast::channel('job.{id}', function (User $user, int $id) {
     return Job::whereKey($id)->exists();
 });
+
+// Everyone in a company, for the screens that span its jobs (Analytics, lists) — see JobScopeChanged.
+Broadcast::channel('company.{id}', function (User $user, int $id) {
+    return $user->company_id !== null && (int) $user->company_id === $id;
+});

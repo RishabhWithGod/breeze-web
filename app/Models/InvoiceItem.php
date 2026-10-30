@@ -38,6 +38,7 @@ class InvoiceItem extends Model
         'unit_price',
         'total',
         'position',
+        'scope_amount',
     ];
 
     protected function casts(): array

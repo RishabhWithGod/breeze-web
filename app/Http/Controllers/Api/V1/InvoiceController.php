@@ -18,6 +18,8 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use App\Policies\InvoicePolicy;
 use App\Policies\JobCostingPolicy;
+use App\Services\JobScope\InvoiceScopeAdjuster;
+use App\Services\JobScope\JobScopeHistory;
 use App\Services\Billing\ActualCostInvoiceSync;
 use App\Services\Billing\EstimateInvoiceSync;
 use App\Services\Billing\InvoiceSummaryCalculator;
@@ -289,6 +291,7 @@ class InvoiceController extends Controller
             'position' => (int) $invoice->items()->max('position') + 1,
         ]);
 
+        app(InvoiceScopeAdjuster::class)->saved($invoice, $item, null);
         $invoice->recalculateTotals();
 
         return $this->created($this->detail($invoice->fresh(), $request), "\"{$item->description}\" added.");
@@ -301,10 +304,13 @@ class InvoiceController extends Controller
 
         $validated = $this->validatedItem($request);
 
+        $totalBefore = (float) $item->total;
+
         $item->update([
             ...$validated,
             'total' => round($validated['quantity'] * $validated['unit_price'], 2),
         ]);
+        app(InvoiceScopeAdjuster::class)->saved($invoice, $item->refresh(), $totalBefore);
         $invoice->recalculateTotals();
 
         return $this->ok($this->detail($invoice->fresh(), $request), "\"{$item->description}\" updated.");
@@ -316,6 +322,7 @@ class InvoiceController extends Controller
         abort_unless($item->invoice_id === $invoice->id, 404);
 
         $description = $item->description;
+        app(InvoiceScopeAdjuster::class)->removed($invoice, $item);
         $item->delete();
         $invoice->recalculateTotals();
 
@@ -476,6 +483,8 @@ class InvoiceController extends Controller
             'jobId' => $invoice->job_id,
             'jobName' => $invoice->job?->name,
             'projectName' => $invoice->job?->project?->name,
+            // The job's scope version and its newest changes — what the app compares to know it is current.
+            'scope' => $invoice->job !== null ? app(JobScopeHistory::class)->payload($invoice->job, (bool) $user->can('viewJobCosts', TimeEntry::class)) : null,
             // Where the client is billed: their primary site, else the first on file.
             'billingAddress' => $this->billingAddress($invoice),
             'estimateId' => $invoice->estimate_id,

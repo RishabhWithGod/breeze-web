@@ -17,8 +17,10 @@ import {
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { JOB_COST_ENTRY_CATEGORY_LABEL, ROUTES, routeTo } from '@/constants'
-import { useDisclosure } from '@/hooks'
+import { LiveChangeBanner, ScopeHistory } from '@/components/jobScope'
+import { useDisclosure, useJobScopeSync } from '@/hooks'
 import type {
+  ScopePayload,
   JobCostEntryRow,
   JobCostRow,
   JobCostingEstimatedItemRow,
@@ -39,6 +41,7 @@ export interface JobCostingDetailProps {
   estimatedItems: readonly JobCostingEstimatedItemRow[]
   schedule: JobCostingScheduleInfo
   can: { manage: boolean }
+  scope: ScopePayload
 }
 
 const EMPTY_DRAFT = { category: 'material' as const, description: '', quantity: '', unit_cost: '', amount: '', incurred_on: new Date().toISOString().slice(0, 10), notes: '' }
@@ -52,7 +55,10 @@ export default function JobCostingDetail({
   estimatedItems,
   schedule,
   can,
+  scope,
 }: JobCostingDetailProps) {
+  // Anything that changes this job's scope, from any screen or phone, refreshes the figures here.
+  const { latest } = useJobScopeSync(job.id)
   const { flash } = usePage<SharedPageProps>().props
   const [dismissed, setDismissed] = useState<string | null>(null)
   const [draft, setDraft] = useState(EMPTY_DRAFT)
@@ -122,6 +128,7 @@ export default function JobCostingDetail({
 
   return (
     <PageTransition>
+      <LiveChangeBanner latest={latest} />
       <Head title={`Job Costing — ${job.name}`} />
 
       <PageHeader
@@ -327,6 +334,9 @@ export default function JobCostingDetail({
           <p className="text-md text-white/70">This job has not been scheduled yet.</p>
         )}
       </Card>
+      <div className="mt-6">
+        <ScopeHistory changes={scope.history} title="Scope Change History" emptyText="The estimate, change orders and costs have not changed since this job was created." />
+      </div>
     </PageTransition>
   )
 }

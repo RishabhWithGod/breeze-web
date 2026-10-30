@@ -128,6 +128,36 @@ class Estimate extends Model
      */
     protected static function booted(): void
     {
+        // A markup or tax rate that moved is part of the same change as the totals it moves.
+        static::updating(function (self $estimate): void {
+            foreach (['markup_pct', 'tax_pct'] as $field) {
+                if ($estimate->isDirty($field) && (float) $estimate->getOriginal($field) !== (float) $estimate->{$field}) {
+                    \App\Services\JobScope\EstimateChangeRecorder::noteSetting($estimate, $field, $estimate->getOriginal($field), $estimate->{$field});
+                }
+            }
+        });
+
+        static::saved(function (self $estimate): void {
+            $recorder = \App\Services\JobScope\EstimateChangeRecorder::class;
+
+            // Totals that moved with no line change behind them (set directly) are remembered here; a line
+            // change is remembered when `recalculateTotals()` finishes, with the lines it touched.
+            if ($recorder::totalsMoved($estimate) && ! $recorder::hasPending($estimate->id)) {
+                $recorder::flush($estimate, array_merge($estimate->getAttributes(), $estimate->getOriginal()));
+            }
+
+            // The first time a job's estimate is priced is the baseline it is measured against.
+            if ($estimate->job_id === null
+                || ! ($estimate->wasRecentlyCreated || $estimate->wasChanged(['job_id', 'grand_total', 'material_total', 'labor_total', 'equipment_total']))) {
+                return;
+            }
+
+            $job = $estimate->job;
+            if ($job !== null && $job->estimate_baseline === null && ! $job->isLocked()) {
+                app(\App\Services\JobCosting\EstimateScope::class)->captureBaseline($job);
+            }
+        });
+
         static::saving(function (self $estimate): void {
             if ($estimate->project_id === null) {
                 return;
@@ -276,6 +306,8 @@ class Estimate extends Model
         $tax = round(($subtotal + $markup) * ((float) $this->tax_pct / 100), 2);
         $grand = round($subtotal + $markup + $tax, 2);
 
+        $before = $this->getAttributes();
+
         $this->update([
             'material_total' => $material,
             'labor_total' => $labor,
@@ -286,6 +318,11 @@ class Estimate extends Model
             'grand_total' => $grand,
             'amount' => $grand,
         ]);
+
+        // Lines touched since they were last counted are now one entry on the job's timeline.
+        if (\App\Services\JobScope\EstimateChangeRecorder::hasPending($this->id)) {
+            \App\Services\JobScope\EstimateChangeRecorder::flush($this, $before);
+        }
     }
 
     /** @return HasMany<EstimateRevision, $this> */

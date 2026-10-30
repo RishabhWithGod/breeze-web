@@ -104,6 +104,12 @@ class ChangeOrders
             $this->billing->attach($co->refresh());
         });
 
+        // An approved change order is added scope: remembered, broadcast, and put on the draft invoices.
+        app(\App\Services\JobScope\JobScopeLog::class)->record($co->job, \App\Models\JobScopeChange::KIND_CHANGE_ORDER, "{$co->label()} approved: ".mb_substr((string) $co->description, 0, 120), [
+            'amount' => (float) $co->sell_total,
+            'source' => $co->source === ChangeOrder::SOURCE_FIELD ? \App\Services\JobScope\ChangeSource::FIELD : \App\Services\JobScope\ChangeSource::current(),
+        ]);
+
         $this->notify($this->author($co, $user), $co, ChangeOrder::STATUS_APPROVED);
     }
 

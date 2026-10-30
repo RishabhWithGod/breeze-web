@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Job;
 use App\Services\ChangeOrders\ChangeOrderBilling;
+use App\Services\JobCosting\EstimateScope;
 use App\Services\JobCosting\JobCostSummary;
 use App\Services\Takeoff\EstimateBuilder;
 
@@ -29,15 +30,19 @@ class ActualCostInvoiceSync
         private readonly EstimateBuilder $estimateBuilder,
     ) {}
 
-    public function sync(Job $job): void
+    public function sync(Job $job, ?int $exceptInvoiceId = null): void
     {
-        $invoices = $job->invoices()->where('status', Invoice::STATUS_DRAFT)->get();
+        $invoices = $job->invoices()->where('status', Invoice::STATUS_DRAFT)
+            ->when($exceptInvoiceId, fn ($q) => $q->whereKeyNot($exceptInvoiceId))
+            ->get();
 
         if ($invoices->isEmpty()) {
             return;
         }
 
         $summary = $this->costSummary->for($job);
+        // An approved change order is billed on its own line below, so what it adds to materials is not billed twice.
+        $summary['actualMaterialCost'] = round(max(0.0, $summary['actualMaterialCost'] - app(EstimateScope::class)->approvedChangeOrders($job)['material']), 2);
         $laborRate = $job->project !== null ? $this->estimateBuilder->laborRateFor($job->project) : 0.0;
 
         foreach ($invoices as $invoice) {
@@ -48,9 +53,17 @@ class ActualCostInvoiceSync
     /** @param  array<string, mixed>  $summary */
     private function syncInvoice(Invoice $invoice, array $summary, float $laborRate): void
     {
-        // Rebuilt from scratch each time — the four lines below are the
-        // whole of a job-linked invoice's content from here on.
-        $invoice->items()->delete();
+        // The four category lines are updated where they stand, not deleted and written again: a person with
+        // one open (to edit it) must still find it there when a teammate's change brings the bill up to date.
+        // Anything else on the invoice — typed lines (their amounts are already carried in the job's costs),
+        // change-order lines (re-added below) — is cleared out.
+        $existing = $invoice->items()
+            ->whereNull('change_order_id')
+            ->where(fn ($q) => $q->whereNull('source')->orWhere('source', '!=', InvoiceItem::SOURCE_MANUAL))
+            ->orderBy('position')
+            ->get()
+            ->groupBy('source_category')
+            ->map(fn ($group) => $group->first());
 
         $lines = [
             [
@@ -84,6 +97,7 @@ class ActualCostInvoiceSync
         ];
 
         $position = 0;
+        $kept = [];
 
         foreach ($lines as $line) {
             // A category with nothing actually incurred is left off the bill
@@ -92,15 +106,27 @@ class ActualCostInvoiceSync
                 continue;
             }
 
-            $invoice->items()->create([
+            $attributes = [
                 'description' => $line['description'],
                 'source_category' => $line['category'],
                 'quantity' => $line['quantity'],
                 'unit_price' => $line['unitPrice'],
                 'total' => round($line['total'], 2),
+                // The line is exactly what the job's scope says, so nothing on it is an invoice-side change yet.
+                'scope_amount' => round($line['total'], 2),
                 'position' => $position++,
-            ]);
+            ];
+
+            $item = $existing->get($line['category']);
+            if ($item !== null) {
+                $item->update($attributes);
+                $kept[] = $item->id;
+            } else {
+                $kept[] = $invoice->items()->create($attributes)->id;
+            }
         }
+
+        $invoice->items()->whereNotIn('id', $kept)->delete();
 
         // Approved change orders are billed on top of the job's actual costs.
         app(ChangeOrderBilling::class)->attachApprovedTo($invoice);

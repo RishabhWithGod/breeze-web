@@ -283,10 +283,10 @@ class OfficePaymentSettingsController extends Controller
             return null;
         }
 
-        $quote = app(PlanPricing::class)->quote($subscription->plan, $subscription->billing_cycle);
+        $quote = app(PlanPricing::class)->quote($subscription->planKey(), $subscription->billing_cycle);
 
         return [
-            'planName' => config("subscription.plans.{$subscription->plan}.name"),
+            'planName' => config("subscription.plans.{$subscription->planKey()}.name"),
             'billingCycle' => $subscription->billing_cycle,
             'amount' => $quote['total'],
             'renewsOn' => $subscription->renews_on->toDateString(),

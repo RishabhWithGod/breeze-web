@@ -37,12 +37,14 @@ import {
 import { InvoiceItemsTable, MetricCard } from '@/components/billing'
 import { appLayout, PageTransition } from '@/components/layout'
 import { MOTION, ROUTES, routeTo } from '@/constants'
-import { useDisclosure } from '@/hooks'
+import { LiveChangeBanner, ScopeHistory } from '@/components/jobScope'
+import { useDisclosure, useJobScopeSync } from '@/hooks'
 import type {
   InvoiceActionAbilities,
   InvoiceDetail,
   InvoiceItemRow,
   JobCostRow,
+  ScopePayload,
   JourneymanHoursRow,
   SharedPageProps,
 } from '@/types'
@@ -78,6 +80,8 @@ export interface InvoiceShowProps {
   /** Every person with time on that same job and their total hours — the
    *  source `jobCostSummary.actualLaborHours` below is summed from. */
   journeymanHours: readonly JourneymanHoursRow[]
+  /** The job's scope version and its newest changes; null when the invoice has no job. */
+  scope: ScopePayload | null
   can: InvoiceActionAbilities
   /** Whether a connected Stripe processor exists to actually take an online payment against. */
   stripeConnected: boolean
@@ -94,6 +98,7 @@ export default function InvoiceShow({
   estimateItems,
   jobCostSummary,
   journeymanHours,
+  scope,
   can,
   stripeConnected,
 }: InvoiceShowProps) {
@@ -105,15 +110,11 @@ export default function InvoiceShow({
   const [linesOpen, setLinesOpen] = useState(true)
   const [estimateOpen, setEstimateOpen] = useState(false)
 
+  // The bill shows the job's latest scope: any estimate, change-order or cost change refreshes it here.
+  const { latest } = useJobScopeSync(invoice.jobId)
+
   const flashed = flash.warning ?? flash.success ?? null
   const notice = flashed === dismissed ? null : flashed
-
-  // What Job Cost Details' "Actual" column shows for Materials — the real
-  // sum of this invoice's own current material-tagged lines, so it can never
-  // disagree with what a client is actually being billed for materials.
-  const materialLineItemsTotal = items
-    .filter((item) => item.sourceCategory === 'material')
-    .reduce((sum, item) => sum + item.total, 0)
 
   const send = () => router.post(routeTo.invoiceSend(invoice.id), {}, { preserveScroll: true })
   const markPaid = () => router.post(routeTo.invoiceMarkPaid(invoice.id), {}, { preserveScroll: true })
@@ -138,6 +139,7 @@ export default function InvoiceShow({
 
   return (
     <PageTransition>
+      <LiveChangeBanner latest={latest} />
       <Head title={`Invoice ${invoice.invoiceNumber}`} />
 
       {/* ==================================================== Header ========= */}
@@ -390,7 +392,7 @@ export default function InvoiceShow({
             aria-expanded={costDetails.isOpen}
             onClick={costDetails.toggle}
           >
-            <h2 className="text-lg font-semibold text-white">Job Cost Details</h2>
+            <h2 className="text-lg font-semibold text-white">Estimated vs Actual</h2>
             <ChevronDown
               size={18}
               className={`shrink-0 text-white/70 transition-transform ${costDetails.isOpen ? 'rotate-180' : ''}`}
@@ -408,24 +410,7 @@ export default function InvoiceShow({
                 transition={{ duration: MOTION.base }}
                 className="overflow-hidden"
               >
-                <div className="mt-4 grid gap-4 border-t border-hairline pt-4 sm:grid-cols-2">
-                  <CostColumn
-                    title="Estimated"
-                    hours={jobCostSummary.estimatedLaborHours}
-                    laborCost={jobCostSummary.estimatedLaborCost}
-                    materialCost={jobCostSummary.estimatedMaterialCost}
-                    otherCost={jobCostSummary.estimatedOtherCost}
-                    totalCost={jobCostSummary.estimatedTotalCost}
-                  />
-                  <CostColumn
-                    title="Actual"
-                    hours={jobCostSummary.actualLaborHours}
-                    laborCost={jobCostSummary.actualLaborCost}
-                    materialCost={materialLineItemsTotal}
-                    otherCost={jobCostSummary.actualOtherCost}
-                    totalCost={jobCostSummary.actualTotalCost}
-                  />
-                </div>
+                <ScopeVariance summary={jobCostSummary} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -442,6 +427,11 @@ export default function InvoiceShow({
         onConfirm={confirmDelete}
         onCancel={deleteDialog.close}
       />
+      {scope && (
+        <div className="mt-5">
+          <ScopeHistory changes={scope.history} title="Scope Change History" emptyText="The job's estimate, change orders and costs have not changed since it was created." />
+        </div>
+      )}
     </PageTransition>
   )
 }
@@ -589,33 +579,63 @@ function JourneymanHourRow({
 
 /** One side of the estimated/actual comparison — hours plus every cost
  *  category, laid out the same way for both so they read as a pair. */
-function CostColumn({
-  title,
-  hours,
-  laborCost,
-  materialCost,
-  otherCost,
-  totalCost,
-}: {
-  title: string
-  hours: number
-  laborCost: number | null
-  materialCost: number | null
-  otherCost: number | null
-  totalCost: number | null
-}) {
+/**
+ * What the job was estimated at when it was raised, against what it stands at
+ * now — the latest estimate (final once the job is completed), the hours
+ * worked and anything logged or adjusted on an invoice — and the difference.
+ */
+function ScopeVariance({ summary }: { summary: JobCostRow }) {
   const money = (value: number | null) => (value === null ? '—' : formatCurrency(value, 2))
+  const rows: { label: string; estimated: number | null; actual: number | null; hours?: boolean }[] = [
+    { label: 'Labor Hours', estimated: summary.estimatedLaborHours, actual: summary.actualLaborHours, hours: true },
+    { label: 'Labor', estimated: summary.estimatedLaborCost, actual: summary.actualLaborCost },
+    { label: 'Materials', estimated: summary.estimatedMaterialCost, actual: summary.actualMaterialCost },
+    { label: 'Equipment', estimated: summary.estimatedEquipmentCost, actual: summary.actualEquipmentCost },
+    { label: 'Other', estimated: summary.estimatedOtherCost, actual: summary.actualOtherCost },
+    { label: 'Total', estimated: summary.estimatedTotalCost, actual: summary.actualTotalCost },
+  ]
 
   return (
-    <div className="rounded-panel border border-hairline bg-white/4 p-4">
-      <p className="mb-3 text-sm font-semibold tracking-wide text-white/80 uppercase">{title}</p>
-      <dl className="flex flex-col gap-2">
-        <TotalRow label="Labor Hours" value={formatHours(hours)} />
-        <TotalRow label="Labor" value={money(laborCost)} />
-        <TotalRow label="Materials" value={money(materialCost)} />
-        <TotalRow label="Other" value={money(otherCost)} />
-        <TotalRow label="Total" value={money(totalCost)} strong />
-      </dl>
+    <div className="mt-4 border-t border-hairline pt-4">
+      {summary.hasBaseline && summary.baselineTotal !== null && summary.currentScopeTotal !== null && summary.scopeChange !== null && (
+        <p className="mb-3 text-sm text-white/80">
+          Estimate when the job was created {formatCurrency(summary.baselineTotal, 2)} → {summary.isFinal ? 'final' : 'latest'} {formatCurrency(summary.currentScopeTotal, 2)}
+          {summary.scopeChange !== 0 && (
+            <span className={summary.scopeChange > 0 ? 'font-medium text-status-danger' : 'font-medium text-status-success'}>
+              {' '}({summary.scopeChange > 0 ? '+' : ''}{formatCurrency(summary.scopeChange, 2)})
+            </span>
+          )}
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[420px] text-md">
+          <thead>
+            <tr className="text-left text-xs tracking-wide text-white/70 uppercase">
+              <th className="py-2 font-medium" />
+              <th className="py-2 text-right font-medium">Estimated</th>
+              <th className="py-2 text-right font-medium">{summary.isFinal ? 'Final actual' : 'Actual (latest)'}</th>
+              <th className="py-2 text-right font-medium">Difference</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const diff = row.estimated !== null && row.actual !== null ? row.actual - row.estimated : null
+              const format = (v: number | null) => (row.hours ? (v === null ? '—' : formatHours(v)) : money(v))
+              const strong = row.label === 'Total'
+              return (
+                <tr key={row.label} className={strong ? 'border-t border-hairline font-semibold text-white' : 'text-white/90'}>
+                  <td className="py-2">{row.label}</td>
+                  <td className="py-2 text-right tabular-nums">{format(row.estimated)}</td>
+                  <td className="py-2 text-right tabular-nums">{format(row.actual)}</td>
+                  <td className={`py-2 text-right tabular-nums ${diff !== null && diff > 0 ? 'text-status-danger' : diff !== null && diff < 0 ? 'text-status-success' : ''}`}>
+                    {diff === null ? '—' : `${diff > 0 ? '+' : ''}${row.hours ? formatHours(diff) : formatCurrency(diff, 2)}`}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

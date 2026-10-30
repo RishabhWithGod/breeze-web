@@ -10,6 +10,8 @@ use App\Models\EstimateItem;
 use App\Models\FinalSymbol;
 use App\Models\Job;
 use App\Models\Project;
+use App\Models\ProjectRateItem;
+use App\Models\ProjectRateLine;
 use App\Models\SymbolReview;
 use App\Models\User;
 use App\Services\Estimating\ProjectRateBook;
@@ -341,6 +343,7 @@ class EstimateBuilder
             $priceBook = $this->priceBook->forUser($project->user_id);
             $clientLaborRate = $this->clientLaborRate($project);
 
+            \App\Services\JobScope\EstimateChangeRecorder::touch($estimate->id);
             $estimate->items()->where('source', 'ai')->delete();
 
             $matchedRateItemIds = $engineLines->isNotEmpty()
@@ -673,6 +676,67 @@ class EstimateBuilder
         );
     }
 
+    /**
+     * `laborRateFor()` for many projects at once, in a fixed number of
+     * queries — the same client-override-then-rate-book-then-price-book
+     * resolution, so a list of jobs prices exactly as each one would alone.
+     *
+     * @param  iterable<Project>  $projects
+     * @return array<int, float> project id => hourly labor rate
+     */
+    public function laborRatesFor(iterable $projects): array
+    {
+        $projects = collect($projects)->unique('id');
+        $rates = [];
+        $needRateBook = collect();
+
+        foreach ($projects as $project) {
+            $override = $this->clientLaborRate($project);
+            if ($override !== null) {
+                $rates[$project->id] = $override;
+            } else {
+                $needRateBook->push($project);
+            }
+        }
+
+        if ($needRateBook->isNotEmpty()) {
+            $ids = $needRateBook->pluck('id');
+            $populated = ProjectRateItem::query()->whereIn('project_id', $ids)->distinct()->pluck('project_id')->flip();
+            $lines = ProjectRateLine::query()
+                ->whereIn('project_id', $populated->keys())
+                ->whereNotNull('manhour_rate')
+                ->where('manhour_rate', '>', 0)
+                ->get(['project_id', 'manhour_rate'])
+                ->groupBy('project_id');
+            $bookRates = [];
+
+            foreach ($needRateBook as $project) {
+                if ($populated->has($project->id)) {
+                    $values = $lines->get($project->id)?->map(fn ($l) => (float) $l->manhour_rate)->all() ?? [];
+                    $rates[$project->id] = $values === [] ? (float) config('ai.estimating.labor_rate') : $this->medianOf($values);
+
+                    continue;
+                }
+
+                // One lookup per distinct project owner, not per project.
+                $rates[$project->id] = $bookRates[$project->user_id] ??= $this->priceBook->forUser($project->user_id)->laborRate();
+            }
+        }
+
+        return $rates;
+    }
+
+    /** @param  list<float>  $values */
+    private function medianOf(array $values): float
+    {
+        sort($values);
+        $middle = intdiv(count($values), 2);
+
+        return count($values) % 2 === 1
+            ? $values[$middle]
+            : ($values[$middle - 1] + $values[$middle]) / 2;
+    }
+
     /** The client's own labor rate override for this project, if they have set one. */
     private function clientLaborRate(Project $project): ?float
     {
@@ -875,7 +939,7 @@ class EstimateBuilder
     }
 
     /** @return array<string, mixed> */
-    public static function totalsFor(Estimate $estimate): array
+    public static function totalsFor(Estimate $estimate, ?float $laborHours = null): array
     {
         $engine = $estimate->aiResult?->ai_estimate ?? [];
 
@@ -889,8 +953,9 @@ class EstimateBuilder
             'taxPct' => (float) $estimate->tax_pct,
             'tax' => (float) $estimate->tax_total,
             'grandTotal' => (float) $estimate->grand_total,
+            // `$laborHours` lets a caller that already summed this for many estimates in one query skip the per-estimate one.
             'laborHours' => round(
-                (float) $estimate->items()->where('category', EstimateItem::CATEGORY_LABOR)->sum('quantity'),
+                $laborHours ?? (float) $estimate->items()->where('category', EstimateItem::CATEGORY_LABOR)->sum('quantity'),
                 2,
             ),
             // What the engine priced before review, for comparison.

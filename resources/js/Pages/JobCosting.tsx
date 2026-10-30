@@ -1,122 +1,135 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Head, router } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { Download, Settings2, SlidersHorizontal, X } from 'lucide-react'
+import { Button, FilterTabs, SelectField, Skeleton, TextInput } from '@/components/common'
 import {
-  AlertTriangle,
-  ChevronRight,
-  Download,
-  SlidersHorizontal,
-} from 'lucide-react'
-import {
-  Button,
-  ButtonLink,
-  Card,
-  EmptyState,
-  ProgressBar,
-  SectionHeading,
-  SelectField,
-  TextInput,
-} from '@/components/common'
-import { ComparisonBarChart, DonutChart, TrendLineChart } from '@/components/jobCosting'
+  AlertsTab,
+  BillingTab,
+  LaborTab,
+  MaterialsTab,
+  OverviewTab,
+  ProfitabilityTab,
+  SavedViews,
+  SettingsModal,
+} from '@/components/analytics'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import {
-  JOB_COSTING_COST_TYPE_FILTERS,
-  JOB_COSTING_OVERRUN_LABEL,
-  JOB_STATUS_FILTERS,
-  MOTION,
-  ROUTES,
-  routeTo,
-} from '@/constants'
-import { useDisclosure } from '@/hooks'
-import type { JobCostingDashboardProps, Tone } from '@/types'
-import { JOB_STATUS_LABEL, formatCurrency, formatHours } from '@/utils'
+import { JOB_COSTING_COST_TYPE_FILTERS, JOB_STATUS_FILTERS, MOTION, ROUTES, routeTo } from '@/constants'
+import { LiveChangeBanner } from '@/components/jobScope'
+import { useCompanyScopeSync, useDisclosure } from '@/hooks'
+import type { AnalyticsTab, JobCostingDashboardProps, JobCostingFilters } from '@/types'
+import { JOB_STATUS_LABEL } from '@/utils'
 
-const STATUS_TONE_CYCLE: readonly Tone[] = ['brand', 'success', 'info', 'warning', 'danger', 'neutral']
+const TABS: readonly { label: string; value: AnalyticsTab }[] = [
+  { label: 'Overview', value: 'overview' },
+  { label: 'Profitability', value: 'profitability' },
+  { label: 'Labor', value: 'labor' },
+  { label: 'Materials', value: 'materials' },
+  { label: 'Billing', value: 'billing' },
+  { label: 'Alerts', value: 'alerts' },
+]
 
-function statusTone(index: number): Tone {
-  return STATUS_TONE_CYCLE[index % STATUS_TONE_CYCLE.length] ?? 'neutral'
+const isoDay = (d: Date) => d.toISOString().slice(0, 10)
+
+/** Quick date windows; "All time" clears the range so revenue and cost stay like-for-like. */
+const DATE_PRESETS: readonly { label: string; range: () => [string | null, string | null] }[] = [
+  { label: 'All time', range: () => [null, null] },
+  { label: 'This month', range: () => { const n = new Date(); return [isoDay(new Date(n.getFullYear(), n.getMonth(), 1)), isoDay(n)] } },
+  { label: 'Last 30 days', range: () => { const n = new Date(); return [isoDay(new Date(n.getTime() - 30 * 864e5)), isoDay(n)] } },
+  { label: 'This quarter', range: () => { const n = new Date(); return [isoDay(new Date(n.getFullYear(), Math.floor(n.getMonth() / 3) * 3, 1)), isoDay(n)] } },
+  { label: 'This year', range: () => { const n = new Date(); return [isoDay(new Date(n.getFullYear(), 0, 1)), isoDay(n)] } },
+]
+
+interface FilterChip {
+  readonly label: string
+  readonly clear: Partial<JobCostingFilters>
 }
 
-export default function JobCosting({
-  filters,
-  canViewCosts,
-  laborTotals,
-  materialTotals,
-  profitLoss,
-  overrunAlerts,
-  jobsByStatus,
-  topProfitable,
-  leastProfitable,
-  jobCount,
-  clients,
-  jobs,
-  teamMembers,
-}: JobCostingDashboardProps) {
-  const [draft, setDraft] = useState(filters)
+function toQuery(filters: Partial<JobCostingFilters>): string {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === '' || value === 'all' || value === null || value === undefined) continue
+    params.set(key, String(value))
+  }
+  return params.toString()
+}
+
+export default function JobCosting(props: JobCostingDashboardProps) {
+  const { filters, canViewCosts, clients, jobs, teamMembers, alerts, can, settings, tab, jobRows, labor, billingReport, billing, trend, costBreakdown } = props
+  // The filter form's edits, discarded whenever the server sends back new filters.
+  const [draftState, setDraftState] = useState({ source: filters, value: filters })
+  const draft = draftState.source === filters ? draftState.value : filters
+  const setDraft = (value: JobCostingFilters) => setDraftState({ source: filters, value })
+  const [isLoading, setIsLoading] = useState(false)
+  // Any job's scope changing — estimate, change order, cost, invoice — refreshes the figures here.
+  const { latest } = useCompanyScopeSync()
   const filterBar = useDisclosure(false)
+  const settingsModal = useDisclosure(false)
 
-  const applyFilters = useCallback((changes: Partial<typeof filters>) => {
-    const params = new URLSearchParams()
-    const merged = { ...filters, ...changes }
-
-    for (const [key, value] of Object.entries(merged)) {
-      if (value === '' || value === 'all' || value === null || value === undefined) continue
-      params.set(key, String(value))
+  // A filter or tab change is a server round trip — show a placeholder rather than stale numbers.
+  useEffect(() => {
+    const offStart = router.on('start', () => setIsLoading(true))
+    const offFinish = router.on('finish', () => setIsLoading(false))
+    return () => {
+      offStart()
+      offFinish()
     }
+  }, [])
 
-    const queryString = params.toString()
-    router.get(queryString ? `${ROUTES.jobCosting}?${queryString}` : ROUTES.jobCosting, {}, { preserveScroll: true })
+  const visit = useCallback((query: string) => {
+    router.get(query ? `${ROUTES.jobCosting}?${query}` : ROUTES.jobCosting, {}, { preserveScroll: true, preserveState: true })
+  }, [])
+
+  const applyFilters = useCallback((changes: Partial<JobCostingFilters>) => visit(toQuery({ ...filters, ...changes })), [filters, visit])
+
+  const resetFilters = useCallback(() => visit(toQuery({ tab: filters.tab })), [filters.tab, visit])
+
+  const applyPreset = useCallback((from: string | null, to: string | null) => applyFilters({ date_from: from, date_to: to }), [applyFilters])
+
+  const exportReport = useCallback((format: 'csv' | 'xlsx') => {
+    const query = toQuery(filters)
+    window.open(`${routeTo.jobCostingExport(format)}${query ? `?${query}` : ''}`, '_blank')
   }, [filters])
 
-  const resetFilters = useCallback(() => {
-    setDraft({ ...filters, job: null, client: 'all', status: 'all', cost_type: 'all', team_member: null })
-    router.get(ROUTES.jobCosting, {}, { preserveScroll: true })
-  }, [filters])
+  const activeChips = ([
+    filters.job !== null && { label: `Job: ${jobs.find((j) => j.id === filters.job)?.name ?? filters.job}`, clear: { job: null } },
+    filters.client !== 'all' && { label: `Client: ${filters.client}`, clear: { client: 'all' } },
+    filters.status !== 'all' && { label: `Status: ${JOB_STATUS_LABEL[filters.status as keyof typeof JOB_STATUS_LABEL] ?? filters.status}`, clear: { status: 'all' } },
+    filters.cost_type !== 'all' && { label: `Cost: ${filters.cost_type}`, clear: { cost_type: 'all' } },
+    filters.team_member !== null && { label: `Member: ${teamMembers.find((m) => m.id === filters.team_member)?.name ?? filters.team_member}`, clear: { team_member: null } },
+  ] as (FilterChip | false)[]).filter((chip): chip is FilterChip => chip !== false)
 
-  const laborRows =
-    canViewCosts && laborTotals.estimatedCost !== null && laborTotals.actualCost !== null
-      ? [
-          { label: 'Estimated', value: laborTotals.estimatedCost, barClassName: 'bg-brand-deep' },
-          { label: 'Actual', value: laborTotals.actualCost, barClassName: laborTotals.actualCost > laborTotals.estimatedCost ? 'bg-status-danger' : 'bg-status-success' },
-        ]
-      : []
-
-  const laborVarianceHours = laborTotals.actualHours - laborTotals.estimatedHours
-  const laborVariancePct = laborTotals.estimatedHours > 0 ? (laborVarianceHours / laborTotals.estimatedHours) * 100 : null
-
-  const materialVariance =
-    canViewCosts && materialTotals.actualCost !== null && materialTotals.estimatedCost !== null
-      ? materialTotals.actualCost - materialTotals.estimatedCost
-      : null
-  const materialVariancePct =
-    materialVariance !== null && materialTotals.estimatedCost && materialTotals.estimatedCost > 0
-      ? (materialVariance / materialTotals.estimatedCost) * 100
-      : null
+  const hasRange = filters.date_from !== null || filters.date_to !== null
+  const tabs = TABS.filter((t) => canViewCosts || t.value !== 'billing')
 
   return (
     <PageTransition>
-      <Head title="Job Costing Dashboard" />
+      <Head title="Analytics" />
+      <LiveChangeBanner latest={latest} />
 
       <PageHeader
-        title="Job Costing Dashboard"
-        subtitle="Track financial performance across all active jobs"
-        breadcrumbs={[{ label: 'Job Costing' }]}
+        title="Analytics"
+        subtitle="Job costing and financial performance across your jobs"
+        breadcrumbs={[{ label: 'Analytics' }]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              leftIcon={SlidersHorizontal}
-              aria-expanded={filterBar.isOpen}
-              onClick={filterBar.toggle}
-            >
+            <Button variant="secondary" leftIcon={SlidersHorizontal} aria-expanded={filterBar.isOpen} onClick={filterBar.toggle}>
               Filter
             </Button>
             <span className="inline-flex items-center rounded-panel border border-hairline-strong bg-white/10 px-4 py-2 text-sm text-white/90">
-              {filters.date_from} – {filters.date_to}
+              {hasRange ? `${filters.date_from ?? '…'} – ${filters.date_to ?? 'today'}` : 'All time'}
             </span>
-            <Button leftIcon={Download} onClick={() => window.open(routeTo.jobCostingExport('csv'), '_blank')}>
-              Export Report
-            </Button>
+            {can.manage && (
+              <Button variant="secondary" leftIcon={Settings2} onClick={settingsModal.open}>
+                Thresholds
+              </Button>
+            )}
+            {canViewCosts && (
+              <>
+                <Button leftIcon={Download} onClick={() => exportReport('csv')}>Export CSV</Button>
+                <Button variant="secondary" leftIcon={Download} onClick={() => exportReport('xlsx')}>Export XLSX</Button>
+              </>
+            )}
           </div>
         }
       />
@@ -132,54 +145,30 @@ export default function JobCosting({
             className="mb-6 overflow-hidden rounded-card border border-hairline glass p-5 shadow-panel sm:p-6"
           >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <TextInput
-                id="jc-date-from"
-                type="date"
-                label="Date From"
-                value={draft.date_from}
-                onChange={(event) => setDraft({ ...draft, date_from: event.target.value })}
-              />
-              <TextInput
-                id="jc-date-to"
-                type="date"
-                label="Date To"
-                value={draft.date_to}
-                onChange={(event) => setDraft({ ...draft, date_to: event.target.value })}
-              />
+              <TextInput id="jc-date-from" type="date" label="Date From" value={draft.date_from ?? ''} onChange={(e) => setDraft({ ...draft, date_from: e.target.value || null })} />
+              <TextInput id="jc-date-to" type="date" label="Date To" value={draft.date_to ?? ''} onChange={(e) => setDraft({ ...draft, date_to: e.target.value || null })} />
               <SelectField
                 id="jc-job"
                 label="Job"
                 options={[{ label: 'All Jobs', value: 'all' }, ...jobs.map((job) => ({ label: job.name, value: String(job.id) }))]}
                 value={draft.job !== null ? String(draft.job) : 'all'}
-                onChange={(event) => setDraft({ ...draft, job: event.target.value === 'all' ? null : Number(event.target.value) })}
+                onChange={(e) => setDraft({ ...draft, job: e.target.value === 'all' ? null : Number(e.target.value) })}
               />
               <SelectField
                 id="jc-client"
                 label="Client"
                 options={[{ label: 'All Clients', value: 'all' }, ...clients.map((client) => ({ label: client, value: client }))]}
                 value={draft.client}
-                onChange={(event) => setDraft({ ...draft, client: event.target.value })}
+                onChange={(e) => setDraft({ ...draft, client: e.target.value })}
               />
-              <SelectField
-                id="jc-status"
-                label="Status"
-                options={JOB_STATUS_FILTERS}
-                value={draft.status}
-                onChange={(event) => setDraft({ ...draft, status: event.target.value })}
-              />
-              <SelectField
-                id="jc-cost-type"
-                label="Cost Type"
-                options={JOB_COSTING_COST_TYPE_FILTERS}
-                value={draft.cost_type}
-                onChange={(event) => setDraft({ ...draft, cost_type: event.target.value })}
-              />
+              <SelectField id="jc-status" label="Status" options={JOB_STATUS_FILTERS} value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })} />
+              <SelectField id="jc-cost-type" label="Cost Type" options={JOB_COSTING_COST_TYPE_FILTERS} value={draft.cost_type} onChange={(e) => setDraft({ ...draft, cost_type: e.target.value })} />
               <SelectField
                 id="jc-team-member"
                 label="Team Member"
                 options={[{ label: 'All Team Members', value: 'all' }, ...teamMembers.map((member) => ({ label: member.name, value: String(member.id) }))]}
                 value={draft.team_member !== null ? String(draft.team_member) : 'all'}
-                onChange={(event) => setDraft({ ...draft, team_member: event.target.value === 'all' ? null : Number(event.target.value) })}
+                onChange={(e) => setDraft({ ...draft, team_member: e.target.value === 'all' ? null : Number(e.target.value) })}
               />
               <div className="flex items-end gap-3">
                 <Button onClick={() => applyFilters(draft)}>Apply</Button>
@@ -190,255 +179,67 @@ export default function JobCosting({
         )}
       </AnimatePresence>
 
-      <p className="mb-6 text-sm text-white/70">{jobCount} active job{jobCount === 1 ? '' : 's'} in this view.</p>
-
-      {/* ============================================ Labor + Materials ======= */}
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card accent="brand" padding="lg">
-          <SectionHeading as="h3" title="Estimated vs Actual Labor" />
-          {canViewCosts && laborTotals.estimatedCost !== null && laborTotals.actualCost !== null ? (
-            <>
-              <ComparisonBarChart rows={laborRows} formatValue={(v) => formatCurrency(v, 0)} />
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <StatBlock label="Total Estimated" value={formatHours(laborTotals.estimatedHours)} detail={formatCurrency(laborTotals.estimatedCost, 2)} />
-                <StatBlock
-                  label="Total Actual"
-                  value={formatHours(laborTotals.actualHours)}
-                  detail={formatCurrency(laborTotals.actualCost, 2)}
-                  note={laborVariancePct !== null ? `${laborVarianceHours >= 0 ? '+' : ''}${formatHours(laborVarianceHours)} · ${laborVarianceHours >= 0 ? '+' : ''}${laborVariancePct.toFixed(1)}%` : undefined}
-                  noteTone={laborVarianceHours > 0 ? 'danger' : 'success'}
-                />
-              </div>
-            </>
-          ) : (
-            <EmptyState title="Cost figures are restricted" description="Only a Client Manager, Admin or Owner can see labor cost totals. Hours worked, shown below, are not restricted." />
-          )}
-          {!canViewCosts && (
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <StatBlock label="Estimated Hours" value={formatHours(laborTotals.estimatedHours)} />
-              <StatBlock label="Actual Hours" value={formatHours(laborTotals.actualHours)} />
-            </div>
-          )}
-        </Card>
-
-        <Card accent="success" padding="lg">
-          <SectionHeading as="h3" title="Estimated vs Actual Materials" />
-          {!canViewCosts ? (
-            <EmptyState title="Cost figures are restricted" description="Only a Client Manager, Admin or Owner can see material cost totals." />
-          ) : materialTotals.estimatedCost === 0 && materialTotals.actualCost === 0 ? (
-            <EmptyState title="No material costing data yet" description="Log an estimate with material lines, or record an actual material cost on a job, to see this chart." />
-          ) : (
-            <>
-              <DonutChart
-                segments={[
-                  { label: 'Estimated', value: materialTotals.estimatedCost ?? 0, tone: 'info' },
-                  { label: 'Actual', value: materialTotals.actualCost ?? 0, tone: (materialTotals.actualCost ?? 0) > (materialTotals.estimatedCost ?? 0) ? 'danger' : 'success' },
-                ]}
-              />
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <StatBlock label="Total Estimated" value={formatCurrency(materialTotals.estimatedCost ?? 0, 2)} detail={`Across ${jobCount} jobs`} />
-                <StatBlock
-                  label="Total Actual"
-                  value={formatCurrency(materialTotals.actualCost ?? 0, 2)}
-                  detail={`Across ${jobCount} jobs`}
-                  note={materialVariancePct !== null ? `${Math.abs(materialVariancePct).toFixed(1)}% ${materialVariancePct >= 0 ? 'over' : 'under'} budget` : undefined}
-                  noteTone={(materialVariance ?? 0) > 0 ? 'danger' : 'success'}
-                />
-              </div>
-            </>
-          )}
-        </Card>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {DATE_PRESETS.map((preset) => (
+          <Button key={preset.label} size="sm" variant="secondary" onClick={() => applyPreset(...preset.range())}>
+            {preset.label}
+          </Button>
+        ))}
+        {activeChips.map((chip) => (
+          <button
+            key={chip.label}
+            type="button"
+            onClick={() => applyFilters(chip.clear)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-hairline-strong bg-white/10 px-3 py-1 text-sm text-white/90 hover:bg-white/15"
+          >
+            {chip.label}
+            <X size={14} aria-hidden />
+            <span className="sr-only">Remove filter</span>
+          </button>
+        ))}
       </div>
 
-      {/* ============================================ Profit/Loss + Alerts ==== */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <Card accent="warning" padding="lg">
-          <SectionHeading as="h3" title="Profit/Loss" />
-          {canViewCosts && profitLoss.revenue !== null && profitLoss.profit !== null ? (
-            <>
-              <TrendLineChart
-                points={[
-                  { label: 'Total Revenue', value: profitLoss.revenue },
-                  { label: 'Net Profit', value: profitLoss.profit },
-                ]}
-                formatValue={(v) => formatCurrency(v, 0)}
-              />
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <StatBlock label="Total Revenue" value={formatCurrency(profitLoss.revenue, 0)} />
-                <StatBlock
-                  label="Net Profit"
-                  value={formatCurrency(profitLoss.profit, 0)}
-                  note={profitLoss.marginPct !== null ? `${profitLoss.marginPct}% margin` : undefined}
-                  noteTone={profitLoss.profit >= 0 ? 'success' : 'danger'}
-                />
-              </div>
-            </>
-          ) : (
-            <EmptyState title="Cost and revenue figures are restricted" description="Only a Client Manager, Admin or Owner can see this job's financial totals." />
-          )}
-        </Card>
-
-        <Card accent="neutral" padding="lg">
-          <SectionHeading
-            as="h3"
-            title="Cost Overrun Alerts"
-            actions={overrunAlerts.length > 0 ? <ButtonLink href={ROUTES.jobs} variant="secondary" size="sm">View All</ButtonLink> : undefined}
-          />
-          {overrunAlerts.length === 0 ? (
-            <EmptyState title="No cost overruns" description="Every job in this view is within its estimated budget." />
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {overrunAlerts.map((row) => (
-                <li key={row.jobId} className="flex items-start gap-3 rounded-panel border border-status-danger/30 bg-status-danger/10 p-4">
-                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-status-warning" aria-hidden />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold text-white">{row.jobName}</p>
-                      <ButtonLink href={routeTo.jobCosting(row.jobId)} variant="ghost" size="sm" rightIcon={ChevronRight}>
-                        View Details
-                      </ButtonLink>
-                    </div>
-                    <p className="mt-1 text-sm text-white/85">
-                      {JOB_COSTING_OVERRUN_LABEL[row.overrunReason ?? ''] ?? 'Exceeding budget'}
-                      {row.overrunPct !== null && ` by ${row.overrunPct}%`}
-                    </p>
-                    {canViewCosts && row.overrunAmount !== null && (
-                      <p className="mt-0.5 text-sm font-medium text-status-danger">
-                        {formatCurrency(row.overrunAmount, 2)} over budget
-                      </p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+      <div className="mb-6">
+        <SavedViews currentQuery={toQuery(filters)} onApply={visit} />
       </div>
 
-      {/* ============================================ Status + Rankings ======= */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-3">
-        <Card accent="brand" padding="lg">
-          <SectionHeading as="h3" title="Jobs by Status" />
-          {jobsByStatus.length === 0 ? (
-            <EmptyState title="No jobs in this view" description="Adjust the filters to see jobs by status." />
-          ) : (
-            <>
-              <DonutChart
-                segments={jobsByStatus.map((row, index) => ({
-                  label: JOB_STATUS_LABEL[row.status as keyof typeof JOB_STATUS_LABEL] ?? row.status,
-                  value: row.count,
-                  tone: statusTone(index),
-                }))}
-              />
-              <ul className="mt-5 flex flex-col gap-2">
-                {jobsByStatus.map((row) => (
-                  <li key={row.status}>
-                    <button
-                      type="button"
-                      onClick={() => router.get(ROUTES.jobs, { status: row.status }, { preserveScroll: true })}
-                      className="flex w-full items-center justify-between rounded-panel px-2 py-1.5 text-left text-md text-white/90 transition-colors hover:bg-white/8 hover:text-white"
-                    >
-                      <span>{JOB_STATUS_LABEL[row.status as keyof typeof JOB_STATUS_LABEL] ?? row.status}</span>
-                      <span className="font-semibold tabular-nums text-white">{row.count}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </Card>
+      <p className="mb-6 text-sm text-white/70">
+        {props.jobCount} active job{props.jobCount === 1 ? '' : 's'} in this view.
+        {hasRange && ' Date range narrows actual hours and logged costs only; estimates and revenue are whole-job figures.'}
+      </p>
 
-        <Card accent="success" padding="lg">
-          <SectionHeading as="h3" title="Top Profitable Jobs" />
-          {topProfitable.length === 0 ? (
-            <EmptyState title="No costed jobs yet" description="Jobs with revenue and cost data will rank here." />
-          ) : (
-            <ul className="flex flex-col gap-4">
-              {topProfitable.map((row) => (
-                <RankingRow key={row.jobId} row={row} canViewCosts={canViewCosts} tone="success" />
-              ))}
-            </ul>
-          )}
-        </Card>
+      <FilterTabs
+        options={tabs}
+        value={tab}
+        onChange={(value) => applyFilters({ tab: value })}
+        counts={{ alerts: alerts.length }}
+        className="mb-6"
+      />
 
-        <Card accent="warning" padding="lg">
-          <SectionHeading as="h3" title="Least Profitable Jobs" />
-          {leastProfitable.length === 0 ? (
-            <EmptyState title="No costed jobs yet" description="Jobs with revenue and cost data will rank here." />
-          ) : (
-            <ul className="flex flex-col gap-4">
-              {leastProfitable.map((row) => (
-                <RankingRow key={row.jobId} row={row} canViewCosts={canViewCosts} tone="danger" />
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-    </PageTransition>
-  )
-}
-
-function StatBlock({
-  label,
-  value,
-  detail,
-  note,
-  noteTone,
-}: {
-  label: string
-  value: string
-  detail?: string
-  note?: string
-  noteTone?: 'success' | 'danger'
-}) {
-  return (
-    <div className="rounded-panel border border-hairline bg-white/4 p-4">
-      <p className="text-2xs tracking-wide text-white/70 uppercase">{label}</p>
-      <p className="mt-1 text-xl font-bold text-white">{value}</p>
-      {detail && <p className="mt-0.5 text-sm text-white/75">{detail}</p>}
-      {note && (
-        <p className={noteTone === 'danger' ? 'mt-1 text-sm font-medium text-status-danger' : 'mt-1 text-sm font-medium text-status-success'}>
-          {note}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function RankingRow({
-  row,
-  canViewCosts,
-  tone,
-}: {
-  row: JobCostingDashboardProps['topProfitable'][number]
-  canViewCosts: boolean
-  tone: 'success' | 'danger'
-}) {
-  const showFinancials = canViewCosts && row.revenue !== null && row.profit !== null
-  const progress = showFinancials && row.revenue! > 0 ? Math.min(100, Math.max(0, (row.profit! / row.revenue!) * 100)) : 0
-
-  return (
-    <li>
-      <ButtonLink href={routeTo.jobCosting(row.jobId)} variant="ghost" className="block w-full p-0 text-left hover:bg-transparent">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate font-semibold text-white">{row.jobName}</p>
-            <p className="truncate text-sm text-white/70">{row.client ?? 'No client on record'}</p>
+      {isLoading ? (
+        <div className="grid gap-6" aria-busy="true" aria-label="Loading analytics">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-24" />)}
           </div>
-          {canViewCosts && (
-            <span className={tone === 'success' ? 'shrink-0 font-semibold text-status-success' : 'shrink-0 font-semibold text-status-danger'}>
-              {row.marginPct !== null ? `${row.marginPct}%` : '—'}
-            </span>
-          )}
+          <Skeleton className="h-64" />
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Skeleton className="h-72" />
+            <Skeleton className="h-72" />
+          </div>
         </div>
-        {showFinancials && (
-          <div className="mt-2 flex items-center gap-3">
-            <ProgressBar value={Math.abs(progress)} tone={tone} size="sm" className="flex-1" />
-            <span className="shrink-0 text-sm font-medium text-white/90">{formatCurrency(row.profit!, 0)}</span>
-          </div>
-        )}
-      </ButtonLink>
-    </li>
+      ) : (
+        <>
+          {tab === 'overview' && <OverviewTab props={props} onTab={(value) => applyFilters({ tab: value })} />}
+          {tab === 'profitability' && <ProfitabilityTab rows={jobRows ?? []} canViewCosts={canViewCosts} />}
+          {tab === 'labor' && labor && <LaborTab labor={labor} rows={jobRows ?? []} canViewCosts={canViewCosts} />}
+          {tab === 'materials' && <MaterialsTab rows={jobRows ?? []} breakdown={costBreakdown} canViewCosts={canViewCosts} />}
+          {tab === 'billing' && <BillingTab report={billingReport} billing={billing} trend={trend} />}
+          {tab === 'alerts' && <AlertsTab alerts={alerts} />}
+        </>
+      )}
+
+      <SettingsModal key={JSON.stringify(settings)} isOpen={settingsModal.isOpen} onClose={settingsModal.close} settings={settings} />
+    </PageTransition>
   )
 }
 

@@ -8,6 +8,7 @@ use App\Models\EstimateItem;
 use App\Models\PriceBookImport;
 use App\Models\PriceBookItem;
 use App\Models\User;
+use App\Services\JobScope\EstimateChangeRecorder;
 use App\Support\Ownership;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,9 @@ class EstimateWorksheet
      */
     public function save(Estimate $estimate, array $lines, array $settings, User $user): void
     {
+        // Lines are deleted and rewritten in bulk below — look at them as they are now, before that happens.
+        EstimateChangeRecorder::touch($estimate->id);
+
         DB::transaction(function () use ($estimate, $lines, $settings, $user) {
             $estimate->update([
                 'tax_pct' => $settings['tax_pct'],

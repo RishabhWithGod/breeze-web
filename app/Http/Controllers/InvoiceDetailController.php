@@ -14,6 +14,8 @@ use App\Models\TimeEntry;
 use App\Notifications\InvoiceStatusChanged;
 use App\Policies\InvoicePolicy;
 use App\Policies\JobCostingPolicy;
+use App\Services\JobScope\InvoiceScopeAdjuster;
+use App\Services\JobScope\JobScopeHistory;
 use App\Services\Activity\FeedItemRecorder;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Export\InvoicePdfWriter;
@@ -80,6 +82,10 @@ class InvoiceDetailController extends Controller
             // approval wait, and directly editable here; `actualLaborHours`
             // above is this same breakdown summed, so the two can never disagree.
             'journeymanHours' => $journeymanHours,
+            // What changed on the job's scope, and the version a screen compares to know it is current.
+            'scope' => $invoice->job !== null
+                ? app(JobScopeHistory::class)->payload($invoice->job, (bool) $request->user()->can('viewJobCosts', TimeEntry::class))
+                : null,
             'can' => [
                 'update' => $abilities->update($request->user(), $invoice),
                 'delete' => $abilities->delete($request->user(), $invoice),
@@ -145,6 +151,7 @@ class InvoiceDetailController extends Controller
             'position' => (int) $invoice->items()->max('position') + 1,
         ]);
 
+        app(InvoiceScopeAdjuster::class)->saved($invoice, $item, null);
         $invoice->recalculateTotals();
 
         return back()->with('success', "\"{$item->description}\" added.");
@@ -162,10 +169,13 @@ class InvoiceDetailController extends Controller
             'unit_price' => ['required', 'numeric', 'min:0', 'max:1000000'],
         ]);
 
+        $totalBefore = (float) $item->total;
+
         $item->update([
             ...$validated,
             'total' => round($validated['quantity'] * $validated['unit_price'], 2),
         ]);
+        app(InvoiceScopeAdjuster::class)->saved($invoice, $item->refresh(), $totalBefore);
         $invoice->recalculateTotals();
 
         return back()->with('success', "\"{$item->description}\" updated.");
@@ -177,6 +187,7 @@ class InvoiceDetailController extends Controller
         abort_unless($item->invoice_id === $invoice->id, 404);
 
         $description = $item->description;
+        app(InvoiceScopeAdjuster::class)->removed($invoice, $item);
         $item->delete();
         $invoice->recalculateTotals();
 

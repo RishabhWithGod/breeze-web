@@ -142,12 +142,12 @@ class HandleInertiaRequests extends Middleware
      * The name and logo of the company this person works for; null when they have
      * none. The logo is null too until one is uploaded — the header shows an icon then.
      *
-     * @return array{name: string, logoUrl: ?string}|null
+     * @return array{id: int, name: string, logoUrl: ?string}|null
      */
     private function company(?User $user): ?array
     {
         $company = $user?->company_id === null ? null : CompanyProfile::query()->find($user->company_id);
 
-        return $company === null ? null : ['name' => $company->name, 'logoUrl' => $company->logoUrl()];
+        return $company === null ? null : ['id' => $company->id, 'name' => $company->name, 'logoUrl' => $company->logoUrl()];
     }
 }

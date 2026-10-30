@@ -22,6 +22,8 @@ class NotificationTarget
         $path = parse_url($href, PHP_URL_PATH) ?: '';
 
         return match (true) {
+            // A job's scope changed — straight to its Job Costing, ahead of the plain job match below.
+            (bool) preg_match('#^/jobs/(\d+)/costing#', $path, $m) => ['screen' => 'job_costing', 'id' => $m[1]],
             (bool) preg_match('#^/jobs/(\d+)#', $path, $m) => ['screen' => 'job', 'id' => $m[1]],
             (bool) preg_match('#^/estimates/(\d+)#', $path, $m) => ['screen' => 'estimate', 'id' => $m[1]],
             (bool) preg_match('#^/reviews/(\d+)#', $path, $m) => self::review($m[1]),

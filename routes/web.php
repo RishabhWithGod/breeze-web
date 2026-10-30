@@ -541,6 +541,7 @@ Route::middleware(['auth', 'company.setup', 'permissions'])->group(function () {
 
     // Job Costing: the dashboard across all jobs, and one job's own detail screen.
     Route::get('job-costing', [JobCostingController::class, 'index'])->name('job-costing.index');
+    Route::put('job-costing/settings', [JobCostingController::class, 'updateSettings'])->name('job-costing.settings.update');
     Route::get('job-costing/export/{format}', [JobCostingController::class, 'export'])->name('job-costing.export');
     Route::get('jobs/{job}/costing', [JobCostingController::class, 'show'])->name('job-costing.show');
     Route::post('jobs/{job}/costing/entries', [JobCostingController::class, 'storeCostEntry'])->name('job-costing.entries.store');

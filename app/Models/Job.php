@@ -122,6 +122,8 @@ class Job extends Model
             'symbol_counts' => 'array',
             'boq' => 'array',
             'metadata' => 'array',
+            'estimate_baseline' => 'array',
+            'estimate_final' => 'array',
         ];
     }
 
@@ -139,6 +141,20 @@ class Job extends Model
             JobTask::where('job_id', $job->id)->delete();
             JobSchedule::where('job_id', $job->id)->delete();
             CrewShift::where('job_id', $job->id)->delete();
+        });
+
+        // Completing a job freezes its estimate as the final scope; reopening it unfreezes it.
+        static::saved(function (self $job): void {
+            if (! $job->wasChanged('status')) {
+                return;
+            }
+
+            $scope = app(\App\Services\JobCosting\EstimateScope::class);
+            if ($job->status === self::STATUS_COMPLETED) {
+                $scope->captureFinal($job);
+            } elseif ($job->getOriginal('status') === self::STATUS_COMPLETED) {
+                $scope->clearFinal($job);
+            }
         });
 
         static::saving(function (self $job): void {

@@ -88,6 +88,11 @@ class EstimateItem extends Model
         static::saving(function (self $item) {
             $item->total = round((float) $item->quantity * (float) $item->unit_cost, 2);
         });
+
+        // Remembered as one entry on the job's timeline once the estimate's totals are next worked out.
+        foreach (['creating', 'updating', 'deleting'] as $event) {
+            static::$event(fn (self $item) => \App\Services\JobScope\EstimateChangeRecorder::touch($item->estimate_id));
+        }
     }
 
     /** @return BelongsTo<Estimate, $this> */

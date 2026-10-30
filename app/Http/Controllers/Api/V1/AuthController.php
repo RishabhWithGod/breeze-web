@@ -314,6 +314,8 @@ class AuthController extends Controller
             'email' => $user->email,
             'role' => $user->role,
             'initials' => $user->initials,
+            // What the phone needs to hear the company's channel (job scope changes across jobs).
+            'companyId' => $user->company_id,
             'status' => $user->status,
             // null = the matrix does not govern this person (everything open).
             'permissions' => app(Permissions::class)->for($user),
@@ -390,6 +392,7 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'role' => $user->role,
                 'initials' => $user->initials,
+                'companyId' => $user->company_id,
                 'status' => $user->status,
                 'permissions' => app(Permissions::class)->for($user),
                 'onboarding' => OnboardingController::statusFor($user),

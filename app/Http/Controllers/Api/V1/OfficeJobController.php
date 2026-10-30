@@ -14,6 +14,7 @@ use App\Models\JobSchedule;
 use App\Models\TimeEntry;
 use App\Policies\InvoicePolicy;
 use App\Policies\JobSchedulePolicy;
+use App\Services\JobScope\JobScopeHistory;
 use App\Services\ChangeOrders\ChangeOrderAccess;
 use App\Services\JobCosting\JobCostSummary;
 use App\Services\Mobile\ElectricianJobAccess;
@@ -72,6 +73,19 @@ class OfficeJobController extends Controller
     }
 
     /** Web's `JobShow` props. */
+    /**
+     * The job's scope version and its newest changes. The phone calls this when it hears a
+     * `job.scope-changed` (or reconnects) with `?since=<version it has>`, and gets only what is newer.
+     */
+    public function scope(Request $request, Job $job): JsonResponse
+    {
+        $this->mayView($request, $job);
+
+        $since = $request->query('since') !== null ? (int) $request->query('since') : null;
+
+        return $this->ok(app(JobScopeHistory::class)->payload($job, (bool) $request->user()->can('viewJobCosts', TimeEntry::class), $since, limit: 50));
+    }
+
     public function show(Request $request, Job $job): JsonResponse
     {
         $this->mayView($request, $job);
@@ -113,6 +127,7 @@ class OfficeJobController extends Controller
             'job' => (new JobDetailResource($job))->resolve(),
             'canViewTimeCosts' => $canViewTimeCosts,
             'jobCosting' => $canViewTimeCosts ? $jobCosting : JobCostSummary::redact($jobCosting),
+            'scope' => app(JobScopeHistory::class)->payload($job, $canViewTimeCosts),
             'canPlanWork' => $this->schedulePolicy
                 ->createTask($user, $job->schedule ?? new JobSchedule(['job_id' => $job->id]))
                 && $permissions->allows($user, 'tasks.create'),

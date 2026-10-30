@@ -166,6 +166,7 @@ export default function JobShow({
 
   usePrivateChannel(`job.${job.id}`, {
     'job.status-changed': resync,
+    'job.scope-changed': resync,
     'job.assignment-changed': resync,
     'schedule.changed': resync,
     'time-entry.logged': resync,

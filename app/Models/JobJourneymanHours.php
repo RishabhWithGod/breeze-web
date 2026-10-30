@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\JobScope\JobScopeLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -20,6 +21,19 @@ class JobJourneymanHours extends Model
         'hours',
         'updated_by',
     ];
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $row): void {
+            $job = Job::find($row->job_id);
+            if ($job === null || ! ($row->wasRecentlyCreated || $row->wasChanged('hours'))) {
+                return;
+            }
+
+            $name = User::whereKey($row->user_id)->value('name') ?? 'a team member';
+            app(JobScopeLog::class)->record($job, JobScopeChange::KIND_HOURS, "Hours set for {$name}");
+        });
+    }
 
     protected function casts(): array
     {

@@ -13,6 +13,7 @@ import {
   FolderKanban,
   Gauge,
   ReceiptText,
+  BarChart3,
   Sparkles,
   Users,
   ListChecks,
@@ -117,7 +118,7 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   { label: 'Electrical Tools', href: ROUTES.electricalTools, icon: Zap },
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock, permission: 'time_tracking.view' },
   { label: 'Billing', href: ROUTES.billing, icon: ReceiptText, permission: 'billing.view' },
-  { label: 'Analytics', href: ROUTES.jobCosting, icon: ReceiptText },
+  { label: 'Analytics', href: ROUTES.jobCosting, icon: BarChart3 },
 ]
 
 export const FOOTER_LINKS: readonly { label: string; href: string }[] = [

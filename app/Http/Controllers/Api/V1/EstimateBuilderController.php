@@ -125,6 +125,8 @@ class EstimateBuilderController extends Controller
                 'markupPct' => (float) $estimate->markup_pct,
                 'laborRate' => (float) $estimate->builder_labor_rate,
                 'commodityVersion' => $estimate->commodity_version,
+                // The job this estimate is on — what a change made elsewhere is heard on (`job.{id}`).
+                'jobId' => $estimate->job_id,
                 'revisions' => $estimate->revisions()->count(),
                 'scopeOfWork' => $estimate->scope_of_work,
                 'exclusions' => $estimate->exclusions ?? [],

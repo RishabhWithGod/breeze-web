@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AnalyticsSetting;
 use App\Models\Job;
 use App\Models\JobCostEntry;
 use App\Models\TeamMember;
@@ -10,8 +11,10 @@ use App\Models\User;
 use App\Policies\JobCostingPolicy;
 use App\Services\Billing\ActualCostInvoiceSync;
 use App\Services\Export\JobCostingExporter;
+use App\Services\JobCosting\AnalyticsDashboard;
 use App\Services\JobCosting\JobCostOverrunNotifier;
 use App\Services\JobCosting\JobCostSummary;
+use App\Services\JobScope\JobScopeHistory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -29,67 +32,15 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class JobCostingController extends Controller
 {
-    public function __construct(
+        public function __construct(
         private readonly JobCostSummary $costSummary,
         private readonly JobCostingExporter $exporter,
+        private readonly AnalyticsDashboard $dashboard,
     ) {}
 
     public function index(Request $request): Response
     {
-        $filters = $this->filters($request);
-        $canViewCosts = (bool) $request->user()->can('viewJobCosts', TimeEntry::class);
-
-        $jobs = $this->filteredJobs($filters);
-        $rows = $jobs->map(fn (Job $job) => $this->costSummary->for($job, $filters['date_from'], $filters['date_to']));
-
-        $costType = $filters['cost_type'];
-        $overrunRows = $costType === 'all'
-            ? $rows->filter(fn (array $r) => $r['isOverBudget'])
-            : $rows->filter(fn (array $r) => $this->matchesCostType($r, $costType));
-
-        $laborTotals = [
-            'estimatedHours' => round($rows->sum('estimatedLaborHours'), 2),
-            'actualHours' => round($rows->sum('actualLaborHours'), 2),
-            'estimatedCost' => $canViewCosts ? round($rows->sum('estimatedLaborCost'), 2) : null,
-            'actualCost' => $canViewCosts ? round($rows->sum('actualLaborCost'), 2) : null,
-        ];
-        $materialTotals = [
-            'estimatedCost' => $canViewCosts ? round($rows->sum('estimatedMaterialCost'), 2) : null,
-            'actualCost' => $canViewCosts ? round($rows->sum('actualMaterialCost'), 2) : null,
-        ];
-
-        $revenue = round($rows->sum('revenue'), 2);
-        $totalCost = round($rows->sum('actualTotalCost'), 2);
-        $profit = round($rows->sum('profit'), 2);
-
-        $jobsByStatus = collect(Job::STATUSES)
-            ->map(fn (string $status) => ['status' => $status, 'count' => $jobs->where('status', $status)->count()])
-            ->filter(fn (array $row) => $row['count'] > 0)
-            ->values();
-
-        return Inertia::render('JobCosting', [
-            'filters' => $filters,
-            'canViewCosts' => $canViewCosts,
-            'laborTotals' => $laborTotals,
-            'materialTotals' => $materialTotals,
-            'profitLoss' => $canViewCosts ? [
-                'revenue' => $revenue,
-                'totalCost' => $totalCost,
-                'profit' => $profit,
-                'marginPct' => $revenue > 0 ? round($profit / $revenue * 100, 1) : null,
-            ] : ['revenue' => null, 'totalCost' => null, 'profit' => null, 'marginPct' => null],
-            'overrunAlerts' => $overrunRows->sortByDesc('overrunAmount')->take(10)->values()
-                ->map(fn (array $row) => $canViewCosts ? $row : JobCostSummary::redact($row)),
-            'jobsByStatus' => $jobsByStatus,
-            'topProfitable' => $rows->sortByDesc('profit')->take(5)->values()
-                ->map(fn (array $row) => $canViewCosts ? $row : JobCostSummary::redact($row)),
-            'leastProfitable' => $rows->sortBy('profit')->take(5)->values()
-                ->map(fn (array $row) => $canViewCosts ? $row : JobCostSummary::redact($row)),
-            'jobCount' => $jobs->count(),
-            'clients' => Job::query()->whereNotNull('client')->distinct()->orderBy('client')->pluck('client'),
-            'jobs' => Job::query()->active()->orderBy('name')->get(['id', 'name', 'client']),
-            'teamMembers' => TeamMember::orderBy('name')->get(['id', 'name']),
-        ]);
+        return Inertia::render('JobCosting', $this->dashboard->build($request->user(), $this->dashboard->filters($request)));
     }
 
     public function export(Request $request, string $format): StreamedResponse|BinaryFileResponse
@@ -98,9 +49,9 @@ class JobCostingController extends Controller
         // Exporting is still a view of cost figures — same gate as the dashboard.
         abort_unless($request->user()->can('viewJobCosts', TimeEntry::class), 403);
 
-        $filters = $this->filters($request);
-        $jobs = $this->filteredJobs($filters);
-        $rows = $jobs->map(fn (Job $job) => $this->costSummary->for($job, $filters['date_from'], $filters['date_to']));
+        $filters = $this->dashboard->filters($request);
+        $jobs = $this->dashboard->filteredJobs($filters);
+        $rows = $this->dashboard->rowsFor($jobs, $filters);
 
         $filename = 'job-costing-'.now()->toDateString();
 
@@ -126,86 +77,7 @@ class JobCostingController extends Controller
             'to' => ['nullable', 'date'],
         ]);
 
-        $canViewCosts = (bool) $request->user()->can('viewJobCosts', TimeEntry::class);
-        $summary = $this->costSummary->for($job, $data['from'] ?? null, $data['to'] ?? null);
-
-        $job->load(['estimates', 'schedule']);
-
-        $laborRows = $job->timeEntries()
-            ->where('status', TimeEntry::STATUS_APPROVED)
-            ->with(['teamMember', 'user'])
-            ->get()
-            // Grouped by `user_id`, never `team_member_id` — every entry has a
-            // real owning user, while the member link is nullable and would
-            // otherwise split one person across two rows.
-            ->groupBy(fn ($entry) => $entry->user_id)
-            ->map(function ($entries) {
-                $first = $entries->first();
-
-                return [
-                    'name' => $first->teamMember?->name ?? $first->user?->name ?? 'Unknown',
-                    'role' => $first->teamMember?->role ?? $first->user?->role,
-                    'hours' => round((float) $entries->sum('hours'), 2),
-                    'regularHours' => round((float) $entries->sum('regular_hours'), 2),
-                    'overtimeHours' => round((float) $entries->sum('overtime_hours'), 2),
-                    'billableHours' => round((float) $entries->where('billable', true)->sum('hours'), 2),
-                    'laborRate' => $entries->last()->cost_rate !== null ? (float) $entries->last()->cost_rate : null,
-                    'laborCost' => round((float) $entries->sum('labor_cost'), 2),
-                ];
-            })
-            ->sortByDesc('hours')
-            ->values();
-
-        $costEntries = $job->costEntries()->with('recorder')->get()->map(fn (JobCostEntry $entry) => [
-            'id' => $entry->id,
-            'category' => $entry->category,
-            'description' => $entry->description,
-            'quantity' => $entry->quantity !== null ? (float) $entry->quantity : null,
-            'unitCost' => $entry->unit_cost !== null ? (float) $entry->unit_cost : null,
-            'amount' => (float) $entry->amount,
-            'incurredOn' => $entry->incurred_on->toDateString(),
-            'recordedBy' => $entry->recorder?->name,
-        ]);
-
-        $estimate = $job->estimates->first();
-        $estimatedItems = $estimate
-            ? $estimate->items()->whereIn('category', ['material', 'fixture', 'equipment'])->get()->map(fn ($item) => [
-                'category' => $item->category,
-                'description' => $item->description,
-                'quantity' => (float) $item->quantity,
-                'cost' => $canViewCosts ? (float) $item->total : null,
-            ])->values()
-            : collect();
-
-        if (! $canViewCosts) {
-            $summary = JobCostSummary::redact($summary);
-            $laborRows = $laborRows->map(fn (array $row) => [...$row, 'laborRate' => null, 'laborCost' => null]);
-            $costEntries = $costEntries->map(fn (array $entry) => [...$entry, 'unitCost' => null, 'amount' => null]);
-        }
-
-        $hasSchedule = $job->schedule !== null;
-
-        return Inertia::render('JobCostingDetail', [
-            'job' => [
-                'id' => $job->id,
-                'name' => $job->name,
-                'client' => $job->client,
-                'status' => $job->status,
-                'isLocked' => $job->isLocked(),
-            ],
-            'range' => ['from' => $data['from'] ?? null, 'to' => $data['to'] ?? null],
-            'canViewCosts' => $canViewCosts,
-            'summary' => $summary,
-            'laborRows' => $laborRows,
-            'costEntries' => $costEntries,
-            'estimatedItems' => $estimatedItems,
-            'schedule' => [
-                'hasSchedule' => $hasSchedule,
-                'scheduledHours' => $hasSchedule ? $summary['estimatedLaborHours'] : null,
-                'remainingHours' => round(max(0, $summary['estimatedLaborHours'] - $summary['actualLaborHours']), 2),
-            ],
-            'can' => app(JobCostingPolicy::class)->abilities($request->user()),
-        ]);
+        return Inertia::render('JobCostingDetail', $this->dashboard->jobDetail($request->user(), $job, $data));
     }
 
     public function storeCostEntry(Request $request, Job $job, JobCostOverrunNotifier $notifier, ActualCostInvoiceSync $invoiceSync): RedirectResponse
@@ -275,7 +147,66 @@ class JobCostingController extends Controller
         return back()->with('success', "{$user->name}'s hours were updated.");
     }
 
-    /** @return array{date_from: ?string, date_to: ?string, job: ?int, client: string, status: string, cost_type: string, team_member: ?int} */
+    /** The dashboard's thresholds — a manager's call, since they decide what counts as an alert. */
+    public function updateSettings(Request $request): RedirectResponse
+    {
+        abort_unless(app(JobCostingPolicy::class)->manage($request->user()), 403);
+
+        $validated = $request->validate([
+            'low_margin_pct' => ['required', 'numeric', 'min:0', 'max:100'],
+            'hours_warning_pct' => ['required', 'numeric', 'min:1', 'max:100'],
+            'stale_timer_hours' => ['required', 'integer', 'min:1', 'max:72'],
+            'overdue_grace_days' => ['required', 'integer', 'min:0', 'max:90'],
+        ]);
+
+        AnalyticsSetting::current()->update([...$validated, 'updated_by' => $request->user()->id]);
+
+        return back()->with('success', 'Analytics thresholds saved.');
+    }
+
+    /** @param  array<string, mixed>  $filters */
+    private function rowsFor(Collection $jobs, array $filters): Collection
+    {
+        return $this->costSummary->forMany($jobs, $filters['date_from'], $filters['date_to'], $filters['team_member']);
+    }
+
+    /**
+     * Actual hours and cost for the window just before the selected one (same
+     * length), so the KPI row can say "+12% vs previous period". Only labor
+     * and total cost are compared: revenue and estimates are whole-job
+     * figures that do not move with a date window.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array{from: string, to: string, laborHours: float, laborCost: float, totalCost: float}|null
+     */
+    private function comparison(Collection $jobs, array $filters): ?array
+    {
+        if ($filters['date_from'] === null) {
+            return null;
+        }
+
+        $from = \Carbon\Carbon::parse($filters['date_from'])->startOfDay();
+        $to = \Carbon\Carbon::parse($filters['date_to'] ?? now()->toDateString())->startOfDay();
+        if ($to->lt($from)) {
+            return null;
+        }
+
+        $days = (int) $from->diffInDays($to) + 1;
+        $prevTo = $from->copy()->subDay();
+        $prevFrom = $prevTo->copy()->subDays($days - 1);
+
+        $rows = $this->costSummary->forMany($jobs, $prevFrom->toDateString(), $prevTo->toDateString(), $filters['team_member']);
+
+        return [
+            'from' => $prevFrom->toDateString(),
+            'to' => $prevTo->toDateString(),
+            'laborHours' => round($rows->sum('actualLaborHours'), 2),
+            'laborCost' => round($rows->sum('actualLaborCost'), 2),
+            'totalCost' => round($rows->sum('actualTotalCost'), 2),
+        ];
+    }
+
+    /** @return array{date_from: ?string, date_to: ?string, job: ?int, client: string, status: string, cost_type: string, team_member: ?int, tab: string} */
     private function filters(Request $request): array
     {
         $data = $request->validate([
@@ -286,16 +217,20 @@ class JobCostingController extends Controller
             'status' => ['nullable', Rule::in(['all', ...Job::STATUSES])],
             'cost_type' => ['nullable', Rule::in(['all', 'labor', 'material', 'equipment', 'other', 'total'])],
             'team_member' => ['nullable', 'integer'],
+            'tab' => ['nullable', Rule::in(self::TABS)],
         ]);
 
         return [
-            'date_from' => $data['date_from'] ?? now()->subDays(30)->toDateString(),
-            'date_to' => $data['date_to'] ?? now()->toDateString(),
+            // No range means all-time: revenue and estimates are whole-job figures, so a
+            // default window would net a few weeks of cost against the full contract value.
+            'date_from' => $data['date_from'] ?? null,
+            'date_to' => $data['date_to'] ?? null,
             'job' => $data['job'] ?? null,
             'client' => $data['client'] ?? 'all',
             'status' => $data['status'] ?? 'all',
             'cost_type' => $data['cost_type'] ?? 'all',
             'team_member' => $data['team_member'] ?? null,
+            'tab' => $data['tab'] ?? 'overview',
         ];
     }
 
@@ -312,18 +247,5 @@ class JobCostingController extends Controller
                 fn ($t) => $t->where('team_member_id', $filters['team_member'])
             ))
             ->get();
-    }
-
-    /** @param  array<string, mixed>  $row */
-    private function matchesCostType(array $row, string $costType): bool
-    {
-        return match ($costType) {
-            'labor' => $row['actualLaborCost'] > $row['estimatedLaborCost'] || $row['actualLaborHours'] > $row['estimatedLaborHours'],
-            'material' => $row['actualMaterialCost'] > $row['estimatedMaterialCost'],
-            'equipment' => $row['actualEquipmentCost'] > $row['estimatedEquipmentCost'],
-            'other' => $row['actualOtherCost'] > $row['estimatedOtherCost'],
-            'total' => $row['actualTotalCost'] > $row['estimatedTotalCost'],
-            default => $row['isOverBudget'],
-        };
     }
 }

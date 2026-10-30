@@ -57,7 +57,7 @@ export interface SharedPageProps {
   /** The company this person works for; null when they have none. */
   /** What this person's role may do; null when their role is not governed by the matrix (everything). */
   readonly permissions: readonly string[] | null
-  readonly company: { readonly name: string; readonly logoUrl: string | null } | null
+  readonly company: { readonly id: number; readonly name: string; readonly logoUrl: string | null } | null
   readonly notifications: readonly AppNotification[]
   readonly unreadNotificationCount: number
   readonly activeTimer: ActiveTimer | null

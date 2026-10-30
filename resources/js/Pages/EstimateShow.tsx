@@ -36,13 +36,16 @@ import {
   WireSizesPanel,
 } from '@/components/finals'
 import { appLayout, PageHeader, PageTransition, StepFooter } from '@/components/layout'
+import { LiveChangeBanner, ScopeHistory } from '@/components/jobScope'
 import { ROUTES, routeTo } from '@/constants'
+import { useJobScopeSync } from '@/hooks'
 import type {
   EquipmentRow,
   EstimateItemRow,
   EstimateStatus,
   EstimateTotals,
   PanelScheduleRow,
+  ScopeChange,
   SelectOption,
   SharedPageProps,
   Tone,
@@ -98,6 +101,8 @@ interface EstimateSummary {
 
 export interface EstimateShowProps {
   estimate: EstimateSummary
+  /** Every change this estimate has had — who, from where, what — newest first. */
+  changes: readonly ScopeChange[]
   items: readonly EstimateItemRow[]
   /** This estimate's own addenda — only populated when `estimate.kind` is `standalone`. */
   addenda: readonly AddendumSummary[]
@@ -138,6 +143,7 @@ export interface EstimateShowProps {
  */
 export default function EstimateShow({
   estimate,
+  changes,
   items,
   addenda,
   beforeJob,
@@ -149,6 +155,8 @@ export default function EstimateShow({
   drawingData,
 }: EstimateShowProps) {
   const { flash } = usePage<SharedPageProps>().props
+  // The estimate is edited from the Estimate Builder, the web and the phone — whoever changes it last, this shows.
+  const { latest } = useJobScopeSync(estimate.jobId)
 
   /*
    * Before a job exists, this selection is the real thing "Continue to Job"
@@ -257,6 +265,7 @@ export default function EstimateShow({
 
   return (
     <PageTransition>
+      <LiveChangeBanner latest={latest} />
       <Head title={`Estimate ${estimate.number}`} />
 
       {/* Status sits in the header, where this app puts it on every other
@@ -723,6 +732,9 @@ export default function EstimateShow({
             : {})}
         />
       )}
+      <div className="mt-6">
+        <ScopeHistory changes={changes} title="Estimate Change History" emptyText="This estimate has not been changed since it was priced." />
+      </div>
     </PageTransition>
   )
 }

@@ -1,4 +1,5 @@
 import { Head, router, usePage } from '@inertiajs/react'
+import { usePrivateChannel, type ScopeBroadcast } from '@/hooks'
 import {
   AlertTriangle,
   Copy,
@@ -86,6 +87,8 @@ export interface EstimateBuilderProps {
     readonly laborRate: number
     /** The price list it was priced from when last saved. */
     readonly commodityVersion: string | null
+    /** The job this estimate is on, when it has one — what a change elsewhere is heard on. */
+    readonly jobId: number | null
     /** What the estimate covers, and what it leaves out — read by whoever approves it. */
     /** How many times it has been sent for approval. */
     readonly revisions: number
@@ -149,6 +152,17 @@ EstimateBuilder.layout = appLayout
 function Builder({ estimate, lines, priceList, priceListVersion, importSources }: EstimateBuilderProps) {
   const { flash, errors } = usePage<SharedPageProps>().props
   const locked = estimate.locked
+
+  // Someone else saved this estimate while it is open here. Not reloaded for them — that would
+  // throw away what is being typed — but never silent either: they choose when to take it.
+  const me = usePage<SharedPageProps>().props.auth.user?.id ?? null
+  const [remote, setRemote] = useState<ScopeBroadcast | null>(null)
+  usePrivateChannel(estimate.jobId ? `job.${estimate.jobId}` : null, {
+    'job.scope-changed': (payload) => {
+      const change = payload as unknown as ScopeBroadcast
+      if (change.estimateId === estimate.id && change.byUserId !== me) setRemote(change)
+    },
+  })
 
   const toRow = (line: ServerLine): BuilderRow => ({
     key: `saved-${line.id}`,
@@ -311,6 +325,17 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
   return (
     <PageTransition>
       <Head title="Estimate Builder" />
+
+      {remote && (
+        <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-panel border border-status-warning/40 bg-status-warning/10 px-4 py-3 text-sm text-white">
+          <span>
+            {remote.by ?? 'Someone'} just changed this estimate — {remote.summary.toLowerCase()}. Reload to see the latest before you save, or your save will overwrite theirs.
+          </span>
+          <Button size="sm" variant="secondary" onClick={() => router.reload()}>
+            Reload latest
+          </Button>
+        </div>
+      )}
 
       <PageHeader
         title="Estimate Builder"

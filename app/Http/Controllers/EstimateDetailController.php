@@ -11,6 +11,7 @@ use App\Notifications\EstimateStatusChanged;
 use App\Services\Clients\ClientDirectory;
 use App\Services\Clients\ProjectDirectory;
 use App\Services\Export\EstimatePdfWriter;
+use App\Services\JobScope\JobScopeHistory;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Support\Ownership;
@@ -68,6 +69,8 @@ class EstimateDetailController extends Controller
         $beforeJob = $estimate->kind === Estimate::KIND_STANDALONE && $estimate->job_id === null;
 
         return Inertia::render('EstimateShow', [
+            // Every change this estimate has had — who, from where, what — newest first.
+            'changes' => app(JobScopeHistory::class)->forEstimate($estimate, (bool) $request->user()->can('viewJobCosts', \App\Models\TimeEntry::class), 30),
             'estimate' => [
                 'id' => $estimate->id,
                 'number' => $estimate->number,

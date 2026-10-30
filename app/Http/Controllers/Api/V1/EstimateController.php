@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\Concerns\ApiResponses;
 use App\Http\Controllers\Controller;
+use App\Models\TimeEntry;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\Project;
+use App\Services\JobScope\JobScopeHistory;
 use App\Services\Clients\ProjectDirectory;
 use App\Services\Takeoff\EstimateBuilder;
 use App\Support\Ownership;
@@ -232,6 +234,8 @@ class EstimateController extends Controller
             'laborRate' => $this->currentLaborRate($estimate),
             'jobId' => $estimate->job_id,
             'jobName' => $estimate->job?->name,
+            // Every change this estimate has had — who, from where, what — newest first.
+            'changes' => app(JobScopeHistory::class)->forEstimate($estimate, (bool) $request->user()->can('viewJobCosts', TimeEntry::class), 20),
             'issuedOn' => $estimate->issued_on->toDateString(),
             'createdAt' => $estimate->created_at?->toISOString(),
             'amount' => (float) $estimate->amount,

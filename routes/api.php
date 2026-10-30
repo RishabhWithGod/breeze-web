@@ -320,6 +320,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('invoices/export', [\App\Http\Controllers\Api\V1\ExportController::class, 'invoices'])->name('invoices.export');
             Route::get('estimates/{estimate}/export/csv', [\App\Http\Controllers\Api\V1\ExportController::class, 'estimate'])->name('estimates.export');
             Route::get('takeoffs/{project}/final/export/{format}', [\App\Http\Controllers\Api\V1\ExportController::class, 'finalTakeoff'])->whereIn('format', ['json', 'csv', 'xlsx'])->name('takeoffs.final.export');
+            Route::get('office/jobs/{job}/scope', [OfficeJobController::class, 'scope'])->whereNumber('job')->name('office.jobs.scope');
+
+            // Analytics and Job Costing — the same data, rules and numbers as the web's (AnalyticsDashboard).
+            Route::get('office/analytics', [\App\Http\Controllers\Api\V1\OfficeAnalyticsController::class, 'index'])->name('office.analytics.index');
+            Route::put('office/analytics/settings', [\App\Http\Controllers\Api\V1\OfficeAnalyticsController::class, 'updateSettings'])->name('office.analytics.settings');
+            Route::get('office/analytics/export/{format}', [\App\Http\Controllers\Api\V1\OfficeAnalyticsController::class, 'export'])->whereIn('format', ['csv', 'xlsx'])->name('office.analytics.export');
+            Route::get('office/jobs/{job}/costing', [\App\Http\Controllers\Api\V1\OfficeAnalyticsController::class, 'show'])->whereNumber('job')->name('office.jobs.costing.show');
+            Route::post('office/jobs/{job}/costing/entries', [\App\Http\Controllers\Api\V1\OfficeAnalyticsController::class, 'storeCostEntry'])->whereNumber('job')->name('office.jobs.costing.entries.store');
+            Route::delete('office/jobs/{job}/costing/entries/{entry}', [\App\Http\Controllers\Api\V1\OfficeAnalyticsController::class, 'destroyCostEntry'])->whereNumber(['job', 'entry'])->name('office.jobs.costing.entries.destroy');
             Route::get('office/jobs/{job}/schedule', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'show'])->name('office.jobs.schedule.show');
             Route::put('office/jobs/{job}/schedule', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'update'])->name('office.jobs.schedule.update');
             Route::post('schedule-tasks/{task}/delay', [\App\Http\Controllers\Api\V1\JobScheduleBoardController::class, 'delay'])->name('schedule-tasks.delay');

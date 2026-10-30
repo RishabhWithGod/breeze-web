@@ -44,6 +44,18 @@ export function JobCostingSummary({ jobId, summary, canViewCosts }: JobCostingSu
             {formatHours(summary.actualLaborHours)} of {formatHours(summary.estimatedLaborHours)} estimated labor hours
             {summary.marginPct !== null ? ` — ${summary.marginPct}% margin.` : '.'}
           </p>
+          {summary.hasBaseline && summary.scopeChange !== null && summary.baselineTotal !== null && summary.currentScopeTotal !== null && (
+            <p className="mt-1 text-sm text-white/75">
+              Estimate at job creation {formatCurrency(summary.baselineTotal, 0)} →{' '}
+              {summary.isFinal ? 'final' : 'current'} {formatCurrency(summary.currentScopeTotal, 0)}
+              {summary.scopeChange !== 0 && (
+                <span className={summary.scopeChange > 0 ? ' font-medium text-status-danger' : ' font-medium text-status-success'}>
+                  {' '}({summary.scopeChange > 0 ? '+' : ''}{formatCurrency(summary.scopeChange, 0)})
+                </span>
+              )}
+              .
+            </p>
+          )}
         </>
       ) : (
         <p className="text-md text-white/70">Only a Client Manager, Admin or Owner can see this job's cost figures.</p>

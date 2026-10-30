@@ -2,12 +2,19 @@
 
 namespace App\Services\JobCosting;
 
+use App\Models\ChangeOrder;
+use App\Models\Estimate;
+use App\Models\EstimateItem;
 use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\JobCostEntry;
+use App\Models\JobJourneymanHours;
+use App\Models\JobTask;
+use App\Models\TeamMember;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\Takeoff\EstimateBuilder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 /**
@@ -43,7 +50,132 @@ use Illuminate\Support\Collection;
  */
 class JobCostSummary
 {
-    public function __construct(private readonly EstimateBuilder $estimateBuilder) {}
+    /**
+     * Whatever `forMany()` fetched for the whole list in a few grouped queries,
+     * keyed by job id, so `for()` reads it instead of querying per job. Empty
+     * outside a `forMany()` call, so a single `for()` behaves exactly as before.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    private array $preloaded = [];
+
+    /** @var Collection<int, User> */
+    private Collection $preloadedUsers;
+
+    public function __construct(private readonly EstimateBuilder $estimateBuilder)
+    {
+        $this->preloadedUsers = new Collection;
+    }
+
+    /**
+     * `for()` across a list of jobs in a fixed number of queries rather than
+     * a dozen or more per job. The numbers are identical — only where they
+     * are read from changes.
+     *
+     * @param  Collection<int, Job>  $jobs
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function forMany(Collection $jobs, ?string $from = null, ?string $to = null, ?int $teamMemberId = null): Collection
+    {
+        if ($jobs->isEmpty()) {
+            return collect();
+        }
+
+        $this->warm($jobs, $from, $to, $teamMemberId);
+
+        try {
+            return $jobs->map(fn (Job $job) => $this->for($job, $from, $to, $teamMemberId));
+        } finally {
+            $this->preloaded = [];
+            $this->preloadedUsers = new Collection;
+        }
+    }
+
+    /**
+     * Each job's effective hourly labor rate, in one batch.
+     *
+     * @param  Collection<int, Job>  $jobs
+     * @return array<int, float> job id => rate (0 when the job has no project)
+     */
+    public function laborRates(Collection $jobs): array
+    {
+        // Accept any collection of jobs, not only an Eloquent one, so `loadMissing` is always there.
+        $jobs = new EloquentCollection($jobs->all());
+        $jobs->loadMissing('project.clientRecord');
+        $rates = $this->estimateBuilder->laborRatesFor($jobs->pluck('project')->filter());
+
+        return $jobs->mapWithKeys(fn (Job $job) => [
+            $job->id => $job->project !== null ? ($rates[$job->project->id] ?? 0.0) : 0.0,
+        ])->all();
+    }
+
+    /** @param  Collection<int, Job>  $jobs */
+    private function warm(Collection $jobs, ?string $from, ?string $to, ?int $teamMemberId): void
+    {
+        $ids = $jobs->pluck('id');
+        $rates = $this->laborRates($jobs);
+
+        $estimates = Estimate::query()->whereIn('job_id', $ids)->with('aiResult')->orderByDesc('issued_on')->get()->groupBy('job_id');
+        $laborQty = EstimateItem::query()
+            ->whereIn('estimate_id', $estimates->map(fn ($group) => $group->first()->id)->values())
+            ->where('category', EstimateItem::CATEGORY_LABOR)
+            ->groupBy('estimate_id')
+            ->selectRaw('estimate_id, SUM(quantity) as total')
+            ->pluck('total', 'estimate_id');
+        $changeOrders = ChangeOrder::query()
+            ->whereIn('job_id', $ids)
+            ->where('status', ChangeOrder::STATUS_APPROVED)
+            ->groupBy('job_id')
+            ->selectRaw('job_id, SUM(material_cost) as material, SUM(labor_cost) as labor, SUM(labor_hours) as hours, SUM(sell_total) as sell')
+            ->get()->keyBy('job_id');
+        $taskHours = JobTask::query()->whereIn('job_id', $ids)->groupBy('job_id')->selectRaw('job_id, SUM(estimated_hours) as total')->pluck('total', 'job_id');
+        $invoices = Invoice::query()
+            ->whereIn('job_id', $ids)
+            ->groupBy('job_id')
+            ->selectRaw('job_id, SUM(CASE WHEN status != ? THEN total ELSE 0 END) as billed, SUM(paid_amount) as paid', [Invoice::STATUS_DRAFT])
+            ->get()->keyBy('job_id');
+        $costs = JobCostEntry::query()
+            ->whereIn('job_id', $ids)
+            ->incurredBetween($from, $to)
+            ->groupBy('job_id', 'category')
+            ->selectRaw('job_id, category, SUM(amount) as total')
+            ->get()->groupBy('job_id');
+
+        $entries = TimeEntry::query()
+            ->whereIn('job_id', $ids)
+            ->where('status', '!=', TimeEntry::STATUS_LOCKED)
+            ->when($from, fn ($q) => $q->whereDate('date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('date', '<=', $to))
+            ->when($teamMemberId, fn ($q) => $q->where('team_member_id', $teamMemberId))
+            ->with(['teamMember', 'user'])
+            ->get()->groupBy('job_id');
+        $memberUserId = $teamMemberId ? TeamMember::whereKey($teamMemberId)->value('user_id') : null;
+        $overrides = JobJourneymanHours::query()
+            ->whereIn('job_id', $ids)
+            ->when($teamMemberId, fn ($q) => $q->where('user_id', $memberUserId ?? 0))
+            ->get()->groupBy('job_id');
+
+        $userIds = $entries->flatten(1)->pluck('user_id')->merge($overrides->flatten(1)->pluck('user_id'))->unique()->filter();
+        $this->preloadedUsers = User::whereKey($userIds)->get(['id', 'name', 'role'])->keyBy('id');
+
+        foreach ($jobs as $job) {
+            $latest = $estimates->get($job->id)?->first();
+            $this->preloaded[$job->id] = [
+                'estimate' => $latest,
+                'laborQty' => $latest ? (float) ($laborQty[$latest->id] ?? 0) : null,
+                'taskHours' => (float) ($taskHours[$job->id] ?? 0),
+                'changeOrders' => ($co = $changeOrders->get($job->id)) ? [
+                    'material' => (float) $co->material, 'labor' => (float) $co->labor, 'hours' => (float) $co->hours, 'sell' => (float) $co->sell,
+                ] : EstimateScope::noChangeOrders(),
+                'rate' => $rates[$job->id] ?? 0.0,
+                'billed' => (float) ($invoices->get($job->id)?->billed ?? 0),
+                'paid' => (float) ($invoices->get($job->id)?->paid ?? 0),
+                'costs' => ($costs->get($job->id) ?? collect())->pluck('total', 'category')->map(fn ($v) => (float) $v)->all(),
+                'entries' => ($entries->get($job->id) ?? collect())->groupBy('user_id'),
+                'overrides' => ($overrides->get($job->id) ?? collect())->keyBy('user_id'),
+            ];
+        }
+    }
 
     /**
      * @return array{
@@ -60,42 +192,62 @@ class JobCostSummary
      *     isOverBudget: bool, overrunReason: ?string, overrunAmount: float, overrunPct: ?float,
      * }
      */
-    public function for(Job $job, ?string $from = null, ?string $to = null): array
+    public function for(Job $job, ?string $from = null, ?string $to = null, ?int $teamMemberId = null): array
     {
-        $estimate = $job->estimates()->latest('issued_on')->first();
-        $estimateTotals = $estimate ? EstimateBuilder::totalsFor($estimate) : null;
+        $pre = $this->preloaded[$job->id] ?? null;
 
-        $estimatedLaborHours = round((float) $job->tasks()->sum('estimated_hours'), 2);
-        $estimatedLaborCost = round($estimateTotals['labor'] ?? 0.0, 2);
-        $estimatedMaterialCost = round($estimateTotals['material'] ?? 0.0, 2);
-        $estimatedEquipmentCost = round($estimateTotals['equipment'] ?? 0.0, 2);
+        $estimate = $pre !== null ? $pre['estimate'] : $job->estimates()->latest('issued_on')->first();
+        $estimateTotals = $estimate ? EstimateBuilder::totalsFor($estimate, $pre['laborQty'] ?? null) : null;
+        $changeOrders = $pre !== null ? $pre['changeOrders'] : app(EstimateScope::class)->approvedChangeOrders($job);
+
+        // Where the job's scope stands today, what it was when the job was raised,
+        // and — once completed — what it finally came to. See `EstimateScope`.
+        $current = EstimateScope::combine($estimate?->id, $estimateTotals, $changeOrders);
+        $baseline = $job->estimate_baseline;
+        $final = $job->isLocked() ? $job->estimate_final : null;
+        $actualScope = $final ?? $current;
+        $estimatedScope = $baseline ?? $current;
+
+        $taskHours = round($pre !== null ? $pre['taskHours'] : (float) $job->tasks()->sum('estimated_hours'), 2);
+        $estimatedLaborHours = round((float) ($baseline['labor_hours'] ?? 0), 2) > 0 ? round((float) $baseline['labor_hours'], 2) : $taskHours;
+        $estimatedLaborCost = round($estimatedScope['labor'], 2);
+        $estimatedMaterialCost = round($estimatedScope['material'], 2);
+        $estimatedEquipmentCost = round($estimatedScope['equipment'], 2);
         // The estimate has no distinct "other" bucket — never invented, left at 0.
         $estimatedOtherCost = 0.0;
         $estimatedTotalCost = round($estimatedLaborCost + $estimatedMaterialCost + $estimatedEquipmentCost + $estimatedOtherCost, 2);
 
-        $journeymanHours = $this->journeymanHours($job, $from, $to);
+        $journeymanHours = $this->journeymanHours($job, $from, $to, $teamMemberId);
         $actualLaborHours = round($journeymanHours->sum('hours'), 2);
 
         $project = $job->project;
-        $laborRate = $project !== null ? $this->estimateBuilder->laborRateFor($project) : 0.0;
+        $laborRate = $pre !== null ? $pre['rate'] : ($project !== null ? $this->estimateBuilder->laborRateFor($project) : 0.0);
         $actualLaborCost = round($actualLaborHours * $laborRate, 2);
 
-        $costEntries = $job->costEntries()->incurredBetween($from, $to);
-        $actualMaterialCost = round($estimatedMaterialCost + (float) $costEntries->clone()->where('category', JobCostEntry::CATEGORY_MATERIAL)->sum('amount'), 2);
-        $actualEquipmentCost = round($estimatedEquipmentCost + (float) $costEntries->clone()->where('category', JobCostEntry::CATEGORY_EQUIPMENT)->sum('amount'), 2);
-        $actualOtherCost = round((float) $costEntries->clone()->where('category', JobCostEntry::CATEGORY_OTHER)->sum('amount'), 2);
+        $costEntries = $pre === null ? $job->costEntries()->incurredBetween($from, $to) : null;
+        $logged = fn (string $category): float => $pre !== null
+            ? (float) ($pre['costs'][$category] ?? 0)
+            : (float) $costEntries->clone()->where('category', $category)->sum('amount');
+        $actualMaterialCost = round($actualScope['material'] + $logged(JobCostEntry::CATEGORY_MATERIAL), 2);
+        $actualEquipmentCost = round($actualScope['equipment'] + $logged(JobCostEntry::CATEGORY_EQUIPMENT), 2);
+        $actualOtherCost = round($logged(JobCostEntry::CATEGORY_OTHER), 2);
         $actualTotalCost = round($actualLaborCost + $actualMaterialCost + $actualEquipmentCost + $actualOtherCost, 2);
 
-        $invoices = $job->invoices();
-        $billed = round((float) $invoices->clone()->where('status', '!=', Invoice::STATUS_DRAFT)->sum('total'), 2);
-        $paid = round((float) $invoices->clone()->sum('paid_amount'), 2);
+        if ($pre !== null) {
+            $billed = round($pre['billed'], 2);
+            $paid = round($pre['paid'], 2);
+        } else {
+            $invoices = $job->invoices();
+            $billed = round((float) $invoices->clone()->where('status', '!=', Invoice::STATUS_DRAFT)->sum('total'), 2);
+            $paid = round((float) $invoices->clone()->sum('paid_amount'), 2);
+        }
         // The contract value when one has actually been priced; an estimate
         // that exists but was never given line items has no real value yet,
         // so it falls through to whatever has genuinely been invoiced —
         // `?? $billed` alone would not do this, since `grandTotal` is `0.0`
         // (not null) on an unpriced estimate and null-coalescing never fires.
-        $hasPricedEstimate = $estimateTotals !== null && $estimateTotals['grandTotal'] > 0;
-        $revenue = round($hasPricedEstimate ? $estimateTotals['grandTotal'] : $billed, 2);
+        $hasPricedEstimate = $actualScope['total'] > 0;
+        $revenue = round($hasPricedEstimate ? $actualScope['total'] : $billed, 2);
         $outstanding = round(max(0, $billed - $paid), 2);
         $unbilled = round(max(0, $revenue - $billed), 2);
 
@@ -117,6 +269,12 @@ class JobCostSummary
             'client' => $job->client,
             'estimateId' => $estimate?->id,
             'estimateNumber' => $estimate?->number,
+
+            'hasBaseline' => $baseline !== null,
+            'isFinal' => $final !== null,
+            'baselineTotal' => $baseline !== null ? round((float) $baseline['total'], 2) : null,
+            'currentScopeTotal' => round($actualScope['total'], 2),
+            'scopeChange' => $baseline !== null ? round($actualScope['total'] - (float) $baseline['total'], 2) : 0.0,
 
             'estimatedLaborHours' => $estimatedLaborHours,
             'actualLaborHours' => $actualLaborHours,
@@ -172,20 +330,34 @@ class JobCostSummary
      *
      * @return Collection<int, array{userId: int, name: string, role: ?string, rawHours: float, hours: float, isOverridden: bool}>
      */
-    public function journeymanHours(Job $job, ?string $from = null, ?string $to = null): Collection
+    public function journeymanHours(Job $job, ?string $from = null, ?string $to = null, ?int $teamMemberId = null): Collection
     {
-        $rawByUser = $job->timeEntries()
-            ->where('status', '!=', TimeEntry::STATUS_LOCKED)
-            ->when($from, fn ($q) => $q->whereDate('date', '>=', $from))
-            ->when($to, fn ($q) => $q->whereDate('date', '<=', $to))
-            ->with(['teamMember', 'user'])
-            ->get()
-            ->groupBy('user_id');
+        $pre = $this->preloaded[$job->id] ?? null;
 
-        $overrides = $job->journeymanHours()->get()->keyBy('user_id');
+        if ($pre !== null) {
+            $rawByUser = $pre['entries'];
+            $overrides = $pre['overrides'];
+            $loadedUsers = $this->preloadedUsers;
+        } else {
+            $rawByUser = $job->timeEntries()
+                ->where('status', '!=', TimeEntry::STATUS_LOCKED)
+                ->when($from, fn ($q) => $q->whereDate('date', '>=', $from))
+                ->when($to, fn ($q) => $q->whereDate('date', '<=', $to))
+                ->when($teamMemberId, fn ($q) => $q->where('team_member_id', $teamMemberId))
+                ->with(['teamMember', 'user'])
+                ->get()
+                ->groupBy('user_id');
+
+            // A team-member filter narrows the saved totals too, to that person's own user.
+            $memberUserId = $teamMemberId ? TeamMember::whereKey($teamMemberId)->value('user_id') : null;
+            $overrides = $job->journeymanHours()
+                ->when($teamMemberId, fn ($q) => $q->where('user_id', $memberUserId ?? 0))
+                ->get()->keyBy('user_id');
+            $loadedUsers = null;
+        }
 
         $userIds = $rawByUser->keys()->merge($overrides->keys())->unique()->filter();
-        $users = User::whereKey($userIds)->get(['id', 'name', 'role'])->keyBy('id');
+        $users = $loadedUsers ?? User::whereKey($userIds)->get(['id', 'name', 'role'])->keyBy('id');
 
         return $userIds->map(function (int $userId) use ($rawByUser, $overrides, $users) {
             $entries = $rawByUser->get($userId);
@@ -226,6 +398,7 @@ class JobCostSummary
             'estimatedTotalCost', 'actualTotalCost', 'totalCostVariance', 'totalCostVariancePct',
             'revenue', 'billed', 'paid', 'outstanding', 'unbilled',
             'profit', 'marginPct', 'overrunAmount',
+            'baselineTotal', 'currentScopeTotal', 'scopeChange',
         ] as $key) {
             if (array_key_exists($key, $row)) {
                 $row[$key] = null;

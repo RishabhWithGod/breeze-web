@@ -398,6 +398,20 @@ class JobCostingTest extends TestCase
                 ->where('laborTotals.actualCost', $expectedCost));
     }
 
+    /** Revenue is a whole-job figure, so with no range given the dashboard must not silently window cost. */
+    public function test_the_dashboard_defaults_to_all_time_so_profit_is_like_for_like(): void
+    {
+        $job = $this->makeJob();
+        $this->makeTimeEntry($job, $this->electrician, 5, TimeEntry::STATUS_APPROVED, 500, now()->subDays(90));
+
+        $this->actingAs($this->manager)
+            ->get('/job-costing')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('filters.date_from', null)
+                ->where('filters.date_to', null)
+                ->where('laborTotals.actualHours', 5));
+    }
+
     /** The same rule applies to the per-job detail screen, not just the dashboard. */
     public function test_a_non_manager_receives_no_dollar_figures_on_the_job_detail_screen(): void
     {
