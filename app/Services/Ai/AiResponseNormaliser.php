@@ -53,6 +53,13 @@ class AiResponseNormaliser
      */
     public function normalise(array $payload): array
     {
+        // The current engine (breeze-ai, /api/v1/electrical/extract) answers in a
+        // different shape; fold it onto the sections below. The stored payload is
+        // never altered — only this read of it.
+        if ($this->isElectricalExtraction($payload)) {
+            $payload = $this->fromElectricalExtraction($payload);
+        }
+
         $cards = $this->cards($payload);
 
         if ($cards === []) {
@@ -150,6 +157,29 @@ class AiResponseNormaliser
                 'status' => SymbolReview::STATUS_REJECTED,
                 'position' => $position++,
             ];
+        }
+
+        return $this->uniqueExternalIds($cards);
+    }
+
+    /**
+     * Two needs-review items can share a description, so a repeated id gets a
+     * numeric suffix — an id must identify exactly one card.
+     *
+     * @param  list<array<string, mixed>>  $cards
+     * @return list<array<string, mixed>>
+     */
+    private function uniqueExternalIds(array $cards): array
+    {
+        $seen = [];
+
+        foreach ($cards as $i => $card) {
+            $id = $card['external_id'];
+            $seen[$id] = ($seen[$id] ?? 0) + 1;
+
+            if ($seen[$id] > 1) {
+                $cards[$i]['external_id'] = $id.'-'.$seen[$id];
+            }
         }
 
         return $cards;
@@ -415,6 +445,268 @@ class AiResponseNormaliser
         return collect($status)
             ->mapWithKeys(fn ($value, $stage) => [(string) $stage => (string) $value])
             ->all();
+    }
+
+    /* ------------------------------------------------- breeze-ai extraction */
+
+    /**
+     * Normalised page coordinates (0–1) are scaled into this nominal frame so the
+     * rest of the pipeline, which works in page pixels, can treat them like any
+     * other box. Boxes are drawn as percentages of the frame, so the size itself
+     * is arbitrary — only the aspect-free proportion matters.
+     */
+    public const NORMALISED_FRAME = 10000.0;
+
+    /** @param  array<string, mixed>  $payload */
+    public function isElectricalExtraction(array $payload): bool
+    {
+        return array_key_exists('components', $payload) && array_key_exists('document', $payload);
+    }
+
+    /**
+     * Per-page nominal sizes for an extraction payload, for `ai_results.page_sizes`.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<int, array{width: float, height: float}>
+     */
+    public function nominalPageSizes(array $payload): array
+    {
+        $pages = max(0, (int) ($payload['document']['total_pages'] ?? 0));
+        $sizes = [];
+
+        for ($page = 1; $page <= $pages; $page++) {
+            $sizes[$page] = ['width' => self::NORMALISED_FRAME, 'height' => self::NORMALISED_FRAME];
+        }
+
+        return $sizes;
+    }
+
+    /**
+     * Rebuilds the sections `normalise()` reads from a breeze-ai
+     * `ExtractionResponse`: components → symbols (merged by name, one card per
+     * type), unidentified_symbols → needs_review, boards/circuits → panel
+     * schedules and circuits, cables_and_wires → wire sizes, bill_of_quantities
+     * → boq.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function fromElectricalExtraction(array $payload): array
+    {
+        $frame = self::NORMALISED_FRAME;
+        $symbols = [];
+        $known = [];
+        $unknown = [];
+        $rejected = [];
+
+        foreach ((array) ($payload['components'] ?? []) as $component) {
+            if (! is_array($component) || blank($component['name'] ?? null)) {
+                continue;
+            }
+
+            $name = $this->name($component['name']);
+            $key = Str::lower($name);
+            $quantity = $component['quantity']['value'] ?? null;
+
+            $symbols[$key] ??= [
+                'name' => $name,
+                'count' => 0,
+                'confidence' => [],
+                'sources' => [],
+                'evidence' => [],
+                'detections' => [],
+            ];
+
+            $symbols[$key]['count'] += is_numeric($quantity) ? (int) round((float) $quantity) : 0;
+
+            if (isset($component['confidence'])) {
+                $symbols[$key]['confidence'][] = (float) $component['confidence'];
+            }
+
+            $symbols[$key]['sources'] = [...$symbols[$key]['sources'], ...array_filter([$component['quantity']['method'] ?? null])];
+            $symbols[$key]['evidence'] = [...$symbols[$key]['evidence'], ...array_filter([
+                $component['category'] ?? null,
+                $component['type'] ?? null,
+                $component['symbol'] ?? null,
+            ])];
+
+            foreach ((array) ($component['placement'] ?? []) as $placement) {
+                $box = is_array($placement) ? ($placement['bounding_box'] ?? null) : null;
+
+                if (! is_array($box)) {
+                    continue;
+                }
+
+                $symbols[$key]['detections'][] = [
+                    'id' => ($component['component_id'] ?? 'c').'-'.count($symbols[$key]['detections']),
+                    'bbox' => [
+                        'x' => (float) ($box['x'] ?? 0) * $frame,
+                        'y' => (float) ($box['y'] ?? 0) * $frame,
+                        'w' => (float) ($box['width'] ?? 0) * $frame,
+                        'h' => (float) ($box['height'] ?? 0) * $frame,
+                    ],
+                    'page' => $placement['page'] ?? null,
+                    'confidence' => $placement['position_confidence'] ?? $component['confidence'] ?? 0,
+                ];
+            }
+
+            match ($component['review_status'] ?? 'pending') {
+                'rejected' => $rejected[$key] = ['name' => $name],
+                'needs_review' => $unknown[$key] = ['name' => $name],
+                default => $known[$key] = ['name' => $name],
+            };
+        }
+
+        $summaries = array_values(array_map(fn (array $row) => [
+            ...$row,
+            'confidence' => $row['confidence'] === [] ? 0 : array_sum($row['confidence']) / count($row['confidence']),
+            'sources' => array_values(array_unique($row['sources'])),
+            'evidence' => array_values(array_unique($row['evidence'])),
+        ], $symbols));
+
+        $needsReview = [];
+
+        foreach ((array) ($payload['unidentified_symbols'] ?? []) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $needsReview[] = [
+                'name' => $item['description'] ?? 'Unidentified symbol',
+                'count' => 1,
+                'confidence' => $item['confidence'] ?? 0,
+                'source' => 'vision',
+                'reason' => $item['reason'] ?? null,
+                'page' => $item['page'] ?? null,
+            ];
+        }
+
+        $circuits = [];
+        $byBoard = [];
+
+        foreach ((array) ($payload['circuits'] ?? []) as $circuit) {
+            if (! is_array($circuit)) {
+                continue;
+            }
+
+            $row = [
+                'number' => $circuit['circuit_number'] ?? '',
+                'description' => $circuit['description'] ?? '',
+                'breaker' => $circuit['breaker'] ?? '',
+                'panel' => $circuit['board_name'] ?? '',
+                'page' => $circuit['page'] ?? 0,
+            ];
+
+            $circuits[] = $row;
+            $byBoard[Str::lower((string) $row['panel'])][] = [
+                'circuit' => $row['number'],
+                'description' => $row['description'],
+                'breaker' => $row['breaker'],
+                'wire' => $circuit['wire'] ?? '',
+            ];
+        }
+
+        $panelSchedules = [];
+        $equipment = [];
+
+        foreach ((array) ($payload['boards'] ?? []) as $board) {
+            if (! is_array($board)) {
+                continue;
+            }
+
+            $panelSchedules[] = [
+                'page' => $board['page'] ?? 0,
+                'panel_name' => $board['name'] ?? '',
+                'rows' => $byBoard[Str::lower((string) ($board['name'] ?? ''))] ?? [],
+                'raw_headers' => ['circuit', 'description', 'breaker', 'wire'],
+            ];
+
+            $equipment[] = [
+                'page' => $board['page'] ?? 0,
+                'tag' => $board['name'] ?? '',
+                'description' => $board['kind'] ?? 'panelboard',
+                'rating' => '',
+                'quantity' => 1,
+            ];
+        }
+
+        $wireSizes = [];
+
+        foreach ((array) ($payload['cables_and_wires'] ?? []) as $cable) {
+            if (! is_array($cable)) {
+                continue;
+            }
+
+            $length = $cable['length']['value'] ?? null;
+
+            $wireSizes[] = [
+                'page' => $cable['source']['page'] ?? 0,
+                'size' => $cable['type'] ?? $cable['name'] ?? '',
+                'context' => trim(($cable['name'] ?? '').(is_numeric($length)
+                    ? ' — '.round((float) $length, 2).' '.($cable['length']['unit'] ?? '')
+                    : '')),
+                'count' => 1,
+            ];
+        }
+
+        $boq = [];
+        $boqTotal = 0.0;
+
+        foreach ((array) ($payload['bill_of_quantities'] ?? []) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $qty = (float) ($item['quantity']['value'] ?? 0);
+            $rate = (float) ($item['unit_rate'] ?? 0);
+            $boqTotal += $qty * $rate;
+
+            $boq[] = [
+                'item' => $item['description'] ?? $item['item_id'] ?? '',
+                'description' => $item['category'] ?? '',
+                'quantity' => $qty,
+                'unit' => $item['quantity']['unit'] ?? $item['rate_unit'] ?? 'ea',
+                'unit_price' => $rate,
+                'subtotal' => $qty * $rate,
+            ];
+        }
+
+        $total = $payload['estimate']['total'] ?? null;
+        $total = is_numeric($total) ? (float) $total : $boqTotal;
+
+        $meta = (array) ($payload['processing_metadata'] ?? []);
+
+        return [
+            'project_name' => $payload['building']['name'] ?? $payload['document']['filename'] ?? null,
+            'run_id' => null,
+            'pages' => $payload['document']['total_pages'] ?? 0,
+            'symbol_counts' => collect($summaries)->mapWithKeys(fn (array $row) => [$row['name'] => $row['count']])->all(),
+            'symbols' => $summaries,
+            'known_symbols' => array_values($known),
+            'unknown_symbols' => array_values($unknown),
+            'rejected_symbols' => array_values($rejected),
+            'needs_review' => $needsReview,
+            'panel_schedules' => $panelSchedules,
+            'equipment' => $equipment,
+            'wire_sizes' => $wireSizes,
+            'circuits' => $circuits,
+            'boq' => $boq,
+            'estimate' => [
+                'subtotal' => $total,
+                'tax_rate' => 0,
+                'tax' => 0,
+                'grand_total' => $total,
+                'currency' => $payload['estimate']['currency'] ?? 'USD',
+                'line_count' => count($boq),
+            ],
+            'warnings' => $payload['assumptions_and_limitations'] ?? [],
+            'processing_time' => 0,
+            'pipeline_status' => array_filter([
+                'legend' => ($meta['legend_found'] ?? false) ? 'found' : 'not_found',
+                'rag' => $meta['rag_status'] ?? null,
+                'model' => $meta['model'] ?? null,
+            ]),
+        ];
     }
 
     /* ---------------------------------------------------------------- helpers */

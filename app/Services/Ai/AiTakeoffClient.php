@@ -18,9 +18,9 @@ use Illuminate\Support\Facades\Log;
  * arrays. Endpoint paths, auth style and timeouts come from config/ai.php, so a
  * relocated or gateway-fronted engine needs no code change.
  *
- * `POST /api/upload` is synchronous: it returns the entire AnalysisResult, which
- * is why `analyse()` runs under a minutes-long timeout — and only ever on a queue
- * worker, never in an HTTP request.
+ * Extraction is asynchronous on the engine (`POST /api/v1/electrical/extract` →
+ * poll `/status` → `GET /result`), so `analyse()` blocks while polling — and only
+ * ever on a queue worker, never in an HTTP request.
  *
  * Every call is bounded twice: a short connect timeout so an unreachable engine
  * fails fast instead of holding a request open, and a per-call request timeout.
@@ -55,9 +55,23 @@ class AiTakeoffClient implements TakeoffEngine
                     ['Content-Type' => 'application/pdf'],
                 );
 
+            $accepted = $this->decode($this->send(
+                fn () => $request->post($this->url($this->config('endpoints.extract'))),
+                'submitting the drawing',
+            ));
+
+            $jobId = (string) ($accepted['job_id'] ?? '');
+
+            if ($jobId === '') {
+                throw AiApiException::unusablePayload('the engine did not return a job_id.');
+            }
+
+            $this->waitForCompletion($jobId);
+
             return $this->decode($this->send(
-                fn () => $request->post($this->url($this->config('endpoints.upload'))),
-                'analysing the drawing',
+                fn () => $this->request($this->config('timeout.analyse'))
+                    ->get($this->url($this->config('endpoints.result'), ['job' => $jobId])),
+                'reading the extraction result',
             ));
         } finally {
             if (is_resource($handle)) {
@@ -67,119 +81,169 @@ class AiTakeoffClient implements TakeoffEngine
     }
 
     /**
-     * Per-crop detail for a run: bounding boxes, pages, detector, pipeline stages
-     * and the crop image paths the review cards render.
+     * The engine's symbol library, searched by text. Returns image-bearing symbols
+     * as `[id, label]` pairs, best match first.
      *
-     * @return array<string, mixed>
+     * @return list<array{id: string, label: string}>
      */
-    public function lifecycle(string $runId): array
+    public function searchSymbols(string $term, int $limit = 5): array
     {
-        $this->assertConfigured();
-
-        return $this->decode($this->send(
-            fn () => $this->request($this->config('timeout.read'))
-                ->get($this->url($this->config('endpoints.lifecycle'), ['run' => $runId])),
-            'reading the run lifecycle',
-        ));
-    }
-
-    /**
-     * The engine's own per-page raster size for a run — the exact pixel space
-     * its detection coordinates were reported in, plus the DPI it rendered at.
-     * This is the only reliable source for mapping a bbox onto a drawing page;
-     * nothing else the engine returns carries page dimensions.
-     *
-     * @return array<string, mixed>
-     */
-    public function pageInfo(string $runId): array
-    {
-        $this->assertConfigured();
-
-        return $this->decode($this->send(
-            fn () => $this->request($this->config('timeout.read'))
-                ->get($this->url($this->config('endpoints.page_info'), ['run' => $runId])),
-            'reading the page dimensions',
-        ));
-    }
-
-    /** Raw bytes of a lifecycle crop image, or null when it cannot be fetched. */
-    public function lifecycleImage(string $runId, string $imagePath): ?string
-    {
-        return $this->fetchImage(
-            $this->url($this->config('endpoints.lifecycle_image'), [
-                'run' => $runId,
-                'image' => $imagePath,
-            ])
-        );
-    }
-
-    /**
-     * Many crop images at once, fetched concurrently.
-     *
-     * One request per symbol, in sequence, is the single slowest thing this client
-     * used to do: a drawing with two hundred detections meant two hundred round
-     * trips end to end. They are independent reads of static files, so they go out
-     * together and the run waits once instead of two hundred times.
-     *
-     * @param  array<string, string>  $imagePaths  Engine image paths, keyed by caller reference.
-     * @return array<string, string|null> Raw bytes keyed the same way; null where a fetch failed.
-     */
-    public function lifecycleImages(string $runId, array $imagePaths): array
-    {
-        if (! $this->isConfigured() || $imagePaths === []) {
-            return array_fill_keys(array_keys($imagePaths), null);
+        if (! $this->isConfigured() || blank($term)) {
+            return [];
         }
 
-        $endpoint = $this->config('endpoints.lifecycle_image');
-        $fetched = [];
+        try {
+            $response = $this->request($this->config('timeout.read'))
+                ->get($this->url($this->config('endpoints.symbols')), [
+                    'q' => $term,
+                    'has_image' => 'true',
+                    'limit' => $limit,
+                ]);
+        } catch (ConnectionException) {
+            return [];
+        }
 
-        /*
-         * Chunked so a large run cannot open hundreds of sockets at once — the
-         * engine is a single FastAPI process and would queue them anyway.
-         */
-        foreach (array_chunk($imagePaths, 25, true) as $chunk) {
+        if (! $response->successful()) {
+            return [];
+        }
+
+        return collect($response->json('items', []))
+            ->filter(fn ($item) => is_array($item) && filled($item['id'] ?? null))
+            ->map(fn (array $item) => ['id' => (string) $item['id'], 'label' => (string) ($item['legend_label'] ?? $item['description'] ?? '')])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Legend symbol images, fetched concurrently.
+     *
+     * @param  list<string>  $symbolIds  Engine symbol (variant) ids.
+     * @return array<string, array{body: string, extension: string}> Keyed by id; failures are absent.
+     */
+    public function symbolImages(array $symbolIds): array
+    {
+        if (! $this->isConfigured() || $symbolIds === []) {
+            return [];
+        }
+
+        $endpoint = $this->config('endpoints.symbol_image');
+        $images = [];
+
+        foreach (array_chunk(array_values($symbolIds), 25) as $chunk) {
             $responses = Http::pool(fn (Pool $pool) => array_map(
-                fn (string|int $key) => $this->applyOptions($pool->as((string) $key), $this->config('timeout.read'))
-                    ->get($this->url($endpoint, ['run' => $runId, 'image' => $chunk[$key]])),
-                array_keys($chunk),
+                fn (string $id) => $this->applyOptions($pool->as($id), $this->config('timeout.read'))
+                    ->get($this->url($endpoint, ['symbol' => $id])),
+                $chunk,
             ));
 
-            foreach (array_keys($chunk) as $key) {
-                $response = $responses[$key] ?? null;
+            foreach ($chunk as $id) {
+                $response = $responses[$id] ?? null;
 
-                $fetched[$key] = $response instanceof Response && $response->successful()
-                    ? $response->body()
-                    : null;
+                if (! $response instanceof Response || ! $response->successful()) {
+                    continue;
+                }
+
+                $type = strtolower((string) $response->header('Content-Type'));
+
+                $images[$id] = [
+                    'body' => $response->body(),
+                    'extension' => match (true) {
+                        str_contains($type, 'svg') => 'svg',
+                        str_contains($type, 'jpeg') => 'jpg',
+                        str_contains($type, 'webp') => 'webp',
+                        default => 'png',
+                    },
+                ];
             }
         }
 
-        return $fetched;
+        return $images;
     }
 
-    /** Raw bytes of a needs-review crop image, or null. */
-    public function reviewImage(string $runId, string $imageId): ?string
+    /*
+     * The new engine has no per-run lifecycle, page-info or crop-image endpoints:
+     * crops are rendered locally from each detection's normalised bounding box.
+     * These remain only so results ingested from the previous engine (which carry
+     * a run_id) degrade to "no crop detail" instead of failing.
+     */
+
+    /** @return array<string, mixed> */
+    public function lifecycle(string $runId): array
     {
-        return $this->fetchImage(
-            $this->url($this->config('endpoints.review_image'), [
-                'run' => $runId,
-                'image' => $imageId,
-            ])
-        );
+        throw AiApiException::unusablePayload('this engine has no lifecycle endpoint.');
+    }
+
+    /** @return array<string, mixed> */
+    public function pageInfo(string $runId): array
+    {
+        return ['available' => false];
+    }
+
+    public function lifecycleImage(string $runId, string $imagePath): ?string
+    {
+        return null;
     }
 
     /**
-     * Pushes a reviewer decision back into the engine's symbol library.
+     * @param  array<string, string>  $imagePaths
+     * @return array<string, string|null>
+     */
+    public function lifecycleImages(string $runId, array $imagePaths): array
+    {
+        return array_fill_keys(array_keys($imagePaths), null);
+    }
+
+    public function reviewImage(string $runId, string $imageId): ?string
+    {
+        return null;
+    }
+
+    /**
+     * Polls the job's status until it completes. Throws with the engine's own
+     * message when the job fails, or when the overall wait exceeds the budget.
+     */
+    private function waitForCompletion(string $jobId): void
+    {
+        $deadline = microtime(true) + (float) $this->config('timeout.analyse');
+        $interval = max(0.2, (float) $this->config('polling.interval_seconds'));
+
+        while (true) {
+            $status = $this->decode($this->send(
+                fn () => $this->request($this->config('timeout.read'))
+                    ->get($this->url($this->config('endpoints.status'), ['job' => $jobId])),
+                'checking the extraction status',
+            ));
+
+            $state = (string) ($status['status'] ?? '');
+
+            if ($state === 'completed') {
+                return;
+            }
+
+            if ($state === 'failed') {
+                throw new AiApiException(
+                    (string) ($status['error_message'] ?? $status['developer_error_message'] ?? 'The AI engine failed to extract this drawing.')
+                );
+            }
+
+            if (microtime(true) >= $deadline) {
+                throw new AiApiException('The AI engine did not finish the drawing in time.');
+            }
+
+            usleep((int) ($interval * 1_000_000));
+        }
+    }
+
+    /**
+     * Pushes a reviewer decision to `POST /api/v1/electrical/knowledge/feedback`.
      *
-     * The learning loop is best-effort: a failure here must never block a review.
-     * The outcome is reported precisely rather than as a bare boolean, because
-     * "the engine declined" (e.g. a symbol it has never seen) and "the engine is
-     * down" mean different things in an audit trail.
+     * Best-effort: the decision is already committed locally, so a failure here
+     * is reported precisely rather than thrown.
      *
-     * @param  'approve'|'reject'|'rename'|'merge'  $action
-     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $payload  KnowledgeFeedbackRequest fields.
      * @return array{delivered: bool, status: ?int, detail: ?string}
      */
-    public function pushDecision(string $action, array $payload): array
+    public function pushDecision(array $payload): array
     {
         if (! $this->isConfigured()) {
             return ['delivered' => false, 'status' => null, 'detail' => 'the engine is not configured'];
@@ -188,33 +252,24 @@ class AiTakeoffClient implements TakeoffEngine
         try {
             $response = $this->request($this->config('timeout.read'))
                 ->asJson()
-                ->post($this->url($this->config("endpoints.{$action}")), $payload);
+                ->post($this->url($this->config('endpoints.feedback')), $payload);
 
             if ($response->successful()) {
                 return ['delivered' => true, 'status' => $response->status(), 'detail' => null];
             }
 
-            // The engine explains itself in `detail`; carry that through verbatim.
-            $detail = $response->json('detail') ?? str($response->body())->limit(160)->value();
+            $detail = $response->json('error_message') ?? $response->json('detail') ?? str($response->body())->limit(160)->value();
 
             Log::info('The AI engine declined a review decision', [
-                'action' => $action,
                 'status' => $response->status(),
                 'detail' => $detail,
             ]);
 
-            return ['delivered' => false, 'status' => $response->status(), 'detail' => (string) $detail];
+            return ['delivered' => false, 'status' => $response->status(), 'detail' => is_string($detail) ? $detail : json_encode($detail)];
         } catch (ConnectionException $e) {
-            Log::warning('AI engine unreachable while pushing a review decision', [
-                'action' => $action,
-                'error' => $e->getMessage(),
-            ]);
+            Log::warning('AI engine unreachable while pushing a review decision', ['error' => $e->getMessage()]);
 
-            return [
-                'delivered' => false,
-                'status' => null,
-                'detail' => 'the engine could not be reached',
-            ];
+            return ['delivered' => false, 'status' => null, 'detail' => 'the engine could not be reached'];
         }
     }
 

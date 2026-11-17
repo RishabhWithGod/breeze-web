@@ -39,28 +39,25 @@ return [
     | OpenAPI document. `:run` and `:image` are substituted per request.
     */
     'endpoints' => [
-        'health' => env('AI_API_HEALTH_PATH', 'api/health'),
-        'upload' => env('AI_API_UPLOAD_PATH', 'api/upload'),
+        'health' => env('AI_API_HEALTH_PATH', 'health'),
 
-        // Learning loop: reviewer decisions are pushed back so the engine's
-        // symbol library improves.
-        'approve' => env('AI_API_APPROVE_PATH', 'api/review/approve'),
-        'reject' => env('AI_API_REJECT_PATH', 'api/review/reject'),
-        'rename' => env('AI_API_RENAME_PATH', 'api/review/rename'),
-        'merge' => env('AI_API_MERGE_PATH', 'api/review/merge'),
+        // Async extraction: POST the PDF, poll the status, then fetch the result.
+        'extract' => env('AI_API_EXTRACT_PATH', 'api/v1/electrical/extract'),
+        'status' => env('AI_API_STATUS_PATH', 'api/v1/electrical/extract/:job/status'),
+        'result' => env('AI_API_RESULT_PATH', 'api/v1/electrical/extract/:job/result'),
 
-        // Per-crop detail: bounding boxes, pipeline stages and crop images.
-        'lifecycle' => env('AI_API_LIFECYCLE_PATH', 'api/debug/lifecycle/:run'),
-        'lifecycle_image' => env('AI_API_LIFECYCLE_IMAGE_PATH', 'api/debug/lifecycle/:run/image/:image'),
-        'review_image' => env('AI_API_REVIEW_IMAGE_PATH', 'api/review/image/:run/:image'),
+        // Learning loop: every reviewer decision is a knowledge-feedback post.
+        'feedback' => env('AI_API_FEEDBACK_PATH', 'api/v1/electrical/knowledge/feedback'),
+        'symbols' => env('AI_API_SYMBOLS_PATH', 'api/v1/electrical/symbols'),
+        'symbol_image' => env('AI_API_SYMBOL_IMAGE_PATH', 'api/v1/electrical/symbols/:symbol/image'),
+    ],
 
-        /*
-         * The engine's own per-page raster size (in the exact pixel space its
-         * detections are reported in) and the DPI it rendered at. This is the
-         * only reliable source for mapping a bbox onto a drawing page — the
-         * upload response itself carries no page dimensions.
-         */
-        'page_info' => env('AI_API_PAGE_INFO_PATH', 'api/review/page-info/:run'),
+    /*
+    | Extraction is asynchronous on the engine, so a run polls its status until it
+    | completes or fails. `analyse` (below) bounds the whole wait.
+    */
+    'polling' => [
+        'interval_seconds' => (float) env('AI_API_POLL_INTERVAL', 2),
     ],
 
     /*

@@ -43,6 +43,7 @@ class TakeoffOrchestrator
         private readonly EstimateBuilder $estimates,
         private readonly RunProfiler $profiler,
         private readonly ProjectDocumentStore $documents,
+        private readonly LegendImageAttacher $legendImages,
     ) {}
 
     public function configured(): bool
@@ -193,7 +194,12 @@ class TakeoffOrchestrator
                 'project_name' => $normalised['project_name'],
                 'run_id' => $normalised['run_id'],
                 'original_payload' => $payload,
-                'model_version' => $engineVersion,
+                'model_version' => $engineVersion ?? ($payload['processing_metadata']['model'] ?? null),
+                // Normalised-page boxes are scaled into a nominal frame (see the
+                // normaliser); record that frame so overlays and crops can place them.
+                'page_sizes' => $this->normaliser->isElectricalExtraction($payload)
+                    ? $this->normaliser->nominalPageSizes($payload)
+                    : null,
                 'page_count' => $normalised['pages'],
                 'detection_count' => count($normalised['cards']),
                 'overall_confidence' => $normalised['confidence'],
@@ -253,6 +259,17 @@ class TakeoffOrchestrator
         $this->profiler->measure('artefact_write', fn () => $result->updateQuietly([
             'original_path' => $this->store->putOriginalResponse($result, $payload),
         ]));
+
+        $this->profiler->measure('legend_images', function () use ($result) {
+            try {
+                $this->legendImages->attach($result);
+            } catch (Throwable $e) {
+                Log::warning('Legend symbol images could not be attached', [
+                    'ai_result_id' => $result->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
 
         $this->profiler->measure('lifecycle_enrich', fn () => $this->enrichFromLifecycle($result));
 
@@ -472,7 +489,9 @@ class TakeoffOrchestrator
      */
     private function enrichFromLifecycle(AiResult $result): void
     {
-        if (! $this->lifecycle->enabled()) {
+        // The current engine has no lifecycle endpoint; crops are rendered locally
+        // from the boxes already on each card.
+        if (! $this->lifecycle->enabled() || $this->normaliser->isElectricalExtraction($result->original_payload ?? [])) {
             return;
         }
 
