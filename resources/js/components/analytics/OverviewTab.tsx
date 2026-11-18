@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
-import { Button, ButtonLink, Card, EmptyState, ProgressBar, SectionHeading } from '@/components/common'
+import { Button, ButtonLink, Card, EmptyState, ProgressBar, SectionHeading, noticeClasses } from '@/components/common'
 import { ComparisonBarChart, DonutChart } from '@/components/jobCosting'
 import { JOB_COSTING_OVERRUN_LABEL, ROUTES, routeTo } from '@/constants'
 import type { AnalyticsTab, JobCostingDashboardProps, Tone } from '@/types'
@@ -43,7 +43,7 @@ export function OverviewTab({ props, onTab }: { props: JobCostingDashboardProps;
   return (
     <>
       {filters.team_member !== null && (
-        <p className="mb-6 rounded-panel border border-status-warning/30 bg-status-warning/10 p-3 text-sm text-white/90">
+        <p className={noticeClasses('warning', 'mb-6 px-3.5 py-3')}>
           Filtering by team member narrows hours and labor cost to that person. Profit and margin still use the whole job, so read them as job-level figures.
         </p>
       )}
@@ -245,14 +245,14 @@ export function OverviewTab({ props, onTab }: { props: JobCostingDashboardProps;
           ) : (
             <ul className="flex flex-col gap-3">
               {overrunAlerts.map((row) => (
-                <li key={row.jobId} className="flex items-start gap-3 rounded-panel border border-status-danger/30 bg-status-danger/10 p-4">
-                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-status-warning" aria-hidden />
+                <li key={row.jobId} className={noticeClasses('danger', 'flex items-start gap-2.5 px-3.5 py-3')}>
+                  <AlertTriangle size={16} className="mt-[3px] shrink-0" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold text-white">{row.jobName}</p>
+                      <p className="font-bold">{row.jobName}</p>
                       <ButtonLink href={routeTo.jobCosting(row.jobId)} variant="ghost" size="sm" rightIcon={ChevronRight}>View Details</ButtonLink>
                     </div>
-                    <p className="mt-1 text-sm text-white/85">
+                    <p className="mt-0.5">
                       {JOB_COSTING_OVERRUN_LABEL[row.overrunReason ?? ''] ?? 'Exceeding budget'}
                       {row.overrunPct !== null && ` by ${row.overrunPct}%`}
                     </p>

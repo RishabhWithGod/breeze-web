@@ -68,6 +68,10 @@ export interface TakeoffHistoryRow {
   readonly pageCount: number
   readonly uploadedAt: string
   readonly reviewStatus: HistoryReviewStatus
+  /** The review screen, while this takeoff is waiting on its review; null otherwise. */
+  readonly reviewUrl?: string | null
+  /** The live progress screen, while the AI is still reading this takeoff; null otherwise. */
+  readonly processingUrl?: string | null
 }
 
 /**

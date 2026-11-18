@@ -19,7 +19,7 @@ export function Logo({ compact = false, className }: LogoProps) {
           <img src={breezeIcon} alt={APP_NAME} className="size-7 object-contain" />
         </span>
       ) : (
-        <img src={breezeLogoFull} alt={APP_NAME} className="h-9 w-auto object-contain" />
+        <img src={breezeLogoFull} alt={APP_NAME} className="h-[34px] w-auto object-contain" />
       )}
     </Link>
   )

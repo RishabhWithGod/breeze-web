@@ -14,7 +14,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
-import { Alert, Button, ButtonLink, SelectField } from '@/components/common'
+import { Alert, Badge, Button, ButtonLink, SelectField, noticeClasses } from '@/components/common'
 import { appLayout, PageHeader, PageTransition, StepWizard } from '@/components/layout'
 import {
   DEFAULT_ASSUMPTIONS,
@@ -292,10 +292,10 @@ export default function ThreeDView({
       />
 
       {result && pending > 0 && !signedOff && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-card border border-status-warning/50 bg-status-warning/10 px-4 py-3">
+        <div className={noticeClasses('warning', 'mb-4 flex flex-wrap items-center justify-between gap-3 px-3.5 py-3')}>
           <div>
-            <p className="text-sm font-semibold text-status-warning">Estimator review required</p>
-            <p className="text-sm text-white/85">
+            <b className="block font-bold">Estimator review required</b>
+            <p>
               Review {pending} remaining {pending === 1 ? 'item' : 'items'}: approve or reject each so the estimate
               counts what you decided.
             </p>
@@ -306,21 +306,19 @@ export default function ThreeDView({
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-card border border-brand/40 bg-brand/8 px-4 py-3">
-        <div className="flex items-start gap-3">
-          <Box size={20} aria-hidden className="mt-0.5 shrink-0 text-brand" />
+      <div className={noticeClasses('info', 'mb-4 flex flex-wrap items-center justify-between gap-3 px-3.5 py-3')}>
+        <div className="flex items-start gap-2.5">
+          <Box size={16} aria-hidden className="mt-[3px] shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-white">3D routing · assumed geometry and elevations</p>
-            <p className="text-xs leading-snug text-white/80">
+            <b className="block font-bold">3D routing · assumed geometry and elevations</b>
+            <p className="text-xs leading-snug">
               {sample
                 ? 'This scene demonstrates where wires could run. It is not extracted from any drawing, is not construction-approved, and does not change any takeoff quantities.'
                 : `Symbols are placed where ${result?.drawingName ?? 'the drawing'} detected them. The floor size, heights and every wire route are assumed, are not construction-approved, and do not change your reviewed takeoff quantities.`}
             </p>
           </div>
         </div>
-        <span className="rounded-full border border-status-warning/60 bg-status-warning/12 px-3 py-1 text-2xs font-bold tracking-wide text-status-warning">
-          NOT FOR CONSTRUCTION
-        </span>
+        <Badge tone="warning">NOT FOR CONSTRUCTION</Badge>
       </div>
 
       {(sheets.length > 1 || (sheets.length === 1 && !sample)) && (
@@ -436,7 +434,7 @@ export default function ThreeDView({
                       }}
                       className={cn(
                         'px-3 py-1.5 text-xs font-semibold transition-colors',
-                        view === option.key ? 'bg-brand text-brand-ink' : 'bg-white/6 text-white/85 hover:bg-white/12',
+                        view === option.key ? 'bg-brand text-brand-ink' : 'bg-surface-input text-white/85 hover:bg-white/8',
                       )}
                     >
                       {option.label}
@@ -568,7 +566,7 @@ function ToolButton({ label, onClick, children }: { label: string; onClick: () =
       title={label}
       aria-label={label}
       onClick={onClick}
-      className="grid size-8 place-items-center rounded-panel border border-hairline-strong bg-white/6 text-white/85 transition-colors hover:bg-white/12"
+      className="grid size-8 place-items-center rounded-panel border border-hairline-strong bg-surface-input text-white/85 transition-colors hover:bg-white/8"
     >
       {children}
     </button>

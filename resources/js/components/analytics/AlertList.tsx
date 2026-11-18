@@ -1,8 +1,7 @@
 import { AlertTriangle, ChevronRight, Clock, FileWarning, TrendingDown } from 'lucide-react'
-import { ButtonLink } from '@/components/common'
+import { ButtonLink, noticeClasses } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { AnalyticsAlert } from '@/types'
-import { cn } from '@/utils'
 
 const ICONS = {
   overrun: AlertTriangle,
@@ -21,17 +20,14 @@ export function AlertList({ alerts }: { alerts: readonly AnalyticsAlert[] }) {
         return (
           <li
             key={alert.id}
-            className={cn(
-              'flex items-start gap-3 rounded-panel border p-4',
-              alert.severity === 'danger' ? 'border-status-danger/30 bg-status-danger/10' : 'border-status-warning/30 bg-status-warning/10',
-            )}
+            className={noticeClasses(alert.severity === 'danger' ? 'danger' : 'warning', 'flex items-start gap-2.5 px-3.5 py-3')}
           >
-            <Icon size={18} className={cn('mt-0.5 shrink-0', alert.severity === 'danger' ? 'text-status-danger' : 'text-status-warning')} aria-hidden />
+            <Icon size={16} className="mt-[3px] shrink-0" aria-hidden />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-semibold text-white">
+                <p className="font-bold">
                   {alert.title}
-                  {alert.jobName && <span className="font-normal text-white/75"> · {alert.jobName}</span>}
+                  {alert.jobName && <span className="font-normal opacity-75"> · {alert.jobName}</span>}
                 </p>
                 {alert.jobId !== null && (
                   <ButtonLink href={routeTo.jobCosting(alert.jobId)} variant="ghost" size="sm" rightIcon={ChevronRight}>
@@ -39,7 +35,7 @@ export function AlertList({ alerts }: { alerts: readonly AnalyticsAlert[] }) {
                   </ButtonLink>
                 )}
               </div>
-              <p className="mt-1 text-sm text-white/85">{alert.detail}</p>
+              <p className="mt-0.5">{alert.detail}</p>
             </div>
           </li>
         )

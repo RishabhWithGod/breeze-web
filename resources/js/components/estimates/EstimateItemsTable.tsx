@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { router } from '@inertiajs/react'
-import { Check, Pencil, Trash2, X } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { Badge, Button, EmptyState, IconButton } from '@/components/common'
 import { ESTIMATE_CATEGORY_LABEL, routeTo } from '@/constants'
 import type { EstimateItemRow, SelectOption } from '@/types'
+import { saveInBackground, useAutosave } from '@/lib/autosave'
 import { formatCurrency } from '@/utils'
 import { EMPTY_LINE_DRAFT, type LineDraft } from './estimateLineDraft'
 import { EstimateLineFields } from './EstimateLineFields'
@@ -79,22 +80,46 @@ export function EstimateItemsTable({
     })
   }
 
-  const saveEdit = (id: number) => {
-    router.put(
-      routeTo.estimateItem(estimateId, id),
-      {
-        category: draft.category,
-        description: draft.description,
-        unit: draft.unit,
-        quantity: Number(draft.quantity) || 0,
-        unit_cost: Number(draft.unit_cost) || 0,
-      },
-      {
-        preserveScroll: true,
-        onSuccess: () => setEditingId(null),
-      },
-    )
+  const payloadFor = (draftValue: LineDraft) => ({
+    category: draftValue.category,
+    description: draftValue.description,
+    unit: draftValue.unit,
+    quantity: Number(draftValue.quantity) || 0,
+    unit_cost: Number(draftValue.unit_cost) || 0,
+  })
+
+  const saveEdit = (id: number, keepOpen = false) => {
+    router.put(routeTo.estimateItem(estimateId, id), payloadFor(draft), {
+      preserveScroll: true,
+      ...(keepOpen ? { preserveState: true } : { onSuccess: () => setEditingId(null) }),
+    })
   }
+
+  // What is typed into a line is saved as it is typed, not only when "Save line" is pressed — so
+  // leaving this screen (Continue to Job, Back, anywhere) never drops it.
+  const editing = editingId === null ? null : (items.find((item) => item.id === editingId) ?? null)
+  const complete =
+    draft.description.trim() !== '' &&
+    Number.isFinite(Number(draft.quantity)) &&
+    draft.quantity.trim() !== '' &&
+    Number.isFinite(Number(draft.unit_cost)) &&
+    draft.unit_cost.trim() !== ''
+  const changed =
+    editing !== null &&
+    (draft.category !== editing.category ||
+      draft.description !== editing.description ||
+      draft.unit !== editing.unit ||
+      Number(draft.quantity) !== editing.quantity ||
+      Number(draft.unit_cost) !== editing.unitCost)
+
+  useAutosave({
+    enabled: editing !== null,
+    dirty: changed && complete,
+    signature: JSON.stringify(draft),
+    save: () => editing && saveEdit(editing.id, true),
+    flush: () =>
+      editing ? saveInBackground(routeTo.estimateItem(estimateId, editing.id), payloadFor(draft)) : Promise.resolve(true),
+  })
 
   const grouped = (['material', 'fixture', 'labor', 'equipment'] as const)
     .map((category) => ({
@@ -117,7 +142,7 @@ export function EstimateItemsTable({
         <section key={group.category}>
           <div className="mb-2 flex items-center justify-between gap-3">
             <h4 className="text-md font-semibold text-white">{group.label}</h4>
-            <span className="text-lg font-bold text-brand-soft">
+            <span className="font-display text-lg font-bold text-brand-soft">
               {formatCurrency(
                 group.rows.reduce((total, item) => total + item.total, 0),
                 2,
@@ -137,16 +162,14 @@ export function EstimateItemsTable({
                       laborRate={laborRate}
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" leftIcon={Check} onClick={() => saveEdit(item.id)}>
-                        Save line
-                      </Button>
+                      {/* "Save line" is hidden: edits save themselves as they are typed (see useAutosave). */}
                       <Button
                         size="sm"
                         variant="ghost"
-                        leftIcon={X}
-                        onClick={() => setEditingId(null)}
+                        // Closing never loses what was just typed: anything still waiting is saved first.
+                        onClick={() => (changed && complete ? saveEdit(item.id) : setEditingId(null))}
                       >
-                        Cancel
+                        Done
                       </Button>
                     </div>
                   </div>

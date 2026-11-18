@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import {
-  ArrowLeft,
   BadgeCheck,
   Briefcase,
   CalendarOff,
@@ -26,10 +25,10 @@ import {
   ConfirmDialog,
   EmptyState,
   Pagination,
-  StatusChip,
+  Stat,
   Table,
 } from '@/components/common'
-import { appLayout, PageTransition } from '@/components/layout'
+import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, TASK_STATUS_LABEL, TASK_STATUS_TONE, routeTo } from '@/constants'
 import { useDisclosure } from '@/hooks'
 import type { LeaveRequestStatus, LeaveStatus, SharedPageProps, TableColumn, TaskStatus } from '@/types'
@@ -174,7 +173,7 @@ export default function ForemanShow({ foreman, tasks, canManage, account, leave 
     {
       key: 'status',
       header: 'Status',
-      render: (task) => <StatusChip pill tone={TASK_STATUS_TONE[task.status]} label={TASK_STATUS_LABEL[task.status]} />,
+      render: (task) => <Badge tone={TASK_STATUS_TONE[task.status]}>{TASK_STATUS_LABEL[task.status]}</Badge>,
     },
     ...(canManage
       ? [
@@ -196,64 +195,51 @@ export default function ForemanShow({ foreman, tasks, canManage, account, leave 
       <Head title={foreman.name} />
 
       {/* ==================================================== Header ========= */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <Link
-            href={ROUTES.teams}
-            className="inline-flex items-center gap-2 text-md font-medium text-white transition-colors hover:text-brand"
-          >
-            <ArrowLeft size={17} aria-hidden />
-            Teams
-          </Link>
-
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+      <PageHeader
+        breadcrumbs={[{ label: 'Teams', href: ROUTES.teams }, { label: foreman.name }]}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
             <span
               aria-hidden
               className={
                 isBusy
-                  ? 'grid size-14 shrink-0 place-items-center rounded-full bg-brand/15 text-lg font-semibold text-brand ring-1 ring-brand/30'
-                  : 'grid size-14 shrink-0 place-items-center rounded-full bg-white/8 text-lg font-semibold text-white/75 ring-1 ring-hairline'
+                  ? 'grid size-11 shrink-0 place-items-center rounded-full bg-[var(--brand-bg)] text-base font-semibold text-brand'
+                  : 'grid size-11 shrink-0 place-items-center rounded-full bg-[var(--gray-bg)] text-base font-semibold text-[var(--gray-text)]'
               }
             >
               {foreman.initials}
             </span>
-            <h1 className="text-3xl font-bold text-white sm:text-4xl">{foreman.name}</h1>
-            <span className="inline-flex rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-medium text-brand">
-              {foreman.roleLabel}
-            </span>
+            {foreman.name}
+            <Badge tone="brand">{foreman.roleLabel}</Badge>
             {account?.status === 'inactive' ? (
-              <StatusChip pill tone="neutral" label="Inactive" />
+              <Badge tone="neutral">Inactive</Badge>
             ) : awayLabel !== null && leave?.status.state === 'on_leave' ? (
-              <StatusChip pill tone="warning" label={awayLabel.label} />
+              <Badge tone="warning">{awayLabel.label}</Badge>
             ) : (
               <>
-                <StatusChip pill tone={isBusy ? 'brand' : 'success'} label={isBusy ? 'On work' : 'Free'} />
-                <StatusChip
-                  pill
-                  tone={foreman.onSite ? 'info' : 'neutral'}
-                  label={foreman.onSite ? 'On site' : 'Available'}
-                />
+                <Badge tone={isBusy ? 'brand' : 'success'}>{isBusy ? 'On work' : 'Free'}</Badge>
+                <Badge tone={foreman.onSite ? 'info' : 'neutral'}>{foreman.onSite ? 'On site' : 'Available'}</Badge>
               </>
             )}
-          </div>
-
-          <p className="mt-2 text-md text-white/85">
-            {foreman.team?.name ?? 'Not on a team'} ·{' '}
-            {foreman.joinedOn ? `Joined ${formatDate(foreman.joinedOn)}` : 'Joining date not recorded'}
-          </p>
-        </div>
-
-        {canManage && (
-          <div className="flex flex-wrap items-center gap-3">
-            <ButtonLink href={routeTo.foremanEdit(foreman.id)} variant="white" leftIcon={PencilLine}>
-              Edit
-            </ButtonLink>
-            <Button variant="secondary" leftIcon={Trash2} disabled={hasHistory} onClick={deleteDialog.open}>
-              Remove
-            </Button>
-          </div>
-        )}
-      </div>
+          </span>
+        }
+        subtitle={`${foreman.team?.name ?? 'Not on a team'} · ${
+          foreman.joinedOn ? `Joined ${formatDate(foreman.joinedOn)}` : 'Joining date not recorded'
+        }`}
+        className="mb-4"
+        actions={
+          canManage ? (
+            <>
+              <ButtonLink href={routeTo.foremanEdit(foreman.id)} variant="secondary" leftIcon={PencilLine}>
+                Edit
+              </ButtonLink>
+              <Button variant="secondary" leftIcon={Trash2} disabled={hasHistory} onClick={deleteDialog.open}>
+                Remove
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
 
       {/* The refusal to delete lands here, and it explains itself. */}
       <AnimatePresence initial={false}>
@@ -280,7 +266,7 @@ export default function ForemanShow({ foreman, tasks, canManage, account, leave 
       )}
 
       {/* ================================================= Summary cards ===== */}
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={ClipboardList} label="Open Tasks" value={String(foreman.openTasks)} />
         <StatCard icon={Briefcase} label="Jobs" value={String(foreman.openJobs)} />
         <StatCard
@@ -297,7 +283,7 @@ export default function ForemanShow({ foreman, tasks, canManage, account, leave 
         <Card padding="sm" className="flex min-w-0 flex-col">
           <div className="flex flex-wrap items-center justify-between gap-3 px-1">
             <div>
-              <h2 className="text-lg font-semibold text-white">Open Work</h2>
+              <h2 className="font-display text-xl leading-[1.25] font-[620] tracking-[-0.01em] text-white">Open Work</h2>
               <p className="mt-0.5 text-xs text-white/70">
                 {tasks.length === 0
                   ? 'Nothing outstanding'
@@ -351,7 +337,7 @@ export default function ForemanShow({ foreman, tasks, canManage, account, leave 
 
         {/* ================================================== Details ========= */}
         <Card padding="md" className="min-w-0">
-          <h2 className="text-lg font-semibold text-white">Details</h2>
+          <h2 className="font-display text-xl leading-[1.25] font-[620] tracking-[-0.01em] text-white">Details</h2>
           <p className="mt-0.5 text-xs text-white/70">What is on record for this member</p>
 
           <dl className="mt-4 space-y-4">
@@ -454,10 +440,10 @@ function AccountCard({ account, busy, onSwitch }: { account: AccountInfo; busy: 
     <Card padding="md" className="min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-white">Account</h2>
+          <h2 className="font-display text-xl leading-[1.25] font-[620] tracking-[-0.01em] text-white">Account</h2>
           <p className="mt-0.5 text-xs text-white/70">Whether they can sign in, and hold a seat on the plan</p>
         </div>
-        <StatusChip pill tone={tone} label={label} />
+        <Badge tone={tone}>{label}</Badge>
       </div>
 
       <p className="mt-4 text-sm text-white/80">
@@ -491,13 +477,13 @@ function LeaveCard({ leave }: { leave: LeaveInfo }) {
     <Card padding="md" className="min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-white">Leave</h2>
+          <h2 className="font-display text-xl leading-[1.25] font-[620] tracking-[-0.01em] text-white">Leave</h2>
           <p className="mt-0.5 text-xs text-white/70">Asked for in the field app, answered under Manage Leave</p>
         </div>
         {label ? (
-          <StatusChip pill tone={label.tone} label={label.label} />
+          <Badge tone={label.tone}>{label.label}</Badge>
         ) : (
-          <StatusChip pill tone="success" label="Available" />
+          <Badge tone="success">Available</Badge>
         )}
       </div>
       {label?.detail && <p className="mt-2 text-sm text-white/70">{label.detail}</p>}
@@ -519,7 +505,7 @@ function LeaveCard({ leave }: { leave: LeaveInfo }) {
                   </p>
                   {request.decisionNote && <p className="text-xs text-white/60">“{request.decisionNote}”</p>}
                 </div>
-                <StatusChip tone={status.tone} label={status.label} />
+                <Badge tone={status.tone}>{status.label}</Badge>
               </li>
             )
           })}
@@ -562,17 +548,7 @@ function Detail({ icon: Icon, label, value, href }: DetailProps) {
 }
 
 function StatCard({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
-  return (
-    <Card padding="md" className="flex items-center gap-4">
-      <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
-        <Icon size={22} aria-hidden />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-white/75">{label}</p>
-        <p className="text-xl leading-tight font-bold tabular-nums text-white">{value}</p>
-      </div>
-    </Card>
-  )
+  return <Stat label={label} value={value} icon={<Icon size={13} aria-hidden />} />
 }
 
 ForemanShow.layout = appLayout

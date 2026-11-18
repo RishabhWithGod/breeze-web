@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Button, ButtonLink, StatusChip } from '@/components/common'
+import { Button, ButtonLink, Badge } from '@/components/common'
 import { routeTo } from '@/constants'
 import type { Estimate } from '@/types'
 import {
@@ -43,12 +43,7 @@ export function EstimateCard({
           <p className="font-bold text-white">{estimate.number}</p>
           <p className="mt-0.5 truncate text-sm text-white/85">{estimate.client}</p>
         </div>
-        <StatusChip
-          hideDot
-          tone={ESTIMATE_STATUS_TONE[estimate.status]}
-          label={ESTIMATE_STATUS_LABEL[estimate.status]}
-          className="shrink-0 text-sm"
-        />
+        <Badge tone={ESTIMATE_STATUS_TONE[estimate.status]} className="shrink-0 text-sm">{ESTIMATE_STATUS_LABEL[estimate.status]}</Badge>
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">

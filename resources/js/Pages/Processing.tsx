@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Head, router } from '@inertiajs/react'
 import type { LucideIcon } from 'lucide-react'
-import { ArrowLeft, ArrowRight, Ban, Clock, FileText, Layers, LoaderCircle, RotateCcw, Tag } from 'lucide-react'
-import {
-  Alert,
-  Button,
-  ButtonLink,
-  Card,
-  ConfirmDialog,
-} from '@/components/common'
-import { PageTransition, StepWizard, appLayout } from '@/components/layout'
+import { ArrowRight, Ban, Clock, FileText, Layers, LoaderCircle, RotateCcw, Tag } from 'lucide-react'
+import { Alert, Badge, Button, ConfirmDialog } from '@/components/common'
+import { PageHeader, PageTransition, StepWizard, appLayout } from '@/components/layout'
 import { ProcessingStepList } from '@/components/processing'
 import { ROUTES, routeTo } from '@/constants'
 import {
@@ -19,7 +13,6 @@ import {
   usePrivateChannel,
 } from '@/hooks'
 import { useUploadStore } from '@/store'
-import { cn } from '@/utils'
 import type {
   ProcessingStage,
   ProcessingStageState,
@@ -233,133 +226,31 @@ export default function Processing({
   const fileName = uploads[0]?.name ?? project.drawingName ?? 'Drawing'
   const tone = isFailed || isCancelled ? 'danger' : isDone ? 'success' : 'brand'
 
+  const sheetShown = useSheetAvailable(project.id, (uploads[0]?.format ?? project.format ?? 'pdf').toString().toLowerCase() === 'pdf')
+
+  const eyebrow = isDone ? 'Analysis complete' : isFailed ? 'Analysis failed' : isCancelled ? 'Analysis cancelled' : 'Live analysis'
+  const ringColor = tone === 'danger' ? '#f87171' : tone === 'success' ? '#22c55e' : 'url(#processing-ring)'
+  const RING = 132
+  const STROKE = 9
+  const radius = (RING - STROKE) / 2
+  const circumference = 2 * Math.PI * radius
+  const ringLength = (Math.min(Math.max(displayProgress, 0), 100) / 100) * circumference
+
   return (
     <PageTransition>
       <Head title="AI Takeoff Processing" />
 
       <StepWizard current="analysis" hrefs={{ upload: ROUTES.upload }} />
 
-      <Card padding="none" className="overflow-hidden">
-        <div className="border-b border-hairline px-6 py-5 sm:px-8">
-          <h1 className="text-2xl font-bold text-white sm:text-3xl">Breeze Takeoff Processing</h1>
-          <p className="mt-1 text-md text-white/90">
-            {uploads.length > 1
-              ? `Our AI is analyzing ${uploads.length} drawings from ${project.name}`
-              : 'Our AI is analyzing your drawings and extracting takeoff data'}
-          </p>
-        </div>
-
-        <div className="p-4 sm:p-6">
-          <div className="rounded-card border border-hairline glass p-4 sm:p-6">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,21rem)_minmax(0,1fr)]">
-              {/* No page image exists until the run returns — a drawing-sheet stand-in. */}
-              <div className="blueprint-grid relative grid aspect-4/3 place-items-center overflow-hidden rounded-panel border border-hairline-strong bg-navy-900/70 on-dark">
-                <FileText size={56} aria-hidden className="text-brand/70" />
-                {isRunning && (
-                  <span
-                    className="pointer-events-none absolute inset-x-0 top-0 h-10 animate-scan bg-linear-to-b from-brand/30 to-transparent"
-                    aria-hidden
-                  />
-                )}
-                <span className="absolute right-2 bottom-2 rounded-sm bg-navy-950/80 px-2 py-0.5 text-2xs font-semibold text-white/85 on-dark">
-                  {(uploads[0]?.format ?? project.format ?? 'PDF').toString().toUpperCase()}
-                </span>
-              </div>
-
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-xl font-bold text-white sm:text-2xl">{project.name}</h2>
-                    <p className="mt-1 truncate text-md text-white/75">{fileName}</p>
-                  </div>
-                  <StatusPill
-                    tone={tone}
-                    isRunning={isRunning}
-                    label={
-                      isFailed ? 'Failed' : isCancelled ? 'Cancelled' : isDone ? 'Completed' : 'Processing'
-                    }
-                  />
-                </div>
-
-                <div className="mt-5 flex items-center gap-4">
-                  <div
-                    className="h-3 flex-1 overflow-hidden rounded-full bg-white/10"
-                    role="progressbar"
-                    aria-valuenow={Math.round(displayProgress)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  >
-                    <div
-                      className={cn(
-                        'h-full rounded-full transition-[width] duration-700',
-                        tone === 'danger'
-                          ? 'bg-status-danger'
-                          : tone === 'success'
-                            ? 'bg-status-success'
-                            : 'bg-brand',
-                      )}
-                      style={{ width: `${Math.min(Math.max(displayProgress, 0), 100)}%` }}
-                    />
-                  </div>
-                  <span className="w-12 text-right text-lg font-bold text-white">
-                    {Math.round(displayProgress)}%
-                  </span>
-                </div>
-                <p className="mt-3 text-md text-white/90">{headline}</p>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <MetricTile icon={FileText} value={String(project.pageCount)} label="Pages" />
-                  <MetricTile icon={Tag} value={String(uploads.length || 1)} label={uploads.length === 1 ? 'File' : 'Files'} />
-                  <MetricTile icon={Layers} value={`${stageNumber}/${stages.length}`} label="Stage" />
-                  <MetricTile icon={Clock} value={elapsed} label="Elapsed" />
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 border-t border-hairline pt-5">
-              <h3 className="mb-4 text-md font-semibold text-white">Current Status</h3>
-              <ProcessingStepList stages={stageStates} className="max-w-md" />
-
-              {run.processingTime && (
-                <p className="mt-3 font-mono text-2xs text-white/65">{run.processingTime.toFixed(1)}s</p>
-              )}
-
-              {(isFailed || isCancelled || isDone) && (
-                <p className="mt-4 max-w-2xl text-md text-white/90">
-                  {isDone
-                    ? 'Every detected symbol is waiting for review. Nothing reaches an estimate until you approve it.'
-                    : isFailed
-                      ? (run.error ?? 'The AI service did not return a usable response.')
-                      : 'The run was cancelled and the uploaded drawing was removed. Upload it again when you are ready.'}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/*
-            A queued run that nothing has claimed means no queue worker is running.
-            Said plainly, with the one action that fixes it, rather than spinning.
-          */}
-          {run.awaitingWorker && isRunning && (
-            <Alert tone="warning" className="mt-6 text-left" title="This is taking longer than usual">
-              <p>
-                Your drawing is saved and queued for analysis, but it hasn't started yet.
-                This screen will update automatically once it does — try again if it
-                doesn't move shortly.
-              </p>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="mt-3"
-                leftIcon={RotateCcw}
-                onClick={handleRetry}
-              >
-                Queue it again
-              </Button>
-            </Alert>
-          )}
-
-          <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+      <PageHeader
+        title="Breeze Takeoff Processing"
+        subtitle={
+          uploads.length > 1
+            ? `Our AI is analyzing ${uploads.length} drawings from ${project.name}`
+            : 'Our AI is analyzing your drawings and extracting takeoff data'
+        }
+        actions={
+          <>
             {isRunning && (
               <Button variant="secondary" leftIcon={Ban} onClick={cancelDialog.open}>
                 Cancel run
@@ -370,10 +261,7 @@ export default function Processing({
                 <Button variant="secondary" leftIcon={RotateCcw} onClick={handleStartOver}>
                   New takeoff
                 </Button>
-                <Button
-                  rightIcon={ArrowRight}
-                  onClick={() => run.reviewUrl && router.visit(run.reviewUrl)}
-                >
+                <Button rightIcon={ArrowRight} onClick={() => run.reviewUrl && router.visit(run.reviewUrl)}>
                   Continue to review
                 </Button>
               </>
@@ -388,19 +276,158 @@ export default function Processing({
                     Resubmit drawing
                   </Button>
                 )}
-                <Button variant="outline" onClick={handleStartOver}>
+                <Button variant="secondary" onClick={handleStartOver}>
                   Back to upload
                 </Button>
               </>
             )}
+          </>
+        }
+      />
+
+      {/*
+        A queued run that nothing has claimed means no queue worker is running.
+        Said plainly, with the one action that fixes it, rather than spinning.
+      */}
+      {run.awaitingWorker && isRunning && (
+        <Alert tone="warning" className="mb-4 text-left" title="This is taking longer than usual">
+          <p>
+            Your drawing is saved and queued for analysis, but it hasn't started yet.
+            This screen will update automatically once it does — try again if it
+            doesn't move shortly.
+          </p>
+          <Button variant="secondary" size="sm" className="mt-3" leftIcon={RotateCcw} onClick={handleRetry}>
+            Queue it again
+          </Button>
+        </Alert>
+      )}
+
+      <section className="blueprint grid gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <span className="bp-corner tl" aria-hidden />
+        <span className="bp-corner br" aria-hidden />
+
+        {/* No page image exists until the run returns — a drawing-sheet stand-in. */}
+        <div className="p-5 sm:p-6">
+          <div className="blueprint-grid relative grid min-h-72 place-items-center overflow-hidden rounded-xl border border-[rgb(126_170_255/0.22)] bg-[#0a1a3d]/70 lg:min-h-[26rem]">
+            {sheetShown ? (
+              /* The drawing's first page, from our own storage, in the browser's own PDF viewer. Not
+                 interactive here — the page is for looking at while the AI reads it. The viewer's
+                 scrollbar is pushed out of frame and the next page's edge is faded away. */
+              <div className="absolute inset-0 overflow-hidden bg-[#323639]">
+                <iframe
+                  title={`First page of ${fileName}`}
+                  src={`${routeTo.drawingFile(project.id)}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
+                  tabIndex={-1}
+                  className="pointer-events-none absolute top-0 left-0 h-full border-0"
+                  style={{ width: 'calc(100% + 20px)' }}
+                />
+                <span
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-[#323639] to-transparent"
+                  aria-hidden
+                />
+              </div>
+            ) : (
+              <div className="grid aspect-[3/4] h-52 place-items-center rounded-sm bg-white/90 shadow-[0_10px_40px_-10px_rgb(0_0_0/0.6)]">
+                <FileText size={52} aria-hidden className="text-[#2f5bff]/70" />
+              </div>
+            )}
             {isRunning && (
-              <ButtonLink href={ROUTES.aiTakeoff} variant="outline" size="lg" leftIcon={ArrowLeft}>
-                Continue Working
-              </ButtonLink>
+              <span
+                className="pointer-events-none absolute inset-x-0 top-0 h-10 animate-scan border-b border-[#3ee6ff] bg-linear-to-b from-transparent to-[rgb(62_230_255/0.28)] shadow-[0_6px_14px_-4px_rgb(62_230_255/0.7)]"
+                aria-hidden
+              />
+            )}
+            <span className="absolute right-2.5 bottom-2.5 rounded-md bg-[rgb(4_10_26/0.82)] px-2 py-0.5 text-2xs font-semibold tracking-wider text-[#e6eeff]">
+              {(uploads[0]?.format ?? project.format ?? 'PDF').toString().toUpperCase()}
+            </span>
+          </div>
+        </div>
+
+        <div className="min-w-0 border-t border-[rgb(126_170_255/0.14)] p-5 sm:p-6 lg:border-t-0 lg:border-l">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="bp-eyebrow">{eyebrow}</span>
+            <Badge tone={tone === 'danger' ? 'danger' : tone === 'success' ? 'success' : 'brand'}>
+              {isRunning && <LoaderCircle size={13} aria-hidden className="animate-spin" />}
+              {isFailed ? 'Failed' : isCancelled ? 'Cancelled' : isDone ? 'Completed' : 'Processing'}
+            </Badge>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-5">
+            <div
+              className="relative shrink-0"
+              style={{ width: RING, height: RING }}
+              role="progressbar"
+              aria-valuenow={Math.round(displayProgress)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <svg width={RING} height={RING} viewBox={`0 0 ${RING} ${RING}`} aria-hidden>
+                <defs>
+                  <linearGradient id="processing-ring" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor="#5b82ff" />
+                    <stop offset="1" stopColor="#3ee6ff" />
+                  </linearGradient>
+                </defs>
+                <circle cx={RING / 2} cy={RING / 2} r={radius} fill="none" stroke="rgba(126,170,255,.16)" strokeWidth={STROKE} />
+                <circle
+                  cx={RING / 2}
+                  cy={RING / 2}
+                  r={radius}
+                  fill="none"
+                  stroke={ringColor}
+                  strokeWidth={STROKE}
+                  strokeLinecap="round"
+                  strokeDasharray={`${ringLength} ${circumference}`}
+                  transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
+                  className="transition-[stroke-dasharray] duration-700"
+                  style={{ filter: 'drop-shadow(0 0 6px rgba(62,230,255,.55))' }}
+                />
+              </svg>
+              <div className="absolute inset-0 grid place-content-center text-center">
+                <span className="font-display text-[1.75rem] leading-none font-[650] tracking-tight text-white">
+                  {Math.round(displayProgress)}%
+                </span>
+                <span className="mt-1 text-[10.5px] font-semibold tracking-[0.08em] text-[#a7b7d9] uppercase">
+                  complete
+                </span>
+              </div>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] text-[#a7b7d9]">{isRunning ? 'Now reading' : 'Status'}</p>
+              <p className="font-display text-xl leading-snug font-[620] text-white">{headline}</p>
+              <p className="mt-1 truncate text-[13px] text-[#a7b7d9]">
+                {project.name} · {fileName}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <MetricTile icon={FileText} value={String(project.pageCount)} label="Pages" />
+            <MetricTile icon={Tag} value={String(uploads.length || 1)} label={uploads.length === 1 ? 'File' : 'Files'} />
+            <MetricTile icon={Layers} value={`${stageNumber}/${stages.length}`} label="Stage" />
+            <MetricTile icon={Clock} value={elapsed} label="Elapsed" />
+          </div>
+
+          <div className="mt-5">
+            <ProcessingStepList stages={stageStates} />
+
+            {run.processingTime && (
+              <p className="mt-3 font-mono text-2xs text-[#a7b7d9]">{run.processingTime.toFixed(1)}s</p>
+            )}
+
+            {(isFailed || isCancelled || isDone) && (
+              <p className="mt-4 text-md text-[#d6e0f2]">
+                {isDone
+                  ? 'Every detected symbol is waiting for review. Nothing reaches an estimate until you approve it.'
+                  : isFailed
+                    ? (run.error ?? 'The AI service did not return a usable response.')
+                    : 'The run was cancelled and the uploaded drawing was removed. Upload it again when you are ready.'}
+              </p>
             )}
           </div>
         </div>
-      </Card>
+      </section>
 
       <ConfirmDialog
         isOpen={cancelDialog.isOpen}
@@ -415,6 +442,35 @@ export default function Processing({
       />
     </PageTransition>
   )
+}
+
+/**
+ * Whether the drawing's PDF can be shown. Asked of the server first (a HEAD request, nothing
+ * downloaded), because the file is gone once a run is cancelled and a missing file would otherwise
+ * show the browser's error page inside the frame.
+ */
+function useSheetAvailable(projectId: number, isPdf: boolean): boolean {
+  const [available, setAvailable] = useState(false)
+
+  useEffect(() => {
+    if (!isPdf) return
+
+    let active = true
+
+    void fetch(routeTo.drawingFile(projectId), { method: 'HEAD', credentials: 'same-origin' })
+      .then((response) => {
+        if (active) setAvailable(response.ok && (response.headers.get('content-type') ?? '').includes('pdf'))
+      })
+      .catch(() => {
+        if (active) setAvailable(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [projectId, isPdf])
+
+  return isPdf && available
 }
 
 /** Minutes/seconds since the run was submitted; freezes once it finishes. */
@@ -434,43 +490,15 @@ function useElapsed(submittedAt: string | null, running: boolean): string {
   return minutes > 0 ? `${minutes}m ${String(seconds % 60).padStart(2, '0')}s` : `${seconds}s`
 }
 
-const PILL_STYLES = {
-  brand: 'border-brand/40 bg-brand/15 text-brand',
-  success: 'border-status-success/40 bg-status-success/12 text-status-success',
-  danger: 'border-status-danger/50 bg-status-danger/20 text-status-danger',
-} as const
-
-function StatusPill({
-  tone,
-  label,
-  isRunning,
-}: {
-  tone: keyof typeof PILL_STYLES
-  label: string
-  isRunning: boolean
-}) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-2 rounded-panel border px-5 py-2.5 text-md font-semibold',
-        PILL_STYLES[tone],
-      )}
-    >
-      {isRunning && <LoaderCircle size={17} aria-hidden className="animate-spin" />}
-      {label}
-    </span>
-  )
-}
-
 function MetricTile({ icon: Icon, value, label }: { icon: LucideIcon; value: string; label: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-panel border border-hairline bg-white/4 px-3 py-3">
-      <span className="grid size-11 shrink-0 place-items-center rounded-panel bg-brand text-brand-ink">
-        <Icon size={20} aria-hidden />
+    <div className="flex items-center gap-2.5 rounded-xl border border-[rgb(126_170_255/0.14)] bg-white/[0.06] px-3 py-2.5">
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[rgb(62_230_255/0.14)] text-[#3ee6ff]">
+        <Icon size={16} aria-hidden />
       </span>
       <div className="min-w-0">
-        <p className="truncate text-xl leading-tight font-bold text-white">{value}</p>
-        <p className="truncate text-xs text-white/80">{label}</p>
+        <p className="truncate font-display text-[1.0625rem] leading-tight font-[620] text-white">{value}</p>
+        <p className="truncate text-xs text-[#a7b7d9]">{label}</p>
       </div>
     </div>
   )

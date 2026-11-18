@@ -2,7 +2,7 @@ import type { Size, Variant } from '@/types'
 import { cn } from '@/utils'
 
 const BASE =
-  'inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap rounded-panel border transition-all duration-200 ' +
+  'inline-flex items-center justify-center gap-[7px] font-[550] whitespace-nowrap rounded-panel border transition-all duration-200 ' +
   'select-none disabled:cursor-not-allowed disabled:opacity-50 active:translate-y-px'
 
 const VARIANTS: Record<Variant, string> = {
@@ -31,9 +31,9 @@ const VARIANTS: Record<Variant, string> = {
 }
 
 const SIZES: Record<Size, string> = {
-  sm: 'text-sm px-2.5 py-1.5', // 30px, as the app's .btn-sm
-  md: 'text-md px-3.5 py-2', // 36px, as the app's .btn
-  lg: 'text-base px-5 py-3', // 44px, as the app's .btn-lg
+  sm: 'h-[30px] px-2.5 text-sm', // as the app's .btn-sm
+  md: 'h-9 px-3.5 text-md', // as the app's .btn
+  lg: 'h-11 px-5 text-lg', // as the app's .btn-lg (15px)
 }
 
 export interface ButtonStyleProps {

@@ -286,7 +286,7 @@ export default function EstimateEdit({
 
             <div className="flex items-center justify-between gap-3 border-t border-hairline pt-2">
               <dt className="text-md font-semibold text-white">Grand total</dt>
-              <dd className="text-lg font-bold text-white">
+              <dd className="font-display text-lg font-bold text-white">
                 {formatCurrency(previewTotal, 2)}
               </dd>
             </div>

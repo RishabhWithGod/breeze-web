@@ -67,9 +67,9 @@ export function Table<T>({
     >
       <table
         className={cn(
-          'w-full min-w-3xl text-left',
+          isLined ? 'w-full min-w-[34rem] text-left' : 'w-full min-w-3xl text-left',
           isLined
-            ? 'overflow-hidden rounded-panel border-separate border-spacing-0'
+            ? 'border-collapse'
             : 'border-separate border-spacing-y-1',
         )}
       >
@@ -82,15 +82,18 @@ export function Table<T>({
                 key={column.key}
                 scope="col"
                 className={cn(
-                  'px-4 py-3 font-semibold whitespace-nowrap text-white',
+                  'whitespace-nowrap',
                   isLined
-                    ? 'border-b border-hairline-strong bg-surface-veil'
-                    : 'bg-surface-veil first:rounded-l-panel last:rounded-r-panel',
+                    ? 'border-b border-hairline px-3.5 py-2.5 font-semibold text-[var(--text-2)]'
+                    : 'bg-surface-veil px-4 py-3 font-semibold text-white first:rounded-l-panel last:rounded-r-panel',
                   headerVariant === 'uppercase'
-                    ? 'text-sm tracking-wide uppercase'
+                    ? isLined
+                      ? 'text-xs tracking-[0.04em] uppercase'
+                      : 'text-sm tracking-wide uppercase'
                     : 'text-md',
                   ALIGNMENTS[column.align ?? 'left'],
                   column.width,
+                  column.cellClassName,
                 )}
               >
                 {column.header}
@@ -128,8 +131,9 @@ export function Table<T>({
                     isLined
                       ? 'border-b border-hairline group-hover:bg-white/4 group-last:border-b-0'
                       : 'border-y border-hairline bg-white/6 group-hover:bg-white/12 first:rounded-l-panel first:border-l last:rounded-r-panel last:border-r',
-                    dense ? 'px-4 py-2.5' : 'px-4 py-4',
+                    isLined ? 'px-3.5 py-[11px] text-[0.875rem]' : dense ? 'px-4 py-2.5' : 'px-4 py-4',
                     ALIGNMENTS[column.align ?? 'left'],
+                    column.cellClassName,
                   )}
                 >
                   {column.render(row, rowIndex)}

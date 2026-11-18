@@ -42,12 +42,11 @@ export function Pagination({
   onPageChange,
   summary,
   withLabels = false,
-  tone = 'default',
   className,
 }: PaginationProps) {
   if (pageCount <= 1 && !summary) return null
 
-  const isLight = tone === 'light'
+  const isLight = false // the app has one pager look; `tone` is kept so callers still compile
   const pages = buildPages(page, pageCount)
 
   const navButton = cn(

@@ -1,19 +1,12 @@
 import { useState } from 'react'
 import { Head, Link, router } from '@inertiajs/react'
-import { Eye, FolderKanban, Mail, MapPin, Phone, Plus, User } from 'lucide-react'
-import {
-  Badge,
-  ButtonLink,
-  Card,
-  EmptyState,
-  Pagination,
-  SearchBox,
-  Table,
-} from '@/components/common'
+import { Plus, Search } from 'lucide-react'
+import { ButtonLink, Card, EmptyState, Pagination, Table, ToolbarSearch } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import { usePermissions } from '@/hooks'
 import type { Paginated, TableColumn } from '@/types'
+import { formatDate } from '@/utils'
 
 interface ClientRow {
   readonly id: number
@@ -25,6 +18,8 @@ interface ClientRow {
   readonly projectCount: number
   readonly siteCount: number
   readonly primarySite: string | null
+  /** When the client was added, for "Client since". */
+  readonly createdAt: string | null
 }
 
 export interface ClientsProps {
@@ -32,17 +27,67 @@ export interface ClientsProps {
   filters: { readonly search: string }
 }
 
+/** Contact, projects and locations are columns of one register, as in the Breeze app's client list. */
+const COLUMNS: readonly TableColumn<ClientRow>[] = [
+  {
+    key: 'client',
+    header: 'Client',
+    render: (row) => (
+      <div className="min-w-0">
+        {/* A real link, so the row can be reached and opened from the keyboard too. */}
+        <Link href={routeTo.client(row.id)} className="block truncate font-bold text-white hover:text-brand">
+          {row.name}
+        </Link>
+        <p className="truncate text-[13px] text-[var(--text-3)]">{row.primarySite ?? 'No site on file'}</p>
+      </div>
+    ),
+  },
+  {
+    key: 'contact',
+    header: 'Contact',
+    render: (row) => (
+      <div className="min-w-0">
+        <p className="truncate text-white">{row.contactName ?? row.name}</p>
+        <p className="truncate text-[13px] text-[var(--text-3)]">{row.contactEmail ?? 'N/A'}</p>
+        {row.contactPhone && <p className="truncate text-[13px] text-[var(--text-3)]">{row.contactPhone}</p>}
+      </div>
+    ),
+  },
+  {
+    key: 'projects',
+    header: 'Projects',
+    align: 'right',
+    render: (row) => <span className="tabular-nums">{row.projectCount}</span>,
+  },
+  {
+    key: 'locations',
+    header: 'Locations',
+    align: 'right',
+    render: (row) => <span className="tabular-nums">{row.siteCount}</span>,
+  },
+  {
+    key: 'since',
+    header: 'Client since',
+    align: 'right',
+    render: (row) => (
+      <span className="whitespace-nowrap">{row.createdAt ? formatDate(row.createdAt) : '—'}</span>
+    ),
+  },
+]
+
 /**
  * The client register.
  *
  * A client is who the work is for. What they have on is their projects, so the
  * count is the column that matters — a name on its own tells you nothing you
- * did not already know.
+ * did not already know. Laid out as the Breeze app's list: one card, a toolbar
+ * with search and a count, and a row per client that opens its record.
  */
 export default function Clients({ clients, filters }: ClientsProps) {
   const { can: permitted } = usePermissions()
   const [search, setSearch] = useState(filters.search)
   const rows = clients.data
+  const total = clients.meta.total
 
   const apply = (changes: Record<string, string>) => {
     const query = new URLSearchParams(window.location.search)
@@ -62,129 +107,41 @@ export default function Clients({ clients, filters }: ClientsProps) {
     })
   }
 
-  const columns: TableColumn<ClientRow>[] = [
-    {
-      key: 'name',
-      header: 'Client',
-      render: (row) => (
-        <Link href={routeTo.client(row.id)} className="group block min-w-0">
-          <span className="block truncate font-semibold text-white transition-colors group-hover:text-brand">
-            {row.name}
-          </span>
-          <span className="flex items-center gap-1.5 text-sm text-white/60">
-            <MapPin size={13} aria-hidden className="shrink-0" />
-            {row.primarySite ?? 'No location recorded'}
-          </span>
-        </Link>
-      ),
-    },
-    {
-      key: 'contact',
-      header: 'Primary Contact',
-      width: 'w-56',
-      render: (row) => (
-        <div className="space-y-0.5 text-xs text-white/60">
-          <span className="flex items-center gap-1.5 truncate">
-            <User size={12} aria-hidden className="shrink-0" />
-            <span className="truncate">{row.contactName ?? row.name}</span>
-          </span>
-          <span className="flex items-center gap-1.5 truncate">
-            <Mail size={12} aria-hidden className="shrink-0" />
-            <span className="truncate">{row.contactEmail ?? 'N/A'}</span>
-          </span>
-          <span className="flex items-center gap-1.5 truncate">
-            <Phone size={12} aria-hidden className="shrink-0" />
-            <span className="truncate">{row.contactPhone ?? 'N/A'}</span>
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: 'projects',
-      header: 'Projects',
-      align: 'right',
-      width: 'w-24',
-      render: (row) => (
-        <span className="text-sm tabular-nums text-white/90">{row.projectCount}</span>
-      ),
-    },
-    {
-      key: 'sites',
-      header: 'Locations',
-      align: 'right',
-      width: 'w-24',
-      render: (row) => (
-        <span className="text-sm tabular-nums text-white/90">{row.siteCount}</span>
-      ),
-    },
-    {
-      /*
-       * Not a real feature yet — there is nothing behind this column to
-       * report. Shown anyway, but plainly marked so it reads as "coming
-       * later" rather than as data nobody trusts.
-       */
-      key: 'commodityLists',
-      header: 'Commodity Lists',
-      width: 'w-44',
-      render: () => (
-        <span title="Commodity lists aren't tracked yet — coming soon">
-          <Badge tone="neutral" size="sm">
-            Not available yet
-          </Badge>
-        </span>
-      ),
-    },
-    {
-      key: 'actions',
-      header: '',
-      align: 'right',
-      width: 'w-24',
-      render: (row) => (
-        <ButtonLink
-          href={routeTo.client(row.id)}
-          variant="ghost"
-          size="sm"
-          leftIcon={Eye}
-          aria-label={`View ${row.name}`}
-        >
-          View
-        </ButtonLink>
-      ),
-    },
-  ]
-
   return (
     <PageTransition>
       <Head title="Clients" />
 
       <PageHeader
         title="Clients"
-        subtitle="Manage your clients and their associated projects, estimates, and activity — All in one place."
-        breadcrumbs={[{ label: 'Clients' }]}
+        subtitle="The companies you build for, with their contacts, projects and locations."
         actions={
           permitted('clients.create') ? (
             <ButtonLink href={ROUTES.clientCreate} leftIcon={Plus}>
-              Add Client
+              Add client
             </ButtonLink>
           ) : undefined
         }
       />
 
-      <Card padding="md" className="mb-4">
-        <SearchBox
-          value={search}
-          onValueChange={setSearch}
-          onSearch={(value) => apply({ search: value })}
-          placeholder="Search clients…"
-          aria-label="Search clients"
-          containerClassName="sm:max-w-xs"
-        />
-      </Card>
+      <Card padding="none" className="overflow-hidden">
+        {/* Toolbar: search on the left, the count on the right. */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
+          <ToolbarSearch
+            value={search}
+            onChange={setSearch}
+            onSubmit={(value) => apply({ search: value })}
+            applied={filters.search !== ''}
+            placeholder="Search clients"
+          />
 
-      <Card padding="lg">
+          <span className="ml-auto text-[13px] text-[var(--text-3)]">
+            {total} client{total === 1 ? '' : 's'}
+          </span>
+        </div>
+
         {rows.length === 0 ? (
           <EmptyState
-            icon={FolderKanban}
+            icon={Search}
             title={filters.search ? 'No client matches that' : 'No clients yet'}
             description={
               filters.search
@@ -196,34 +153,30 @@ export default function Clients({ clients, filters }: ClientsProps) {
               : {
                   actions: (
                     <ButtonLink href={ROUTES.clientCreate} leftIcon={Plus}>
-                      Add Client
+                      Add client
                     </ButtonLink>
                   ),
                 })}
           />
         ) : (
           <Table
-            columns={columns}
+            variant="lined"
+            columns={COLUMNS}
             rows={rows}
             getRowId={(row) => row.id}
-            variant="lined"
-            dense
-            caption="Clients on the register"
+            caption="Clients"
+            onRowClick={(row) => router.visit(routeTo.client(row.id))}
           />
         )}
       </Card>
 
       <Pagination
         withLabels
-        className="mt-6"
+        className="mt-5"
         page={clients.meta.current_page}
         pageCount={clients.meta.last_page}
         onPageChange={(page) => apply({ page: String(page) })}
-        summary={
-          clients.meta.total === 0
-            ? 'No clients to display'
-            : `Showing ${rows.length} of ${clients.meta.total} clients`
-        }
+        summary={total === 0 ? 'No clients to display' : `Showing ${rows.length} of ${total} clients`}
       />
     </PageTransition>
   )

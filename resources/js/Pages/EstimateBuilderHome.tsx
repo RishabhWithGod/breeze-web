@@ -1,6 +1,6 @@
 import { Head, router, useForm } from '@inertiajs/react'
-import { Calculator, Plus } from 'lucide-react'
-import { Alert, Button, ButtonLink, Card, EmptyState, SelectField, StatusChip, Table } from '@/components/common'
+import { ArrowRight, Calculator, Plus } from 'lucide-react'
+import { Alert, Button, ButtonLink, Card, EmptyState, SelectField, Badge, Table } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { TableColumn, Tone } from '@/types'
@@ -53,7 +53,7 @@ export default function EstimateBuilderHome({ estimates, projects }: EstimateBui
       render: (row) => {
         const status = STATUS[row.status] ?? STATUS['draft']!
 
-        return <StatusChip pill tone={status.tone} label={status.label} />
+        return <Badge tone={status.tone}>{status.label}</Badge>
       },
     },
     {
@@ -78,7 +78,12 @@ export default function EstimateBuilderHome({ estimates, projects }: EstimateBui
       header: 'Open',
       align: 'right',
       render: (row) => (
-        <ButtonLink href={routeTo.estimateBuilderShow(row.id)} variant="secondary" size="sm">
+        <ButtonLink
+          href={routeTo.estimateBuilderShow(row.id)}
+          variant="secondary"
+          size="sm"
+          {...(row.status === 'draft' ? { rightIcon: ArrowRight } : {})}
+        >
           {row.status === 'draft' ? 'Continue' : 'View'}
         </ButtonLink>
       ),

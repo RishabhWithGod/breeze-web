@@ -87,7 +87,7 @@ export function UploadDropzone({
       data-testid="upload-dropzone"
       aria-disabled={disabled}
       className={cn(
-        'relative overflow-hidden rounded-dropzone border border-dashed p-8 text-center transition-all duration-300 sm:px-10 sm:py-12',
+        'relative overflow-hidden rounded-[18px] border-[1.5px] border-dashed p-8 text-center transition-all duration-200 sm:px-10 sm:py-12',
         'focus-within:border-brand',
         disabled && 'cursor-not-allowed opacity-55',
         !disabled && 'cursor-copy',
@@ -97,7 +97,7 @@ export function UploadDropzone({
             ? 'scale-[1.01] border-brand-soft bg-brand/12 shadow-glow'
             : isSuccess
               ? 'border-status-success/70 bg-status-success/6'
-              : 'border-brand/70 bg-brand/4 hover:bg-brand/8',
+              : 'border-[var(--border-strong)] bg-[var(--surface-2)] hover:border-brand hover:bg-[var(--brand-bg)]',
         className,
       )}
     >
@@ -114,7 +114,7 @@ export function UploadDropzone({
       <motion.div
         animate={isDragActive ? { scale: 1.06 } : { scale: 1 }}
         transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-        className="relative mx-auto mb-3 grid size-16 place-items-center"
+        className="relative mx-auto mb-3 grid size-16 place-items-center rounded-[20px] shadow-[0_16px_40px_-12px_rgb(47_91_255/0.6),inset_0_1px_0_rgb(255_255_255/0.3)] [background-image:var(--brand-grad)]"
       >
         {(isRejecting || isDragActive) && (
           <span
@@ -126,20 +126,13 @@ export function UploadDropzone({
           />
         )}
         <Icon
-          size={52}
+          size={28}
           aria-hidden
-          className={cn(
-            'relative transition-colors',
-            isRejecting
-              ? 'text-status-danger'
-              : isSuccess
-                ? 'text-status-success'
-                : 'text-brand',
-          )}
+          className="relative text-brand-ink transition-colors"
         />
       </motion.div>
 
-      <p className="text-xl font-semibold text-white">
+      <p className="font-display text-[1.1875rem] font-[620] text-white">
         {isDragReject
           ? 'That file type is not supported'
           : hasError
@@ -149,7 +142,7 @@ export function UploadDropzone({
               : `Drag and drop ${supportedFormats.length === 1 ? `${supportedFormats[0]} ` : ''}files here`}
       </p>
 
-      <p className="mt-1 text-md text-white/85">or click to browse your files</p>
+      <p className="mt-1 text-[13px] text-[var(--text-3)]">or click to browse your files</p>
 
       <Button
         type="button"
@@ -165,7 +158,7 @@ export function UploadDropzone({
         Browse Files
       </Button>
 
-      <p className="mt-5 text-sm text-white/80">
+      <p className="mt-5 text-[12.5px] text-[var(--text-3)]">
         Supported format: {supportedFormats.join(', ')}
         <span className="mx-2 text-white/40">|</span>
         {maxFiles === 1 ? 'One file at a time' : `Up to ${maxFiles} files`}

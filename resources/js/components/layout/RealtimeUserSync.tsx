@@ -22,7 +22,7 @@ import type { SharedPageProps } from '@/types'
  * rather than assuming nothing was missed.
  */
 export function RealtimeUserSync() {
-  const userId = usePage<SharedPageProps>().props.auth.user?.id ?? null
+  const userId = usePage<SharedPageProps>().props.auth?.user?.id ?? null
 
   const resync = useCallback(() => {
     router.reload({ only: ['activeTimer', 'notifications', 'unreadNotificationCount'] })

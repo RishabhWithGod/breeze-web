@@ -32,6 +32,7 @@ import {
   MoreMenu,
   ProgressBar,
   StatusChip,
+  noticeClasses
 } from '@/components/common'
 import {
   AssignTaskModal,
@@ -258,13 +259,13 @@ export default function JobSchedule({
             ) : (
               <ul className="space-y-3">
                 {delays.map((task) => (
-                  <li key={task.id} className="rounded-panel border border-status-danger/30 bg-status-danger/10 p-3">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle size={16} className="mt-0.5 shrink-0 text-status-warning" aria-hidden />
+                  <li key={task.id} className={noticeClasses('danger', 'px-3.5 py-3')}>
+                    <div className="flex items-start gap-2.5">
+                      <AlertTriangle size={16} className="mt-[3px] shrink-0" aria-hidden />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-white">{task.title}</p>
-                        <p className="text-sm text-white/85">{task.daysLate} days late{task.notes ? ` — ${task.notes}` : ''}</p>
-                        {task.blockedBy.length > 0 && <p className="mt-1 text-xs text-white/60">Blocked by: {task.blockedBy.join(', ')}</p>}
+                        <p className="font-bold">{task.title}</p>
+                        <p>{task.daysLate} days late{task.notes ? ` — ${task.notes}` : ''}</p>
+                        {task.blockedBy.length > 0 && <p className="mt-1 text-xs opacity-75">Blocked by: {task.blockedBy.join(', ')}</p>}
                       </div>
                     </div>
                   </li>
@@ -535,9 +536,9 @@ export default function JobSchedule({
               <CardHeader title="Broken Constraints" />
               <ul className="space-y-2">
                 {dependencies.breaches.map((b, i) => (
-                  <li key={i} className="flex items-start gap-2 rounded-panel border border-status-danger/30 bg-status-danger/10 p-3">
-                    <AlertTriangle size={16} className="mt-0.5 shrink-0 text-status-warning" aria-hidden />
-                    <p className="text-sm text-white/90">{b.problem}</p>
+                  <li key={i} className={noticeClasses('danger', 'flex items-start gap-2.5 px-3.5 py-3')}>
+                    <AlertTriangle size={16} className="mt-[3px] shrink-0" aria-hidden />
+                    <p>{b.problem}</p>
                   </li>
                 ))}
               </ul>

@@ -24,7 +24,6 @@ import {
   Card,
   CardHeader,
   CollapsibleCard,
-  StatusChip,
   TextInput,
   WorkflowProgress,
 } from '@/components/common'
@@ -36,7 +35,8 @@ import {
   WireSizesPanel,
 } from '@/components/finals'
 import { appLayout, PageHeader, PageTransition, StepFooter } from '@/components/layout'
-import { LiveChangeBanner, ScopeHistory } from '@/components/jobScope'
+import { LiveChangeBanner } from '@/components/jobScope'
+import { saveInBackground, useAutosave } from '@/lib/autosave'
 import { ROUTES, routeTo } from '@/constants'
 import { useJobScopeSync } from '@/hooks'
 import type {
@@ -143,7 +143,7 @@ export interface EstimateShowProps {
  */
 export default function EstimateShow({
   estimate,
-  changes,
+  // `changes` (the change history) is still sent; it is just not drawn while that card is hidden.
   items,
   addenda,
   beforeJob,
@@ -279,12 +279,9 @@ export default function EstimateShow({
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <StatusChip
-              tone={ESTIMATE_STATUS_TONE[estimate.status as EstimateStatus] ?? 'neutral'}
-              label={
+            <Badge tone={ESTIMATE_STATUS_TONE[estimate.status as EstimateStatus] ?? 'neutral'}>{
                 ESTIMATE_STATUS_LABEL[estimate.status as EstimateStatus] ?? estimate.status
-              }
-            />
+              }</Badge>
             {/*
               Hidden for now, PM's call. Was always available here, never
               nested in a card, as the one addendum action the screen offers
@@ -732,9 +729,11 @@ export default function EstimateShow({
             : {})}
         />
       )}
+      {/* Hidden for now. The history is still loaded (`changes`) and the card is unchanged; to bring it back, restore:
       <div className="mt-6">
         <ScopeHistory changes={changes} title="Estimate Change History" emptyText="This estimate has not been changed since it was priced." />
       </div>
+      */}
     </PageTransition>
   )
 }
@@ -764,6 +763,15 @@ function LaborRateField({ id, estimateId, rate }: { id: string; estimateId: numb
       },
     )
 
+  // A rate typed here is applied by itself once typing stops, and before any link is followed.
+  useAutosave({
+    enabled: true,
+    dirty: valid && parsed !== rate,
+    signature: value,
+    save: apply,
+    flush: () => saveInBackground(routeTo.estimateLaborRate(estimateId), { labor_rate: parsed }),
+  })
+
   return (
     <div className="flex items-center gap-2">
       <label htmlFor={`labor-rate-${id}`} className="text-sm font-medium text-white/80">
@@ -780,11 +788,8 @@ function LaborRateField({ id, estimateId, rate }: { id: string; estimateId: numb
         className="w-28"
         controlClassName="py-1.5 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
-      {valid && parsed !== rate && (
-        <Button size="sm" isLoading={saving} onClick={apply}>
-          Apply
-        </Button>
-      )}
+      {/* "Apply" is hidden: the rate applies itself once typing stops (see useAutosave). */}
+      {saving && <span className="text-xs text-white/60">Saving…</span>}
     </div>
   )
 }

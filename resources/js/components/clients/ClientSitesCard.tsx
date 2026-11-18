@@ -4,8 +4,7 @@ import { MapPin, PencilLine, Trash2 } from 'lucide-react'
 import {
   AddressField,
   Button,
-  Card,
-  CardHeader,
+  Panel,
   ConfirmDialog,
   IconButton,
   Modal,
@@ -66,7 +65,7 @@ export function ClientSitesList({ clientId, addresses }: ClientSitesListProps) {
             >
               <MapPin size={16} aria-hidden className="mt-0.5 shrink-0 text-white/60" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-md text-white">{site.display}</span>
+                <span className="block text-md break-words text-white">{site.display}</span>
                 <span className="flex flex-wrap items-center gap-x-3 text-sm">
                   {site.isPrimary && <span className="text-brand">Primary site</span>}
                   {/*
@@ -161,19 +160,9 @@ export interface ClientSitesCardProps {
 /** `ClientSitesList` in its own standalone card — the client's own screen. */
 export function ClientSitesCard({ clientId, addresses }: ClientSitesCardProps) {
   return (
-    <Card padding="md" className="min-w-0">
-      <CardHeader
-        title={
-          <span className="flex items-center gap-2">
-            <MapPin size={18} aria-hidden className="text-white/70" />
-            Addresses
-          </span>
-        }
-        className="border-b border-hairline pb-4"
-        titleClassName="text-lg font-semibold"
-      />
+    <Panel title="Addresses">
       <ClientSitesList clientId={clientId} addresses={addresses} />
-    </Card>
+    </Panel>
   )
 }
 

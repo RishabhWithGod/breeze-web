@@ -1,5 +1,6 @@
 import { Head, usePage } from '@inertiajs/react'
 import {
+  ArrowRight,
   CalendarDays,
   DollarSign,
   Hourglass,
@@ -111,7 +112,7 @@ export default function Home({
       header: '',
       align: 'right',
       render: (row) => (
-        <ButtonLink href={routeTo.review(row.id)} size="sm" variant="secondary">
+        <ButtonLink href={routeTo.review(row.id)} size="sm" variant="secondary" rightIcon={ArrowRight}>
           Continue Review
         </ButtonLink>
       ),

@@ -20,12 +20,13 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={cn('mb-8', className)}>
-      {breadcrumbs && breadcrumbs.length > 0 && (
-        <Breadcrumb items={breadcrumbs} className="mb-4" />
-      )}
+    <div className={cn('mb-6', className)}>
       <SectionHeading
+        as="h1"
         title={title}
+        {...(breadcrumbs && breadcrumbs.length > 0
+          ? { above: <Breadcrumb items={breadcrumbs} className="mb-2" /> }
+          : {})}
         {...(subtitle ? { subtitle } : {})}
         {...(actions ? { actions } : {})}
       />

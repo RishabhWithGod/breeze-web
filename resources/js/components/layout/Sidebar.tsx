@@ -14,8 +14,8 @@ interface SidebarNavProps {
 }
 
 const ITEM_BASE =
-  'group relative flex items-center gap-3 rounded-[10px] px-2.5 py-2 ' +
-  'text-md font-medium transition-colors duration-150'
+  'group relative flex items-center gap-[11px] rounded-lg px-2.5 py-2 ' +
+  'text-[14px] font-medium transition-colors duration-150'
 
 /**
  * The paths a module owns beyond the one its entry links to.
@@ -214,11 +214,11 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
     // `overscroll-contain` keeps a flick at the end of the list from scrolling
     // the page behind it; the bottom padding stops the last entry sitting hard
     // against the window edge once the rail is long enough to scroll.
-    <nav aria-label="Main navigation" className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain px-3 py-2 pb-6">
+    <nav aria-label="Main navigation" className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain px-2.5 py-2 pb-6">
       {visibleGroups.map((group, groupIndex) => (
-        <div key={group.label ?? `group-${groupIndex}`} className={cn(groupIndex > 0 && 'mt-1')}>
+        <div key={group.label ?? `group-${groupIndex}`} className="pt-2 pb-1">
           {group.label && (
-            <p className="px-3.5 pt-3 pb-1.5 font-mono text-[10.5px] font-medium tracking-[0.14em] text-[#7f92b8] uppercase">
+            <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold tracking-[0.04em] text-[#93a4c8] uppercase">
               {group.label}
             </p>
           )}
@@ -284,20 +284,20 @@ function SidebarHeader() {
 
   return (
     <div className="shrink-0">
-      <div className="px-5 pt-5 pb-3">
+      <div className="px-5 pt-[22px] pb-2.5">
         <Logo />
       </div>
       {company && (
-        <div className="mx-3 mb-2 flex items-center gap-3 rounded-xl border border-[rgb(126_170_255/0.12)] bg-white/4 px-3 py-2.5">
+        <div className="mx-3 mt-1.5 mb-2.5 flex items-center gap-2.5 rounded-xl border border-[rgb(126_170_255/0.12)] bg-white/4 px-3 py-2.5">
           <CompanyMark
             logoUrl={company.logoUrl}
             name={company.name}
-            size={34}
-            className="ring-2 ring-accent-bright/25"
+            size={30}
+            className="rounded-full ring-2 ring-accent-bright/25"
           />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-white">{company.name}</p>
-            <p className="truncate font-mono text-2xs tracking-wide text-[#6f81a8]">WORKSPACE</p>
+            <p className="truncate text-[13px] font-bold text-white">{company.name}</p>
+            <p className="truncate text-[11.5px] text-[#93a4c8]">Workspace</p>
           </div>
         </div>
       )}
@@ -308,7 +308,7 @@ function SidebarHeader() {
 /** Small mono footer line, like the app's rail. */
 function SidebarFoot() {
   return (
-    <div className="shrink-0 border-t border-[rgb(126_170_255/0.1)] px-4 py-3 font-mono text-[10.5px] tracking-wide text-[#6f81a8]">
+    <div className="shrink-0 border-t border-[rgb(126_170_255/0.1)] px-3 py-3 font-mono text-[11.5px] text-[#93a4c8]">
       Breeze.Ai · Smarter Software. Stronger Projects.
     </div>
   )

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Head, Link, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import type { LucideIcon } from 'lucide-react'
-import { ArrowLeft, Ban, Box, Building2, FileText, FolderOpen, Hash, History, Layers, Layers2, Play, Ruler, Sparkles, TriangleAlert, UploadCloud } from 'lucide-react'
+import { ArrowLeft, Ban, Building2, FileText, FolderOpen, Hash, History, Layers, Layers2, Play, Ruler, Sparkles, TriangleAlert, UploadCloud } from 'lucide-react'
 import {
   Alert,
   Button,
@@ -408,9 +408,6 @@ export default function Upload({
         breadcrumbs={[{ label: 'AI Takeoff', href: ROUTES.aiTakeoff }, { label: 'Upload Drawings' }]}
         actions={
           <>
-            <ButtonLink href={ROUTES.threeDSample} variant="secondary" leftIcon={Box}>
-              Explore sample 3D (optional)
-            </ButtonLink>
             <ButtonLink href={ROUTES.history} variant="secondary" leftIcon={History}>
               History
             </ButtonLink>
@@ -485,7 +482,7 @@ export default function Upload({
 
       {files.length > 0 && (
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-white/80">
+          <p className="text-[13px] text-[var(--text-3)]">
             {files.length} {files.length === 1 ? 'file' : 'files'} ready for AI takeoff
           </p>
           <div className="flex flex-wrap items-center gap-3">
@@ -533,11 +530,11 @@ function SummaryRow({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-brand/15 text-brand ring-1 ring-brand/30">
+      <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-[var(--brand-bg)] text-brand">
         <Icon size={16} aria-hidden />
       </span>
       <div className="min-w-0">
-        <dt className="text-xs text-white/70">{label}</dt>
+        <dt className="text-xs text-[var(--text-3)]">{label}</dt>
         <dd className="truncate font-medium text-white">{value}</dd>
       </div>
     </div>

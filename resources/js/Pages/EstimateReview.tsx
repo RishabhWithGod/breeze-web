@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
-import { Alert, Button, ButtonLink, Card, ConfirmDialog, StatusChip, TextArea } from '@/components/common'
+import { Alert, Button, ButtonLink, Card, ConfirmDialog, Badge, TextArea } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { SharedPageProps } from '@/types'
@@ -129,12 +129,7 @@ export default function EstimateReview({
         }
         breadcrumbs={[{ label: 'Estimates', href: ROUTES.estimates }, { label: estimate.number }]}
         actions={
-          <StatusChip
-            pill
-            tone={approved ? 'success' : 'warning'}
-            label={approved ? 'Approved' : 'Pending Approval'}
-            className="px-5 py-2.5 text-md"
-          />
+          <Badge tone={approved ? 'success' : 'warning'} className="px-5 py-2.5 text-md">{approved ? 'Approved' : 'Pending Approval'}</Badge>
         }
       />
 
@@ -232,7 +227,7 @@ export default function EstimateReview({
             <div className="flex items-center justify-between gap-4 bg-brand/10 px-5 py-4">
               <span className="text-lg font-semibold text-white">Total Estimate</span>
               <span className="flex items-baseline gap-8">
-                <span className="text-2xl font-bold text-brand tabular-nums">{formatCurrency(summary.total, 2)}</span>
+                <span className="font-display text-2xl font-bold text-brand tabular-nums">{formatCurrency(summary.total, 2)}</span>
                 <span className="text-md font-semibold text-white tabular-nums">100%</span>
               </span>
             </div>

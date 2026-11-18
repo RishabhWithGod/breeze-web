@@ -104,7 +104,7 @@ export function SymbolLegend({
 
   return (
     <div>
-      <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem_5.5rem] items-center gap-1.5 bg-surface-veil px-3 py-2 text-xs font-semibold text-white">
+      <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem_5.5rem] items-center gap-1.5 bg-surface-veil px-3 py-2 text-xs font-semibold tracking-[0.04em] text-[var(--text-2)] uppercase">
         <span>Symbol</span>
         <span>Description</span>
         <span className="text-right">Count</span>

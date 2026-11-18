@@ -4,19 +4,20 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Eye, SearchX, SlidersHorizontal, Trash2, Undo2 } from 'lucide-react'
 import {
   Alert,
+  Badge,
   Button,
+  Card,
   ConfirmDialog,
   EmptyState,
   MoreMenu,
   Pagination,
-  SearchBox,
   SelectField,
-  StatusChip,
   Table,
   TextInput,
+  ToolbarSearch,
 } from '@/components/common'
 import { EstimateCard } from '@/components/estimates'
-import { appLayout, PageTransition } from '@/components/layout'
+import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import {
   ESTIMATE_SORT_OPTIONS,
   ESTIMATE_STATUS_FILTERS,
@@ -181,7 +182,7 @@ export default function Estimates({
       key: 'number',
       header: 'Estimate #',
       render: (estimate) => (
-        <span className="font-medium whitespace-nowrap text-white">{estimate.number}</span>
+        <span className="font-bold whitespace-nowrap text-white">{estimate.number}</span>
       ),
     },
     {
@@ -212,12 +213,7 @@ export default function Estimates({
       key: 'status',
       header: 'Status',
       render: (estimate) => (
-        <StatusChip
-          hideDot
-          pill
-          tone={ESTIMATE_STATUS_TONE[estimate.status]}
-          label={ESTIMATE_STATUS_LABEL[estimate.status]}
-        />
+        <Badge tone={ESTIMATE_STATUS_TONE[estimate.status]}>{ESTIMATE_STATUS_LABEL[estimate.status]}</Badge>
       ),
     },
     {
@@ -253,27 +249,27 @@ export default function Estimates({
     <PageTransition>
       <Head title="Estimates" />
 
-      {/* =========================================== Estimates panel ========= */}
-      <section className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
-        <header className="flex flex-col gap-4 border-b border-hairline grad-ocean-soft px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-          <h1 className="text-2xl font-bold text-white sm:text-3xl">Estimates</h1>
-
+      <PageHeader
+        title="Estimates"
+        subtitle="Every estimate on the register, with its client, amount, revision and status."
+        actions={
           <Button
-            variant={filterBar.isOpen ? 'primary' : 'white'}
+            variant={filterBar.isOpen ? 'primary' : 'secondary'}
             leftIcon={SlidersHorizontal}
             aria-expanded={filterBar.isOpen}
             onClick={filterBar.toggle}
-            className="lg:shrink-0"
           >
             Filters
           </Button>
-        </header>
+        }
+      />
 
+      <Card padding="none" className="overflow-hidden">
         <div className="p-5 sm:p-6">
           {!bannerDismissed && (
             <Alert
               tone="info"
-              className="mb-5 [&_p]:text-md [&_div]:text-sm"
+              className="mb-4"
               title="Addendums create estimate revisions"
               onDismiss={() => setBannerDismissed(true)}
             >
@@ -284,15 +280,13 @@ export default function Estimates({
           )}
 
           {/* Search + the three quick filters, always in view. */}
-          <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
-            <SearchBox
-              id="estimate-search"
+          <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+            <ToolbarSearch
               value={query}
-              onValueChange={setQuery}
-              onSearch={(value) => applyFilters({ search: value })}
-              placeholder="Search estimates, projects, or clients..."
-              aria-label="Search estimates"
-              containerClassName="lg:max-w-xl"
+              onChange={setQuery}
+              onSubmit={(value) => applyFilters({ search: value })}
+              applied={filters.search !== ''}
+              placeholder="Search estimates, projects, or clients"
             />
             <SelectField
               id="estimate-status-filter"
@@ -332,7 +326,7 @@ export default function Estimates({
                 transition={{ duration: MOTION.base }}
                 className="mb-5 overflow-hidden"
               >
-                <div className="grid gap-4 rounded-panel border border-hairline bg-white/4 p-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-4 rounded-panel border border-hairline bg-[var(--surface-2)] p-4 sm:grid-cols-2 xl:grid-cols-4">
                   <TextInput
                     id="estimate-date-from"
                     type="date"
@@ -406,10 +400,7 @@ export default function Estimates({
               {/* Table view — xl and up, where all seven columns fit */}
               <div className="hidden xl:block">
                 <Table
-                  dense
                   variant="lined"
-                  headerVariant="plain"
-                  className="text-sm [&_th]:text-sm [&_td]:text-sm [&_td_span]:text-sm"
                   columns={columns}
                   rows={rows}
                   getRowId={(estimate) => estimate.id}
@@ -433,7 +424,6 @@ export default function Estimates({
 
           <Pagination
             withLabels
-            tone="light"
             className="mt-6"
             page={meta.current_page}
             pageCount={meta.last_page}
@@ -445,7 +435,7 @@ export default function Estimates({
             }
           />
         </div>
-      </section>
+      </Card>
 
 
       <ConfirmDialog

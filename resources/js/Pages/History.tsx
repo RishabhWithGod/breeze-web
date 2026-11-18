@@ -1,19 +1,16 @@
 import { useCallback, useState } from 'react'
-import { Head, router, usePage } from '@inertiajs/react'
+import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
-import { GitBranch, Plus, SearchX, Trash2, Undo2 } from 'lucide-react'
+import { Plus, SearchX, UploadCloud, Undo2 } from 'lucide-react'
 import {
   Alert,
   Button,
-  ButtonLink,
+  Card,
   ConfirmDialog,
   EmptyState,
-  MoreMenu,
   Pagination,
-  SearchBox,
   SelectField,
-  StatusChip,
-  Table,
+  ToolbarSearch,
 } from '@/components/common'
 import { ProjectHistoryCard } from '@/components/history'
 import { appLayout, PageTransition } from '@/components/layout'
@@ -30,14 +27,8 @@ import type {
   Paginated,
   SelectOption,
   SharedPageProps,
-  TableColumn,
   TakeoffHistoryRow,
 } from '@/types'
-import {
-  HISTORY_STATUS_LABEL,
-  HISTORY_STATUS_TONE,
-  formatDate,
-} from '@/utils'
 
 interface HistoryFilters {
   search: string
@@ -140,90 +131,6 @@ export default function History({ projects, filters, clients, projectOptions }: 
     applyFilters({ search: '', status: 'all', client: 'all', project: 'all' })
   }, [applyFilters])
 
-  const columns: TableColumn<TakeoffHistoryRow>[] = [
-    {
-      key: 'drawingSet',
-      header: 'Drawing Set',
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-purple-400/15 text-status-purple ring-1 ring-purple-400/40">
-            <GitBranch size={17} aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate font-bold text-white">
-              {row.drawingName ?? 'Untitled drawing'}
-            </p>
-            {row.format && <p className="truncate text-xs text-white/60">{row.format}</p>}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'project',
-      header: 'Project',
-      render: (row) => (
-        <div className="min-w-0">
-          <p className="truncate font-semibold text-white">{row.name}</p>
-          <p className="truncate text-xs text-white/60">{row.client}</p>
-        </div>
-      ),
-    },
-    {
-      key: 'uploadedAt',
-      header: 'Uploaded',
-      render: (row) => (
-        <span className="whitespace-nowrap text-white/90">{formatDate(row.uploadedAt)}</span>
-      ),
-    },
-    {
-      key: 'pageCount',
-      header: 'Pages',
-      render: (row) => <span className="text-white/90">{row.pageCount}</span>,
-    },
-    {
-      key: 'reviewStatus',
-      header: 'Review Status',
-      render: (row) => (
-        <StatusChip
-          pill
-          tone={HISTORY_STATUS_TONE[row.reviewStatus]}
-          label={HISTORY_STATUS_LABEL[row.reviewStatus]}
-        />
-      ),
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      width: 'w-52',
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <ButtonLink href={`${routeTo.drawingDetails(row.id)}?from=history`} variant="purple" size="sm">
-            View
-          </ButtonLink>
-
-          {row.reviewStatus === 'failed' && (
-            <Button variant="white" size="sm" onClick={() => handleRetry(row)}>
-              Retry
-            </Button>
-          )}
-
-          <MoreMenu
-            variant="minimal"
-            ariaLabel={`More actions for ${row.name}`}
-            items={[
-              {
-                label: 'Delete',
-                icon: Trash2,
-                destructive: true,
-                onSelect: () => requestDelete(row),
-              },
-            ]}
-          />
-        </div>
-      ),
-    },
-  ]
-
   const rows = projects.data
   const { meta } = projects
 
@@ -231,164 +138,176 @@ export default function History({ projects, filters, clients, projectOptions }: 
     <PageTransition>
       <Head title="AI Takeoff" />
 
-      {/* ============================================= History panel ========= */}
-      <section className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
-        <header className="flex flex-col gap-4 border-b border-hairline grad-ocean-soft px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-white sm:text-3xl">AI Takeoff</h1>
-            <p className="mt-1 text-md text-white/90">
-              Automatically analyze electrical drawings and generate detailed takeoff data for faster, more accurate estimating
-            </p>
+      {/* ================================================== Hero =========== */}
+      <section className="blueprint mb-5 grid items-center gap-8 p-6 sm:p-9 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+        <span className="bp-corner tl" aria-hidden />
+        <span className="bp-corner br" aria-hidden />
+
+        <div className="min-w-0">
+          <span className="bp-eyebrow">AI Takeoff</span>
+          <h1 className="mt-3.5 mb-3 max-w-[14ch] text-[clamp(1.875rem,3.4vw,2.75rem)] leading-[1.1] font-semibold">
+            Count a whole drawing set <em className="auth-grad-text">in minutes.</em>
+          </h1>
+          <p className="max-w-[46ch] text-[15px] leading-relaxed text-[#c3cfea]">
+            Automatically analyze electrical drawings and generate detailed takeoff data for faster, more accurate
+            estimating
+          </p>
+          <div className="mt-6 text-[13px] text-[#c3cfea]">
+            <b className="block font-display text-[1.625rem] leading-[1.1] font-[650] tracking-[-0.02em] text-white">
+              {meta.total}
+            </b>
+            drawing {meta.total === 1 ? 'set' : 'sets'} on record
           </div>
+        </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:shrink-0">
-            <SearchBox
-              value={query}
-              onValueChange={setQuery}
-              onSearch={(value) => applyFilters({ search: value })}
-              placeholder="Search drawings or projects..."
-              containerClassName="sm:w-72"
-              aria-label="Search drawings or projects"
-            />
-            {permitted('takeoff.create') && (
-              <ButtonLink href={ROUTES.upload} variant="dark" leftIcon={Plus}>
-                Upload Drawings
-              </ButtonLink>
-            )}
-          </div>
-        </header>
+        {permitted('takeoff.create') && (
+          <Link
+            href={ROUTES.upload}
+            aria-label="Upload a PDF drawing set"
+            className="group relative flex min-h-[250px] flex-col items-center justify-center gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[rgb(126_170_255/0.45)] bg-gradient-to-b from-white/6 to-white/2 p-6 text-center transition-[border-color,background-color,box-shadow] duration-200 hover:border-[#3ee6ff] hover:bg-[rgb(62_230_255/0.07)] hover:shadow-[0_0_0_6px_rgb(62_230_255/0.06),0_20px_50px_-20px_rgb(62_230_255/0.45)] focus-visible:border-[#3ee6ff] focus-visible:outline-none"
+          >
+            <span className="mb-1.5 grid size-16 place-items-center rounded-[20px] bg-brand text-brand-ink shadow-[0_16px_40px_-12px_rgb(47_91_255/0.9),inset_0_1px_0_rgb(255_255_255/0.3)] [background-image:var(--brand-grad)]">
+              <UploadCloud size={28} aria-hidden />
+            </span>
+            <span className="font-display text-[19px] font-[620] text-white">Upload a drawing set</span>
+            <span className="text-[13px] text-[#c3cfea]">Click to choose a PDF</span>
+            <span className="mt-2 rounded-md border border-[rgb(126_170_255/0.25)] px-2 py-[3px] font-mono text-[11px] text-[#c3cfea]">
+              E-sheets, power plans, RCPs, panel schedules
+            </span>
+          </Link>
+        )}
+      </section>
 
-        <div className="p-5 sm:p-6">
-          {/* Filters + sort */}
-          <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:flex xl:flex-wrap">
-              <SelectField
-                aria-label="Filter by status"
-                options={HISTORY_FILTERS}
-                value={filters.status}
-                onChange={(event) =>
-                  applyFilters({ status: event.target.value as HistoryFilter })
-                }
-                className="xl:w-44"
-              />
-              <SelectField
-                aria-label="Filter by project"
-                options={projectFilterOptions}
-                value={filters.project}
-                onChange={(event) => applyFilters({ project: event.target.value })}
-                className="xl:w-44"
-              />
-              <SelectField
-                aria-label="Filter by client"
-                options={clientOptions}
-                value={filters.client}
-                onChange={(event) => applyFilters({ client: event.target.value })}
-                className="xl:w-44"
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <label
-                htmlFor="history-sort"
-                className="text-md font-medium whitespace-nowrap text-white/90"
-              >
-                Sort by:
-              </label>
-              <SelectField
-                id="history-sort"
-                options={HISTORY_SORT_OPTIONS}
-                value={filters.sort}
-                onChange={(event) =>
-                  applyFilters({ sort: event.target.value as HistorySort })
-                }
-                className="w-48"
-              />
-            </div>
-          </div>
-
-          {/* Action feedback */}
-          <AnimatePresence initial={false}>
-            {notice && (
-              <Alert
-                key={notice}
-                tone={canUndo ? 'warning' : 'success'}
-                className="mb-5"
-                onDismiss={() => setDismissed(notice)}
-              >
-                <span className="flex flex-wrap items-center gap-3">
-                  {notice}
-                  {canUndo && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      leftIcon={Undo2}
-                      onClick={handleUndo}
-                    >
-                      Undo
-                    </Button>
-                  )}
-                </span>
-              </Alert>
-            )}
-          </AnimatePresence>
-
-          {rows.length === 0 ? (
-            <EmptyState
-              icon={SearchX}
-              title="No drawing sets found"
-              description="No takeoffs match your current filters. Try another status or clear the search."
-              actions={
-                <Button variant="secondary" onClick={resetFilters}>
-                  Reset filters
-                </Button>
-              }
-            />
-          ) : (
-            <>
-              {/* Table view — xl and up, where all six columns fit the panel */}
-              <div className="hidden xl:block">
-                <Table
-                  dense
-                  variant="lined"
-                  headerVariant="plain"
-                  columns={columns}
-                  rows={rows}
-                  getRowId={(row) => row.id}
-                  caption="Previous AI takeoff drawing sets"
-                />
-              </div>
-
-              {/* Card view — below xl, so status and the actions stay
-                  reachable without scrolling the table sideways. */}
-              <ul className="space-y-3 xl:hidden">
-                {rows.map((row, rowIndex) => (
-                  <ProjectHistoryCard
-                    key={row.id}
-                    project={row}
-                    index={rowIndex}
-                    onDelete={requestDelete}
-                    onRetry={handleRetry}
-                  />
-                ))}
-              </ul>
-            </>
-          )}
-
-          <Pagination
-            withLabels
-            tone="light"
-            className="mt-6"
-            page={meta.current_page}
-            pageCount={meta.last_page}
-            onPageChange={(page) => applyFilters({ page })}
-            summary={
-              meta.total === 0
-                ? 'No drawing sets to display'
-                : `Showing ${rows.length} of ${meta.total} drawing sets`
-            }
+      {/* ================================================ Toolbar ========== */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <ToolbarSearch
+          value={query}
+          onChange={setQuery}
+          onSubmit={(value) => applyFilters({ search: value })}
+          applied={filters.search !== ''}
+          placeholder="Search drawings or projects"
+        />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:flex xl:flex-wrap">
+          <SelectField
+            aria-label="Filter by status"
+            options={HISTORY_FILTERS}
+            value={filters.status}
+            onChange={(event) => applyFilters({ status: event.target.value as HistoryFilter })}
+            className="xl:w-44"
+          />
+          <SelectField
+            aria-label="Filter by project"
+            options={projectFilterOptions}
+            value={filters.project}
+            onChange={(event) => applyFilters({ project: event.target.value })}
+            className="xl:w-44"
+          />
+          <SelectField
+            aria-label="Filter by client"
+            options={clientOptions}
+            value={filters.client}
+            onChange={(event) => applyFilters({ client: event.target.value })}
+            className="xl:w-44"
           />
         </div>
-      </section>
+
+        <div className="flex items-center gap-2.5 sm:ml-auto">
+          <label htmlFor="history-sort" className="text-[13px] font-medium whitespace-nowrap text-[var(--text-2)]">
+            Sort by:
+          </label>
+          <SelectField
+            id="history-sort"
+            options={HISTORY_SORT_OPTIONS}
+            value={filters.sort}
+            onChange={(event) => applyFilters({ sort: event.target.value as HistorySort })}
+            className="w-48"
+          />
+        </div>
+      </div>
+
+      {/* Action feedback */}
+      <AnimatePresence initial={false}>
+        {notice && (
+          <Alert
+            key={notice}
+            tone={canUndo ? 'warning' : 'success'}
+            className="mb-4"
+            onDismiss={() => setDismissed(notice)}
+          >
+            <span className="flex flex-wrap items-center gap-3">
+              {notice}
+              {canUndo && (
+                <Button variant="secondary" size="sm" leftIcon={Undo2} onClick={handleUndo}>
+                  Undo
+                </Button>
+              )}
+            </span>
+          </Alert>
+        )}
+      </AnimatePresence>
+
+      {/* ============================================ Drawing sets ========= */}
+      <div className="mt-2 mb-3.5 flex items-baseline justify-between gap-3 px-0.5">
+        <h2 className="font-display text-[1.1875rem] font-[620]">Your drawing sets</h2>
+        <span className="text-[13px] text-[var(--text-3)]">
+          {meta.total} {meta.total === 1 ? 'takeoff' : 'takeoffs'}
+        </span>
+      </div>
+
+      {rows.length === 0 ? (
+        <Card padding="lg">
+          <EmptyState
+            icon={SearchX}
+            title="No drawing sets found"
+            description="No takeoffs match your current filters. Try another status or clear the search."
+            actions={
+              <Button variant="secondary" onClick={resetFilters}>
+                Reset filters
+              </Button>
+            }
+          />
+        </Card>
+      ) : (
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
+          {rows.map((row, rowIndex) => (
+            <ProjectHistoryCard
+              key={row.id}
+              project={row}
+              index={rowIndex}
+              onDelete={requestDelete}
+              onRetry={handleRetry}
+            />
+          ))}
+
+          {permitted('takeoff.create') && (
+            <li>
+              <Link
+                href={ROUTES.upload}
+                className="flex h-full min-h-[200px] flex-col items-center justify-center gap-2 rounded-card border-[1.5px] border-dashed border-hairline-strong bg-surface-glass/50 p-6 text-center transition-colors hover:bg-[var(--brand-bg)] hover:text-brand"
+              >
+                <span className="grid size-[52px] place-items-center rounded-2xl bg-[var(--brand-bg)] text-brand">
+                  <Plus size={24} aria-hidden />
+                </span>
+                <b className="font-semibold text-white">Start a new takeoff</b>
+                <span className="text-xs text-[var(--text-3)]">Upload a PDF drawing set</span>
+              </Link>
+            </li>
+          )}
+        </ul>
+      )}
+
+      <Pagination
+        withLabels
+        className="mt-6"
+        page={meta.current_page}
+        pageCount={meta.last_page}
+        onPageChange={(page) => applyFilters({ page })}
+        summary={
+          meta.total === 0
+            ? 'No drawing sets to display'
+            : `Showing ${rows.length} of ${meta.total} drawing sets`
+        }
+      />
 
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}

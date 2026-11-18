@@ -62,6 +62,7 @@ class ClientController extends Controller
                 'projectCount' => $client->projects_count,
                 'siteCount' => $client->addresses_count,
                 'primarySite' => $client->primaryAddress?->display(),
+                'createdAt' => $client->created_at?->toISOString(),
             ]);
 
         return Inertia::render('Clients', [
@@ -244,6 +245,20 @@ class ClientController extends Controller
                 ->where('status', '!=', Invoice::STATUS_DRAFT)
                 ->get()
                 ->sum(fn (Invoice $invoice) => $invoice->outstanding()),
+            /*
+             * Everything invoiced to this client so far: the total of every
+             * invoice that has actually been asked for (sent or paid). A draft
+             * is not billed yet, so it is left out — the same rule as the
+             * balance above, which is this sum less what has been paid.
+             */
+            'billedToDate' => round((float) Invoice::where('client_id', $client->id)
+                ->where('status', '!=', Invoice::STATUS_DRAFT)
+                ->sum('total'), 2),
+            /*
+             * What an hour of this client's labor is billed at: their own rate
+             * where one was set, the usual rate otherwise (`effectiveLaborRate`).
+             */
+            'laborRate' => $client->effectiveLaborRate(),
             /*
              * What has actually happened, read off the client's own projects
              * — the only place an event like this is recorded today. Other

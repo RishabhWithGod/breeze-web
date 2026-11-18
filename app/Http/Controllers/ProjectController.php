@@ -55,7 +55,7 @@ class ProjectController extends Controller
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
-            'status' => ['nullable', Rule::in(['all', ...Project::STATUSES])],
+            'status' => ['nullable', Rule::in(['all', 'active', ...Project::STATUSES])],
         ]);
 
         $status = $filters['status'] ?? 'all';
@@ -67,7 +67,10 @@ class ProjectController extends Controller
             ->when($search !== '', fn ($inner) => $inner->where(fn ($match) => $match
                 ->where('name', 'like', "%{$search}%")
                 ->orWhere('code', 'like', "%{$search}%")))
-            ->when($status !== 'all', fn ($inner) => $inner->where('status', $status));
+            // "active" is not a status a project is stored with: it is a project that has
+            // work under way, i.e. at least one job in progress, scheduled or planned.
+            ->when($status === 'active', fn ($inner) => $inner->whereHas('jobs', fn ($jobs) => $jobs->whereIn('status', Job::ACTIVE_STATUSES)))
+            ->when($status !== 'all' && $status !== 'active', fn ($inner) => $inner->where('status', $status));
 
         $clients = $request->user()->clients()
             // Narrowed, a client earns its place by having a project that
@@ -78,6 +81,8 @@ class ProjectController extends Controller
                 // Newest or most recently changed first, within each client.
                 'projects' => fn ($query) => $matching($query)
                     ->withCount(['uploads', 'aiResults', 'estimates', 'jobs', 'members', 'documents', 'invoices'])
+                    // Who is on it, for the avatar stack beside each project.
+                    ->with(['members' => fn ($members) => $members->select('foremen.id', 'foremen.name', 'foremen.initials')->orderBy('foremen.name')])
                     ->reorder()
                     ->latest('updated_at')
                     ->latest('id'),
@@ -106,6 +111,14 @@ class ProjectController extends Controller
                     'documentCount' => $project->documents_count,
                     'invoiceCount' => $project->invoices_count,
                     'createdAt' => $project->created_at?->toISOString(),
+                    // The same two dates the project's own screen calls Start Date and End Date.
+                    'startedAt' => $project->started_at?->toISOString(),
+                    'dueDate' => $project->due_date?->toDateString(),
+                    'team' => $project->members->map(fn ($member) => [
+                        'id' => $member->id,
+                        'name' => $member->name,
+                        'initials' => $member->initials,
+                    ])->values(),
                 ])->values(),
             ]);
 
@@ -118,6 +131,25 @@ class ProjectController extends Controller
             // Across every client, not just the page shown — the footer counts
             // the whole (filtered) set, not what happened to render.
             'totalProjects' => Project::ownedBy($request->user())->when($narrowed, $matching)->count(),
+            /*
+             * How many projects sit in each status, across every client — over
+             * the search only, never the status filter, so a status tab always
+             * shows what choosing it would give.
+             */
+            'statusCounts' => Project::ownedBy($request->user())
+                ->when($search !== '', fn ($query) => $query->where(fn ($match) => $match
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('code', 'like', "%{$search}%")))
+                ->reorder()
+                ->selectRaw('status, count(*) as total')
+                ->groupBy('status')
+                ->pluck('total', 'status')
+                ->put('active', Project::ownedBy($request->user())
+                    ->when($search !== '', fn ($query) => $query->where(fn ($match) => $match
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('code', 'like', "%{$search}%")))
+                    ->whereHas('jobs', fn ($jobs) => $jobs->whereIn('status', Job::ACTIVE_STATUSES))
+                    ->count()),
         ]);
     }
 

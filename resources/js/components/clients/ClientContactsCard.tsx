@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { router, useForm } from '@inertiajs/react'
-import { Mail, PencilLine, Phone, Plus, Trash2, Users } from 'lucide-react'
+import { Mail, PencilLine, Phone, Plus, Trash2 } from 'lucide-react'
 import {
   Button,
-  Card,
-  CardHeader,
+  Panel,
   ConfirmDialog,
   Modal,
   MoreMenu,
@@ -62,7 +61,7 @@ export function ClientContactsList({ clientId, contacts, hideAddButton = false }
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2">
-                  <span className="truncate text-md font-medium text-white">{contact.name}</span>
+                  <span className="text-md font-medium break-words text-white">{contact.name}</span>
                   {contact.isPrimary && (
                     <span className="text-2xs tracking-wide text-brand uppercase">Primary</span>
                   )}
@@ -157,30 +156,18 @@ export function ClientContactsCard({ clientId, contacts }: ClientContactsCardPro
   const [adding, setAdding] = useState(false)
 
   return (
-    <Card padding="md" className="min-w-0">
-      <CardHeader
-        title={
-          <span className="flex items-center gap-2">
-            <Users size={18} aria-hidden className="text-white/70" />
-            Contacts
-          </span>
-        }
-        actions={
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="text-sm text-brand hover:underline"
-          >
-            Add Contact →
-          </button>
-        }
-        className="border-b border-hairline pb-4"
-        titleClassName="text-lg font-semibold"
-      />
+    <Panel
+      title="Contacts"
+      actions={
+        <Button variant="ghost" size="sm" leftIcon={Plus} onClick={() => setAdding(true)}>
+          Add contact
+        </Button>
+      }
+    >
       <ClientContactsList clientId={clientId} contacts={contacts} hideAddButton />
 
       {adding && <ContactDialog clientId={clientId} onClose={() => setAdding(false)} />}
-    </Card>
+    </Panel>
   )
 }
 

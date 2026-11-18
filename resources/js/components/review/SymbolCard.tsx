@@ -14,7 +14,6 @@ import {
   Checkbox,
   DetailRow,
   IconButton,
-  StatusChip,
   TextArea,
   TextInput,
 } from '@/components/common'
@@ -141,13 +140,20 @@ export function SymbolCard({
          * Set here rather than through `accent`, which takes one of the six app
          * tones and cannot say "whatever this category happens to be".
          */
-        'border-2 border-t-[6px] border-(--sym-accent)',
+        'relative border border-hairline',
         selected && 'ring-1 ring-brand/70',
         focused && 'ring-2 ring-white',
         isRejected && 'opacity-75',
       )}
       style={{ '--sym-accent': color.solid } as React.CSSProperties}
     >
+
+      {/* The Stat tile's corner glow, in this category's own colour. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -top-10 -right-10 z-1 size-[120px] rounded-full opacity-35 blur-sm"
+        style={{ background: `radial-gradient(circle, ${color.solid}, transparent 70%)` }}
+      />
 
       {/* Symbol image — a fixed height regardless of the crop's own aspect
           ratio, so every card presents the exact same size image area; the
@@ -237,7 +243,7 @@ export function SymbolCard({
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-3.5">
         {/* Symbol name */}
         <div className="min-w-0">
-          <h3 className="flex items-center gap-2 truncate text-sm font-semibold text-white" title={row.name}>
+          <h3 className="flex items-center gap-2 truncate text-[13.5px] font-bold text-white" title={row.name}>
             <span
               aria-hidden
               className="size-2 shrink-0 rounded-full"
@@ -246,13 +252,11 @@ export function SymbolCard({
             <span className="truncate">{symbolLabel(row.name)}</span>
           </h3>
           <div className="mt-1 flex items-center gap-2">
-            <StatusChip
-              tone={REVIEW_STATUS_TONE[row.status]}
-              label={REVIEW_STATUS_LABEL[row.status]}
-              className="text-2xs"
-            />
+            <Badge tone={REVIEW_STATUS_TONE[row.status]} size="sm">
+              {REVIEW_STATUS_LABEL[row.status]}
+            </Badge>
             {row.isRenamed && (
-              <span className="truncate text-2xs text-white/70">
+              <span className="truncate text-2xs text-[var(--text-3)]">
                 was “{row.aiName}”
               </span>
             )}
@@ -262,12 +266,12 @@ export function SymbolCard({
         {/* Quantity — the number the estimate is built from, so it leads. */}
         <div>
           <label
-            className="text-2xs tracking-wide text-white/75 uppercase"
+            className="text-xs font-semibold tracking-[0.04em] text-[var(--text-2)] uppercase"
             htmlFor={`symbol-count-${row.id}`}
           >
             Quantity
           </label>
-          <div className="mt-1 flex items-stretch overflow-hidden rounded-panel border border-hairline-strong bg-white/5">
+          <div className="mt-1 flex items-stretch overflow-hidden rounded-panel border border-hairline-strong bg-surface-input">
             <IconButton
               variant="ghost"
               size="sm"
@@ -275,7 +279,7 @@ export function SymbolCard({
               label={`Decrease the quantity of ${row.name}`}
               disabled={row.finalCount <= 0}
               onClick={() => step(-1)}
-              className="size-8 shrink-0 rounded-none border-0 hover:bg-white/10"
+              className="size-9 shrink-0 rounded-none border-0 hover:bg-white/10"
             />
             <TextInput
               id={`symbol-count-${row.id}`}
@@ -298,7 +302,7 @@ export function SymbolCard({
                 are already a minus and a plus either side of it, and the tiny
                 native arrows on top of them are two controls for one job.
               */
-              controlClassName="h-8 rounded-none border-x border-y-0 border-hairline bg-transparent px-2 py-0 text-center text-sm font-semibold hover:border-hairline focus:bg-white/10 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              controlClassName="h-9 rounded-none border-x border-y-0 border-hairline bg-transparent px-2 py-0 text-center font-display text-lg font-[650] tabular-nums hover:border-hairline focus:bg-white/10 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
             <IconButton
               variant="ghost"

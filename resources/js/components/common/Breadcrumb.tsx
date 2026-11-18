@@ -12,10 +12,10 @@ export interface BreadcrumbProps {
   className?: string
 }
 
-export function Breadcrumb({ items, showHome = true, className }: BreadcrumbProps) {
+export function Breadcrumb({ items, showHome = false, className }: BreadcrumbProps) {
   return (
     <nav aria-label="Breadcrumb" className={cn('min-w-0', className)}>
-      <ol className="flex flex-wrap items-center gap-1.5 text-sm text-white/80">
+      <ol className="flex flex-wrap items-center gap-1.5 text-[13px] text-[var(--text-3)]">
         {showHome && (
           <li className="flex items-center gap-1.5">
             <Link
@@ -25,7 +25,7 @@ export function Breadcrumb({ items, showHome = true, className }: BreadcrumbProp
               <Home size={14} aria-hidden />
               <span className="sr-only">Home</span>
             </Link>
-            <ChevronRight size={14} className="text-white/30" aria-hidden />
+            <ChevronRight size={13} aria-hidden />
           </li>
         )}
 
@@ -44,7 +44,7 @@ export function Breadcrumb({ items, showHome = true, className }: BreadcrumbProp
                   </Link>
                 ) : (
                   <span
-                    className={cn(isLast && 'font-medium text-white')}
+                    className={cn()}
                     aria-current={isLast ? 'page' : undefined}
                   >
                     {item.label}
@@ -53,7 +53,7 @@ export function Breadcrumb({ items, showHome = true, className }: BreadcrumbProp
               </li>
               {!isLast && (
                 <li aria-hidden>
-                  <ChevronRight size={14} className="text-white/30" />
+                  <ChevronRight size={13} />
                 </li>
               )}
             </Fragment>

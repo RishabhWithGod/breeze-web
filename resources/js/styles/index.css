@@ -34,7 +34,7 @@
   --text-sm--line-height: 1.5;
   --text-md: 0.84375rem; /* 13.5px — buttons, tables, list rows */
   --text-md--line-height: 1.5;
-  --text-base: 0.875rem; /* 14px — body */
+  --text-base: 0.90625rem; /* 14.5px — body, as the app's final theme sets it */
   --text-base--line-height: 1.5;
   --text-lg: 0.9375rem; /* 15px — h3 */
   --text-lg--line-height: 1.45;
@@ -155,6 +155,13 @@
   --accent-bright: #3ee6ff;
   --brand-grad: linear-gradient(135deg, #4a74ff 0%, #2f5bff 45%, #1d3fd6 100%);
   --live-grad: linear-gradient(90deg, #2f5bff 0%, #12b8d8 100%);
+  --ok-bg: #e8f7ee; --ok-text: #166534;
+  --warn-bg: #fff6e5; --warn-text: #92400e;
+  --danger-bg: #fdecec; --danger-text: #991b1b;
+  --info-bg: #e6f4fb; --info-text: #075985;
+  --violet-bg: #f1eafe; --violet-text: #5b21b6;
+  --gray-bg: #eef1f5; --gray-text: #475569;
+  --brand-bg: #ebf0ff;
   --bg: #eef2f9;
   --surface: #ffffff;
   --surface-2: #f6f8fc;
@@ -162,9 +169,9 @@
   --border: #dfe5f0;
   --border-strong: #c9d3e3;
   --text: #0a1530;
-  --text-2: #43506a;
-  --text-3: #5a6782;
-  --grid-line: rgba(47, 91, 255, 0.055);
+  --text-2: #3a4660;
+  --text-3: #4b586f;
+  --grid-line: rgba(47, 91, 255, 0.035);
   --glow-a: rgba(47, 91, 255, 0.14);
   --glow-b: rgba(18, 184, 216, 0.12);
   --shadow-sm: 0 1px 2px rgba(10, 21, 48, 0.05);
@@ -227,7 +234,7 @@
     color: var(--color-mist-300);
     font-family: var(--font-sans);
     font-size: var(--text-base);
-    line-height: 1.6;
+    line-height: 1.5;
     min-height: calc(100dvh / var(--page-zoom));
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -450,6 +457,13 @@
   --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 16px 40px -20px rgb(0 0 0 / 0.7);
   --shadow-raised: 0 30px 80px -20px rgb(0 0 0 / 0.75);
 
+  --ok-bg: #0f2e22; --ok-text: #6ee7a0;
+  --warn-bg: #33250b; --warn-text: #fcd34d;
+  --danger-bg: #3a1418; --danger-text: #fca5a5;
+  --info-bg: #0c2a3d; --info-text: #7dd3fc;
+  --violet-bg: #251a47; --violet-text: #c4b5fd;
+  --gray-bg: #1b2948; --gray-text: #b5c3dd;
+  --brand-bg: #14234f;
   --brand: #5b82ff;
   --brand-600: #4a6ff0;
   --brand-50: #14234f;
@@ -460,9 +474,9 @@
   --border: #1c2c58;
   --border-strong: #2a3f74;
   --text: #edf2ff;
-  --text-2: #b3c1df;
-  --text-3: #8f9fc4;
-  --grid-line: rgba(126, 170, 255, 0.05);
+  --text-2: #c4d0ea;
+  --text-3: #a3b1d2;
+  --grid-line: rgba(126, 170, 255, 0.035);
   --glow-a: rgba(47, 91, 255, 0.22);
   --glow-b: rgba(18, 184, 216, 0.14);
   --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 16px 40px -20px rgba(0, 0, 0, 0.7);
@@ -591,3 +605,16 @@
   animation: bp-live 2s ease-in-out infinite;
 }
 @keyframes bp-live { 50% { opacity: 0.45; } }
+
+/* A scan line that sweeps a drawing thumbnail while its takeoff is still running. */
+.takeoff-scan {
+  position: absolute;
+  inset-inline: 0;
+  height: 40px;
+  top: -40px;
+  background: linear-gradient(180deg, transparent, rgb(62 230 255 / 0.28), transparent);
+  animation: takeoff-scan 2.4s linear infinite;
+}
+@keyframes takeoff-scan {
+  to { top: 150px; }
+}

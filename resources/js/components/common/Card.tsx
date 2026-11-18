@@ -108,8 +108,8 @@ export function CardHeader({ title, subtitle, actions, className, titleClassName
       )}
     >
       <div className="min-w-0">
-        <h3 className={cn('text-xl font-semibold text-white', titleClassName)}>{title}</h3>
-        {subtitle && <p className="mt-1 text-md text-white/85">{subtitle}</p>}
+        <h3 className={cn('font-display text-xl leading-[1.25] font-[620] tracking-[-0.01em] text-white', titleClassName)}>{title}</h3>
+        {subtitle && <p className="mt-0.5 text-[13px] text-[var(--text-3)]">{subtitle}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-3">{actions}</div>}
     </div>

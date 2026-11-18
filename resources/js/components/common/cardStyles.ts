@@ -11,16 +11,6 @@ import { cn } from '@/utils'
  * The stripe is kept as a thicker left edge, so the accent still leads the eye
  * down the page the way it did.
  */
-const ACCENTS: Record<Tone, string> = {
-  brand: 'border-brand/60 border-l-brand',
-  success: 'border-status-success/60 border-l-status-success',
-  warning: 'border-status-warning/60 border-l-status-warning',
-  danger: 'border-status-danger/60 border-l-status-danger',
-  info: 'border-status-info/60 border-l-status-info',
-  purple: 'border-status-purple/60 border-l-status-purple',
-  blue: 'border-status-blue/60 border-l-status-blue',
-  neutral: 'border-white/35 border-l-white/50',
-}
 
 /**
  * The estimate screen's section border, for any card that is a section of a
@@ -34,8 +24,10 @@ const ACCENTS: Record<Tone, string> = {
  * Returned as one string rather than left to the glass variant, whose own
  * hairline these override.
  */
-export function cardAccent(tone: Tone = 'brand', className?: string): string {
-  return cn('border-2 border-l-[6px]', ACCENTS[tone], className)
+export function cardAccent(_tone: Tone = 'brand', className?: string): string {
+  // The Breeze app's cards carry no lit edge: one hairline, one surface. The tone is still accepted so
+  // every caller keeps compiling, and it can be turned back into a colour here without touching them.
+  return cn('border border-hairline', className)
 }
 
 /**

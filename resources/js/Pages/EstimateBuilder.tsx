@@ -26,9 +26,10 @@ import {
   Modal,
   MoreMenu,
   SelectField,
-  StatusChip,
+  Badge,
   TextArea,
   TextInput,
+  noticeClasses
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
@@ -327,7 +328,7 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
       <Head title="Estimate Builder" />
 
       {remote && (
-        <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-panel border border-status-warning/40 bg-status-warning/10 px-4 py-3 text-sm text-white">
+        <div role="status" className={noticeClasses('warning', 'mb-4 flex flex-wrap items-center justify-between gap-3 px-3.5 py-3')}>
           <span>
             {remote.by ?? 'Someone'} just changed this estimate — {remote.summary.toLowerCase()}. Reload to see the latest before you save, or your save will overwrite theirs.
           </span>
@@ -424,9 +425,9 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
         {/* ------------------------------------------------------------ Estimate title -- */}
         <div className="border-b border-hairline px-5 py-4 sm:px-6">
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-2xl font-bold text-white">{estimate.project}</h2>
-            <StatusChip pill tone={status.tone} label={status.label} />
-            {dirty && !locked && <StatusChip pill tone="warning" label="Unsaved changes" pulse />}
+            <h2 className="font-display text-2xl font-bold text-white">{estimate.project}</h2>
+            <Badge tone={status.tone}>{status.label}</Badge>
+            {dirty && !locked && <Badge tone="warning">Unsaved changes</Badge>}
           </div>
           <p className="mt-1 text-sm text-white/75">
             Client: {estimate.client} <span className="mx-2 text-white/40">|</span> Estimate: {estimate.number}
@@ -1010,7 +1011,7 @@ function TotalsCard({ totals, taxPct }: { totals: ReturnType<typeof builderTotal
       </dl>
       <div className="flex items-baseline justify-between gap-4 border-t border-hairline px-4 py-3">
         <span className="text-md font-semibold text-white">Total</span>
-        <span className="text-2xl font-bold tabular-nums text-white" aria-live="polite">
+        <span className="font-display text-2xl font-bold tabular-nums text-white" aria-live="polite">
           {formatCurrency(totals.total, 2)}
         </span>
       </div>

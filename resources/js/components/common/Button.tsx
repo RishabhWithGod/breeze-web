@@ -30,7 +30,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   },
   ref,
 ) {
-  const iconSize = size === 'sm' ? 15 : 17
+  const iconSize = size === 'sm' ? 15 : 16
 
   return (
     <button
@@ -69,7 +69,7 @@ export function ButtonLink({
   children,
   ...props
 }: ButtonLinkProps) {
-  const iconSize = size === 'sm' ? 15 : 17
+  const iconSize = size === 'sm' ? 15 : 16
 
   return (
     <Link className={buttonStyles({ variant, size, fullWidth, className })} {...props}>

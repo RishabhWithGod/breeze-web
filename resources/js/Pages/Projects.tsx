@@ -1,43 +1,25 @@
 import { useState } from 'react'
 import { Head, Link, router } from '@inertiajs/react'
-import { AnimatePresence, motion } from 'framer-motion'
-import {
-  ExternalLink,
-  FileText,
-  Files,
-  FolderKanban,
-  MapPin,
-  PencilLine,
-  Plus,
-  Receipt,
-  SlidersHorizontal,
-  Trash2,
-  Users,
-  type LucideIcon,
-  ScanLine,
-  Calculator,
-  HardHat,
-} from 'lucide-react'
+import { FolderKanban, PencilLine, Plus, Trash2 } from 'lucide-react'
 import {
   Alert,
+  AvatarStack,
   Badge,
-  Button,
   ButtonLink,
   Card,
-  cardAccentAt,
   ConfirmDialog,
   EmptyState,
   MoreMenu,
   Pagination,
-  SearchBox,
-  SelectField,
-  StatusChip,
+  Table,
+  ToolbarSearch,
+  UnderlineTabs,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
-import { MOTION, ROUTES, routeTo } from '@/constants'
+import { ROUTES, routeTo } from '@/constants'
 import { useDisclosure, usePermissions } from '@/hooks'
-import type { Paginated, TakeoffStatus } from '@/types'
-import { TAKEOFF_STATUS_LABEL, TAKEOFF_STATUS_TONE } from '@/utils'
+import type { Paginated, TableColumn, TakeoffStatus } from '@/types'
+import { TAKEOFF_STATUS_LABEL, TAKEOFF_STATUS_TONE, formatDate } from '@/utils'
 
 interface ProjectRow {
   readonly id: number
@@ -54,6 +36,10 @@ interface ProjectRow {
   readonly teamCount: number
   readonly documentCount: number
   readonly invoiceCount: number
+  /** The same two dates the project's own screen calls Start Date and End Date. */
+  readonly startedAt: string | null
+  readonly dueDate: string | null
+  readonly team: readonly { readonly id: number; readonly name: string; readonly initials: string | null }[]
 }
 
 /** One client and the projects they have on — the unit this screen pages through. */
@@ -69,28 +55,51 @@ export interface ProjectsProps {
   statuses: readonly string[]
   /** Across every client this filter matches, not just the page shown. */
   totalProjects: number
+  /** Projects per status over the current search — what each status tab would show. */
+  statusCounts: Record<string, number>
 }
 
 /** "in-review" reads as a machine value; the label should not. */
 const humanise = (value: string) =>
   value.charAt(0).toUpperCase() + value.slice(1).replaceAll('-', ' ')
 
+/** One line of the register: a project under its client, or a client that has none yet. */
+type Row =
+  | { readonly kind: 'project'; readonly key: string; readonly client: ClientGroup; readonly project: ProjectRow }
+  | { readonly kind: 'empty'; readonly key: string; readonly client: ClientGroup }
+
+/**
+ * The tabs offered after "All", in order. `active` is not a stored status: it is the projects with work
+ * under way (a job planned, scheduled, in progress or late). Statuses left out here — converted, failed,
+ * processing — still show under All.
+ */
+const TAB_ORDER: readonly string[] = ['draft', 'active', 'completed']
+
+const num = (value: number) => <span className="tabular-nums">{value}</span>
+
 /**
  * Every project, under the client it is for.
  *
- * Grouped rather than flat because a project's name only means something
- * beside its client — two clients can both have a "Phase 1". The client is
- * stated once per card, and adding a project starts from the card of the
- * client it is for, so that question is never asked twice.
+ * A flat register in the Breeze app's layout — status tabs, a search toolbar and
+ * one table — with the client named on every line, because a project's name only
+ * means something beside its client. Paged by client, so a client's projects are
+ * never split across two pages.
  */
-export default function Projects({ clients, filters, statuses, totalProjects }: ProjectsProps) {
+export default function Projects({ clients, filters, statuses, totalProjects, statusCounts }: ProjectsProps) {
   const { can: permitted } = usePermissions()
   const [search, setSearch] = useState(filters.search)
-  const filterBar = useDisclosure()
   const [pendingDelete, setPendingDelete] = useState<{ id: number; name: string } | null>(null)
+  const deleteDialog = useDisclosure()
 
   const groups = clients.data
-  const activeFilters = [filters.search !== '', filters.status !== 'all'].filter(Boolean).length
+  const narrowed = filters.search !== '' || filters.status !== 'all'
+  const allCount = Object.entries(statusCounts).reduce((sum, [key, count]) => (key === 'active' ? sum : sum + count), 0)
+
+  const rows: readonly Row[] = groups.flatMap((client): readonly Row[] =>
+    client.projects.length === 0
+      ? [{ kind: 'empty', key: `c${client.id}`, client }]
+      : client.projects.map((project) => ({ kind: 'project', key: `p${project.id}`, client, project })),
+  )
 
   const apply = (changes: Record<string, string>) => {
     const query = new URLSearchParams(window.location.search)
@@ -109,6 +118,106 @@ export default function Projects({ clients, filters, statuses, totalProjects }: 
     })
   }
 
+  const columns: readonly TableColumn<Row>[] = [
+    {
+      key: 'project',
+      header: 'Project',
+      render: (row) =>
+        row.kind === 'project' ? (
+          <div className="min-w-0">
+            <Link href={routeTo.project(row.project.id)} className="block truncate font-bold text-white hover:text-brand">
+              {row.project.name}
+            </Link>
+            {row.project.location && (
+              <p className="truncate text-[13px] text-[var(--text-3)]">{row.project.location}</p>
+            )}
+          </div>
+        ) : (
+          <span className="text-[var(--text-3)]">Nothing on for this client yet.</span>
+        ),
+    },
+    {
+      key: 'client',
+      header: 'Client',
+      render: (row) => (
+        <Link href={routeTo.client(row.client.id)} className="whitespace-nowrap hover:text-brand">
+          {row.client.name}
+        </Link>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (row) =>
+        row.kind === 'project' ? (
+          <Badge tone={TAKEOFF_STATUS_TONE[row.project.status]}>{TAKEOFF_STATUS_LABEL[row.project.status]}</Badge>
+        ) : null,
+    },
+    {
+      key: 'dates',
+      header: 'Dates',
+      render: (row) => {
+        if (row.kind !== 'project') return null
+        const { startedAt, dueDate } = row.project
+
+        if (!startedAt && !dueDate) return <span className="text-[var(--text-3)]">—</span>
+
+        return (
+          <span className="whitespace-nowrap">
+            {startedAt ? formatDate(startedAt) : '—'} – {dueDate ? formatDate(dueDate) : '—'}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'team',
+      header: 'Team',
+      render: (row) => (row.kind === 'project' ? <AvatarStack people={row.project.team} /> : null),
+    },
+    { key: 'drawings', header: 'Drawings', align: 'right', render: (row) => (row.kind === 'project' ? num(row.project.drawingCount) : null) },
+    { key: 'estimates', header: 'Estimates', align: 'right', render: (row) => (row.kind === 'project' ? num(row.project.estimateCount) : null) },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      width: 'w-12',
+      cellClassName: 'pl-1',
+      render: (row) => {
+        if (row.kind === 'empty') {
+          return permitted('projects.create') ? (
+            <ButtonLink href={routeTo.projectCreateForClient(row.client.id)} variant="ghost" size="sm" leftIcon={Plus}>
+              Add
+            </ButtonLink>
+          ) : null
+        }
+
+        const { project } = row
+        const items = [
+          ...(permitted('projects.edit')
+            ? [{ label: 'Edit', icon: PencilLine, onSelect: () => router.visit(routeTo.projectEdit(project.id)) }]
+            : []),
+          ...(permitted('projects.delete')
+            ? [
+                {
+                  label: 'Delete',
+                  icon: Trash2,
+                  destructive: true,
+                  onSelect: () => {
+                    setPendingDelete(project)
+                    deleteDialog.open()
+                  },
+                },
+              ]
+            : []),
+        ]
+
+        return items.length > 0 ? (
+          <MoreMenu ariaLabel={`Actions for ${project.name}`} variant="minimal" items={items} />
+        ) : null
+      },
+    },
+  ]
+
   return (
     <PageTransition>
       <Head title="Projects" />
@@ -116,246 +225,79 @@ export default function Projects({ clients, filters, statuses, totalProjects }: 
       <PageHeader
         title="Projects"
         subtitle="Manage your projects, drawings, estimates, takeoffs, and job activity - all in one place"
-        breadcrumbs={[{ label: 'Projects' }]}
         actions={
-          <>
-            <Button
-              variant="secondary"
-              leftIcon={SlidersHorizontal}
-              aria-expanded={filterBar.isOpen}
-              onClick={filterBar.toggle}
-            >
-              Filter{activeFilters > 0 ? ` (${activeFilters})` : ''}
-            </Button>
-            {permitted('projects.create') && (
-              <ButtonLink href={ROUTES.projectCreate} leftIcon={Plus}>
-                Add Project
-              </ButtonLink>
-            )}
-          </>
+          permitted('projects.create') ? (
+            <ButtonLink href={ROUTES.projectCreate} leftIcon={Plus}>
+              Add project
+            </ButtonLink>
+          ) : undefined
         }
       />
 
-      <AnimatePresence initial={false}>
-        {filterBar.isOpen && (
-          <motion.div
-            key="filter-bar"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: MOTION.base }}
-            className="mb-4 overflow-hidden"
-          >
-            <Card padding="md">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <SearchBox
-                  id="project-search"
-                  label="Search"
-                  value={search}
-                  onValueChange={setSearch}
-                  onSearch={(value) => apply({ search: value })}
-                  placeholder="Search projects…"
-                  aria-label="Search projects"
-                />
-                <SelectField
-                  id="project-status-filter"
-                  label="Status"
-                  options={[
-                    { label: 'All statuses', value: 'all' },
-                    ...statuses.map((status) => ({ label: humanise(status), value: status })),
-                  ]}
-                  value={filters.status}
-                  onChange={(event) => apply({ status: event.target.value })}
-                />
-              </div>
+      <UnderlineTabs
+        value={filters.status}
+        onChange={(status) => apply({ status })}
+        tabs={[
+          { key: 'all', label: 'All', count: allCount },
+          ...TAB_ORDER.filter((key) => key === 'active' || statuses.includes(key)).map((key) => ({
+            key,
+            label: key === 'active' ? 'Active' : (TAKEOFF_STATUS_LABEL[key as TakeoffStatus] ?? humanise(key)),
+            count: statusCounts[key] ?? 0,
+          })),
+        ]}
+      />
 
-              {activeFilters > 0 && (
-                <div className="mt-4 border-t border-hairline pt-4">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setSearch('')
-                      apply({ search: '', status: 'all' })
-                    }}
-                  >
-                    Reset filters
-                  </Button>
-                </div>
-              )}
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Card padding="none" className="overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
+          <ToolbarSearch
+            value={search}
+            onChange={setSearch}
+            onSubmit={(value) => apply({ search: value })}
+            applied={filters.search !== ''}
+            placeholder="Search projects"
+          />
+        </div>
 
-      {groups.length === 0 ? (
-        <Card padding="lg">
+        {rows.length === 0 ? (
           <EmptyState
             icon={FolderKanban}
-            title={activeFilters > 0 ? 'No project matches' : 'No clients yet'}
+            title={narrowed ? 'No project matches' : 'No clients yet'}
             description={
-              activeFilters > 0
+              narrowed
                 ? 'Nothing on any client matches these filters.'
                 : 'Add the client the work is for, then open a project under them.'
             }
-            {...(activeFilters > 0 || !permitted('clients.create')
+            {...(narrowed || !permitted('clients.create')
               ? {}
               : {
                   actions: (
                     <ButtonLink href={ROUTES.clientCreate} leftIcon={Plus}>
-                      Add Client
+                      Add client
                     </ButtonLink>
                   ),
                 })}
           />
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {groups.map((group, index) => (
-            /*
-             * The same accent the task list walks down its job groups with, so
-             * a client group here reads as the same kind of thing. Cycled by
-             * position rather than tied to anything: a client has no status to
-             * colour it by, and the border is here to separate one card from
-             * the next.
-             */
-            <Card key={group.id} padding="lg" className={cardAccentAt(index)}>
-              <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hairline pb-3">
-                <Link
-                  href={routeTo.client(group.id)}
-                  className="min-w-0 truncate text-lg font-semibold text-white transition-colors hover:text-brand"
-                >
-                  {group.name}
-                </Link>
+        ) : (
+          <Table
+            variant="lined"
+            columns={columns}
+            rows={rows}
+            getRowId={(row) => row.key}
+            caption="Projects"
+            onRowClick={(row) => router.visit(row.kind === 'project' ? routeTo.project(row.project.id) : routeTo.client(row.client.id))}
+          />
+        )}
+      </Card>
 
-                <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-sm text-white/70">
-                    {group.projects.length}{' '}
-                    {group.projects.length === 1 ? 'project' : 'projects'}
-                  </span>
-                  {/* Adding to *this* client, so it never asks who it is for. */}
-                  <ButtonLink
-                    href={routeTo.projectCreateForClient(group.id)}
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={Plus}
-                  >
-                    Add Project
-                  </ButtonLink>
-                </div>
-              </header>
-
-              {group.projects.length === 0 ? (
-                <p className="text-md text-white/70">
-                  Nothing on for this client yet. Open the first project above.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {group.projects.map((project) => (
-                    <li
-                      key={project.id}
-                      className={cardAccentAt(index, 'rounded-panel bg-white/4 p-4')}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                              href={routeTo.project(project.id)}
-                              className="truncate font-semibold text-white transition-colors hover:text-brand"
-                            >
-                              {project.name}
-                            </Link>
-                            <StatusChip
-                              hideDot
-                              tone={TAKEOFF_STATUS_TONE[project.status]}
-                              label={TAKEOFF_STATUS_LABEL[project.status]}
-                            />
-                          </div>
-                          {project.location && (
-                            <p className="mt-1 flex items-center gap-1.5 text-sm text-white/60">
-                              <MapPin size={13} aria-hidden className="shrink-0" />
-                              {project.location}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex shrink-0 items-center gap-2">
-                          {/*
-                            Not a real feature yet — see the same placeholder on
-                            the Clients list. Shown anyway, but plainly marked so
-                            it reads as "coming later" rather than as data nobody
-                            trusts.
-                          */}
-                          <span title="Commodity lists aren't tracked yet — coming soon">
-                            <Badge tone="neutral" size="sm">
-                              Not available yet
-                            </Badge>
-                          </span>
-                          <MoreMenu
-                            ariaLabel={`Actions for ${project.name}`}
-                            variant="minimal"
-                            items={[
-                              ...(permitted('projects.edit')
-                                ? [
-                                    {
-                                      label: 'Edit',
-                                      icon: PencilLine,
-                                      onSelect: () => router.visit(routeTo.projectEdit(project.id)),
-                                    },
-                                  ]
-                                : []),
-                              ...(permitted('projects.delete')
-                                ? [
-                                    {
-                                      label: 'Delete',
-                                      icon: Trash2,
-                                      destructive: true,
-                                      onSelect: () => setPendingDelete(project),
-                                    },
-                                  ]
-                                : []),
-                            ]}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-3">
-                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                          <StatItem icon={FileText} value={project.drawingCount} label="Drawings" />
-                          <StatItem icon={ScanLine} value={project.takeoffCount} label="Takeoffs" />
-                          <StatItem icon={Calculator} value={project.estimateCount} label="Estimates" />
-                          <StatItem icon={HardHat} value={project.jobCount} label="Jobs" />
-                          <StatItem icon={Users} value={project.teamCount} label="Team" />
-                          <StatItem icon={Files} value={project.documentCount} label="Documents" />
-                          <StatItem icon={Receipt} value={project.invoiceCount} label="Invoices" />
-                        </div>
-
-                        <ButtonLink
-                          href={routeTo.project(project.id)}
-                          variant="secondary"
-                          size="sm"
-                          leftIcon={ExternalLink}
-                        >
-                          Open
-                        </ButtonLink>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          ))}
-
-          <Alert tone="info" title="Invoices live inside Projects">
-            Create, manage, and track all invoices for each project. Open a project to view its
-            invoices.
-          </Alert>
-        </div>
+      {rows.length > 0 && (
+        <Alert tone="info" title="Invoices live inside Projects" className="mt-4">
+          Create, manage, and track all invoices for each project. Open a project to view its invoices.
+        </Alert>
       )}
 
       <Pagination
         withLabels
-        className="mt-6"
+        className="mt-5"
         page={clients.meta.current_page}
         pageCount={clients.meta.last_page}
         onPageChange={(page) => apply({ page: String(page) })}
@@ -367,7 +309,7 @@ export default function Projects({ clients, filters, statuses, totalProjects }: 
       />
 
       <ConfirmDialog
-        isOpen={pendingDelete !== null}
+        isOpen={deleteDialog.isOpen && pendingDelete !== null}
         tone="danger"
         title={`Delete "${pendingDelete?.name ?? ''}"?`}
         description="The project is removed from your list. Its drawings stay on file."
@@ -376,28 +318,14 @@ export default function Projects({ clients, filters, statuses, totalProjects }: 
         onConfirm={() => {
           if (pendingDelete) router.delete(routeTo.project(pendingDelete.id))
           setPendingDelete(null)
+          deleteDialog.close()
         }}
-        onCancel={() => setPendingDelete(null)}
+        onCancel={() => {
+          setPendingDelete(null)
+          deleteDialog.close()
+        }}
       />
     </PageTransition>
-  )
-}
-
-interface StatItemProps {
-  icon: LucideIcon
-  value: number
-  label: string
-}
-
-function StatItem({ icon: Icon, value, label }: StatItemProps) {
-  return (
-    <div className="flex items-center gap-2">
-      <Icon size={16} aria-hidden className="shrink-0 text-white/50" />
-      <div className="leading-tight">
-        <p className="text-sm font-semibold text-white">{value}</p>
-        <p className="text-xs text-white/50">{label}</p>
-      </div>
-    </div>
   )
 }
 

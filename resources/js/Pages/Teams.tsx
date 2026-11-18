@@ -21,15 +21,15 @@ import {
   Alert,
   Button,
   ButtonLink,
+  Badge,
   Card,
   ConfirmDialog,
   EmptyState,
-  FilterTabs,
   Modal,
   Pagination,
-  SearchBox,
   SelectField,
-  StatusChip,
+  ToolbarSearch,
+  UnderlineTabs,
   Table,
   TextInput,
 } from '@/components/common'
@@ -181,7 +181,7 @@ function SeatUsageCard({ seats, canBuy, onBuy }: { seats: SeatUsage; canBuy: boo
           full && <span className="text-sm text-white/65">Ask an owner or admin to add seats.</span>
         )}
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10" role="presentation">
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]" role="presentation">
         <div className={full ? 'h-full bg-status-warning' : 'h-full bg-brand'} style={{ width: `${share}%` }} />
       </div>
     </Card>
@@ -233,12 +233,7 @@ function ManagersList({ managers, canAdd }: { managers: readonly ManagerRow[]; c
               {manager.addedAt && (
                 <span className="hidden text-xs text-white/60 sm:inline">Added {formatDate(manager.addedAt)}</span>
               )}
-              <StatusChip
-                pill
-                hideDot
-                tone={manager.isOwner ? 'brand' : 'neutral'}
-                label={manager.isOwner ? 'Owner' : manager.role}
-              />
+              <Badge tone={manager.isOwner ? 'brand' : 'neutral'}>{manager.isOwner ? 'Owner' : manager.role}</Badge>
               {manager.canEdit && (
                 <ButtonLink href={routeTo.managerEdit(manager.id)} variant="secondary" size="sm">
                   Edit
@@ -519,15 +514,13 @@ export default function Teams({
       )}
 
       {canSeeManagers && (
-        <FilterTabs
-          className="mb-5"
+        <UnderlineTabs
           value={showingManagers ? 'managers' : 'teams'}
           onChange={openTab}
-          options={[
-            { label: 'Teams', value: 'teams' },
-            { label: 'Managers', value: 'managers' },
+          tabs={[
+            { key: 'teams', label: 'Teams' },
+            { key: 'managers', label: 'Managers', count: managers.length },
           ]}
-          counts={{ managers: managers.length }}
         />
       )}
 
@@ -546,19 +539,18 @@ export default function Teams({
             />
           )}
 
-          <Card padding="md" className="mb-5">
-            <SearchBox
+          <div className="mb-4">
+            <ToolbarSearch
               value={search}
-              onValueChange={setSearch}
-              onSearch={(value) => apply({ search: value })}
-              placeholder="Search teams and members..."
-              aria-label="Search teams and members"
-              containerClassName="sm:max-w-sm"
+              onChange={setSearch}
+              onSubmit={(value) => apply({ search: value })}
+              applied={filters.search !== ''}
+              placeholder="Search teams and members"
             />
-          </Card>
+          </div>
 
           {nothingAtAll ? (
-            <Card accent="brand" padding="lg">
+            <Card padding="lg">
               <EmptyState
                 icon={HardHat}
                 title={filters.search ? 'Nothing matches that' : 'No teams yet'}
@@ -579,7 +571,7 @@ export default function Teams({
               />
             </Card>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {groups.map((team, index) => (
                 <TeamCard
                   key={team.id}
@@ -737,7 +729,7 @@ interface TeamCardProps {
 }
 
 /** One crew and everyone on it. */
-function TeamCard({ teamId, name, description, members, columns, canManage, index }: TeamCardProps) {
+function TeamCard({ teamId, name, description, members, columns, canManage }: TeamCardProps) {
   const [renaming, setRenaming] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -761,15 +753,15 @@ function TeamCard({ teamId, name, description, members, columns, canManage, inde
   return (
     /* A colour per crew, cycling down the list the way every other list on the
        screen does — one repeated accent makes a page of crews read as one. */
-    <Card accent="auto" index={index} padding="lg">
+    <Card padding="md">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-4">
-          <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-linear-to-br from-brand/35 to-blue-500/25 text-white ring-1 ring-brand/30">
-            <Users size={22} aria-hidden />
+          <span className="grid size-10 shrink-0 place-items-center rounded-panel bg-[var(--brand-bg)] text-brand">
+            <Users size={20} aria-hidden />
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-xl font-semibold text-white">{name}</h2>
-            <p className="text-sm text-white/70">
+            <h2 className="truncate font-display text-xl leading-[1.25] font-[620] tracking-[-0.01em] text-white">{name}</h2>
+            <p className="text-[13px] text-[var(--text-3)]">
               {description ?? `${members.length} ${members.length === 1 ? 'member' : 'members'}`}
             </p>
           </div>
@@ -778,15 +770,15 @@ function TeamCard({ teamId, name, description, members, columns, canManage, inde
         {/* Status and actions together, in the corner — not floating between the name and the buttons. */}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
           {members.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-              <span className="rounded-full bg-status-warning/12 px-3 py-1 text-status-warning ring-1 ring-status-warning/30">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-[23px] items-center rounded-full bg-[var(--warn-bg)] px-[9px] text-[12.5px] font-[550] text-[var(--warn-text)]">
                 {members.filter((member) => !isAway(member) && member.openTasks > 0).length} on work
               </span>
-              <span className="rounded-full bg-status-success/12 px-3 py-1 text-status-success ring-1 ring-status-success/30">
+              <span className="inline-flex h-[23px] items-center rounded-full bg-[var(--ok-bg)] px-[9px] text-[12.5px] font-[550] text-[var(--ok-text)]">
                 {members.filter((member) => !isAway(member) && member.openTasks === 0).length} available
               </span>
               {members.some(isAway) && (
-                <span className="rounded-full bg-white/8 px-3 py-1 text-white/75 ring-1 ring-hairline">
+                <span className="inline-flex h-[23px] items-center rounded-full bg-[var(--gray-bg)] px-[9px] text-[12.5px] font-[550] text-[var(--gray-text)]">
                   {members.filter(isAway).length} away
                 </span>
               )}
@@ -1080,7 +1072,7 @@ function PendingTechnicianRow({
           </Button>
         </>
       ) : (
-        <StatusChip hideDot tone="warning" label="Awaiting a manager" />
+        <Badge tone="warning">Awaiting a manager</Badge>
       )}
     </div>
   )
@@ -1201,7 +1193,7 @@ function TechnicianRegisterSection({
                       <p className="truncate font-semibold text-white">{technician.name}</p>
                       <p className="truncate text-sm text-white/60">{technician.email}</p>
                     </div>
-                    <StatusChip hideDot tone="danger" label="Rejected" />
+                    <Badge tone="danger">Rejected</Badge>
                   </div>
                 ),
               )}
@@ -1283,12 +1275,10 @@ function ActiveTechnicianRow({
         </>
       ) : (
         <>
-          <StatusChip hideDot tone="info" label={roleLabel(technician.role)} />
-          <StatusChip
-            hideDot
-            tone={technician.teamMember?.teamName ? 'brand' : 'neutral'}
-            label={technician.teamMember?.teamName ?? 'Not on a team'}
-          />
+          <Badge tone="info">{roleLabel(technician.role)}</Badge>
+          <Badge tone={technician.teamMember?.teamName ? 'brand' : 'neutral'}>
+            {technician.teamMember?.teamName ?? 'Not on a team'}
+          </Badge>
         </>
       )}
     </div>

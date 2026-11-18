@@ -51,6 +51,8 @@ export interface TableColumn<T> {
   readonly align?: 'left' | 'center' | 'right'
   /** Tailwind width utility, e.g. `w-40`. */
   readonly width?: string
+  /** Extra classes for this column's header and cells — a tighter padding for a numeric column, say. */
+  readonly cellClassName?: string
   readonly render: (row: T, index: number) => React.ReactNode
 }
 

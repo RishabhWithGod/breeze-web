@@ -29,6 +29,7 @@ import {
   Modal,
   Table,
   TextArea,
+  noticeClasses
 } from '@/components/common'
 import { appLayout, PageTransition } from '@/components/layout'
 import { SessionStatus, clockTime, entrySessionStatus } from '@/components/timeTracking'
@@ -359,9 +360,9 @@ export default function TimeEntryShow({
               <ApprovalHistoryPanel entries={history} />
             </div>
             {entry.rejectionReason && (
-              <div className="mt-4 rounded-panel border border-status-danger/40 bg-status-danger/10 p-4">
-                <p className="text-2xs tracking-wide text-status-danger uppercase">Rejection reason</p>
-                <p className="mt-1 text-md text-white">{entry.rejectionReason}</p>
+              <div className={noticeClasses('danger', 'mt-4 px-3.5 py-3')}>
+                <p className="text-2xs font-semibold tracking-wide uppercase">Rejection reason</p>
+                <p className="mt-1 text-md">{entry.rejectionReason}</p>
               </div>
             )}
           </Card>

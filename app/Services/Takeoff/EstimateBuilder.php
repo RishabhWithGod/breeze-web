@@ -344,13 +344,33 @@ class EstimateBuilder
             $clientLaborRate = $this->clientLaborRate($project);
 
             \App\Services\JobScope\EstimateChangeRecorder::touch($estimate->id);
-            $estimate->items()->where('source', 'ai')->delete();
+
+            /*
+             * A line the estimator has edited is theirs now, even if the AI wrote it first. Only the
+             * AI lines nobody has touched are rewritten at the reviewed counts; the edited ones are
+             * left exactly as they were, and the freshly generated twin of each is dropped below so
+             * nothing is counted twice. (A line that has never been saved by hand still has the
+             * same created and updated time.)
+             */
+            $edited = $estimate->items()
+                ->where('source', 'ai')
+                ->whereColumn('updated_at', '>', 'created_at')
+                ->get();
+
+            $estimate->items()
+                ->where('source', 'ai')
+                ->whereNotIn('id', $edited->pluck('id'))
+                ->delete();
+
+            $lastExistingId = (int) EstimateItem::max('id');
 
             $matchedRateItemIds = $engineLines->isNotEmpty()
                 ? $this->writeEngineLines($estimate, $engineLines, $symbols, $catalog, $rateBook, $priceBook, $clientLaborRate)
                 : $this->writeCatalogLines($estimate, $symbols, $catalog, $rateBook, $priceBook, $clientLaborRate);
 
             $this->writeUnmatchedRateBookLines($estimate, $rateBook, $matchedRateItemIds);
+
+            $this->dropRegeneratedTwinsOf($estimate, $edited, $lastExistingId);
 
             // Manual lines keep their own positions after the rewritten AI block.
             $estimate->update([
@@ -394,6 +414,41 @@ class EstimateBuilder
 
             return $estimate;
         });
+    }
+
+    /**
+     * Removes the lines just written that are the same line as one the estimator already edited.
+     *
+     * "The same line" is the same symbol (or rate-book entry) in the same category, one for one, so
+     * two edited lines of a kind only ever cancel two new ones. An edited line with no new twin —
+     * its symbol was reviewed down to zero, say — simply stays: it is the estimator's work.
+     *
+     * @param  Collection<int, EstimateItem>  $edited
+     */
+    private function dropRegeneratedTwinsOf(Estimate $estimate, Collection $edited, int $lastExistingId): void
+    {
+        if ($edited->isEmpty()) {
+            return;
+        }
+
+        $identity = fn (EstimateItem $item): string => $item->category.'|'.match (true) {
+            $item->final_symbol_id !== null => 's'.$item->final_symbol_id,
+            $item->project_rate_item_id !== null => 'r'.$item->project_rate_item_id,
+            default => 'd'.mb_strtolower((string) $item->description),
+        };
+
+        $fresh = $estimate->items()
+            ->where('source', 'ai')
+            ->where('id', '>', $lastExistingId)
+            ->orderBy('id')
+            ->get()
+            ->groupBy($identity);
+
+        foreach ($edited as $kept) {
+            $twin = $fresh->get($identity($kept))?->shift();
+
+            $twin?->delete();
+        }
     }
 
     /**

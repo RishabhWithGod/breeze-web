@@ -43,6 +43,29 @@ class ProjectSummaryResource extends JsonResource
                 $this->status === 'completed' => 'completed',
                 default => 'draft',
             },
+            // Where a click on this takeoff should go. A takeoff waiting on its review is picked up
+            // at the review screen — the same place the Resume button points — so nobody has to go
+            // through the detail screen to get to it. Anything else has no answer here and the list
+            // falls back to the drawing's detail screen.
+            'reviewUrl' => $this->reviewUrl(),
+            // A takeoff still being read keeps running on the server whether or not anyone is watching it;
+            // this is the way back to the screen that shows how far it has got.
+            'processingUrl' => $this->status === 'processing' ? route('processing.show', $this->id, absolute: false) : null,
         ];
+    }
+
+    /** The review screen of this takeoff's latest result, while that review is still open. */
+    private function reviewUrl(): ?string
+    {
+        if (! in_array($this->review_status, ['pending', 'in-review'], true)
+            || in_array($this->status, ['processing', 'failed', 'converted'], true)) {
+            return null;
+        }
+
+        $result = $this->aiResults()->first();
+
+        return $result !== null && ! $result->isFinalised()
+            ? route('reviews.show', $result, absolute: false)
+            : null;
     }
 }

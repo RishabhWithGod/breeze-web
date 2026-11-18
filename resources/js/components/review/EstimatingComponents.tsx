@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { Check, Clock } from 'lucide-react'
-import { Badge, Card, CardHeader } from '@/components/common'
+import { Badge, Panel } from '@/components/common'
 import type { EstimatingComponent } from '@/types'
 import { cn } from '@/utils'
 
@@ -24,9 +24,11 @@ export function EstimatingComponents({ components, className }: EstimatingCompon
   if (available.length === 0) return null
 
   return (
-    <Card accent="success" padding="lg" className={cn('mt-6', className)}>
-      <CardHeader title="Estimating components" subtitle="What this takeoff already has for the estimate." />
-
+    <Panel
+      title="Estimating components"
+      sub="What this takeoff already has for the estimate."
+      className={cn('mt-4', className)}
+    >
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {available.map((component, index) => (
           <motion.li
@@ -35,15 +37,16 @@ export function EstimatingComponents({ components, className }: EstimatingCompon
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.3, delay: Math.min(index, 6) * 0.05 }}
-            className={cn(
-              'rounded-panel border p-4',
-              component.status === 'available'
-                ? 'border-brand/40 bg-brand/8'
-                : 'border-hairline bg-white/4',
-            )}
+            className="relative overflow-hidden rounded-card border border-hairline bg-[var(--surface-2)] p-4"
           >
-            <div className="flex items-start justify-between gap-2">
-              <p className="min-w-0 font-medium text-white">{component.label}</p>
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -top-10 -right-10 size-[120px] rounded-full bg-[radial-gradient(circle,var(--glow-a),transparent_70%)]"
+            />
+            <div className="relative flex items-start justify-between gap-2">
+              <p className="min-w-0 text-xs font-semibold tracking-[0.04em] text-[var(--text-2)] uppercase">
+                {component.label}
+              </p>
               {component.status === 'available' ? (
                 <Badge tone="success" size="sm" icon={Check}>
                   From takeoff
@@ -55,17 +58,12 @@ export function EstimatingComponents({ components, className }: EstimatingCompon
               )}
             </div>
 
-            <p
-              className={cn(
-                'mt-1 text-sm',
-                component.status === 'available' ? 'text-white/90' : 'text-white/70',
-              )}
-            >
+            <p className="relative mt-2 font-display text-[1.125rem] leading-snug font-[620] tracking-tight text-white">
               {component.summary}
             </p>
 
             {component.items.length > 0 && (
-              <ul className="mt-3 space-y-1.5 border-t border-hairline pt-3">
+              <ul className="relative mt-3 space-y-1.5 border-t border-hairline pt-3">
                 {component.items.map((item, position) => (
                   <li
                     key={`${component.key}-${position}`}
@@ -93,6 +91,6 @@ export function EstimatingComponents({ components, className }: EstimatingCompon
           </motion.li>
         ))}
       </ul>
-    </Card>
+    </Panel>
   )
 }

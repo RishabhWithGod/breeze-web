@@ -36,6 +36,13 @@ class Job extends Model
 
     public const STATUS_COMPLETED = 'completed';
 
+    /**
+     * The states of a job that is under way: being planned, booked, worked or
+     * running late. A draft has not started, on-hold is paused, completed is done
+     * — a project with at least one job in these is an "active" project.
+     */
+    public const ACTIVE_STATUSES = ['planning', 'scheduled', 'in-progress', 'delayed'];
+
     public const TYPES = ['residential', 'commercial', 'industrial'];
 
     /** Ranked high → low; the unassigned queue's default order. */

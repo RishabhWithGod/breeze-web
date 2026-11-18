@@ -584,7 +584,7 @@ export function DrawingOverlay({
               aria-label="Drawing page"
               value={String(activePage)}
               onChange={(event) => goToPage(Number(event.target.value))}
-              className="appearance-none bg-transparent pr-7 text-md font-semibold text-white focus:outline-none"
+              className="appearance-none bg-transparent pr-7 font-display text-[1.0625rem] font-[620] text-white focus:outline-none"
             >
               {pages.map((page) => (
                 <option key={page} value={page} className="bg-surface-glass text-white">
@@ -600,7 +600,7 @@ export function DrawingOverlay({
             <IconButton variant="secondary" size="sm" icon={Plus} label="Zoom in" onClick={() => stepZoom(1)} disabled={scale >= MAX_SCALE} />
             <IconButton variant="secondary" size="sm" icon={Maximize} label="Fit to page" onClick={fitToPage} />
             <IconButton variant="secondary" size="sm" icon={RotateCcw} label="Reset zoom" onClick={resetZoom} />
-            <span className="ml-1 rounded-panel border border-hairline-strong bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+            <span className="ml-1 rounded-panel border border-hairline-strong bg-surface-input px-3 py-1 text-xs font-semibold text-white">
               {zoomPercent}%
             </span>
             {SHOW_THREE_D_ENTRY && (
@@ -837,7 +837,7 @@ export function DrawingOverlay({
       {/* Detected symbols: colour, name, count and a one-click verdict per category. */}
       <Card padding="none" className="min-w-0" animated={false}>
         <div className="p-4">
-          <h3 className="text-lg font-semibold text-white">Detected Symbols</h3>
+          <h3 className="font-display text-xl leading-[1.25] font-[620] tracking-[-0.01em] text-white">Detected Symbols</h3>
           <label className="relative mt-3 block">
             <span className="sr-only">Search symbols</span>
             <Search size={16} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-white/60" />
@@ -846,7 +846,7 @@ export function DrawingOverlay({
               value={symbolQuery}
               onChange={(event) => setSymbolQuery(event.target.value)}
               placeholder="Search symbols…"
-              className="w-full rounded-panel border border-hairline-strong bg-white/8 py-2 pr-3 pl-9 text-sm text-white placeholder:text-white/55 focus:border-brand focus:outline-none"
+              className="w-full h-9 rounded-panel border border-hairline-strong bg-surface-input pr-3 pl-9 text-base text-white placeholder:text-white/45 focus:border-brand focus:ring-[3px] focus:ring-brand/25 focus:outline-none"
             />
           </label>
         </div>

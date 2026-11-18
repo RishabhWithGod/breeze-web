@@ -13,21 +13,21 @@ import { cn } from '@/utils'
 
 type AlertTone = Extract<Tone, 'brand' | 'success' | 'warning' | 'danger' | 'info'>
 
-const TONE_STYLES: Record<AlertTone, { wrapper: string; icon: string }> = {
-  brand: { wrapper: 'border-l-brand bg-brand/10', icon: 'text-brand' },
-  info: { wrapper: 'border-l-status-info bg-status-info/10', icon: 'text-status-info' },
-  success: {
-    wrapper: 'border-l-status-success bg-status-success/10',
-    icon: 'text-status-success',
-  },
-  warning: {
-    wrapper: 'border-l-status-warning bg-status-warning/10',
-    icon: 'text-status-warning',
-  },
-  danger: {
-    wrapper: 'border-l-status-danger bg-status-danger/10',
-    icon: 'text-status-danger',
-  },
+/**
+ * The Breeze app's alert: a soft tint of the tone with its own darker ink, 12px corners, no border and no
+ * side bar. Everything inside — the title, the text, links — takes the tone's ink.
+ */
+const TONE_CLASSES: Record<AlertTone, string> = {
+  brand: 'bg-[var(--brand-bg)] text-brand',
+  info: 'bg-[var(--info-bg)] text-[var(--info-text)]',
+  success: 'bg-[var(--ok-bg)] text-[var(--ok-text)]',
+  warning: 'bg-[var(--warn-bg)] text-[var(--warn-text)]',
+  danger: 'bg-[var(--danger-bg)] text-[var(--danger-text)]',
+}
+
+/** The same look for a notice that is laid out by hand rather than with `<Alert>`. */
+export function noticeClasses(tone: AlertTone = 'info', className?: string): string {
+  return cn('rounded-xl text-[13.5px]', TONE_CLASSES[tone], className)
 }
 
 const TONE_ICONS: Record<AlertTone, LucideIcon> = {
@@ -47,7 +47,7 @@ export interface AlertProps {
   children: ReactNode
 }
 
-/** Inline message block with a left accent rule, matching the reference notebox. */
+/** Inline message block. */
 export function Alert({
   tone = 'info',
   title,
@@ -57,7 +57,6 @@ export function Alert({
   children,
 }: AlertProps) {
   const Icon = icon ?? TONE_ICONS[tone]
-  const styles = TONE_STYLES[tone]
 
   return (
     <motion.div
@@ -66,25 +65,21 @@ export function Alert({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.22 }}
-      className={cn(
-        'flex items-start gap-3 rounded-panel border border-hairline border-l-4 p-4',
-        styles.wrapper,
-        className,
-      )}
+      className={cn('flex items-start gap-2.5 px-3.5 py-3', noticeClasses(tone), className)}
     >
-      <Icon size={20} className={cn('mt-0.5 shrink-0', styles.icon)} aria-hidden />
+      <Icon size={16} className="mt-[3px] shrink-0" aria-hidden />
       <div className="min-w-0 flex-1">
-        {title && <p className="font-semibold text-white">{title}</p>}
-        <div className="text-md text-white">{children}</div>
+        {title && <b className="block font-bold">{title}</b>}
+        <div>{children}</div>
       </div>
       {onDismiss && (
         <button
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss message"
-          className="rounded-full p-1 text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+          className="-mr-1 shrink-0 rounded-full p-1 opacity-70 transition-opacity hover:opacity-100"
         >
-          <X size={16} aria-hidden />
+          <X size={15} aria-hidden />
         </button>
       )}
     </motion.div>

@@ -35,7 +35,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <main
           id="main-content"
           className={cn(
-            'mx-auto flex min-h-[calc(100dvh/var(--page-zoom)-var(--spacing-navbar))] max-w-ultra flex-col px-4 py-6 sm:px-6 sm:py-8 xl:px-10',
+            // The Breeze app's page frame: 1360px column, centred, 28px gutters, 30px above and 60px below.
+            'mx-auto flex min-h-[calc(100dvh/var(--page-zoom)-var(--spacing-navbar))] max-w-[1360px] flex-col px-4 pt-6 pb-12 sm:px-7 sm:pt-[30px] sm:pb-[60px]',
             // Room for the floating Resume Takeoff button to sit in, clear of
             // a form's own trailing buttons — those are bottom-right on every
             // screen that has them, exactly where the widget floats too.

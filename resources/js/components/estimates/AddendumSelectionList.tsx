@@ -1,4 +1,4 @@
-import { Checkbox, StatusChip } from '@/components/common'
+import { Checkbox, Badge } from '@/components/common'
 import type { EstimateItemRow, EstimateStatus } from '@/types'
 import { cn, ESTIMATE_STATUS_LABEL, ESTIMATE_STATUS_TONE, formatCurrency } from '@/utils'
 
@@ -74,7 +74,7 @@ export function AddendumSelectionList({
       {selectable && (
         <div className="mt-1 flex items-center justify-between border-t border-hairline pt-3">
           <p className="text-md font-semibold text-white">Selected Total</p>
-          <p className="text-lg font-bold tabular-nums text-white">{formatCurrency(selectedTotal, 2)}</p>
+          <p className="font-display text-lg font-bold tabular-nums text-white">{formatCurrency(selectedTotal, 2)}</p>
         </div>
       )}
     </div>
@@ -123,12 +123,7 @@ function Row({
       </div>
 
       <div className="flex items-center gap-3">
-        <StatusChip
-          pill
-          hideDot
-          tone={ESTIMATE_STATUS_TONE[status as EstimateStatus] ?? 'neutral'}
-          label={ESTIMATE_STATUS_LABEL[status as EstimateStatus] ?? status}
-        />
+        <Badge tone={ESTIMATE_STATUS_TONE[status as EstimateStatus] ?? 'neutral'}>{ESTIMATE_STATUS_LABEL[status as EstimateStatus] ?? status}</Badge>
         <span className="tabular-nums font-semibold text-white">{formatCurrency(amount, 2)}</span>
       </div>
     </div>

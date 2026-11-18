@@ -3,15 +3,16 @@ import type { LucideIcon } from 'lucide-react'
 import type { Tone } from '@/types'
 import { cn } from '@/utils'
 
+/** Tinted pill, the Breeze app's badge: soft fill, darker same-hue text, no border. */
 const TONES: Record<Tone, string> = {
-  brand: 'bg-brand/15 text-brand border-brand/40',
-  success: 'bg-status-success/12 text-status-success border-status-success/40',
-  warning: 'bg-status-warning/15 text-status-warning border-status-warning/40',
-  danger: 'bg-status-danger/12 text-status-danger border-status-danger/40',
-  info: 'bg-status-info/15 text-status-info border-status-info/40',
-  purple: 'bg-status-purple/15 text-status-purple border-status-purple/40',
-  blue: 'bg-status-blue/15 text-status-blue border-status-blue/40',
-  neutral: 'bg-white/10 text-white border-hairline-strong',
+  brand: 'bg-[var(--brand-bg)] text-brand',
+  success: 'bg-[var(--ok-bg)] text-[var(--ok-text)]',
+  warning: 'bg-[var(--warn-bg)] text-[var(--warn-text)]',
+  danger: 'bg-[var(--danger-bg)] text-[var(--danger-text)]',
+  info: 'bg-[var(--info-bg)] text-[var(--info-text)]',
+  purple: 'bg-[var(--violet-bg)] text-[var(--violet-text)]',
+  blue: 'bg-[var(--brand-bg)] text-brand',
+  neutral: 'bg-[var(--gray-bg)] text-[var(--gray-text)]',
 }
 
 export interface BadgeProps {
@@ -22,20 +23,15 @@ export interface BadgeProps {
   children: ReactNode
 }
 
-/** Compact label for counts, categories and metadata. */
-export function Badge({
-  tone = 'neutral',
-  icon: Icon,
-  size = 'md',
-  className,
-  children,
-}: BadgeProps) {
+/** Compact label for counts, categories and statuses. A leading dot marks it as a status unless it carries an icon. */
+export function Badge({ tone = 'neutral', icon: Icon, size = 'md', className, children }: BadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border font-medium whitespace-nowrap',
-        size === 'sm' ? 'px-2 py-0.5 text-2xs' : 'px-3 py-1 text-xs',
+        'inline-flex items-center gap-[5px] rounded-full font-[550] whitespace-nowrap',
+        size === 'sm' ? 'h-[19px] px-1.5 text-[11px]' : 'h-[23px] px-[9px] text-[12.5px]',
         TONES[tone],
+        !Icon && "before:size-1.5 before:shrink-0 before:rounded-full before:bg-current before:opacity-80 before:content-['']",
         className,
       )}
     >

@@ -19,6 +19,10 @@
     <meta name="theme-color" content="#0b1a3f" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
 
+    {{-- Roboto: the Breeze app's typeface, used by the client list. --}}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@500;700&display=swap" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 

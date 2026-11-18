@@ -11,7 +11,7 @@ import type { SelectOption } from '@/types'
 import { cn } from '@/utils'
 
 const CONTROL_BASE =
-  'w-full rounded-panel border border-hairline-strong bg-surface-input px-3 py-2 text-md text-white ' +
+  'w-full rounded-panel border border-hairline-strong bg-surface-input px-[11px] py-[7px] text-base text-white ' +
   'placeholder:text-white/45 transition-colors duration-200 ' +
   'hover:border-brand/40 focus:border-brand focus:ring-[3px] focus:ring-brand/25 focus:outline-none ' +
   'disabled:cursor-not-allowed disabled:opacity-50'

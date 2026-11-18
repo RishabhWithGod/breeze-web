@@ -23,7 +23,7 @@ import {
   Users,
   type LucideIcon,
   ScanLine,
-  HardHat,
+  Calculator,
 } from 'lucide-react'
 import {
   Alert,
@@ -31,11 +31,12 @@ import {
   Button,
   ButtonLink,
   Card,
+  Stat,
+  UnderlineTabs,
   CardHeader,
   ConfirmDialog,
   EmptyState,
   MoreMenu,
-  StatusChip,
   Table,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
@@ -190,16 +191,6 @@ export default function ProjectShow({
    * away, so Back always still means "leave the project", never "leave this
    * tab".
    */
-  const tabs: { key: TabKey; label: string; icon: LucideIcon }[] = [
-    { key: 'overview', label: 'Overview', icon: FolderKanban },
-    { key: 'drawings', label: 'Drawings', icon: FileText },
-    { key: 'takeoffs', label: 'Takeoffs', icon: ScanLine },
-    { key: 'estimates', label: 'Estimates', icon: ClipboardList },
-    { key: 'jobs', label: 'Jobs', icon: HardHat },
-    { key: 'team', label: 'Team', icon: Users },
-    { key: 'documents', label: 'Documents', icon: Files },
-    { key: 'invoices', label: 'Invoices', icon: Receipt },
-  ]
 
   const estimateColumns: TableColumn<ProjectEstimateRow>[] = [
     {
@@ -215,7 +206,7 @@ export default function ProjectShow({
       key: 'status',
       header: 'Status',
       render: (row) => (
-        <StatusChip hideDot tone={ESTIMATE_STATUS_TONE[row.status]} label={ESTIMATE_STATUS_LABEL[row.status]} />
+        <Badge tone={ESTIMATE_STATUS_TONE[row.status]}>{ESTIMATE_STATUS_LABEL[row.status]}</Badge>
       ),
     },
     {
@@ -245,7 +236,7 @@ export default function ProjectShow({
     {
       key: 'status',
       header: 'Status',
-      render: (row) => <StatusChip hideDot tone={JOB_STATUS_TONE[row.status]} label={JOB_STATUS_LABEL[row.status]} />,
+      render: (row) => <Badge tone={JOB_STATUS_TONE[row.status]}>{JOB_STATUS_LABEL[row.status]}</Badge>,
     },
     {
       key: 'type',
@@ -277,7 +268,7 @@ export default function ProjectShow({
       key: 'status',
       header: 'Status',
       render: (row) => (
-        <StatusChip hideDot tone={INVOICE_STATUS_TONE[row.status]} label={INVOICE_STATUS_LABEL[row.status]} />
+        <Badge tone={INVOICE_STATUS_TONE[row.status]}>{INVOICE_STATUS_LABEL[row.status]}</Badge>
       ),
     },
     {
@@ -337,11 +328,18 @@ export default function ProjectShow({
         subtitle={`${project.description ?? project.client} · ${project.drawingCount} ${project.drawingCount === 1 ? 'drawing' : 'drawings'} · ${project.takeoffCount} ${project.takeoffCount === 1 ? 'takeoff' : 'takeoffs'}`}
         breadcrumbs={[
           { label: 'Projects', href: ROUTES.projects },
-          { label: project.name, href: routeTo.project(project.id) },
-          { label: 'Project Workspace' },
+          { label: project.name },
         ]}
         actions={
           <>
+            {permitted('projects.edit') && (
+              <ButtonLink href={routeTo.projectEdit(project.id)} variant="secondary" leftIcon={PencilLine}>
+                Edit
+              </ButtonLink>
+            )}
+            <ButtonLink href={`${ROUTES.estimateCreate}?project=${project.id}`} variant="secondary" leftIcon={Calculator}>
+              New estimate
+            </ButtonLink>
             {takeoffAction.kind === 'link' ? (
               <ButtonLink href={takeoffAction.href} variant="secondary" leftIcon={takeoffAction.icon}>
                 {takeoffAction.label}
@@ -356,7 +354,11 @@ export default function ProjectShow({
                 {takeoffAction.label}
               </Button>
             )}
+            <ButtonLink href={routeTo.uploadForProject(project.id)} leftIcon={UploadIcon}>
+              Upload drawings
+            </ButtonLink>
             <MoreMenu
+              variant="minimal"
               ariaLabel="Project actions"
               items={[
                 ...(permitted('projects.edit')
@@ -398,66 +400,28 @@ export default function ProjectShow({
       </AnimatePresence>
 
       {/* ======================================================= Tabs ======= */}
-      <nav
-        aria-label="Project sections"
-        className="mb-6 flex gap-1 overflow-x-auto border-b border-hairline"
-      >
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            aria-current={activeTab === tab.key ? 'page' : undefined}
-            className={cn(
-              'flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
-              activeTab === tab.key
-                ? 'border-brand text-brand'
-                : 'border-transparent text-white/60 hover:text-white',
-            )}
-          >
-            <tab.icon size={15} aria-hidden />
-            {tab.label}
-          </button>
-        ))}
-      </nav>
+      <UnderlineTabs
+        value={activeTab}
+        onChange={setActiveTab}
+        tabs={[
+          { key: 'overview', label: 'Overview' },
+          { key: 'drawings', label: 'Drawings', count: project.drawingCount },
+          { key: 'takeoffs', label: 'Takeoffs', count: project.takeoffCount },
+          { key: 'estimates', label: 'Estimates', count: project.estimateCount },
+          { key: 'jobs', label: 'Jobs', count: project.jobCount },
+          { key: 'team', label: 'Team', count: project.teamCount },
+          { key: 'documents', label: 'Documents', count: project.documentsList.length },
+          { key: 'invoices', label: 'Invoices', count: project.invoiceCount },
+        ]}
+      />
 
       {/* =================================================== Stat cards ===== */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard
-          icon={FileText}
-          label="Drawings"
-          value={project.drawingCount}
-          tone="brand"
-          onClick={() => setActiveTab('drawings')}
-        />
-        <StatCard
-          icon={ScanLine}
-          label="Takeoffs"
-          value={project.takeoffCount}
-          tone="purple"
-          onClick={() => setActiveTab('takeoffs')}
-        />
-        <StatCard
-          icon={ClipboardList}
-          label="Estimates"
-          value={project.estimateCount}
-          tone="success"
-          onClick={() => setActiveTab('estimates')}
-        />
-        <StatCard
-          icon={Briefcase}
-          label="Jobs"
-          value={project.jobCount}
-          tone="warning"
-          onClick={() => setActiveTab('jobs')}
-        />
-        <StatCard
-          icon={Users}
-          label="Team Members"
-          value={project.teamCount}
-          tone="purple"
-          onClick={() => setActiveTab('team')}
-        />
+      <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <StatCard label="Drawings" value={project.drawingCount} onClick={() => setActiveTab('drawings')} />
+        <StatCard label="Takeoffs" value={project.takeoffCount} onClick={() => setActiveTab('takeoffs')} />
+        <StatCard label="Estimates" value={project.estimateCount} onClick={() => setActiveTab('estimates')} />
+        <StatCard label="Jobs" value={project.jobCount} onClick={() => setActiveTab('jobs')} />
+        <StatCard label="Team Members" value={project.teamCount} onClick={() => setActiveTab('team')} />
       </div>
 
       {activeTab === 'overview' && (
@@ -478,16 +442,15 @@ export default function ProjectShow({
               </ButtonLink>
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
-          <dl className="flex flex-col gap-3">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
             <InfoRow label="Name" value={project.name} />
             {project.description && <InfoRow label="Description" value={project.description} />}
             {project.code && <InfoRow label="Project #" value={project.code} />}
           </dl>
 
-          <dl className="mt-6 flex flex-col gap-3 border-t border-hairline pt-6">
+          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-hairline pt-4">
             <InfoRow
               label="Status"
               value={<StatusBadge status={project.status} />}
@@ -510,7 +473,7 @@ export default function ProjectShow({
 
           {/* Hidden for now — see `CommodityList` below to bring it back. */}
 
-          <dl className="mt-6 flex flex-col gap-3 border-t border-hairline pt-6">
+          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-hairline pt-4">
             {project.startedAt && <InfoRow label="Start Date" value={formatDate(project.startedAt)} />}
             {project.dueDate && <InfoRow label="End Date" value={formatDate(project.dueDate)} />}
             <InfoRow label="Opened" value={formatDate(project.createdAt)} />
@@ -526,7 +489,6 @@ export default function ProjectShow({
               </span>
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -597,7 +559,6 @@ export default function ProjectShow({
               </span>
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
           {project.activity.length === 0 ? (
@@ -639,7 +600,6 @@ export default function ProjectShow({
               </span>
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
           <div className="flex flex-col gap-4">
@@ -667,7 +627,6 @@ export default function ProjectShow({
             </ButtonLink>
           }
           className="border-b border-hairline pb-4"
-          titleClassName="text-lg font-semibold"
         />
 
         <p
@@ -699,7 +658,6 @@ export default function ProjectShow({
                 : 'Every drawing on record for this client.'
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
           <ProjectDocumentList
@@ -726,7 +684,6 @@ export default function ProjectShow({
               </span>
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
           {project.takeoffCount === 0 ? (
@@ -778,7 +735,6 @@ export default function ProjectShow({
               </ButtonLink>
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
           {project.estimatesList.length === 0 ? (
@@ -821,7 +777,6 @@ export default function ProjectShow({
               </ButtonLink>
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
           {project.jobsList.length === 0 ? (
@@ -862,7 +817,6 @@ export default function ProjectShow({
               </Link>
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
           {project.members.length === 0 ? (
@@ -929,7 +883,6 @@ export default function ProjectShow({
               </ButtonLink>
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
           {project.documentsList.length === 0 ? (
@@ -962,7 +915,6 @@ export default function ProjectShow({
               </span>
             }
             className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
           />
 
           {project.invoicesList.length === 0 ? (
@@ -1017,7 +969,7 @@ export default function ProjectShow({
 
 function StatusBadge({ status }: { status: ProjectRecord['status'] }) {
   return (
-    <Badge tone={TAKEOFF_STATUS_TONE[status]} size="sm">
+    <Badge tone={TAKEOFF_STATUS_TONE[status]}>
       {TAKEOFF_STATUS_LABEL[status]}
     </Badge>
   )
@@ -1040,10 +992,10 @@ const TONE_STYLES: Record<StatTone, { border: string; iconBg: string; iconText: 
     barFill: 'bg-status-blue',
   },
   purple: {
-    border: 'border-purple-400/40 border-l-purple-400 hover:border-purple-400/70',
-    iconBg: 'bg-purple-400/15',
+    border: 'border-status-purple/40',
+    iconBg: 'bg-status-purple/15',
     iconText: 'text-status-purple',
-    barFill: 'bg-purple-400',
+    barFill: 'bg-status-purple',
   },
   info: {
     border: 'border-status-info/40 border-l-status-info hover:border-status-info/70',
@@ -1089,33 +1041,15 @@ const ACTIVITY_TONE_STYLES: Record<Tone, string> = {
 }
 
 interface StatCardProps {
-  icon: LucideIcon
   label: string
   value: number
-  tone: StatTone
   onClick: () => void
 }
 
-function StatCard({ icon: Icon, label, value, tone, onClick }: StatCardProps) {
-  const styles = TONE_STYLES[tone]
-
+function StatCard({ label, value, onClick }: StatCardProps) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'flex items-center gap-3 rounded-panel border-2 border-l-[6px] glass p-4 text-left transition-colors',
-        styles.border,
-      )}
-    >
-      <span className={cn('grid size-11 shrink-0 place-items-center rounded-panel', styles.iconBg, styles.iconText)}>
-        <Icon size={20} aria-hidden />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-xl font-semibold tabular-nums text-white">{value}</p>
-        <p className="truncate text-sm text-white/60">{label}</p>
-      </div>
-      <ChevronRight size={16} aria-hidden className="shrink-0 text-white/40" />
+    <button type="button" onClick={onClick} className="block text-left transition-transform hover:-translate-y-0.5">
+      <Stat label={label} value={value} className="h-full" />
     </button>
   )
 }
@@ -1135,7 +1069,7 @@ function QuickAction({ icon: Icon, tone, title, subtitle, href, onClick }: Quick
   const content = (
     <div
       className={cn(
-        'flex w-full items-center gap-3 rounded-panel border bg-white/4 p-3 text-left transition-colors hover:bg-white/8',
+        'flex w-full items-center gap-3 rounded-panel border bg-[var(--surface-2)] p-3 text-left transition-colors hover:border-brand/40',
         'border-hairline',
       )}
     >
@@ -1143,8 +1077,8 @@ function QuickAction({ icon: Icon, tone, title, subtitle, href, onClick }: Quick
         <Icon size={18} aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white">{title}</p>
-        <p className="truncate text-xs text-white/60">{subtitle}</p>
+        <p className="truncate text-[13.5px] font-semibold text-white">{title}</p>
+        <p className="truncate text-xs text-[var(--text-3)]">{subtitle}</p>
       </div>
       <ChevronRight size={16} aria-hidden className="shrink-0 text-white/40" />
     </div>
@@ -1173,12 +1107,12 @@ interface InfoRowProps {
 
 function InfoRow({ label, value, icon: Icon }: InfoRowProps) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-3">
-      <dt className="flex items-center gap-1.5 text-sm text-white/60">
-        {Icon && <Icon size={13} aria-hidden className="shrink-0" />}
+    <div className="min-w-0">
+      <dt className="mb-0.5 flex items-center gap-[5px] text-xs text-[var(--text-3)]">
+        {Icon && <Icon size={12} aria-hidden className="shrink-0" />}
         {label}
       </dt>
-      <dd className="text-md text-white">{value ?? <span className="text-white/45">—</span>}</dd>
+      <dd className="font-medium break-words text-white">{value ?? <span className="text-[var(--text-3)]">—</span>}</dd>
     </div>
   )
 }
@@ -1201,19 +1135,19 @@ function ProgressRow({ label, value, tone }: ProgressRowProps) {
   return (
     <div>
       <div className="flex items-center justify-between text-sm">
-        <span className="text-white/70">{label}</span>
-        <span className="text-white/50">
+        <span className="text-[var(--text-2)]">{label}</span>
+        <span className="text-[var(--text-3)]">
           {value} / {value}
         </span>
       </div>
       <div className="mt-1.5 flex items-center gap-3">
-        <div className="h-2 flex-1 rounded-full bg-white/10">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--surface-3)]">
           <div
             className={cn('h-full rounded-full', styles.barFill)}
             style={{ width: `${percent}%` }}
           />
         </div>
-        <span className="w-10 shrink-0 text-right text-xs text-white/50">{percent}%</span>
+        <span className="w-10 shrink-0 text-right text-xs text-[var(--text-3)]">{percent}%</span>
       </div>
     </div>
   )

@@ -1,33 +1,15 @@
 import { Head, Link, router, usePage } from '@inertiajs/react'
-import { AnimatePresence, motion } from 'framer-motion'
-import {
-  CircleDollarSign,
-  ClipboardList,
-  Clock,
-  DollarSign,
-  ExternalLink,
-  FileText,
-  FolderKanban,
-  Globe,
-  Mail,
-  PencilLine,
-  Phone,
-  Plus,
-  Trash2,
-  User,
-  Users,
-  ScanLine,
-} from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
+import { Clock, Globe, Mail, MapPin, PencilLine, Phone, Plus, Trash2 } from 'lucide-react'
 import {
   Alert,
   Badge,
   ButtonLink,
-  Card,
-  CardHeader,
   ConfirmDialog,
   EmptyState,
-  IconButton,
-  StatusChip,
+  MoreMenu,
+  Panel,
+  Stat,
   Table,
 } from '@/components/common'
 import { ClientContactsCard, ClientSitesCard, type ClientContact, type ClientSite } from '@/components/clients'
@@ -40,6 +22,7 @@ import {
   TAKEOFF_STATUS_TONE,
   formatCurrency,
   formatDate,
+  cn,
   formatRelative,
 } from '@/utils'
 
@@ -90,6 +73,10 @@ export interface ClientShowProps {
   projectSummary: ProjectSummary
   /** Every invoice raised against this client, still owed. */
   outstandingBalance: number
+  /** Everything invoiced to this client so far — sent and paid invoices, not drafts. */
+  billedToDate: number
+  /** What an hour of this client's labor is billed at: their own rate, else the usual one. */
+  laborRate: number
   /** What has actually happened, read off this client's own projects. */
   activity: readonly ActivityEntry[]
 }
@@ -115,6 +102,8 @@ export default function ClientShow({
   projects,
   projectSummary,
   outstandingBalance,
+  billedToDate,
+  laborRate,
   activity,
 }: ClientShowProps) {
   const { can: permitted } = usePermissions()
@@ -124,10 +113,9 @@ export default function ClientShow({
     {
       key: 'activity',
       header: 'Activity',
-      width: 'w-56',
       render: (entry) => (
         <span className="flex items-center gap-2">
-          <Clock size={14} aria-hidden className="shrink-0 text-white/50" />
+          <Clock size={14} aria-hidden className="shrink-0 text-[var(--text-3)]" />
           {entry.title}
         </span>
       ),
@@ -136,18 +124,49 @@ export default function ClientShow({
       key: 'details',
       header: 'Details',
       render: (entry) => (
-        <span className="text-white/80">{entry.description ?? '—'}</span>
+        <span className="text-[var(--text-2)]">{entry.description ?? '—'}</span>
       ),
     },
     {
       key: 'time',
       header: 'Time',
       align: 'right',
-      width: 'w-36',
       render: (entry) => (
-        <span className="text-white/60">
+        <span className="whitespace-nowrap text-[var(--text-3)]">
           {entry.occurredAt ? formatRelative(entry.occurredAt) : '—'}
         </span>
+      ),
+    },
+  ]
+
+  const projectColumns: TableColumn<ClientProject>[] = [
+    {
+      key: 'project',
+      header: 'Project',
+      render: (project) => (
+        <div className="min-w-0">
+          <Link href={routeTo.project(project.id)} className="block truncate font-bold text-white hover:text-brand">
+            {project.name}
+          </Link>
+          <p className="truncate text-[13px] text-[var(--text-3)]">
+            {project.drawingCount} {project.drawingCount === 1 ? 'drawing' : 'drawings'} · {project.takeoffCount}{' '}
+            {project.takeoffCount === 1 ? 'takeoff' : 'takeoffs'}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (project) => (
+        <Badge tone={TAKEOFF_STATUS_TONE[project.status]}>{TAKEOFF_STATUS_LABEL[project.status]}</Badge>
+      ),
+    },
+    {
+      key: 'opened',
+      header: 'Opened',
+      render: (project) => (
+        <span className="whitespace-nowrap">{project.createdAt ? formatDate(project.createdAt) : '—'}</span>
       ),
     },
   ]
@@ -157,14 +176,8 @@ export default function ClientShow({
       <Head title={client.name} />
 
       <PageHeader
-        title={
-          <span className="flex flex-wrap items-center gap-3">
-            {client.name}
-            <Badge tone="info" size="sm">
-              Client
-            </Badge>
-          </span>
-        }
+        title={client.name}
+        {...(client.createdAt ? { subtitle: `Client since ${formatDate(client.createdAt)}` } : {})}
         breadcrumbs={[
           { label: 'Clients', href: ROUTES.clients },
           { label: client.name },
@@ -173,14 +186,15 @@ export default function ClientShow({
           <>
             {permitted('clients.edit') && (
               <ButtonLink href={routeTo.clientEdit(client.id)} variant="secondary" leftIcon={PencilLine}>
-                Edit Client
+                Edit
               </ButtonLink>
             )}
             {permitted('projects.create') && (
               <ButtonLink href={routeTo.projectCreateForClient(client.id)} leftIcon={Plus}>
-                Add Project
+                New project
               </ButtonLink>
             )}
+            <RemoveClient client={client} projectCount={projects.length} />
           </>
         }
       />
@@ -188,332 +202,164 @@ export default function ClientShow({
       {/* A refused delete lands here, and it explains itself. */}
       <AnimatePresence initial={false}>
         {flash.warning && (
-          <Alert key={flash.warning} tone="warning" className="mb-6">
+          <Alert key={flash.warning} tone="warning" className="mb-4">
             {flash.warning}
           </Alert>
         )}
       </AnimatePresence>
 
-      {/* ============================================ Information row ====== */}
-      <div className="grid gap-6 xl:grid-cols-3">
-        <Card padding="md" className="min-w-0">
-          <CardHeader
-            title={
-              <span className="flex items-center gap-2">
-                <User size={18} aria-hidden className="text-white/70" />
-                Client Information
-              </span>
-            }
-            actions={<RemoveClient client={client} projectCount={projects.length} />}
-            className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
-          />
-
-          <dl className="flex flex-col gap-3">
-            <InfoRow label="Name" value={client.name} />
-            <InfoRow label="Phone" value={client.contactPhone} icon={Phone} />
-            <InfoRow label="Email" value={client.contactEmail} icon={Mail} />
-            <InfoRow
-              label="Website"
-              icon={Globe}
-              value={
-                client.website ? (
-                  <a
-                    href={client.website}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-brand hover:underline"
-                  >
-                    {client.website.replace(/^https?:\/\//, '')}
-                  </a>
-                ) : null
-              }
-            />
-          </dl>
-
-          <dl className="mt-6 flex flex-col gap-3 border-t border-hairline pt-6">
-            <InfoRow label="On the register since" value={client.createdAt ? formatDate(client.createdAt) : null} />
-          </dl>
-
-          <div className="mt-6 border-t border-hairline pt-6">
-            <p className="flex items-center gap-1.5 text-sm text-white/60">
-              <FileText size={13} aria-hidden className="shrink-0" />
-              Notes
-            </p>
-            <p
-              className={
-                client.notes
-                  ? 'mt-1 text-md whitespace-pre-line text-white/90'
-                  : 'mt-1 text-md text-white/45'
-              }
-            >
-              {client.notes ?? 'Nothing recorded.'}
-            </p>
-          </div>
-        </Card>
-
-        <ClientContactsCard clientId={client.id} contacts={client.contacts} />
-
-        <ClientSitesCard clientId={client.id} addresses={client.addresses} />
-
-        <Card padding="md" className="min-w-0">
-          <CardHeader
-            title={
-              <span className="flex items-center gap-2">
-                <Users size={18} aria-hidden className="text-white/70" />
-                Crew
-              </span>
-            }
-            className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
-          />
-
-          {members.length === 0 ? (
-            <p className="text-md text-white/70">No one on record yet.</p>
-          ) : (
-            <ul className="space-y-2">
-              {members.map((member) => (
-                <li
-                  key={member.id}
-                  className="flex items-center justify-between gap-3 rounded-panel border border-hairline bg-white/4 p-3"
-                >
-                  <span className="text-md font-medium text-white">{member.name}</span>
-                  <StatusChip hideDot tone={MEMBER_ROLE_TONE[member.role] ?? 'neutral'} label={member.roleLabel} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+      {/* ================================================== Stat tiles ====== */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label="Labor rate" value={`${formatCurrency(laborRate, 2)}/hr`} />
+        <Stat label="Projects" value={projectSummary.total} />
+        <Stat label="Billed to date" value={<InvoicesLink name={client.name}>{formatCurrency(billedToDate, 0)}</InvoicesLink>} />
+        <Stat label="Open balance" value={<InvoicesLink name={client.name}>{formatCurrency(outstandingBalance, 0)}</InvoicesLink>} />
       </div>
 
-      {/* ==================================== Summary + Balance row ====== */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <Card padding="md" className="min-w-0">
-          <CardHeader
-            title={
-              <span className="flex items-center gap-2">
-                <ClipboardList size={18} aria-hidden className="text-white/70" />
-                Project Summary
-              </span>
-            }
+      {/* ================================================== Body grid ======= */}
+      <div className="mt-4 grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {/* Cards run in rows so each row stands one height: Projects with the client's details, three smaller cards, then the activity log across the bottom. */}
+          <Panel
+            id="projects"
+            title="Projects"
+            pad={false}
+            className="scroll-mt-6 xl:col-span-2"
             actions={
-              <a href="#projects" className="text-sm text-brand hover:underline">
-                View All Projects →
-              </a>
-            }
-            className="border-b border-hairline pb-4 sm:items-center"
-            titleClassName="text-lg font-semibold"
-          />
-
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <SummaryStat label="Total Projects" value={projectSummary.total} />
-            <SummaryStat label="Active Projects" value={projectSummary.active} tone="brand" />
-            <SummaryStat label="Completed Projects" value={projectSummary.completed} />
-            <SummaryStat label="On Hold" value={projectSummary.onHold} />
-          </div>
-        </Card>
-
-        <Card padding="md" className="min-w-0">
-          <CardHeader
-            title={
-              <span className="flex items-center gap-2">
-                <CircleDollarSign size={18} aria-hidden className="text-white/70" />
-                Outstanding Balance
-              </span>
-            }
-            className="border-b border-hairline pb-4"
-            titleClassName="text-lg font-semibold"
-          />
-
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-3xl font-semibold text-white">
-                {formatCurrency(outstandingBalance, 2)}
-              </p>
-              <p className="mt-1 text-sm text-white/60">Total Outstanding</p>
-            </div>
-
-            <ButtonLink
-              href={`${ROUTES.invoices}?client=${encodeURIComponent(client.name)}`}
-              size="sm"
-              leftIcon={DollarSign}
-            >
-              View Invoices
-            </ButtonLink>
-          </div>
-        </Card>
-      </div>
-
-      {/* ===================================================== Projects ====== */}
-      <Card id="projects" padding="md" className="mt-6 scroll-mt-6">
-        <CardHeader
-          title={
-            <span className="flex items-center gap-2">
-              <FolderKanban size={18} aria-hidden className="text-white/70" />
-              Projects
-            </span>
-          }
-          actions={
-            <ButtonLink
-              href={routeTo.projectCreateForClient(client.id)}
-              variant="secondary"
-              size="sm"
-              leftIcon={Plus}
-            >
-              Add project
-            </ButtonLink>
-          }
-          className="border-b border-hairline pb-4 sm:items-center"
-          titleClassName="text-lg font-semibold"
-        />
-
-        {projects.length === 0 ? (
-          <EmptyState
-            size="sm"
-            icon={FolderKanban}
-            title="Nothing on for this client yet"
-            description="Open a project, then run its drawings through AI Takeoff."
-            actions={
-              <ButtonLink
-                href={routeTo.projectCreateForClient(client.id)}
-                leftIcon={Plus}
-              >
-                Add project
+              <ButtonLink href={routeTo.projectCreateForClient(client.id)} variant="ghost" size="sm" leftIcon={Plus}>
+                Add
               </ButtonLink>
             }
-          />
-        ) : (
-          <ul className="space-y-3">
-            {projects.map((project, index) => (
-              <motion.li
-                key={project.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: Math.min(index, 6) * 0.04 }}
-                className="rounded-panel border border-hairline bg-white/4 p-4"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <Link
-                      href={routeTo.project(project.id)}
-                      className="truncate font-semibold text-white transition-colors hover:text-brand"
-                    >
-                      {project.name}
-                    </Link>
-                    <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-sm text-white/70">
-                      <span className="flex items-center gap-1.5">
-                        <FileText size={13} aria-hidden />
-                        {project.drawingCount}{' '}
-                        {project.drawingCount === 1 ? 'drawing' : 'drawings'}
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <ScanLine size={13} aria-hidden />
-                        {project.takeoffCount}{' '}
-                        {project.takeoffCount === 1 ? 'takeoff' : 'takeoffs'}
-                      </span>
-                      {project.createdAt && <span>Opened {formatDate(project.createdAt)}</span>}
-                    </p>
-                  </div>
+          >
+            {projects.length === 0 ? (
+              <EmptyState
+                size="sm"
+                icon={MapPin}
+                title="Nothing on for this client yet"
+                description="Open a project, then run its drawings through AI Takeoff."
+                actions={
+                  <ButtonLink href={routeTo.projectCreateForClient(client.id)} leftIcon={Plus}>
+                    Add project
+                  </ButtonLink>
+                }
+              />
+            ) : (
+              <Table
+                variant="lined"
+                columns={projectColumns}
+                rows={projects}
+                getRowId={(project) => project.id}
+                caption="Projects for this client"
+                onRowClick={(project) => router.visit(routeTo.project(project.id))}
+              />
+            )}
+          </Panel>
 
-                  <div className="flex items-center gap-3">
-                    <StatusChip
-                      hideDot
-                      tone={TAKEOFF_STATUS_TONE[project.status]}
-                      label={TAKEOFF_STATUS_LABEL[project.status]}
-                    />
-                    <ButtonLink
-                      href={routeTo.project(project.id)}
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={ExternalLink}
-                    >
-                      Open
-                    </ButtonLink>
-                  </div>
-                </div>
-              </motion.li>
-            ))}
-          </ul>
-        )}
-      </Card>
+          <Panel title="Client information">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <KvItem label="Name" value={client.name} />
+              <KvItem label="On the register since" value={client.createdAt ? formatDate(client.createdAt) : null} />
+              <KvItem label="Phone" icon={Phone} value={client.contactPhone && <a href={`tel:${client.contactPhone}`} className="text-brand hover:underline">{client.contactPhone}</a>} />
+              <KvItem label="Email" icon={Mail} value={client.contactEmail && <a href={`mailto:${client.contactEmail}`} className="text-brand hover:underline">{client.contactEmail}</a>} />
+              <KvItem
+                className="col-span-2"
+                label="Website"
+                icon={Globe}
+                value={
+                  client.website && (
+                    <a href={client.website} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                      {client.website.replace(/^https?:\/\//, '')}
+                    </a>
+                  )
+                }
+              />
+              <KvItem
+                className="col-span-2"
+                label="Notes"
+                value={client.notes ? <span className="whitespace-pre-line">{client.notes}</span> : null}
+                emptyLabel="Nothing recorded."
+              />
+            </dl>
+          </Panel>
 
-      {/* ================================================ Recent Activity ==== */}
-      <Card padding="md" className="mt-6">
-        <CardHeader
-          title={
-            <span className="flex items-center gap-2">
-              <Clock size={18} aria-hidden className="text-white/70" />
-              Recent Activity
-            </span>
-          }
-          actions={
-            activity.length > 0 ? (
-              <span className="text-sm text-brand">View All Activity →</span>
-            ) : undefined
-          }
-          className="border-b border-hairline pb-4 sm:items-center"
-          titleClassName="text-lg font-semibold"
-        />
+          <ClientSitesCard clientId={client.id} addresses={client.addresses} />
 
-        {activity.length === 0 ? (
-          <p className="text-md text-white/70">
-            Nothing recorded yet — activity shows up here once there's a project to report on.
-          </p>
-        ) : (
-          <Table
-            columns={activityColumns}
-            rows={activity}
-            getRowId={(entry) => entry.id}
-            variant="lined"
-            dense
-            caption="Recent activity on this client"
-          />
-        )}
-      </Card>
+          <ClientContactsCard clientId={client.id} contacts={client.contacts} />
+
+          <Panel title="Crew">
+            {members.length === 0 ? (
+              <p className="text-[var(--text-3)]">No one on record yet.</p>
+            ) : (
+              <ul>
+                {members.map((member) => (
+                  <li
+                    key={member.id}
+                    className="flex items-center justify-between gap-3 border-b border-hairline py-[11px] first:pt-0 last:border-b-0 last:pb-0"
+                  >
+                    <span className="font-medium text-white">{member.name}</span>
+                    <Badge tone={MEMBER_ROLE_TONE[member.role] ?? 'neutral'}>{member.roleLabel}</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel
+            title="Recent activity"
+            className="lg:col-span-2 xl:col-span-3"
+            pad={false}
+            actions={
+              activity.length > 0 ? <span className="text-[13px] font-medium text-brand">View all activity →</span> : undefined
+            }
+          >
+            {activity.length === 0 ? (
+              <p className="p-[22px] text-[var(--text-3)]">
+                Nothing recorded yet — activity shows up here once there's a project to report on.
+              </p>
+            ) : (
+              <Table
+                columns={activityColumns}
+                rows={activity}
+                getRowId={(entry) => entry.id}
+                variant="lined"
+                caption="Recent activity on this client"
+              />
+            )}
+          </Panel>
+      </div>
     </PageTransition>
   )
 }
 
-interface InfoRowProps {
-  label: string
-  value: React.ReactNode | null
-  icon?: React.ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
-}
-
-function InfoRow({ label, value, icon: Icon }: InfoRowProps) {
+/** A figure that opens this client's invoices. */
+function InvoicesLink({ name, children }: { name: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-3">
-      <dt className="flex items-center gap-1.5 text-sm text-white/60">
-        {Icon && <Icon size={13} aria-hidden className="shrink-0" />}
-        {label}
-      </dt>
-      <dd className="text-md text-white">{value ?? <span className="text-white/45">—</span>}</dd>
-    </div>
+    <Link
+      href={`${ROUTES.invoices}?client=${encodeURIComponent(name)}`}
+      title="View this client's invoices"
+      className="transition-colors hover:text-brand"
+    >
+      {children}
+    </Link>
   )
 }
 
-interface SummaryStatProps {
+interface KvItemProps {
   label: string
-  value: number
-  tone?: Tone
+  value: React.ReactNode | null
+  icon?: React.ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
+  emptyLabel?: string
+  className?: string
 }
 
-function SummaryStat({ label, value, tone = 'neutral' }: SummaryStatProps) {
-  const TONE_TEXT: Record<Tone, string> = {
-    brand: 'text-brand',
-    success: 'text-status-success',
-    warning: 'text-status-warning',
-    danger: 'text-status-danger',
-    info: 'text-status-info',
-    purple: 'text-status-purple',
-    blue: 'text-status-blue',
-    neutral: 'text-white',
-  }
-
+/** One label-over-value pair, as the Breeze app's key/value list draws it. */
+function KvItem({ label, value, icon: Icon, emptyLabel = '—', className }: KvItemProps) {
   return (
-    <div>
-      <p className={`text-2xl font-semibold tabular-nums ${TONE_TEXT[tone]}`}>{value}</p>
-      <p className="text-sm text-white/60">{label}</p>
+    <div className={cn('min-w-0', className)}>
+      <dt className="mb-0.5 flex items-center gap-[5px] text-xs text-[var(--text-3)]">
+        {Icon && <Icon size={12} aria-hidden className="shrink-0" />}
+        {label}
+      </dt>
+      <dd className="font-medium break-words text-white">{value ?? <span className="text-[var(--text-3)]">{emptyLabel}</span>}</dd>
     </div>
   )
 }
@@ -535,12 +381,10 @@ function RemoveClient({ client, projectCount }: RemoveClientProps) {
 
   return (
     <>
-      <IconButton
-        icon={Trash2}
-        label={`Remove ${client.name}`}
-        variant="danger"
-        size="sm"
-        onClick={dialog.open}
+      <MoreMenu
+        variant="minimal"
+        ariaLabel={`More actions for ${client.name}`}
+        items={[{ label: 'Remove client', icon: Trash2, destructive: true, onSelect: dialog.open }]}
       />
 
       <ConfirmDialog

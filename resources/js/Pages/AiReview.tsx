@@ -1,11 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
-import { Box, CheckCheck, Combine, RotateCcw, X, ScanLine } from 'lucide-react'
+import { CheckCheck, Combine, RotateCcw, X, ScanLine } from 'lucide-react'
 import {
   Alert,
   Badge,
   Button,
-  ButtonLink,
   Card,
   EmptyState,
   Pagination,
@@ -168,6 +167,9 @@ export default function AiReview({
         </Alert>
       )}
 
+      {/* Where the review stands — read-only, straight from the tally. Nothing here changes a decision. */}
+      <ReviewSummaryBand tally={tally} signedOff={signedOff} />
+
       {selectedOnPage.length > 0 && (
         <Card padding="md" variant="solid" className="mb-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -282,12 +284,8 @@ export default function AiReview({
         current="review"
         continueLabel="Continue to Estimate"
         isBusy={isFinalising}
-        // Optional: the same detections stood up in a room, to check them against where wire could run.
-        aside={
-          <ButtonLink href={routeTo.reviewThreeD(result.id)} variant="secondary" size="lg" leftIcon={Box}>
-            Review in 3D (optional)
-          </ButtonLink>
-        }
+        // The "Review in 3D (optional)" button is hidden here. The 3D review is still reached from the
+        // "3D Review" button on the drawing card, and the route itself is unchanged.
         {...(signedOff && result.estimateId
           // In the flow, so the estimate opens with its roadmap and its own way
           // forward — without this a signed-off review continued to a dead end.
@@ -304,6 +302,82 @@ export default function AiReview({
           : {})}
       />
     </PageTransition>
+  )
+}
+
+/** The Breeze app's "review in progress" band: a progress ring and the three counts that matter. */
+function ReviewSummaryBand({ tally, signedOff }: { tally: ReviewTally; signedOff: boolean }) {
+  const decided = tally.approved + tally.rejected
+  const percent = tally.total > 0 ? Math.round((decided / tally.total) * 100) : 0
+  const SIZE = 112
+  const STROKE = 9
+  const radius = (SIZE - STROKE) / 2
+  const circumference = 2 * Math.PI * radius
+  const share = (value: number) => (tally.total > 0 ? (value / tally.total) * circumference : 0)
+
+  return (
+    <section className="blueprint mb-4 flex flex-wrap items-center gap-6 p-5 sm:px-7 sm:py-6">
+      <span className="bp-corner tr" aria-hidden />
+
+      <div className="relative shrink-0" style={{ width: SIZE, height: SIZE }} aria-hidden>
+        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90">
+          <circle cx={SIZE / 2} cy={SIZE / 2} r={radius} fill="none" stroke="rgba(126,170,255,.16)" strokeWidth={STROKE} />
+          <circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={radius}
+            fill="none"
+            stroke="#22c55e"
+            strokeWidth={STROKE}
+            strokeDasharray={`${share(tally.approved)} ${circumference}`}
+            className="transition-[stroke-dasharray] duration-500"
+          />
+          <circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={radius}
+            fill="none"
+            stroke="#f87171"
+            strokeWidth={STROKE}
+            strokeDasharray={`${share(tally.rejected)} ${circumference}`}
+            strokeDashoffset={-share(tally.approved)}
+            className="transition-[stroke-dasharray] duration-500"
+          />
+        </svg>
+        <div className="absolute inset-0 grid place-content-center text-center">
+          <span className="font-display text-2xl leading-none font-[650] tracking-tight text-white">{percent}%</span>
+          <span className="mt-1 text-[10px] font-semibold tracking-[0.08em] text-[#a7b7d9] uppercase">reviewed</span>
+        </div>
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <span className="bp-eyebrow">{signedOff ? 'Review signed off' : 'Review in progress'}</span>
+        <p className="mt-1 font-display text-[1.5rem] leading-tight font-[620] text-white">
+          {decided} of {tally.total} {tally.total === 1 ? 'item' : 'items'} reviewed
+        </p>
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-[#c3cfea]">
+          <span className="inline-flex items-center gap-1.5">
+            <i className="size-2 rounded-full bg-[#22c55e]" />
+            {tally.approved} approved
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <i className="size-2 rounded-full bg-[#f87171]" />
+            {tally.rejected} rejected
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <i className="size-2 rounded-full bg-[#5b82ff]" />
+            {tally.pending} to review
+          </span>
+        </div>
+      </div>
+
+      <div className="text-[13px] text-[#c3cfea]">
+        <b className="block font-display text-[1.625rem] leading-[1.1] font-[650] tracking-[-0.02em] text-white tabular-nums">
+          {tally.approvedCount.toLocaleString('en-US')}
+        </b>
+        units counted in approved items
+      </div>
+    </section>
   )
 }
 

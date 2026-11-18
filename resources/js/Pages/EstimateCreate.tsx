@@ -18,7 +18,7 @@ import {
   RequiredFieldsNotice,
   SectionHeading,
   SelectField,
-  StatusChip,
+  Badge,
   TextInput,
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
@@ -363,10 +363,7 @@ export default function EstimateCreate({
               <div className="rounded-panel border border-hairline bg-white/4 p-4">
                 <dt className="text-xs tracking-wide text-white/70 uppercase">Status</dt>
                 <dd className="mt-2">
-                  <StatusChip
-                    tone={ESTIMATE_STATUS_TONE[data.status]}
-                    label={ESTIMATE_STATUS_LABEL[data.status]}
-                  />
+                  <Badge tone={ESTIMATE_STATUS_TONE[data.status]}>{ESTIMATE_STATUS_LABEL[data.status]}</Badge>
                 </dd>
               </div>
             </dl>
