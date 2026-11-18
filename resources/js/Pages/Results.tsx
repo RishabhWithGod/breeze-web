@@ -128,7 +128,7 @@ export default function Results({ project }: ResultsProps) {
               ].map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-panel border border-hairline bg-navy-950/30 p-3"
+                  className="rounded-panel border border-hairline bg-white/5 p-3"
                 >
                   <p className="text-xs tracking-wide text-white/70 uppercase">
                     {item.label}

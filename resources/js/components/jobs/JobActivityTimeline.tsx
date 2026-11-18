@@ -75,7 +75,7 @@ export function JobActivityTimeline({ activities, className }: JobActivityTimeli
 
             <span
               className={cn(
-                'relative grid size-8 shrink-0 place-items-center rounded-full bg-navy-950/60 ring-1 ring-hairline-strong',
+                'relative grid size-8 shrink-0 place-items-center rounded-full bg-white/5 ring-1 ring-hairline-strong',
               )}
             >
               <Icon size={15} aria-hidden className="text-white" />

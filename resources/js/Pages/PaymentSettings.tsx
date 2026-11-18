@@ -245,7 +245,7 @@ export default function PaymentSettings({
           {/* ================================================ Subscription ======= */}
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             <div className="min-w-0 space-y-5">
-              <section className="rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-white/4 to-transparent p-5 shadow-glow sm:p-6">
+              <section className="rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-surface-glass to-surface-glass p-5 shadow-glow sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-sm text-white/85">Current Plan</p>
@@ -304,7 +304,7 @@ export default function PaymentSettings({
                     value={
                       <span className="flex flex-wrap items-center justify-end gap-3">
                         <span
-                          className={subscription.seats.used > subscription.seats.limit ? 'text-red-300' : undefined}
+                          className={subscription.seats.used > subscription.seats.limit ? 'text-status-danger' : undefined}
                         >
                           {subscription.seats.used} of {subscription.seats.limit}
                         </span>
@@ -353,7 +353,7 @@ export default function PaymentSettings({
                         <span
                           className={cn(
                             'text-xs font-semibold whitespace-nowrap tabular-nums',
-                            over ? 'text-red-300' : 'text-white',
+                            over ? 'text-status-danger' : 'text-white',
                           )}
                         >
                           {item.used.toLocaleString()}
@@ -375,7 +375,7 @@ export default function PaymentSettings({
           <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             <div className="flex min-w-0 flex-col gap-5">
               {/* ============================================== The connection ==== */}
-              <section className="flex flex-1 flex-col rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-white/4 to-transparent p-5 shadow-glow sm:p-6">
+              <section className="flex flex-1 flex-col rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-surface-glass to-surface-glass p-5 shadow-glow sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-sm text-white/85">Payment processor</p>
@@ -460,7 +460,7 @@ export default function PaymentSettings({
               <Panel icon={CreditCard} title="Subscription Payment">
                 <div className="grid gap-5 p-5 md:grid-cols-2">
                   <div className="flex items-center gap-4 rounded-panel border border-hairline bg-white/4 p-4">
-                    <span className="grid h-11 w-16 shrink-0 place-items-center rounded-panel bg-white text-sm font-extrabold tracking-wide text-blue-800 uppercase italic">
+                    <span className="grid h-11 w-16 shrink-0 place-items-center rounded-panel bg-[#fff] text-sm font-extrabold tracking-wide text-blue-800 uppercase italic">
                       {subscriptionPayment.card.brand}
                     </span>
                     <div className="min-w-0">

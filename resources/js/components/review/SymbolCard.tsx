@@ -165,7 +165,7 @@ export function SymbolCard({
         one thing they could not see. White is the paper the symbol was drawn
         on, so it is the background it reads on.
       */}
-      <div className="relative flex h-32 w-full shrink-0 items-center justify-center border-b border-hairline bg-white">
+      <div className="relative flex h-32 w-full shrink-0 items-center justify-center border-b border-hairline bg-[#fff]">
         {row.cropUrl && !imageFailed ? (
           <img
             src={row.cropUrl}
@@ -197,7 +197,7 @@ export function SymbolCard({
         {/* On its own dark plate: the checkbox is drawn for this app's dark
             chrome, and its unchecked state is a hairline on white/10 — which
             on the white crop below is nothing at all. */}
-        <div className="absolute top-2 left-2 rounded-md bg-navy-900/85 p-1">
+        <div className="absolute top-2 left-2 rounded-md bg-navy-900/85 p-1 on-dark">
           <Checkbox
             id={`select-symbol-${row.id}`}
             checked={selected}
@@ -214,7 +214,7 @@ export function SymbolCard({
         {/* Badges are drawn for dark chrome too — tinted fills with light text,
             which the white plate below would swallow. They keep their own. */}
         {(row.origin === 'needs_review' || isRejected || row.isModified) && (
-          <div className="absolute top-2 right-2 flex flex-col items-end gap-1 rounded-panel bg-navy-900/85 p-1">
+          <div className="absolute top-2 right-2 flex flex-col items-end gap-1 rounded-panel bg-navy-900/85 p-1 on-dark">
             {row.origin === 'needs_review' && (
               <Badge tone="warning" size="sm">
                 Needs review

@@ -42,7 +42,7 @@ export function ProjectHistoryCard({
       )}
     >
       <div className="flex items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-purple-400/15 text-purple-300 ring-1 ring-purple-400/40">
+        <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-purple-400/15 text-status-purple ring-1 ring-purple-400/40">
           <GitBranch size={17} aria-hidden />
         </span>
 

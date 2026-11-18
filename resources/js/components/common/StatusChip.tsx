@@ -5,7 +5,7 @@ const TEXT_TONES: Record<Tone, string> = {
   brand: 'text-brand',
   success: 'text-status-success',
   warning: 'text-status-warning',
-  danger: 'text-red-300',
+  danger: 'text-status-danger',
   info: 'text-status-info',
   purple: 'text-status-purple',
   blue: 'text-status-blue',

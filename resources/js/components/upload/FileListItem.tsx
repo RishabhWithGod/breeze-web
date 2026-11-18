@@ -55,10 +55,10 @@ export function FileListItem({
       <div className="order-3 col-span-2 min-w-0 sm:order-none sm:col-span-1">
         {hasError ? (
           <div className="flex items-center gap-2.5">
-            <TriangleAlert size={22} aria-label="File error" className="shrink-0 text-red-300" />
+            <TriangleAlert size={22} aria-label="File error" className="shrink-0 text-status-danger" />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-red-300">Invalid</p>
-              <p className="truncate text-xs text-red-300/90">{file.errorMessage}</p>
+              <p className="text-sm font-semibold text-status-danger">Invalid</p>
+              <p className="truncate text-xs text-status-danger">{file.errorMessage}</p>
             </div>
           </div>
         ) : isUploading ? (
@@ -104,7 +104,7 @@ export function FileListItem({
         </button>
         <button
           type="button"
-          className={cn(actionButton, 'hover:border-status-danger/60 hover:text-red-300')}
+          className={cn(actionButton, 'hover:border-status-danger/60 hover:text-status-danger')}
           disabled={disabled || isUploading}
           onClick={() => onRemove(file.id)}
           aria-label={`Remove ${file.name}`}
@@ -122,7 +122,7 @@ function FileBadge({ extension }: { extension: string }) {
   if (extension.toUpperCase() !== 'PDF') return <FileTypeIcon extension={extension} size="sm" />
 
   return (
-    <span className="grid size-10 shrink-0 place-items-center rounded-panel bg-red-500 text-2xs font-bold tracking-wide text-white shadow-panel">
+    <span className="grid size-10 shrink-0 place-items-center rounded-panel bg-red-500 text-2xs font-bold tracking-wide text-brand-ink shadow-panel">
       PDF
     </span>
   )

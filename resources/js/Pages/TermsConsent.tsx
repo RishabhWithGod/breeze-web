@@ -88,7 +88,7 @@ export default function TermsConsent({ terms, privacy, signedOn, signerName }: T
             tabIndex={0}
             role="region"
             aria-label="Terms of Service and Privacy Summary"
-            className="mt-5 h-[26rem] overflow-y-auto rounded-card border border-hairline-strong bg-white/4 p-6 focus-visible:outline-2 focus-visible:outline-brand sm:p-8"
+            className="mt-5 h-[26rem] overflow-y-auto rounded-card border border-hairline-strong bg-surface-glass p-6 focus-visible:outline-2 focus-visible:outline-brand sm:p-8"
           >
             <LegalBlock id="terms-of-service" section={terms} />
             <hr className="my-8 border-hairline" />
@@ -121,7 +121,7 @@ export default function TermsConsent({ terms, privacy, signedOn, signerName }: T
                   </>
                 }
               />
-              {errors.accept_terms && <p className="mt-1.5 ml-8 text-sm text-red-300">{errors.accept_terms}</p>}
+              {errors.accept_terms && <p className="mt-1.5 ml-8 text-sm text-status-danger">{errors.accept_terms}</p>}
             </div>
             <div>
               <Checkbox
@@ -148,7 +148,7 @@ export default function TermsConsent({ terms, privacy, signedOn, signerName }: T
                   </>
                 }
               />
-              {errors.accept_privacy && <p className="mt-1.5 ml-8 text-sm text-red-300">{errors.accept_privacy}</p>}
+              {errors.accept_privacy && <p className="mt-1.5 ml-8 text-sm text-status-danger">{errors.accept_privacy}</p>}
             </div>
           </div>
 

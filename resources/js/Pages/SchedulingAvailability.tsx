@@ -217,7 +217,7 @@ export default function SchedulingAvailability({
                 <span
                   className={cn(
                     'rounded-full px-2 py-0.5 text-2xs font-semibold',
-                    isActive ? 'bg-navy-950/30 text-white' : 'bg-white/10 text-white/90',
+                    isActive ? 'bg-white/5 text-white' : 'bg-white/10 text-white/90',
                   )}
                 >
                   {count}
@@ -299,7 +299,7 @@ export default function SchedulingAvailability({
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <span className="flex min-w-0 items-center gap-3">
-                            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ocean-800 text-xs font-semibold text-white ring-1 ring-steel-600">
+                            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-xs font-semibold text-brand-ink ring-1 ring-brand/30">
                               {member.initials}
                             </span>
                             <span className="min-w-0">
@@ -501,7 +501,7 @@ export default function SchedulingAvailability({
                           <Link
                             key={side.id}
                             href={routeTo.jobFrom(side.jobId, 'scheduling-availability')}
-                            className="rounded-panel bg-navy-950/30 px-3 py-2 transition-colors hover:bg-navy-950/50"
+                            className="rounded-panel bg-white/5 px-3 py-2 transition-colors hover:bg-white/5"
                           >
                             <span className="block truncate font-medium text-white">
                               {side.jobName}
@@ -654,7 +654,7 @@ export default function SchedulingAvailability({
             <ul className="space-y-4">
               {members.map((member) => (
                 <li key={member.id} className="flex items-center gap-3">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ocean-800 text-xs font-semibold text-white ring-1 ring-steel-600">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-xs font-semibold text-brand-ink ring-1 ring-brand/30">
                     {member.initials}
                   </span>
                   <span className="min-w-0">

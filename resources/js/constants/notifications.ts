@@ -1,18 +1,18 @@
 import {
   Banknote,
   Bell,
-  Bot,
-  Briefcase,
   Calendar,
   CheckSquare,
   Clock,
-  FileText,
   Folder,
   Gift,
   LineChart,
   ShieldCheck,
   UsersRound,
   type LucideIcon,
+  ScanLine,
+  Calculator,
+  HardHat,
 } from 'lucide-react'
 import type { NotificationTab } from '@/types'
 
@@ -24,10 +24,10 @@ export const NOTIFICATION_TABS: readonly { label: string; value: NotificationTab
 
 /** Icon shown per category — mirrors `AppNotification::CATEGORY_LABELS` on the backend. */
 export const NOTIFICATION_CATEGORY_ICON: Record<string, LucideIcon> = {
-  jobs: Briefcase,
+  jobs: HardHat,
   tasks: CheckSquare,
-  estimates: FileText,
-  'ai-takeoff': Bot,
+  estimates: Calculator,
+  'ai-takeoff': ScanLine,
   'time-tracking': Clock,
   documents: Folder,
   billing: Banknote,

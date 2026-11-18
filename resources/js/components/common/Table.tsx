@@ -84,8 +84,8 @@ export function Table<T>({
                 className={cn(
                   'px-4 py-3 font-semibold whitespace-nowrap text-white',
                   isLined
-                    ? 'border-b border-hairline-strong bg-ocean-600/35'
-                    : 'bg-ocean-600/45 first:rounded-l-panel last:rounded-r-panel',
+                    ? 'border-b border-hairline-strong bg-surface-veil'
+                    : 'bg-surface-veil first:rounded-l-panel last:rounded-r-panel',
                   headerVariant === 'uppercase'
                     ? 'text-sm tracking-wide uppercase'
                     : 'text-md',
@@ -124,10 +124,10 @@ export function Table<T>({
                 <td
                   key={column.key}
                   className={cn(
-                    'text-md text-white transition-colors group-hover:bg-white/12',
+                    'text-md text-white transition-colors',
                     isLined
-                      ? 'border-b border-hairline bg-white/3 group-last:border-b-0'
-                      : 'border-y border-hairline bg-white/6 first:rounded-l-panel first:border-l last:rounded-r-panel last:border-r',
+                      ? 'border-b border-hairline group-hover:bg-white/4 group-last:border-b-0'
+                      : 'border-y border-hairline bg-white/6 group-hover:bg-white/12 first:rounded-l-panel first:border-l last:rounded-r-panel last:border-r',
                     dense ? 'px-4 py-2.5' : 'px-4 py-4',
                     ALIGNMENTS[column.align ?? 'left'],
                   )}

@@ -122,7 +122,7 @@ export function SearchSelect({
           className={cn(
             'flex w-full items-center justify-between gap-2 rounded-panel border border-transparent',
             'bg-surface-veil/50 px-4 py-2.5 text-left text-md transition-colors duration-200',
-            'hover:border-hairline-strong focus:border-brand focus:bg-white/25 focus:outline-none',
+            'hover:border-brand/40 focus:border-brand focus:ring-[3px] focus:ring-brand/25 focus:outline-none',
             'disabled:cursor-not-allowed disabled:opacity-50',
             error && 'border-status-danger/70',
           )}
@@ -152,7 +152,7 @@ export function SearchSelect({
               onClick={close}
             />
 
-            <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-panel border border-hairline bg-navy-900 shadow-xl">
+            <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-panel border border-hairline bg-surface-glass shadow-xl">
               <div className="relative border-b border-hairline">
                 <Search
                   size={15}

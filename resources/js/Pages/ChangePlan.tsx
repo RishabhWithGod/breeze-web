@@ -131,7 +131,7 @@ export default function ChangePlan({ origin, subscription, seatOffer, blockers }
                     onClick={() => setCycle(value)}
                     className={cn(
                       'min-w-28 px-5 py-2 text-sm font-semibold transition-colors',
-                      cycle === value ? 'bg-blue-500 text-white' : 'bg-white/6 text-white/85 hover:bg-white/12',
+                      cycle === value ? 'bg-blue-500 text-brand-ink' : 'bg-white/6 text-white/85 hover:bg-white/12',
                     )}
                   >
                     {label}
@@ -351,17 +351,17 @@ function PlanChoice({
             selected ? 'border-blue-400 bg-blue-500' : 'border-white/50',
           )}
         >
-          {selected && <span className="size-1.5 rounded-full bg-white" />}
+          {selected && <span className="size-1.5 rounded-full bg-brand-ink" />}
         </span>
       </span>
 
       {isCurrent ? (
-        <span className="absolute -top-3 right-11 rounded-full border border-status-success bg-ocean-950 px-3 py-1 text-xs font-bold text-status-success">
+        <span className="absolute -top-3 right-11 rounded-full border border-status-success bg-surface-glass px-3 py-1 text-xs font-bold text-status-success">
           Current
         </span>
       ) : (
         plan.popular && (
-          <span className="absolute -top-3 right-11 rounded-full bg-green-700 px-3 py-1 text-xs font-bold text-white ring-1 ring-white/40">
+          <span className="absolute -top-3 right-11 rounded-full bg-green-700 px-3 py-1 text-xs font-bold text-brand-ink ring-1 ring-white/40">
             Most Popular
           </span>
         )

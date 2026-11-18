@@ -261,7 +261,7 @@ export default function CompanySetup({ company, defaults, timezones, editing }: 
                 </span>
               )}
             </button>
-            {(logoError ?? errors.logo) && <p className="mt-2 text-sm text-red-300">{logoError ?? errors.logo}</p>}
+            {(logoError ?? errors.logo) && <p className="mt-2 text-sm text-status-danger">{logoError ?? errors.logo}</p>}
             {editing && company?.logoUrl && !data.logo && (
               <Checkbox
                 id="remove-logo"
@@ -298,5 +298,5 @@ CompanySetup.layout = appLayout
 
 /** One field in its own box, the way the design lays the form out. */
 function FieldCard({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-card border border-hairline bg-white/4 p-5">{children}</div>
+  return <div className="rounded-card border border-hairline glass p-5">{children}</div>
 }

@@ -57,7 +57,7 @@ export function ResumeTakeoffButton() {
               // action in this app uses — and it means what this is, something
               // left unfinished.
               'border-2 border-l-[6px] border-status-warning/55 border-l-status-warning',
-              'bg-navy-900/95 shadow-panel backdrop-blur-xl',
+              'bg-navy-900/95 shadow-panel backdrop-blur-xl on-dark',
               'transition-colors duration-200 hover:border-status-warning/80',
             ].join(' ')}
           >

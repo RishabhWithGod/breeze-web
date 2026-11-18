@@ -36,7 +36,7 @@ export function AccessNotice() {
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -12 }}
-          className="fixed top-[calc(var(--spacing-navbar)+0.75rem)] right-4 z-50 flex max-w-md items-start gap-3 rounded-panel border border-status-warning/50 bg-navy-900/95 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur"
+          className="fixed top-[calc(var(--spacing-navbar)+0.75rem)] right-4 z-50 flex max-w-md items-start gap-3 rounded-panel border border-status-warning/50 bg-navy-900/95 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur on-dark"
         >
           <ShieldAlert size={20} aria-hidden className="mt-0.5 shrink-0 text-status-warning" />
           <p className="flex-1">{message}</p>

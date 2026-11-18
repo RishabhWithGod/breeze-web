@@ -58,8 +58,8 @@ export const SearchBox = forwardRef<HTMLInputElement, SearchBoxProps>(
           className={cn(
             'w-full rounded-pill border border-transparent bg-surface-input py-2.5 pr-19 pl-11',
             'text-md text-white placeholder:text-white/75',
-            'transition-colors duration-200 hover:bg-white/25',
-            'focus:border-brand/60 focus:bg-white/25 focus:outline-none',
+            'transition-colors duration-200 hover:border-brand/40',
+            'focus:border-brand focus:ring-[3px] focus:ring-brand/25 focus:outline-none',
             '[&::-webkit-search-cancel-button]:hidden',
             className,
           )}

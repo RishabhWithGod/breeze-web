@@ -108,7 +108,7 @@ export function ClientSitesList({ clientId, addresses }: ClientSitesListProps) {
                   size="sm"
                   disabled={site.jobCount > 0}
                   onClick={() => setRemovingSite(site)}
-                  className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                  className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink"
                 />
               </span>
             </li>

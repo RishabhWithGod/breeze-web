@@ -179,7 +179,7 @@ export default function PaymentSetup({
                     className={cn(
                       'min-w-28 px-5 py-2 text-sm font-semibold transition-colors',
                       data.billing_cycle === value
-                        ? 'bg-blue-500 text-white'
+                        ? 'bg-blue-500 text-brand-ink'
                         : 'bg-white/6 text-white/85 hover:bg-white/12',
                     )}
                   >
@@ -358,12 +358,12 @@ function PlanCard({ plan, selected, onSelect }: { plan: SubscriptionPlan; select
             selected ? 'border-blue-400 bg-blue-500' : 'border-white/50',
           )}
         >
-          {selected && <span className="size-1.5 rounded-full bg-white" />}
+          {selected && <span className="size-1.5 rounded-full bg-brand-ink" />}
         </span>
       </span>
 
       {plan.popular && (
-        <span className="absolute -top-3 right-11 rounded-full bg-green-700 px-3 py-1 text-xs font-bold text-white ring-1 ring-white/40">
+        <span className="absolute -top-3 right-11 rounded-full bg-green-700 px-3 py-1 text-xs font-bold text-brand-ink ring-1 ring-white/40">
           Most Popular
         </span>
       )}

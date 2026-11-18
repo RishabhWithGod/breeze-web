@@ -4,7 +4,6 @@ import { AnimatePresence } from 'framer-motion'
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowLeft,
-  Briefcase,
   Check,
   Clock,
   DollarSign,
@@ -18,6 +17,7 @@ import {
   UserRound,
   Wallet,
   X,
+  HardHat,
 } from 'lucide-react'
 import {
   Alert,
@@ -259,7 +259,7 @@ export default function TimeEntryShow({
       {/* Who, where, what — the facts the rest of the screen hangs on. */}
       <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
         <MetaItem icon={UserRound} label="Employee" value={employee.role ? `${employee.name} · ${employee.role}` : employee.name} />
-        <MetaItem icon={Briefcase} label="Job" value={job?.name ?? 'No job'} />
+        <MetaItem icon={HardHat} label="Job" value={job?.name ?? 'No job'} />
         <MetaItem icon={ListChecks} label="Task" value={task?.title ?? entry.taskLabel ?? '—'} />
         <MetaItem icon={MapPin} label="Location" value={job?.location ?? '—'} />
       </dl>
@@ -360,7 +360,7 @@ export default function TimeEntryShow({
             </div>
             {entry.rejectionReason && (
               <div className="mt-4 rounded-panel border border-status-danger/40 bg-status-danger/10 p-4">
-                <p className="text-2xs tracking-wide text-red-300 uppercase">Rejection reason</p>
+                <p className="text-2xs tracking-wide text-status-danger uppercase">Rejection reason</p>
                 <p className="mt-1 text-md text-white">{entry.rejectionReason}</p>
               </div>
             )}
@@ -568,7 +568,7 @@ function StatCard({
 }) {
   return (
     <Card padding="md" className="flex items-center gap-4">
-      <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+      <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
         <Icon size={22} aria-hidden />
       </span>
       <div className="min-w-0 flex-1">

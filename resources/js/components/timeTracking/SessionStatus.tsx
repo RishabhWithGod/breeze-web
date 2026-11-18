@@ -33,7 +33,7 @@ const STYLE: Record<SessionStatusKey, { label: string; icon: LucideIcon; classes
   rejected: {
     label: 'Needs review',
     icon: TriangleAlert,
-    classes: 'border-status-danger/60 bg-status-danger/20 text-red-300',
+    classes: 'border-status-danger/60 bg-status-danger/20 text-status-danger',
   },
   'missing-checkout': {
     label: 'Missing Checkout',

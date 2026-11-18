@@ -44,7 +44,16 @@ class ProcessingController extends Controller
 
         return Inertia::render('Processing', [
             'project' => (new ProjectSummaryResource($project))->resolve(),
-            'uploads' => UploadResource::collection($project->uploads)->resolve(),
+            /*
+             * Only the drawing this run is analysing. A project accumulates uploads
+             * over time, and showing them all made the screen name the oldest file
+             * (and count every one) instead of the PDF actually being processed.
+             */
+            'uploads' => UploadResource::collection(
+                $aiJob?->upload_id
+                    ? $project->uploads->where('id', $aiJob->upload_id)->values()
+                    : $project->uploads->take(1),
+            )->resolve(),
             'stages' => config('takeoff.stages'),
             'run' => $this->runState($aiJob),
             /*

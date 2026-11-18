@@ -34,7 +34,7 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(function Switch(
       >
         <span
           className={cn(
-            'inline-block size-4 translate-x-1 rounded-full bg-white transition-transform',
+            'inline-block size-4 translate-x-1 rounded-full bg-brand-ink shadow-sm transition-transform',
             'group-has-[input:checked]:translate-x-6',
           )}
         />

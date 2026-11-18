@@ -24,7 +24,7 @@ export function NotificationsMenu() {
       >
         <Bell size={21} aria-hidden />
         {unreadNotificationCount > 0 && (
-          <span className="absolute top-1 right-1 grid size-4 place-items-center rounded-full bg-status-danger text-[10px] font-bold text-white">
+          <span className="absolute top-1 right-1 grid size-4 place-items-center rounded-full bg-status-danger text-[10px] font-bold text-brand-ink">
             {unreadNotificationCount}
           </span>
         )}

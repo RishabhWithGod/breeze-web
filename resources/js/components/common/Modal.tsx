@@ -110,7 +110,7 @@ export function Modal({
             </div>
 
             {footer && (
-              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-hairline bg-navy-950/25 px-6 py-4">
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-hairline bg-white/4 px-6 py-4">
                 {footer}
               </div>
             )}

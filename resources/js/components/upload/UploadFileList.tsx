@@ -26,7 +26,7 @@ export function UploadFileList({
       layout
       className={cn('overflow-hidden rounded-panel border border-hairline', className)}
     >
-      <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_6rem] gap-3 bg-ocean-700/40 px-4 py-3 text-sm font-semibold text-white sm:grid">
+      <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_6rem] gap-3 bg-surface-veil px-4 py-3 text-sm font-semibold text-white sm:grid">
         <span>File Name</span>
         <span>Status</span>
         <span className="text-right">Actions</span>

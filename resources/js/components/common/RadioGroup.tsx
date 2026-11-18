@@ -94,7 +94,7 @@ export function RadioGroup({
         })}
       </div>
 
-      {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
+      {error && <p className="mt-2 text-sm text-status-danger">{error}</p>}
     </fieldset>
   )
 }

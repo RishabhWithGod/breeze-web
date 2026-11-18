@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react'
-import { usePage } from '@inertiajs/react'
 import { Menu, X } from 'lucide-react'
 import { useUiStore } from '@/store'
-import type { SharedPageProps } from '@/types'
 import { cn } from '@/utils'
-import { CompanyMark } from './CompanyMark'
 import { Logo } from './Logo'
 import { NotificationsMenu } from './NotificationsMenu'
 import { ProfileMenu } from './ProfileMenu'
+import { ThemeSwitch } from './ThemeSwitch'
 import { TimerIndicator } from './TimerIndicator'
 
 /**
@@ -17,7 +15,6 @@ import { TimerIndicator } from './TimerIndicator'
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const { toggleSidebar, isSidebarOpen } = useUiStore()
-  const { company } = usePage<SharedPageProps>().props
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 8)
@@ -29,33 +26,30 @@ export function Navbar() {
   return (
     <header
       className={cn(
-        'fixed inset-x-0 top-0 z-60 h-navbar border-b transition-colors duration-500',
-        isScrolled ? 'grad-ocean border-hairline shadow-raised' : 'glass-strong border-transparent shadow-panel',
+        // Starts where the rail ends on desktop (the rail carries the logo and
+        // the company), and spans the full width on phones and tablets.
+        'fixed top-0 right-0 left-0 z-60 h-navbar border-b backdrop-blur-xl backdrop-saturate-150 transition-shadow duration-300 lg:left-sidebar',
+        'bg-surface-glass/75 border-hairline',
+        isScrolled && 'shadow-panel',
       )}
     >
-      <div className="mx-auto flex h-full max-w-ultra items-center gap-3 px-4 sm:gap-5 sm:px-6">
+      <div className="flex h-full items-center gap-3 px-4 sm:gap-5 sm:px-6 xl:px-10">
         <button
           type="button"
           onClick={toggleSidebar}
           aria-label={isSidebarOpen ? 'Close navigation' : 'Open navigation'}
           aria-expanded={isSidebarOpen}
-          className="grid size-10 shrink-0 place-items-center rounded-panel text-brand transition-colors hover:bg-white/10 lg:hidden"
+          className="grid size-10 shrink-0 place-items-center rounded-panel text-white transition-colors hover:bg-white/8 lg:hidden"
         >
           {isSidebarOpen ? <X size={24} aria-hidden /> : <Menu size={24} aria-hidden />}
         </button>
 
-        <Logo className="shrink-0" />
-
-        {/* Whose workspace this is: the company's logo, or an icon until one is uploaded. */}
-        {company && (
-          <div className="flex min-w-0 items-center gap-3 border-l border-hairline pl-3 sm:pl-5">
-            <CompanyMark logoUrl={company.logoUrl} name={company.name} size={36} />
-            <span className="hidden max-w-48 truncate text-md font-semibold text-white md:block">{company.name}</span>
-          </div>
-        )}
+        {/* The lockup lives in the rail on desktop; phones have no rail to hold it. */}
+        <Logo className="shrink-0 lg:hidden" />
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <TimerIndicator />
+          <ThemeSwitch />
           <NotificationsMenu />
           <ProfileMenu />
         </div>

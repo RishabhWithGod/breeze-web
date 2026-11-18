@@ -131,10 +131,10 @@ SubscriptionConfirmed.layout = appLayout
 
 const TONES = {
   cyan: 'border-brand bg-brand/15 text-brand',
-  purple: 'border-purple-400 bg-purple-500/20 text-purple-300',
-  blue: 'border-blue-400 bg-blue-500/20 text-blue-300',
-  teal: 'border-teal-400 bg-teal-500/20 text-teal-300',
-  orange: 'border-orange-400 bg-orange-500/20 text-orange-300',
+  purple: 'border-purple-400 bg-purple-500/20 text-status-purple',
+  blue: 'border-blue-400 bg-blue-500/20 text-brand',
+  teal: 'border-teal-400 bg-teal-500/20 text-status-info',
+  orange: 'border-orange-400 bg-orange-500/20 text-status-warning',
 } as const
 
 /** One fact about the subscription: an icon and what it is on the left, its value on the right. */

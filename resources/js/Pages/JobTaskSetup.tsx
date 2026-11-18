@@ -320,7 +320,7 @@ export default function JobTaskSetup({
                             current.filter((_, position) => position !== index),
                           )
                         }
-                        className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                        className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink"
                       />
                     )}
                   </div>
@@ -341,7 +341,7 @@ export default function JobTaskSetup({
                     {/* What the task is the work for, taken from the estimate. */}
                     <div>
                       <p className="mb-2 text-md font-medium text-white">
-                        Estimate lines{estimateLines.length > 0 && <span className="text-red-300">*</span>}
+                        Estimate lines{estimateLines.length > 0 && <span className="text-status-danger">*</span>}
                       </p>
                       <TaskLinePicker
                         lines={estimateLines}
@@ -410,7 +410,7 @@ export default function JobTaskSetup({
             </Button>
           </div>
 
-          {errors['tasks'] && <p className="mt-3 text-sm text-red-300">{errors['tasks']}</p>}
+          {errors['tasks'] && <p className="mt-3 text-sm text-status-danger">{errors['tasks']}</p>}
 
           <div className="mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-hairline pt-6">
             {/*

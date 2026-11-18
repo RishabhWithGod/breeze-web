@@ -250,7 +250,7 @@ export default function RolesPermissions({ roles, modules, granted, defaults, cu
                               >
                                 <span
                                   className={cn(
-                                    'inline-block size-3.5 rounded-full bg-white transition-transform',
+                                    'inline-block size-3.5 rounded-full bg-brand-ink shadow-sm transition-transform',
                                     on ? 'translate-x-[1.125rem]' : 'translate-x-0.5',
                                   )}
                                 />

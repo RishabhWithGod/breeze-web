@@ -209,7 +209,7 @@ export default function SecuritySettings({
 function RadioDot({ checked }: { checked: boolean }) {
   return (
     <span className={`grid size-5 shrink-0 place-items-center rounded-full border-2 ${checked ? 'border-brand bg-brand' : 'border-hairline-strong'}`} aria-hidden>
-      {checked && <span className="size-2 rounded-full bg-white" />}
+      {checked && <span className="size-2 rounded-full bg-brand-ink" />}
     </span>
   )
 }

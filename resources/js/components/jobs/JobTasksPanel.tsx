@@ -93,7 +93,7 @@ export function JobTasksPanel({ tasks, canPlan, jobOrigin = null }: JobTasksPane
                   variant="white"
                   size="sm"
                   onClick={() => setRemoving(task)}
-                  className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                  className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink"
                 />
               )}
             </div>

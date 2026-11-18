@@ -3,6 +3,9 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers'
 import { StrictMode } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import './styles/index.css'
+import { applyStoredTheme } from './lib/theme'
+
+applyStoredTheme()
 
 const APP_NAME = import.meta.env['VITE_APP_NAME'] ?? 'Breeze AI'
 
@@ -38,7 +41,7 @@ void createInertiaApp({
   },
 
   progress: {
-    color: '#33E3FF',
+    color: '#2f5bff',
     showSpinner: false,
   },
 })

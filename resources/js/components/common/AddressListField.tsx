@@ -60,7 +60,7 @@ export function AddressListField({
                 size="sm"
                 disabled={disabled}
                 onClick={() => remove(index)}
-                className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink"
               />
             )}
           </div>

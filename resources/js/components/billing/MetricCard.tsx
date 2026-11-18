@@ -4,7 +4,7 @@ import { cn } from '@/utils'
 const TONE = {
   cyan: { border: 'border-brand/70', icon: 'bg-brand/15 text-brand' },
   blue: { border: 'border-status-blue/70', icon: 'bg-status-blue/15 text-status-blue' },
-  red: { border: 'border-status-danger/80', icon: 'bg-status-danger/20 text-red-300' },
+  red: { border: 'border-status-danger/80', icon: 'bg-status-danger/20 text-status-danger' },
   green: { border: 'border-status-success/70', icon: 'bg-status-success/15 text-status-success' },
 } as const
 

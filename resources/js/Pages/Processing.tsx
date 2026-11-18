@@ -250,10 +250,10 @@ export default function Processing({
         </div>
 
         <div className="p-4 sm:p-6">
-          <div className="rounded-card border border-hairline bg-white/3 p-4 sm:p-6">
+          <div className="rounded-card border border-hairline glass p-4 sm:p-6">
             <div className="grid gap-6 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,21rem)_minmax(0,1fr)]">
               {/* No page image exists until the run returns — a drawing-sheet stand-in. */}
-              <div className="blueprint-grid relative grid aspect-4/3 place-items-center overflow-hidden rounded-panel border border-hairline-strong bg-navy-900/70">
+              <div className="blueprint-grid relative grid aspect-4/3 place-items-center overflow-hidden rounded-panel border border-hairline-strong bg-navy-900/70 on-dark">
                 <FileText size={56} aria-hidden className="text-brand/70" />
                 {isRunning && (
                   <span
@@ -261,7 +261,7 @@ export default function Processing({
                     aria-hidden
                   />
                 )}
-                <span className="absolute right-2 bottom-2 rounded-sm bg-navy-950/80 px-2 py-0.5 text-2xs font-semibold text-white/85">
+                <span className="absolute right-2 bottom-2 rounded-sm bg-navy-950/80 px-2 py-0.5 text-2xs font-semibold text-white/85 on-dark">
                   {(uploads[0]?.format ?? project.format ?? 'PDF').toString().toUpperCase()}
                 </span>
               </div>
@@ -437,7 +437,7 @@ function useElapsed(submittedAt: string | null, running: boolean): string {
 const PILL_STYLES = {
   brand: 'border-brand/40 bg-brand/15 text-brand',
   success: 'border-status-success/40 bg-status-success/12 text-status-success',
-  danger: 'border-status-danger/50 bg-status-danger/20 text-red-300',
+  danger: 'border-status-danger/50 bg-status-danger/20 text-status-danger',
 } as const
 
 function StatusPill({
@@ -465,7 +465,7 @@ function StatusPill({
 function MetricTile({ icon: Icon, value, label }: { icon: LucideIcon; value: string; label: string }) {
   return (
     <div className="flex items-center gap-3 rounded-panel border border-hairline bg-white/4 px-3 py-3">
-      <span className="grid size-11 shrink-0 place-items-center rounded-panel bg-ocean-600 text-white">
+      <span className="grid size-11 shrink-0 place-items-center rounded-panel bg-brand text-brand-ink">
         <Icon size={20} aria-hidden />
       </span>
       <div className="min-w-0">

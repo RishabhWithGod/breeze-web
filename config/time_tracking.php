@@ -20,8 +20,8 @@ return [
         'weekend_overtime' => (bool) env('TIME_TRACKING_WEEKEND_OVERTIME', true),
         'holiday_overtime' => (bool) env('TIME_TRACKING_HOLIDAY_OVERTIME', true),
         'holiday_dates' => [],
-        'default_billable_rate' => env('TIME_TRACKING_DEFAULT_BILLABLE_RATE'),
-        'default_cost_rate' => env('TIME_TRACKING_DEFAULT_COST_RATE'),
+        'default_billable_rate' => env('TIME_TRACKING_DEFAULT_BILLABLE_RATE') ?: null,
+        'default_cost_rate' => env('TIME_TRACKING_DEFAULT_COST_RATE') ?: null,
         // A timer runs on `now()`, kept in `config('app.timezone')` (UTC) for
         // storage consistency — this is the timezone that UTC instant is
         // converted to before it becomes a `time_entries.date`/start/end time.

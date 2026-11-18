@@ -52,7 +52,7 @@ export function UsageBar({
     <li className="px-4 py-3">
       <div className="flex items-baseline justify-between gap-3 text-sm">
         <span className="text-white/90">{label}</span>
-        <span className={cn('tabular-nums', over ? 'text-red-300' : 'text-white/80')}>
+        <span className={cn('tabular-nums', over ? 'text-status-danger' : 'text-white/80')}>
           {used} / {limit}
           {unit ? ` ${unit}` : ''}
         </span>

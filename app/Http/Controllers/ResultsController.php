@@ -24,6 +24,9 @@ class ResultsController extends Controller
     public function latest(Request $request): Response|RedirectResponse
     {
         $result = AiResult::query()
+            // Only what openReview() needs: a bare `select *` sorts every row's stored
+            // engine response and overflows MySQL's sort buffer on big takeoffs.
+            ->select(['id', 'project_id', 'review_status', 'final_path'])
             ->whereHas('project', fn ($query) => $query->whereIn('user_id', Ownership::userIds($request->user())))
             ->latest('id')
             ->first();

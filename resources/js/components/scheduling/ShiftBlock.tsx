@@ -52,7 +52,7 @@ export function ShiftBlock({ shift, onSelect, onRemove, muted = false }: ShiftBl
 
         {shift.member && (
           <span className="mt-1.5 flex items-center gap-1.5">
-            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-ocean-800 text-[9px] font-semibold text-white ring-1 ring-steel-600">
+            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-brand text-[9px] font-semibold text-brand-ink ring-1 ring-brand/30">
               {shift.member.initials}
             </span>
             <span className="truncate text-2xs font-medium text-white">

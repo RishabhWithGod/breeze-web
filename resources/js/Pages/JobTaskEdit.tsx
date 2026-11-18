@@ -164,7 +164,7 @@ export default function JobTaskEdit({
               {/* What the task is the work for, taken from the estimate. */}
               <div>
                 <p className="mb-2 text-md font-medium text-white">
-                  Estimate lines{estimateLines.length > 0 && <span className="text-red-300">*</span>}
+                  Estimate lines{estimateLines.length > 0 && <span className="text-status-danger">*</span>}
                 </p>
                 <TaskLinePicker
                   lines={estimateLines}

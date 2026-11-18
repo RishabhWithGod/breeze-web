@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
-import { Box, CheckCheck, Combine, RotateCcw, Sparkles, X } from 'lucide-react'
+import { Box, CheckCheck, Combine, RotateCcw, X, ScanLine } from 'lucide-react'
 import {
   Alert,
   Badge,
@@ -227,7 +227,7 @@ export default function AiReview({
       {rows.length === 0 ? (
         <Card accent="neutral" padding="lg">
           <EmptyState
-            icon={Sparkles}
+            icon={ScanLine}
             title="No detections on this drawing"
             description="The model returned nothing to review for this takeoff."
           />

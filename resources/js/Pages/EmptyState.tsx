@@ -58,7 +58,7 @@ export default function EmptyState() {
               {SUGGESTIONS.map(({ icon: Icon, title, body }) => (
                 <div
                   key={title}
-                  className="rounded-card border border-hairline bg-navy-950/30 p-5 text-left"
+                  className="rounded-card border border-hairline bg-white/5 p-5 text-left"
                 >
                   <Icon size={20} aria-hidden className="mb-3 text-brand" />
                   <p className="text-md font-semibold text-white">{title}</p>

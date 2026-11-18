@@ -92,7 +92,7 @@ export function TaskLinePicker({
       </button>
 
       {isOpen && (
-        <div className="absolute z-30 mt-1 max-h-80 w-full overflow-y-auto rounded-panel border border-hairline bg-navy-900 p-1 shadow-panel">
+        <div className="absolute z-30 mt-1 max-h-80 w-full overflow-y-auto rounded-panel border border-hairline bg-surface-glass p-1 shadow-panel">
           {lines.length === 0 ? (
             <p className="p-3 text-sm text-white/70">
               This job has no estimate yet, so there are no lines to plan from. Name
@@ -172,7 +172,7 @@ export function TaskLinePicker({
         </ul>
       )}
 
-      {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
+      {error && <p className="mt-2 text-sm text-status-danger">{error}</p>}
     </div>
   )
 }

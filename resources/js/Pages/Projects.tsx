@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { Head, Link, router } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Briefcase,
-  ClipboardList,
   ExternalLink,
   FileText,
   Files,
@@ -13,10 +11,12 @@ import {
   Plus,
   Receipt,
   SlidersHorizontal,
-  Sparkles,
   Trash2,
   Users,
   type LucideIcon,
+  ScanLine,
+  Calculator,
+  HardHat,
 } from 'lucide-react'
 import {
   Alert,
@@ -322,9 +322,9 @@ export default function Projects({ clients, filters, statuses, totalProjects }: 
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-3">
                         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                           <StatItem icon={FileText} value={project.drawingCount} label="Drawings" />
-                          <StatItem icon={Sparkles} value={project.takeoffCount} label="Takeoffs" />
-                          <StatItem icon={ClipboardList} value={project.estimateCount} label="Estimates" />
-                          <StatItem icon={Briefcase} value={project.jobCount} label="Jobs" />
+                          <StatItem icon={ScanLine} value={project.takeoffCount} label="Takeoffs" />
+                          <StatItem icon={Calculator} value={project.estimateCount} label="Estimates" />
+                          <StatItem icon={HardHat} value={project.jobCount} label="Jobs" />
                           <StatItem icon={Users} value={project.teamCount} label="Team" />
                           <StatItem icon={Files} value={project.documentCount} label="Documents" />
                           <StatItem icon={Receipt} value={project.invoiceCount} label="Invoices" />

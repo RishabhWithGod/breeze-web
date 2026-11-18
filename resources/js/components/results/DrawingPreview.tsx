@@ -71,7 +71,7 @@ export function DrawingPreview({
           transition={{ delay: 0.3 + index * 0.09, type: 'spring', stiffness: 300 }}
           className={cn('absolute', hotspot.position)}
         >
-          <span className="relative grid size-7 place-items-center rounded-full border border-brand bg-navy-950/80 text-2xs font-bold text-brand">
+          <span className="relative grid size-7 place-items-center rounded-full border border-brand bg-navy-950/80 text-2xs font-bold text-brand on-dark">
             <span
               className="absolute inset-0 rounded-full bg-brand/40 animate-pulse-ring"
               aria-hidden

@@ -90,7 +90,7 @@ export function JobCard({
           size="sm"
           disabled={job.isLocked}
           title={job.isLocked ? 'Completed jobs cannot be deleted.' : undefined}
-          className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+          className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink"
           onClick={() => onDelete(job)}
         >
           Delete

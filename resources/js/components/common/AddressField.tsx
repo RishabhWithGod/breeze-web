@@ -278,7 +278,7 @@ export function AddressField({
         <ul
           id={`${id}-suggestions`}
           role="listbox"
-          className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-panel border border-hairline bg-navy-900 py-1 shadow-panel"
+          className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-panel border border-hairline bg-surface-glass py-1 shadow-panel"
         >
           {suggestions.map((suggestion, index) => (
             <li key={suggestion.placeId}>

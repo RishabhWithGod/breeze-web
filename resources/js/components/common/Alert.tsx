@@ -25,8 +25,8 @@ const TONE_STYLES: Record<AlertTone, { wrapper: string; icon: string }> = {
     icon: 'text-status-warning',
   },
   danger: {
-    wrapper: 'border-l-status-danger bg-status-danger/15',
-    icon: 'text-red-300',
+    wrapper: 'border-l-status-danger bg-status-danger/10',
+    icon: 'text-status-danger',
   },
 }
 

@@ -289,7 +289,7 @@ function FieldNotesAndPhotos({ comments, attachments }: FieldNotesAndPhotosProps
                 rel="noreferrer"
                 className="group overflow-hidden rounded-panel bg-white/6 transition-colors hover:ring-1 hover:ring-brand/60"
               >
-                <div className="aspect-square overflow-hidden bg-navy-950/40">
+                <div className="aspect-square overflow-hidden bg-white/5">
                   <img
                     src={photo.url}
                     alt={photo.name}

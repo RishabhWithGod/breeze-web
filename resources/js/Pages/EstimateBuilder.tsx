@@ -643,7 +643,7 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
                                 <span className="ml-2 text-2xs text-brand/80">from takeoff</span>
                               )}
                               {rowIssue(row) !== null && (
-                                <span className="mt-1 flex items-center gap-1 text-2xs font-semibold text-amber-300">
+                                <span className="mt-1 flex items-center gap-1 text-2xs font-semibold text-status-warning">
                                   <AlertTriangle size={12} aria-hidden /> {rowIssue(row)}
                                 </span>
                               )}

@@ -85,7 +85,7 @@ export function JobAttachmentsPanel({ jobId, attachments, readOnly = false }: Jo
             </Button>
           </div>
 
-          {errors.file && <p className="mt-2 text-sm text-red-300">{errors.file}</p>}
+          {errors.file && <p className="mt-2 text-sm text-status-danger">{errors.file}</p>}
         </form>
       )}
 

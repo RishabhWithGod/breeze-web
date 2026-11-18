@@ -2,18 +2,20 @@ import { useEffect, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Link, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ROUTES, SIDEBAR_ITEMS } from '@/constants'
+import { ROUTES, SIDEBAR_GROUPS, SIDEBAR_ITEMS } from '@/constants'
 import { useUiStore } from '@/store'
 import type { NavItem, SharedPageProps } from '@/types'
 import { cn } from '@/utils'
+import { CompanyMark } from './CompanyMark'
+import { Logo } from './Logo'
 
 interface SidebarNavProps {
   onNavigate: () => void
 }
 
 const ITEM_BASE =
-  'group relative flex items-center gap-4 border-b border-steel-500/60 px-5 py-3.5 ' +
-  'text-md font-medium transition-colors duration-200'
+  'group relative flex items-center gap-3 rounded-[10px] px-2.5 py-2 ' +
+  'text-md font-medium transition-colors duration-150'
 
 /**
  * The paths a module owns beyond the one its entry links to.
@@ -128,18 +130,34 @@ function SidebarLink({ item, isActive, onNavigate, nested = false, padEnd = fals
       onClick={onNavigate}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
+        'nav-link',
         ITEM_BASE,
-        'text-white',
-        nested && 'py-2.5 pl-11 text-sm',
-        padEnd && 'pr-14',
-        isActive ? 'grad-midnight text-white' : 'hover:bg-white/8 hover:text-brand',
+        nested && 'py-1.5 pl-9 text-sm',
+        padEnd && 'pr-12',
+        isActive
+          ? 'bg-linear-to-r from-accent-bright/16 to-accent-bright/2 text-white'
+          : 'text-[#b9c6e2] hover:bg-white/6 hover:text-white',
       )}
     >
-      {isActive && <span className="absolute inset-y-0 left-0 w-1 bg-brand" aria-hidden />}
-      <item.icon size={nested ? 16 : 20} aria-hidden className={cn('shrink-0', isActive && 'text-brand')} />
+      {isActive && (
+        <span
+          className="absolute top-2 bottom-2 -left-2.5 w-[3px] rounded-r-[3px] bg-accent-bright shadow-[0_0_12px_rgb(62_230_255/0.8)]"
+          aria-hidden
+        />
+      )}
+      <item.icon
+        size={nested ? 15 : 18}
+        aria-hidden
+        className={cn(
+          'shrink-0 transition-colors',
+          isActive
+            ? 'text-accent-bright drop-shadow-[0_0_6px_rgb(62_230_255/0.6)]'
+            : 'text-[#6f81a8] group-hover:text-[#dfe8ff]',
+        )}
+      />
       <span className="truncate">{item.label}</span>
       {item.badge ? (
-        <span className="ml-auto grid min-w-6 place-items-center rounded-full bg-status-danger px-1.5 py-0.5 text-2xs font-bold text-white">
+        <span className="ml-auto grid min-w-6 place-items-center rounded-full bg-linear-to-br from-[#ffcf5a] to-[#f59e0b] px-1.5 py-0.5 text-2xs font-bold text-[#2a1700] shadow-[0_0_10px_rgb(245_158_11/0.35)]">
           {item.badge}
         </span>
       ) : null}
@@ -156,11 +174,14 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
 
   // A group its role cannot open still shows the entries under it that it can — an apprentice has
   // no Jobs, but has Tasks — as rows of their own.
-  const visibleItems = SIDEBAR_ITEMS.flatMap((item): readonly NavItem[] =>
-    allowed(item, role, isOwner, permissions)
-      ? [item]
-      : (item.children ?? []).filter((child) => allowed(child, role, isOwner, permissions)),
-  )
+  const visibleGroups = SIDEBAR_GROUPS.map((group) => ({
+    label: group.label,
+    items: group.items.flatMap((item): readonly NavItem[] =>
+      allowed(item, role, isOwner, permissions)
+        ? [item]
+        : (item.children ?? []).filter((child) => allowed(child, role, isOwner, permissions)),
+    ),
+  })).filter((group) => group.items.length > 0)
 
   // Groups start open, as the reference draws them. Two different clicks:
   // the row is the whole tab — it opens the group's own screen and its submenu —
@@ -193,58 +214,103 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
     // `overscroll-contain` keeps a flick at the end of the list from scrolling
     // the page behind it; the bottom padding stops the last entry sitting hard
     // against the window edge once the rail is long enough to scroll.
-    <nav aria-label="Main navigation" className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain py-2 pb-6">
-      <ul>
-        {visibleItems.map((item: NavItem) => {
-          // Some entries are for particular roles only.
-          const children = (item.children ?? []).filter((child) => allowed(child, role, isOwner, permissions))
-          const holdsActive = children.some((child) => child.href === active)
-          const isOpen = holdsActive || !folded.has(item.label)
+    <nav aria-label="Main navigation" className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain px-3 py-2 pb-6">
+      {visibleGroups.map((group, groupIndex) => (
+        <div key={group.label ?? `group-${groupIndex}`} className={cn(groupIndex > 0 && 'mt-1')}>
+          {group.label && (
+            <p className="px-3.5 pt-3 pb-1.5 font-mono text-[10.5px] font-medium tracking-[0.14em] text-[#7f92b8] uppercase">
+              {group.label}
+            </p>
+          )}
+          <ul>
+            {group.items.map((item: NavItem) => {
+              // Some entries are for particular roles only.
+              const children = (item.children ?? []).filter((child) => allowed(child, role, isOwner, permissions))
+              const holdsActive = children.some((child) => child.href === active)
+              const isOpen = holdsActive || !folded.has(item.label)
 
-          return (
-            <li key={item.label}>
-              <div className="relative">
-                <SidebarLink
-                  item={item}
-                  isActive={item.href === active}
-                  onNavigate={() => {
-                    onNavigate()
-                    if (children.length > 0) unfold(item.label)
-                  }}
-                  {...(children.length > 0 ? { padEnd: true } : {})}
-                />
-                {children.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => toggle(item.label)}
-                    aria-expanded={isOpen}
-                    aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${item.label}`}
-                    disabled={holdsActive}
-                    className="absolute top-1/2 right-3 grid size-8 -translate-y-1/2 place-items-center rounded-full text-white/85 transition-colors hover:bg-white/12 hover:text-white disabled:cursor-default disabled:hover:bg-transparent"
-                  >
-                    <ChevronDown
-                      size={17}
-                      aria-hidden
-                      className={cn('transition-transform duration-200', !isOpen && '-rotate-90')}
+              return (
+                <li key={item.label}>
+                  <div className="relative">
+                    <SidebarLink
+                      item={item}
+                      isActive={item.href === active}
+                      onNavigate={() => {
+                        onNavigate()
+                        if (children.length > 0) unfold(item.label)
+                      }}
+                      {...(children.length > 0 ? { padEnd: true } : {})}
                     />
-                  </button>
-                )}
-              </div>
+                    {children.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => toggle(item.label)}
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${item.label}`}
+                        disabled={holdsActive}
+                        className="absolute top-1/2 right-2 grid size-8 -translate-y-1/2 place-items-center rounded-full text-[#b9c6e2] transition-colors hover:bg-white/10 hover:text-white disabled:cursor-default disabled:hover:bg-transparent"
+                      >
+                        <ChevronDown
+                          size={17}
+                          aria-hidden
+                          className={cn('transition-transform duration-200', !isOpen && '-rotate-90')}
+                        />
+                      </button>
+                    )}
+                  </div>
 
-              {children.length > 0 && isOpen && (
-                <ul>
-                  {children.map((child) => (
-                    <li key={child.label}>
-                      <SidebarLink item={child} isActive={child.href === active} onNavigate={onNavigate} nested />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          )
-        })}
-      </ul>
+                  {children.length > 0 && isOpen && (
+                    <ul>
+                      {children.map((child) => (
+                        <li key={child.label}>
+                          <SidebarLink item={child} isActive={child.href === active} onNavigate={onNavigate} nested />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))}
     </nav>
+  )
+}
+
+/** Logo + company card that head the rail, as in the Breeze app. */
+function SidebarHeader() {
+  const { company } = usePage<SharedPageProps>().props
+
+  return (
+    <div className="shrink-0">
+      <div className="px-5 pt-5 pb-3">
+        <Logo />
+      </div>
+      {company && (
+        <div className="mx-3 mb-2 flex items-center gap-3 rounded-xl border border-[rgb(126_170_255/0.12)] bg-white/4 px-3 py-2.5">
+          <CompanyMark
+            logoUrl={company.logoUrl}
+            name={company.name}
+            size={34}
+            className="ring-2 ring-accent-bright/25"
+          />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">{company.name}</p>
+            <p className="truncate font-mono text-2xs tracking-wide text-[#6f81a8]">WORKSPACE</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Small mono footer line, like the app's rail. */
+function SidebarFoot() {
+  return (
+    <div className="shrink-0 border-t border-[rgb(126_170_255/0.1)] px-4 py-3 font-mono text-[10.5px] tracking-wide text-[#6f81a8]">
+      Breeze.Ai · Smarter Software. Stronger Projects.
+    </div>
   )
 }
 
@@ -261,8 +327,10 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop rail */}
-      <aside className="fixed top-navbar bottom-0 left-0 z-40 hidden w-sidebar flex-col border-r border-steel-500/50 grad-sidebar backdrop-blur-xl lg:flex">
+      <aside className="fixed top-0 bottom-0 left-0 z-40 hidden w-sidebar flex-col border-r border-[rgb(126_170_255/0.08)] grad-sidebar lg:flex">
+        <SidebarHeader />
         <SidebarNav onNavigate={closeSidebar} />
+        <SidebarFoot />
       </aside>
 
       {/* Mobile / tablet drawer */}
@@ -275,7 +343,7 @@ export function Sidebar() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={closeSidebar}
-              className="fixed inset-0 z-40 bg-navy-950/70 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-65 bg-navy-950/70 backdrop-blur-sm lg:hidden"
               aria-hidden
             />
             <motion.aside
@@ -283,9 +351,11 @@ export function Sidebar() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 380, damping: 38 }}
-              className="fixed top-navbar bottom-0 left-0 z-50 flex w-sidebar max-w-[85vw] flex-col border-r border-steel-500/50 grad-sidebar backdrop-blur-xl lg:hidden"
+              className="fixed top-0 bottom-0 left-0 z-70 flex w-sidebar max-w-[85vw] flex-col border-r border-[rgb(126_170_255/0.08)] grad-sidebar lg:hidden"
             >
+              <SidebarHeader />
               <SidebarNav onNavigate={closeSidebar} />
+              <SidebarFoot />
             </motion.aside>
           </>
         )}

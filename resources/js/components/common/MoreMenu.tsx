@@ -136,7 +136,7 @@ export function MoreMenu({
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.14 }}
               style={anchor}
-              className="fixed z-50 min-w-44 overflow-hidden rounded-panel border border-hairline-strong bg-navy-900 shadow-raised"
+              className="fixed z-50 min-w-44 overflow-hidden rounded-panel border border-hairline-strong bg-surface-glass shadow-raised"
             >
               {items.map((item) => (
                 <button
@@ -152,7 +152,7 @@ export function MoreMenu({
                     'flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors',
                     'disabled:cursor-not-allowed disabled:opacity-40',
                     item.destructive
-                      ? 'text-red-300 hover:bg-status-danger/15'
+                      ? 'text-status-danger hover:bg-status-danger/15'
                       : 'text-white hover:bg-white/10 hover:text-white',
                   )}
                 >

@@ -556,7 +556,7 @@ export default function InvoiceCreate({
               </dt>
               <dd className="tabular-nums text-white">{formatCurrency(tax, 2)}</dd>
             </div>
-            {errors.tax_pct && <p className="text-xs text-red-300">{errors.tax_pct}</p>}
+            {errors.tax_pct && <p className="text-xs text-status-danger">{errors.tax_pct}</p>}
             <div className="flex items-center justify-between gap-3 border-t border-hairline-strong pt-3">
               <dt className="text-lg font-semibold text-white">Total</dt>
               <dd className="text-2xl font-bold tabular-nums text-white">{formatCurrency(total, 2)}</dd>
@@ -721,7 +721,7 @@ InvoiceCreate.layout = appLayout
 function Labelled({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="mt-6 grid size-11 shrink-0 place-items-center rounded-panel bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+      <span className="mt-6 grid size-11 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
         <Icon size={20} aria-hidden />
       </span>
       <div className="min-w-0 flex-1">

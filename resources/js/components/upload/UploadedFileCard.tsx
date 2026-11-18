@@ -43,7 +43,7 @@ export function UploadedFileCard({
       )}
     >
       <div className="flex flex-wrap items-center gap-4">
-        <span className="grid size-14 shrink-0 place-items-center rounded-panel bg-red-500 text-sm font-bold tracking-wide text-white shadow-panel">
+        <span className="grid size-14 shrink-0 place-items-center rounded-panel bg-red-500 text-sm font-bold tracking-wide text-brand-ink shadow-panel">
           {extension}
         </span>
 
@@ -82,7 +82,7 @@ export function UploadedFileCard({
 
       <div className="mt-4 border-t border-hairline pt-4">
         {hasError ? (
-          <p className="flex items-center gap-2 text-sm font-semibold text-red-300">
+          <p className="flex items-center gap-2 text-sm font-semibold text-status-danger">
             <TriangleAlert size={18} aria-hidden />
             {file.errorMessage ?? 'This file could not be used'}
           </p>

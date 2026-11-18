@@ -77,7 +77,7 @@ const STATUS = {
   pending: { label: 'Pending', className: 'border-status-warning/60 bg-status-warning/12 text-status-warning' },
   accepted: { label: 'Accepted', className: 'border-status-success/60 bg-status-success/15 text-status-success' },
   cancelled: { label: 'Cancelled', className: 'border-hairline-strong bg-white/6 text-white/60' },
-  expired: { label: 'Expired', className: 'border-status-danger/50 bg-status-danger/15 text-red-300' },
+  expired: { label: 'Expired', className: 'border-status-danger/50 bg-status-danger/15 text-status-danger' },
 } as const
 
 const CONTROL =
@@ -337,7 +337,7 @@ export default function TeamSetup({
                             onChange={(event) => change(draft.key, { name: event.target.value })}
                             className={cn(CONTROL, nameError && 'border-status-danger/70')}
                           />
-                          {nameError && <span className="mt-1 block text-xs text-red-300">{nameError}</span>}
+                          {nameError && <span className="mt-1 block text-xs text-status-danger">{nameError}</span>}
                         </span>
                       </span>
                     </td>
@@ -350,7 +350,7 @@ export default function TeamSetup({
                         onChange={(event) => change(draft.key, { email: event.target.value })}
                         className={cn(CONTROL, emailError && 'border-status-danger/70')}
                       />
-                      {emailError && <span className="mt-1 block text-xs text-red-300">{emailError}</span>}
+                      {emailError && <span className="mt-1 block text-xs text-status-danger">{emailError}</span>}
                     </td>
                     <td className="px-3 py-2.5 align-top">
                       <input
@@ -363,7 +363,7 @@ export default function TeamSetup({
                         className={cn(CONTROL, errorFor(draft, 'phone') && 'border-status-danger/70')}
                       />
                       {errorFor(draft, 'phone') && (
-                        <span className="mt-1 block text-xs text-red-300">{errorFor(draft, 'phone')}</span>
+                        <span className="mt-1 block text-xs text-status-danger">{errorFor(draft, 'phone')}</span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 align-top">
@@ -377,7 +377,7 @@ export default function TeamSetup({
                         className={cn(CONTROL, errorFor(draft, 'password') && 'border-status-danger/70')}
                       />
                       {errorFor(draft, 'password') && (
-                        <span className="mt-1 block text-xs text-red-300">{errorFor(draft, 'password')}</span>
+                        <span className="mt-1 block text-xs text-status-danger">{errorFor(draft, 'password')}</span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 align-top">
@@ -385,7 +385,7 @@ export default function TeamSetup({
                         aria-label="Role"
                         value={draft.role}
                         onChange={(event) => change(draft.key, { role: event.target.value })}
-                        className={cn(CONTROL, '[&>option]:bg-navy-900')}
+                        className={cn(CONTROL, '[&>option]:bg-surface-glass')}
                       >
                         {roles.map((role) => (
                           <option key={role} value={role}>
@@ -399,11 +399,11 @@ export default function TeamSetup({
                         aria-label="Team assignment"
                         value={draft.teamId}
                         onChange={(event) => change(draft.key, { teamId: event.target.value })}
-                        className={cn(CONTROL, '[&>option]:bg-navy-900', teamError && 'border-status-danger/70')}
+                        className={cn(CONTROL, '[&>option]:bg-surface-glass', teamError && 'border-status-danger/70')}
                       >
                         {teamOptions}
                       </select>
-                      {teamError && <span className="mt-1 block text-xs text-red-300">{teamError}</span>}
+                      {teamError && <span className="mt-1 block text-xs text-status-danger">{teamError}</span>}
                     </td>
                     <td className="px-3 py-2.5 align-top">
                       <Chip className={STATUS.draft.className}>{STATUS.draft.label}</Chip>
@@ -428,7 +428,7 @@ export default function TeamSetup({
           </Button>
           <div className="flex items-center gap-4">
             {overSeats && (
-              <span className="text-sm text-red-300">
+              <span className="text-sm text-status-danger">
                 Only {seats.available} {seats.available === 1 ? 'seat is' : 'seats are'} left on your plan.
               </span>
             )}
@@ -542,7 +542,7 @@ function SeatStrip({
           <strong className="text-white tabular-nums">{adding}</strong> on this list
         </span>
       )}
-      <span className={cn('ml-auto font-semibold', seats.available === 0 ? 'text-red-300' : 'text-brand')}>
+      <span className={cn('ml-auto font-semibold', seats.available === 0 ? 'text-status-danger' : 'text-brand')}>
         {seats.available} of {seats.limit} seats available
       </span>
       {canBuy && (

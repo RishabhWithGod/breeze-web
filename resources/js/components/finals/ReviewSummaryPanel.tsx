@@ -88,7 +88,7 @@ export function ReviewSummaryPanel({
       value: formatNumber(totals.rejected),
       hint: 'Left out of the estimate',
       icon: XCircle,
-      tone: 'bg-status-danger/20 text-red-300',
+      tone: 'bg-status-danger/20 text-status-danger',
     },
   ]
 

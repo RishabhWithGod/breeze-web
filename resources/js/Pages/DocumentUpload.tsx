@@ -113,7 +113,7 @@ export default function DocumentUpload({
               }}
             />
             {fileName && <p className="text-sm text-white/80">Selected: {fileName}</p>}
-            {errors.file && <p className="text-sm text-red-300">{errors.file}</p>}
+            {errors.file && <p className="text-sm text-status-danger">{errors.file}</p>}
 
             <TextInput
               id="document-name"

@@ -131,7 +131,7 @@ export function UploadDropzone({
           className={cn(
             'relative transition-colors',
             isRejecting
-              ? 'text-red-300'
+              ? 'text-status-danger'
               : isSuccess
                 ? 'text-status-success'
                 : 'text-brand',

@@ -540,7 +540,7 @@ interface DetailProps {
 function Detail({ icon: Icon, label, value, href }: DetailProps) {
   return (
     <div className="flex items-start gap-3">
-      <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+      <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
         <Icon size={16} aria-hidden />
       </span>
       <div className="min-w-0">
@@ -564,7 +564,7 @@ function Detail({ icon: Icon, label, value, href }: DetailProps) {
 function StatCard({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <Card padding="md" className="flex items-center gap-4">
-      <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+      <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
         <Icon size={22} aria-hidden />
       </span>
       <div className="min-w-0 flex-1">

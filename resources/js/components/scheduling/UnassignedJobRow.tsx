@@ -10,7 +10,7 @@ import { cn, formatCurrency, formatDate } from '@/utils'
  * gone — a colour per level, readable as a solid fill with a white glyph.
  */
 const PRIORITY_STYLES: Record<JobPriority, { bubble: string }> = {
-  high: { bubble: 'bg-status-danger text-white' },
+  high: { bubble: 'bg-status-danger text-brand-ink' },
   medium: { bubble: 'bg-status-warning text-brand-ink' },
   low: { bubble: 'bg-status-success text-brand-ink' },
 }
@@ -19,7 +19,7 @@ const PRIORITY_STYLES: Record<JobPriority, { bubble: string }> = {
 const TYPE_TEXT: Record<string, string> = {
   residential: 'text-status-success',
   commercial: 'text-brand',
-  industrial: 'text-violet-300',
+  industrial: 'text-status-purple',
 }
 
 export interface UnassignedJobRowProps {

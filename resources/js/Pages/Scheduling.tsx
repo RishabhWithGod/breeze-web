@@ -45,9 +45,9 @@ const HATCH = (color: string) =>
   }) as const
 
 const STATE_STYLE: Record<BoardState, { box: string; icon: typeof FileText; label: string }> = {
-  scheduled: { box: 'border-blue-300/40 bg-blue-500 text-white', icon: FileText, label: 'Scheduled' },
-  'in-progress': { box: 'border-cyan-200/40 bg-cyan-600 text-white', icon: Clock, label: 'In progress' },
-  completed: { box: 'border-emerald-200/40 bg-emerald-500 text-white', icon: Check, label: 'Completed' },
+  scheduled: { box: 'border-blue-300/40 bg-blue-500 text-brand-ink', icon: FileText, label: 'Scheduled' },
+  'in-progress': { box: 'border-cyan-200/40 bg-cyan-600 text-brand-ink', icon: Clock, label: 'In progress' },
+  completed: { box: 'border-emerald-200/40 bg-emerald-500 text-brand-ink', icon: Check, label: 'Completed' },
   conflict: {
     box: 'border-red-400/70 bg-red-950/50 text-white',
     icon: AlertTriangle,
@@ -61,9 +61,9 @@ const STATE_STYLE: Record<BoardState, { box: string; icon: typeof FileText; labe
 }
 
 const PRIORITY: Record<string, { stripe: string; chip: string; label: string }> = {
-  high: { stripe: 'bg-red-500', chip: 'bg-red-500 text-white', label: 'High' },
+  high: { stripe: 'bg-red-500', chip: 'bg-red-500 text-brand-ink', label: 'High' },
   medium: { stripe: 'bg-amber-400', chip: 'bg-amber-400 text-navy-950', label: 'Medium' },
-  low: { stripe: 'bg-blue-500', chip: 'bg-blue-500 text-white', label: 'Low' },
+  low: { stripe: 'bg-blue-500', chip: 'bg-blue-500 text-brand-ink', label: 'Low' },
 }
 
 /**
@@ -187,7 +187,7 @@ export default function Scheduling({ anchor, today, board }: SchedulingProps) {
             {summary.jobs === 1 ? 'job' : 'jobs'}
           </span>
           {summary.clashes > 0 && (
-            <span className="rounded-full border border-red-400/50 bg-red-500/15 px-3 py-1.5 text-xs text-red-200">
+            <span className="rounded-full border border-red-400/50 bg-red-500/15 px-3 py-1.5 text-xs text-status-danger">
               <strong className="font-semibold">{summary.clashes}</strong>{' '}
               {summary.clashes === 1 ? 'clash' : 'clashes'}
             </span>
@@ -199,9 +199,9 @@ export default function Scheduling({ anchor, today, board }: SchedulingProps) {
             onChange={(event) => setCrewFilter(event.target.value)}
             className="rounded-panel border border-hairline-strong bg-white/8 px-3 py-2.5 text-md text-white focus:border-brand focus:outline-none"
           >
-            <option value="all" className="bg-navy-900">All crews</option>
+            <option value="all" className="bg-surface-glass">All crews</option>
             {board.crews.map((crew) => (
-              <option key={crew.id} value={crew.id} className="bg-navy-900">
+              <option key={crew.id} value={crew.id} className="bg-surface-glass">
                 {crew.name}
               </option>
             ))}
@@ -221,7 +221,7 @@ export default function Scheduling({ anchor, today, board }: SchedulingProps) {
               className={cn(
                 'px-5 py-2.5 text-md font-semibold transition-colors',
                 view === option.value
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-blue-600 text-brand-ink'
                   : 'bg-white/6 text-white/85 hover:bg-white/12',
               )}
             >
@@ -305,7 +305,7 @@ function Block({ block, compact = false }: { block: BoardBlock; compact?: boolea
             <Check size={10} strokeWidth={3} />
           </span>
         ) : block.state === 'conflict' || block.state === 'attention' ? (
-          <span className="grid size-4 place-items-center rounded-full bg-red-500 text-white">
+          <span className="grid size-4 place-items-center rounded-full bg-red-500 text-brand-ink">
             <span className="text-2xs leading-none font-bold">!</span>
           </span>
         ) : (
@@ -351,7 +351,7 @@ function CrewGrid({
   return (
     <div className={FRAME}>
       <div className="min-w-max" style={{ display: 'grid', gridTemplateColumns: columns }}>
-        <div className="sticky top-0 left-0 z-30 flex items-center border-r border-b border-hairline bg-navy-900 px-4 py-3 text-md font-bold text-white">
+        <div className="sticky top-0 left-0 z-30 flex items-center border-r border-b border-hairline bg-surface-glass px-4 py-3 text-md font-bold text-white">
           Crews
         </div>
         {days.map((day) => (
@@ -371,7 +371,7 @@ function DayHeader({ day }: { day: BoardDay }) {
     <div
       className={cn(
         'sticky top-0 z-20 border-b border-l border-hairline px-3 py-2.5 text-center',
-        day.isToday ? 'bg-blue-700' : day.isWeekend ? 'bg-navy-900' : 'bg-navy-800',
+        day.isToday ? 'bg-brand on-dark' : day.isWeekend ? 'bg-surface-glass' : 'bg-surface-veil',
       )}
     >
       <p className={cn('text-xs font-semibold tracking-wide uppercase', day.isWeekend && !day.isToday ? 'text-white/60' : 'text-white/85')}>
@@ -397,7 +397,7 @@ function CrewRow({
 
   return (
     <>
-      <div className="sticky left-0 z-10 flex items-center gap-3 border-r border-b border-hairline bg-navy-900 px-4 py-3">
+      <div className="sticky left-0 z-10 flex items-center gap-3 border-r border-b border-hairline bg-surface-glass px-4 py-3">
         <span
           className={cn('size-3 shrink-0 rounded-full', jobCount > 0 ? 'bg-status-success' : 'bg-white/30')}
           aria-hidden
@@ -420,7 +420,7 @@ function CrewRow({
             className={cn(
               'flex min-h-20 flex-col gap-1.5 border-b border-l border-hairline p-1.5',
               day.isToday && 'bg-blue-600/10',
-              day.isWeekend && 'bg-black/15',
+              day.isWeekend && 'bg-white/4',
             )}
           >
             {blocks.map((block) => (
@@ -493,7 +493,7 @@ function MonthGrid({
         {days.slice(0, 7).map((day) => (
           <div
             key={day.weekday}
-            className="sticky top-0 z-10 border-b border-hairline bg-navy-800 px-3 py-2.5 text-center text-xs font-semibold tracking-wide text-white/90 uppercase"
+            className="sticky top-0 z-10 border-b border-hairline bg-surface-veil px-3 py-2.5 text-center text-xs font-semibold tracking-wide text-white/80 uppercase"
           >
             {day.weekday}
           </div>
@@ -507,8 +507,8 @@ function MonthGrid({
               key={day.date}
               className={cn(
                 'flex min-h-32 flex-col gap-1 border-b border-l border-hairline p-1.5',
-                !day.isCurrentPeriod && 'bg-black/20 opacity-50',
-                day.isWeekend && day.isCurrentPeriod && 'bg-black/15',
+                !day.isCurrentPeriod && 'bg-white/6 opacity-50',
+                day.isWeekend && day.isCurrentPeriod && 'bg-white/4',
                 day.isToday && 'bg-blue-600/15',
               )}
             >
@@ -518,7 +518,7 @@ function MonthGrid({
                   onClick={() => onOpenDay(day.date)}
                   className={cn(
                     'grid size-7 place-items-center rounded-full text-xs font-semibold transition-colors hover:bg-white/15',
-                    day.isToday ? 'bg-blue-600 text-white' : 'text-white/85',
+                    day.isToday ? 'bg-blue-600 text-brand-ink' : 'text-white/85',
                   )}
                   aria-label={`Open ${day.monthDay}`}
                 >
@@ -559,7 +559,7 @@ function Legend() {
     {
       label: 'Completed',
       swatch: (
-        <span className="grid size-4 place-items-center rounded-full bg-emerald-500 text-white">
+        <span className="grid size-4 place-items-center rounded-full bg-emerald-500 text-brand-ink">
           <Check size={10} strokeWidth={3} />
         </span>
       ),
@@ -643,16 +643,16 @@ function UnassignedPanel({
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <select aria-label="Type" value={type} onChange={(event) => setType(event.target.value)} className={selectClass}>
-          <option value="all" className="bg-navy-900">All Types</option>
-          <option value="residential" className="bg-navy-900">Residential</option>
-          <option value="commercial" className="bg-navy-900">Commercial</option>
-          <option value="industrial" className="bg-navy-900">Industrial</option>
+          <option value="all" className="bg-surface-glass">All Types</option>
+          <option value="residential" className="bg-surface-glass">Residential</option>
+          <option value="commercial" className="bg-surface-glass">Commercial</option>
+          <option value="industrial" className="bg-surface-glass">Industrial</option>
         </select>
         <select aria-label="Priority" value={priority} onChange={(event) => setPriority(event.target.value)} className={selectClass}>
-          <option value="all" className="bg-navy-900">All Priority</option>
-          <option value="high" className="bg-navy-900">High</option>
-          <option value="medium" className="bg-navy-900">Medium</option>
-          <option value="low" className="bg-navy-900">Low</option>
+          <option value="all" className="bg-surface-glass">All Priority</option>
+          <option value="high" className="bg-surface-glass">High</option>
+          <option value="medium" className="bg-surface-glass">Medium</option>
+          <option value="low" className="bg-surface-glass">Low</option>
         </select>
       </div>
 

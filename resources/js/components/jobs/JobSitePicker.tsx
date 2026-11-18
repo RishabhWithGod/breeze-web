@@ -280,7 +280,7 @@ export function JobSitePicker({
                       size="sm"
                       disabled={disabled || saving}
                       onClick={() => removeSite(site.id)}
-                      className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                      className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink"
                     />
                   </span>
                 </label>
@@ -375,7 +375,7 @@ export function JobSitePicker({
         </Button>
       )}
 
-      {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
+      {error && <p className="mt-2 text-sm text-status-danger">{error}</p>}
     </div>
   )
 }

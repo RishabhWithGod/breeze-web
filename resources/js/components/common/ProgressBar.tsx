@@ -10,7 +10,7 @@ const FILL_TONES: Record<Tone, string> = {
   info: 'bg-status-info',
   purple: 'bg-status-purple',
   blue: 'bg-status-blue',
-  neutral: 'bg-white/60',
+  neutral: 'bg-white/40',
 }
 
 const HEIGHTS = {
@@ -59,7 +59,7 @@ export function ProgressBar({
         aria-valuemax={100}
         aria-label={label ?? 'Progress'}
         className={cn(
-          'w-full overflow-hidden rounded-pill bg-white/25',
+          'w-full overflow-hidden rounded-pill bg-white/10',
           HEIGHTS[size],
         )}
       >

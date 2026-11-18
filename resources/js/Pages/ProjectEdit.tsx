@@ -408,7 +408,7 @@ export default function ProjectEdit({ project, clients, teams }: ProjectEditProp
               {vendorRateListErrors.length > 0 ? (
                 <div className="mt-2 space-y-1">
                   {vendorRateListErrors.map((message, index) => (
-                    <p key={index} className="text-sm text-red-300">
+                    <p key={index} className="text-sm text-status-danger">
                       {message}
                     </p>
                   ))}

@@ -39,7 +39,7 @@ export function ProjectListCard({
       )}
     >
       <div className="flex items-start gap-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-sm bg-ocean-600 text-white">
+        <span className="grid size-8 shrink-0 place-items-center rounded-sm bg-brand text-brand-ink">
           <FolderKanban size={15} aria-hidden />
         </span>
 
@@ -79,7 +79,7 @@ export function ProjectListCard({
         <Button
           variant="white"
           size="sm"
-          className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+          className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink"
           onClick={() => onDelete(project)}
         >
           Delete

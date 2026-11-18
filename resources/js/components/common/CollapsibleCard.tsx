@@ -75,7 +75,7 @@ export function CollapsibleCard({
       >
         {plain ? (
           // The same icon tile the job screen's stat and progress cards wear.
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand/12 text-brand ring-1 ring-brand/25">
             {createElement(icon, { size: 16, 'aria-hidden': true })}
           </span>
         ) : (

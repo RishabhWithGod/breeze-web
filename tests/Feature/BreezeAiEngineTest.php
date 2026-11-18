@@ -114,4 +114,22 @@ class BreezeAiEngineTest extends TestCase
             $result->reviews()->pluck('external_id')->unique()->count(),
         );
     }
+
+    public function test_point_locations_become_boxes_on_the_card(): void
+    {
+        $payload = $this->realResponse();
+        $payload['components'][0]['placement'] = [
+            ['page' => 2, 'coordinates' => ['x' => 0.5, 'y' => 0.25]],
+            ['page' => 2, 'coordinates' => ['x' => null, 'y' => null]],
+        ];
+
+        $cards = app(\App\Services\Ai\AiResponseNormaliser::class)->normalise($payload)['cards'];
+        $card = collect($cards)->firstWhere('name', $payload['components'][0]['name']);
+
+        $this->assertNotEmpty($card['occurrences']);
+        $box = $card['occurrences'][0]['bbox'];
+        $this->assertEqualsWithDelta(5000 - 60, $box[0], 1);   // centred on x=0.5
+        $this->assertEqualsWithDelta(2500 - 90, $box[1], 1);   // centred on y=0.25
+        $this->assertSame(2, $card['occurrences'][0]['page']);
+    }
 }

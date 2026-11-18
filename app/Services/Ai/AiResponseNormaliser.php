@@ -457,6 +457,52 @@ class AiResponseNormaliser
      */
     public const NORMALISED_FRAME = 10000.0;
 
+    /**
+     * Half-size of the box drawn around a point-only location, as a fraction of the
+     * page. Roughly a symbol on a 36×24in sheet; height is larger than width so the
+     * box looks square on a landscape page.
+     */
+    private const POINT_BOX_W = 0.012;
+
+    private const POINT_BOX_H = 0.018;
+
+    /**
+     * A placement's box in normalised page space: the engine's own `bounding_box`
+     * when it sends one, otherwise a small box centred on its `coordinates` point.
+     *
+     * @return array{x: float, y: float, width: float, height: float}|null
+     */
+    private function placementBox(mixed $placement): ?array
+    {
+        if (! is_array($placement)) {
+            return null;
+        }
+
+        $box = $placement['bounding_box'] ?? null;
+
+        if (is_array($box) && isset($box['x'], $box['y'])) {
+            return [
+                'x' => (float) $box['x'],
+                'y' => (float) $box['y'],
+                'width' => (float) ($box['width'] ?? self::POINT_BOX_W),
+                'height' => (float) ($box['height'] ?? self::POINT_BOX_H),
+            ];
+        }
+
+        $point = $placement['coordinates'] ?? null;
+
+        if (! is_array($point) || ! is_numeric($point['x'] ?? null) || ! is_numeric($point['y'] ?? null)) {
+            return null;
+        }
+
+        return [
+            'x' => max(0.0, (float) $point['x'] - self::POINT_BOX_W / 2),
+            'y' => max(0.0, (float) $point['y'] - self::POINT_BOX_H / 2),
+            'width' => self::POINT_BOX_W,
+            'height' => self::POINT_BOX_H,
+        ];
+    }
+
     /** @param  array<string, mixed>  $payload */
     public function isElectricalExtraction(array $payload): bool
     {
@@ -531,9 +577,9 @@ class AiResponseNormaliser
             ])];
 
             foreach ((array) ($component['placement'] ?? []) as $placement) {
-                $box = is_array($placement) ? ($placement['bounding_box'] ?? null) : null;
+                $box = $this->placementBox($placement);
 
-                if (! is_array($box)) {
+                if ($box === null) {
                     continue;
                 }
 

@@ -13,10 +13,10 @@ import {
   PencilLine,
   Phone,
   Plus,
-  Sparkles,
   Trash2,
   User,
   Users,
+  ScanLine,
 } from 'lucide-react'
 import {
   Alert,
@@ -407,7 +407,7 @@ export default function ClientShow({
                         {project.drawingCount === 1 ? 'drawing' : 'drawings'}
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <Sparkles size={13} aria-hidden />
+                        <ScanLine size={13} aria-hidden />
                         {project.takeoffCount}{' '}
                         {project.takeoffCount === 1 ? 'takeoff' : 'takeoffs'}
                       </span>
@@ -503,7 +503,7 @@ function SummaryStat({ label, value, tone = 'neutral' }: SummaryStatProps) {
     brand: 'text-brand',
     success: 'text-status-success',
     warning: 'text-status-warning',
-    danger: 'text-red-300',
+    danger: 'text-status-danger',
     info: 'text-status-info',
     purple: 'text-status-purple',
     blue: 'text-status-blue',

@@ -465,7 +465,7 @@ export default function ChangeOrderForm({
             {Object.entries(fieldErrors)
               .filter(([key]) => key.startsWith('attachments'))
               .map(([key, message]) => (
-                <p key={key} className={cn('mt-2 text-sm text-red-300')}>
+                <p key={key} className={cn('mt-2 text-sm text-status-danger')}>
                   {message}
                 </p>
               ))}

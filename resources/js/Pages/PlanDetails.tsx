@@ -72,7 +72,7 @@ export default function PlanDetails({ subscription, seatOffer, payment, receipt 
       )}
 
       {/* ----------------------------------------------------------------- hero -- */}
-      <section className="mb-5 rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-white/4 to-transparent p-5 shadow-glow sm:p-6">
+      <section className="mb-5 rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-surface-glass to-surface-glass p-5 shadow-glow sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-sm text-white/85">Current plan</p>

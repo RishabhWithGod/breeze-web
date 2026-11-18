@@ -41,17 +41,17 @@ export function FilterTabs<T extends string>({
             className={cn(
               'relative inline-flex items-center gap-2 rounded-panel px-4 py-2 text-md font-medium transition-colors duration-200',
               isActive
-                ? 'text-white'
+                ? 'text-brand-ink'
                 : solid
-                  ? 'bg-white/25 text-white hover:bg-white/35'
-                  : 'text-white/90 hover:bg-white/15 hover:text-white',
+                  ? 'bg-white/6 text-white hover:bg-white/12'
+                  : 'text-white/80 hover:bg-white/8 hover:text-white',
             )}
           >
             {isActive && (
               <motion.span
                 layoutId="filter-tab-active"
                 transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                className="absolute inset-0 rounded-panel bg-brand/45"
+                className="absolute inset-0 rounded-panel bg-brand shadow-panel"
                 aria-hidden
               />
             )}
@@ -60,7 +60,7 @@ export function FilterTabs<T extends string>({
               <span
                 className={cn(
                   'relative rounded-full px-2 py-0.5 text-2xs font-semibold',
-                  isActive ? 'bg-navy-950/40 text-white' : 'bg-white/10 text-white/90',
+                  isActive ? 'bg-brand-ink/25 text-brand-ink' : 'bg-white/10 text-white/80',
                 )}
               >
                 {count}

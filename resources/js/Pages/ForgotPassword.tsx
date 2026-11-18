@@ -37,7 +37,7 @@ export default function ForgotPassword() {
       footer={
         <Link
           href={ROUTES.login}
-          className="inline-flex items-center gap-2 text-brand transition-colors hover:text-white"
+          className="inline-flex items-center gap-2 text-brand transition-colors hover:text-brand-deep"
         >
           <ArrowLeft size={15} aria-hidden />
           Back to login

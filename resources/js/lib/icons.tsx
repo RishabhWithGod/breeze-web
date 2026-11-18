@@ -1,11 +1,11 @@
 import {
-  Bot,
-  Briefcase,
   CalendarCheck,
   FileText,
-  ReceiptText,
   TriangleAlert,
   type LucideProps,
+  ScanLine,
+  Calculator,
+  HardHat,
 } from 'lucide-react'
 
 /**
@@ -37,13 +37,13 @@ export interface FeedIconProps extends LucideProps {
 export function FeedIcon({ name, ...props }: FeedIconProps) {
   switch (name) {
     case 'bot':
-      return <Bot {...props} />
+      return <ScanLine {...props} />
     case 'briefcase':
-      return <Briefcase {...props} />
+      return <HardHat {...props} />
     case 'calendar-check':
       return <CalendarCheck {...props} />
     case 'receipt-text':
-      return <ReceiptText {...props} />
+      return <Calculator {...props} />
     case 'triangle-alert':
       return <TriangleAlert {...props} />
     case 'file-text':

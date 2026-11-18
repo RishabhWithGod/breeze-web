@@ -1,23 +1,21 @@
 import {
   Calculator,
-  Briefcase,
   CalendarDays,
   CalendarOff,
-  // ChartColumn,
-  ClipboardList,
   Clock,
-  Contact,
-  FilePen,
   FileStack,
-  FileText,
   FolderKanban,
-  Gauge,
-  ReceiptText,
   BarChart3,
-  Sparkles,
   Users,
   ListChecks,
   Zap,
+  ScanLine,
+  HardHat,
+  FileDiff,
+  Receipt,
+  Building2,
+  LayoutDashboard,
+  Package,
 } from 'lucide-react'
 import { ROUTES } from './routes'
 import type { NavItem } from '@/types'
@@ -28,8 +26,8 @@ import type { NavItem } from '@/types'
  * Breeze Bucks is hidden for now — it still resolves to ModuleController's
  * "in development" screen — every other item is a real, built module.
  */
-export const SIDEBAR_ITEMS: readonly NavItem[] = [
-  { label: 'Dashboard', href: ROUTES.home, icon: Gauge },
+const NAV_ITEMS: readonly NavItem[] = [
+  { label: 'Dashboard', href: ROUTES.home, icon: LayoutDashboard },
   /*
    * Who the work is for, and then the work itself. A client has projects and a
    * crew; a project is what a drawing is taken off, and what every takeoff,
@@ -38,7 +36,7 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   {
     label: 'Clients',
     href: ROUTES.clients,
-    icon: Contact,
+    icon: Building2,
     permission: 'clients.view',
     children: [
       { label: 'Projects', href: ROUTES.projects, icon: FolderKanban, permission: 'projects.view' },
@@ -56,11 +54,11 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
     ],
   },
   // Lands on the takeoff history, matching the reference product.
-  { label: 'AI Takeoff', href: ROUTES.aiTakeoff, icon: Sparkles, permission: 'takeoff.view' },
+  { label: 'AI Takeoff', href: ROUTES.aiTakeoff, icon: ScanLine, permission: 'takeoff.view' },
   {
     label: 'Estimates',
     href: ROUTES.estimates,
-    icon: FileText,
+    icon: Calculator,
     permission: 'estimates.view',
     children: [
       // Where quantities become priced labor and material lines — for the people who
@@ -78,7 +76,7 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
       {
         label: 'Commodity List',
         href: ROUTES.commodities,
-        icon: ListChecks,
+        icon: Package,
         permission: 'estimates.view',
         roles: ['project manager', 'estimator', 'supervisor', 'admin', 'owner'],
       },
@@ -87,19 +85,19 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   {
     label: 'Jobs',
     href: ROUTES.jobs,
-    icon: Briefcase,
+    icon: HardHat,
     permission: 'jobs.view',
     children: [
       // Read across every job rather than inside one. Adding a task is a button
       // on its list, the way every other module does it.
-      { label: 'Tasks', href: ROUTES.tasks, icon: ClipboardList, permission: 'tasks.view' },
+      { label: 'Tasks', href: ROUTES.tasks, icon: ListChecks, permission: 'tasks.view' },
       // The crew calendar is the scheduling screen; it lives with the work it draws.
       { label: 'Calendar', href: ROUTES.schedulingCalendar, icon: CalendarDays, permission: 'schedule.view' },
       // Work added to a job after it began: raised by a foreman or the office, decided by a manager.
       {
         label: 'Change Orders',
         href: ROUTES.changeOrders,
-        icon: FilePen,
+        icon: FileDiff,
         permission: 'change_orders.view',
         roles: ['project manager', 'foreman', 'admin', 'owner'],
       },
@@ -117,9 +115,43 @@ export const SIDEBAR_ITEMS: readonly NavItem[] = [
   // A static preview of the calculation tools, ahead of the real engine.
   { label: 'Electrical Tools', href: ROUTES.electricalTools, icon: Zap },
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock, permission: 'time_tracking.view' },
-  { label: 'Billing', href: ROUTES.billing, icon: ReceiptText, permission: 'billing.view' },
+  { label: 'Billing', href: ROUTES.billing, icon: Receipt, permission: 'billing.view' },
   { label: 'Analytics', href: ROUTES.jobCosting, icon: BarChart3 },
 ]
+
+export interface SidebarGroup {
+  /** The small heading above the group; unset for the lone Dashboard entry. */
+  readonly label?: string
+  readonly items: readonly NavItem[]
+}
+
+const pick = (...labels: readonly string[]): readonly NavItem[] =>
+  labels.flatMap((label) => NAV_ITEMS.filter((item) => item.label === label))
+
+const GROUPED: readonly SidebarGroup[] = [
+  { items: pick('Dashboard') },
+  // Who the work is for, and what gets priced before it is won.
+  { label: 'Preconstruction', items: pick('Clients', 'AI Takeoff', 'Estimates') },
+  // The work itself, and the hours spent on it.
+  { label: 'Field operations', items: pick('Jobs', 'Time Tracking') },
+  { label: 'Finance', items: pick('Billing', 'Analytics') },
+  { label: 'Resources', items: pick('Electrical Tools') },
+]
+
+/**
+ * The drawer, divided by category as in the Breeze app. Any entry not placed in
+ * a group above still shows, in a trailing unlabelled group, so adding an item to
+ * `NAV_ITEMS` can never make it vanish from the rail.
+ */
+export const SIDEBAR_GROUPS: readonly SidebarGroup[] = (() => {
+  const placed = new Set(GROUPED.flatMap((group) => group.items))
+  const rest = NAV_ITEMS.filter((item) => !placed.has(item))
+
+  return rest.length > 0 ? [...GROUPED, { items: rest }] : GROUPED
+})()
+
+/** Every top-level entry, flat — for code that matches a path to its entry. */
+export const SIDEBAR_ITEMS: readonly NavItem[] = SIDEBAR_GROUPS.flatMap((group) => group.items)
 
 export const FOOTER_LINKS: readonly { label: string; href: string }[] = [
   { label: 'Documentation', href: '#' },

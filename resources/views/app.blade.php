@@ -16,17 +16,24 @@
       name="description"
       content="AI-powered electrical takeoff — upload drawings and get automated symbol detection, material counts and cost breakdowns."
     />
-    <meta name="theme-color" content="#0a1c33" />
+    <meta name="theme-color" content="#0b1a3f" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
 
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
-      rel="stylesheet"
-    />
+
+    <script>
+      // Set the theme before first paint so a dark-mode user never sees a light flash.
+      (function () {
+        try {
+          var t = localStorage.getItem('breeze.theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
 
     <title inertia>{{ config('app.name') }}</title>
 

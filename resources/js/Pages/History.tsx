@@ -146,7 +146,7 @@ export default function History({ projects, filters, clients, projectOptions }: 
       header: 'Drawing Set',
       render: (row) => (
         <div className="flex items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-purple-400/15 text-purple-300 ring-1 ring-purple-400/40">
+          <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-purple-400/15 text-status-purple ring-1 ring-purple-400/40">
             <GitBranch size={17} aria-hidden />
           </span>
           <div className="min-w-0">

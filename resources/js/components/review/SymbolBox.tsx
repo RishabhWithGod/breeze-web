@@ -302,7 +302,7 @@ export function SymbolBox({
         )}
       </button>
 
-      <span className="pointer-events-none absolute -top-6 left-1/2 hidden -translate-x-1/2 rounded-full bg-navy-900/95 px-2 py-0.5 text-2xs whitespace-nowrap text-white group-hover:block">
+      <span className="pointer-events-none absolute -top-6 left-1/2 hidden -translate-x-1/2 rounded-full bg-navy-900/95 px-2 py-0.5 text-2xs whitespace-nowrap text-white group-hover:block on-dark">
         {name} · page {page}
       </span>
 

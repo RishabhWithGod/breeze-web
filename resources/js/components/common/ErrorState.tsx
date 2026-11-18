@@ -35,7 +35,7 @@ export function ErrorState({
         className,
       )}
     >
-      <span className="relative mb-6 grid size-24 place-items-center rounded-full bg-status-danger/15 text-red-300 ring-1 ring-status-danger/40">
+      <span className="relative mb-6 grid size-24 place-items-center rounded-full bg-status-danger/15 text-status-danger ring-1 ring-status-danger/40">
         <span
           className="absolute inset-0 rounded-full bg-status-danger/25 animate-pulse-ring"
           aria-hidden
@@ -44,7 +44,7 @@ export function ErrorState({
       </span>
 
       {code && (
-        <p className="mb-2 font-mono text-xs tracking-[0.2em] text-red-300/80 uppercase">
+        <p className="mb-2 font-mono text-xs tracking-[0.2em] text-status-danger uppercase">
           {code}
         </p>
       )}
@@ -66,7 +66,7 @@ export function ErrorState({
           <summary className="cursor-pointer text-sm text-white/80 transition-colors hover:text-brand">
             Technical details
           </summary>
-          <pre className="mt-3 overflow-x-auto rounded-panel border border-hairline bg-navy-950/50 p-4 font-mono text-xs text-white/90">
+          <pre className="mt-3 overflow-x-auto rounded-panel border border-hairline bg-white/5 p-4 font-mono text-xs text-white/90">
             {details}
           </pre>
         </details>

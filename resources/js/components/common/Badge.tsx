@@ -7,7 +7,7 @@ const TONES: Record<Tone, string> = {
   brand: 'bg-brand/15 text-brand border-brand/40',
   success: 'bg-status-success/12 text-status-success border-status-success/40',
   warning: 'bg-status-warning/15 text-status-warning border-status-warning/40',
-  danger: 'bg-status-danger/20 text-red-300 border-status-danger/50',
+  danger: 'bg-status-danger/12 text-status-danger border-status-danger/40',
   info: 'bg-status-info/15 text-status-info border-status-info/40',
   purple: 'bg-status-purple/15 text-status-purple border-status-purple/40',
   blue: 'bg-status-blue/15 text-status-blue border-status-blue/40',

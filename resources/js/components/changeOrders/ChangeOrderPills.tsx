@@ -8,7 +8,7 @@ const STATUS: Record<ChangeOrderStatus, { label: string; className: string }> = 
   draft: { label: 'Draft', className: 'border-white/15 bg-white/10 text-white/90' },
   submitted: { label: 'Submitted', className: 'border-status-warning/50 bg-status-warning/15 text-status-warning' },
   approved: { label: 'Approved', className: 'border-status-success/50 bg-status-success/20 text-white' },
-  rejected: { label: 'Rejected', className: 'border-status-danger/50 bg-status-danger/20 text-red-200' },
+  rejected: { label: 'Rejected', className: 'border-status-danger/50 bg-status-danger/20 text-status-danger' },
 }
 
 const SOURCE: Record<ChangeOrderSource, { label: string; className: string }> = {

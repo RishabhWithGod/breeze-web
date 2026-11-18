@@ -183,6 +183,13 @@ class DashboardController extends Controller
     private function reviewsNeedingAttention(User $user): array
     {
         return AiResult::query()
+            /*
+             * Only the columns this list shows. A bare `select *` drags every row's
+             * stored engine response (hundreds of KB of JSON each) through the
+             * ORDER BY, which overflows MySQL's sort buffer ("Out of sort memory")
+             * and took the whole dashboard down.
+             */
+            ->select(['id', 'project_id', 'review_status', 'received_at'])
             ->whereIn('review_status', [AiResult::REVIEW_PENDING, AiResult::REVIEW_IN_PROGRESS])
             /*
              * Only takeoffs whose project is still there.

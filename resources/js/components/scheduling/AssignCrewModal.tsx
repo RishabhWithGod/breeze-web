@@ -220,7 +220,7 @@ function AssignCrewForm({ job, onClose, defaultDate }: AssignCrewFormProps) {
       </div>
 
       {error && (
-        <p role="alert" className="mt-4 text-sm text-red-300">
+        <p role="alert" className="mt-4 text-sm text-status-danger">
           {error}
         </p>
       )}

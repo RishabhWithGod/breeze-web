@@ -1,8 +1,7 @@
 import { Link } from '@inertiajs/react'
 import { motion } from 'framer-motion'
-import { ChevronRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { MOTION } from '@/constants'
-import { cardAccentAt } from '@/components/common'
 import { FeedIcon } from '@/lib/icons'
 import type { DashboardSummary } from '@/types'
 import { cn } from '@/utils'
@@ -15,66 +14,43 @@ export interface StatMedallionCardProps {
 }
 
 /**
- * Headline summary card: large circular icon medallion, an accent figure with
- * its label, and a corner deep-link — the reference dashboard's hero-stat tile.
+ * Headline KPI tile for the dashboard hero: mono label with its icon, a large
+ * display-font figure, and a deep link. Sits on the blueprint panel, so it
+ * carries its own light-on-dark colours.
  */
-export function StatMedallionCard({
-  stat,
-  index = 0,
-  className,
-}: StatMedallionCardProps) {
+export function StatMedallionCard({ stat, index = 0, className }: StatMedallionCardProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 22 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.2 }}
-      whileHover={{ y: -6 }}
-      transition={{
-        duration: MOTION.slow,
-        delay: index * MOTION.stagger,
-        ease: [0.22, 1, 0.36, 1],
-      }}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: MOTION.slow, delay: index * MOTION.stagger, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        'group relative flex min-w-0 flex-col overflow-hidden rounded-card',
-        'glass px-6 py-8 shadow-panel',
-        /*
-         * The same lit border every other card in the app wears, walked across
-         * the three so no two are the same colour. These are the first thing on
-         * the dashboard and they were the last thing still drawn in a hairline.
-         */
-        cardAccentAt(index),
-        'transition-colors duration-300 hover:bg-white/10',
+        'group relative flex min-w-0 flex-col overflow-hidden rounded-[14px] p-4',
+        'border border-[rgb(126_170_255/0.14)] bg-white/[0.075] backdrop-blur-sm',
+        'transition-colors duration-200 hover:bg-white/[0.11]',
         className,
       )}
     >
-      {/* Corner glow on hover. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute -top-20 -right-12 size-48 rounded-full bg-brand/0 blur-3xl transition-colors duration-500 group-hover:bg-brand/20"
+        className="pointer-events-none absolute -top-10 -right-10 size-28 rounded-full bg-[radial-gradient(circle,rgb(62_230_255/0.16),transparent_70%)]"
       />
 
-      <span className="relative mx-auto grid size-24 place-items-center rounded-full bg-white/25 text-white ring-1 ring-white/15 transition-colors duration-300 group-hover:bg-white/32 sm:size-30">
-        {/* Tiles are built server-side, so the icon arrives as a key. */}
-        <FeedIcon name={stat.icon} className="size-10 sm:size-12" aria-hidden />
-      </span>
+      <p className="relative flex items-center gap-1.5 font-mono text-[11.5px] tracking-[0.06em] text-[#a7b7d9] uppercase">
+        <FeedIcon name={stat.icon} size={13} aria-hidden />
+        <span className="leading-tight">{stat.label}</span>
+      </p>
 
-      <p className="relative mt-7 text-center text-md font-medium text-white">
-        <span className="text-lg font-semibold text-brand">
-          <AnimatedCounter value={stat.value} className="tabular-nums" />
-        </span>{' '}
-        {stat.label}
+      <p className="relative mt-1.5 font-display text-[1.625rem] leading-tight font-semibold tracking-tight text-white">
+        <AnimatedCounter value={stat.value} />
       </p>
 
       <Link
         href={stat.href}
-        className="relative mt-6 ml-auto inline-flex items-center gap-1 text-md font-medium text-white transition-colors hover:text-brand"
+        className="relative mt-1 inline-flex items-center gap-1 text-[13px] font-medium text-[#3ee6ff] transition-colors hover:text-white"
       >
         {stat.linkLabel}
-        <ChevronRight
-          size={16}
-          aria-hidden
-          className="transition-transform group-hover:translate-x-0.5"
-        />
+        <ArrowRight size={13} aria-hidden className="transition-transform group-hover:translate-x-0.5" />
       </Link>
     </motion.div>
   )

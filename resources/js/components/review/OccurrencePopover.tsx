@@ -97,7 +97,7 @@ export function OccurrencePopover({
       // Solid, not the app's usual translucent glass panel — this floats
       // over the drawing image itself (often light-colored), where a 9%-opacity
       // panel is nearly invisible. Opaque guarantees it reads at any position.
-      className="fixed z-50 w-60 rounded-panel border border-hairline-strong bg-navy-900 p-3 shadow-panel"
+      className="fixed z-50 w-60 rounded-panel border border-hairline-strong bg-surface-glass p-3 shadow-panel"
       style={anchorStyle}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}

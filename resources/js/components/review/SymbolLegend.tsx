@@ -104,7 +104,7 @@ export function SymbolLegend({
 
   return (
     <div>
-      <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem_5.5rem] items-center gap-1.5 bg-ocean-700/40 px-3 py-2 text-xs font-semibold text-white">
+      <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem_5.5rem] items-center gap-1.5 bg-surface-veil px-3 py-2 text-xs font-semibold text-white">
         <span>Symbol</span>
         <span>Description</span>
         <span className="text-right">Count</span>
@@ -173,7 +173,7 @@ export function SymbolLegend({
                     'grid size-6 place-items-center rounded-panel transition-all',
                     verdict === 'approved'
                       ? 'bg-emerald-400 text-navy-950 shadow-panel'
-                      : 'bg-emerald-400/25 text-emerald-200 hover:bg-emerald-400 hover:text-navy-950',
+                      : 'bg-emerald-400/25 text-status-success hover:bg-emerald-400 hover:text-navy-950',
                   )}
                 >
                   <Check size={13} strokeWidth={3} aria-hidden />
@@ -187,8 +187,8 @@ export function SymbolLegend({
                   className={cn(
                     'grid size-6 place-items-center rounded-panel transition-all',
                     verdict === 'rejected'
-                      ? 'bg-red-500 text-white shadow-panel'
-                      : 'bg-red-500/25 text-red-200 hover:bg-red-500 hover:text-white',
+                      ? 'bg-red-500 text-brand-ink shadow-panel'
+                      : 'bg-red-500/25 text-status-danger hover:bg-red-500 hover:text-brand-ink',
                   )}
                 >
                   <X size={13} strokeWidth={3} aria-hidden />

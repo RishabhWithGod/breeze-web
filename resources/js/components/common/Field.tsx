@@ -11,9 +11,9 @@ import type { SelectOption } from '@/types'
 import { cn } from '@/utils'
 
 const CONTROL_BASE =
-  'w-full rounded-panel border border-transparent bg-surface-veil/50 px-4 py-2.5 text-md text-white ' +
-  'placeholder:text-white/75 transition-colors duration-200 ' +
-  'hover:border-hairline-strong focus:border-brand focus:bg-white/25 focus:outline-none ' +
+  'w-full rounded-panel border border-hairline-strong bg-surface-input px-3 py-2 text-md text-white ' +
+  'placeholder:text-white/45 transition-colors duration-200 ' +
+  'hover:border-brand/40 focus:border-brand focus:ring-[3px] focus:ring-brand/25 focus:outline-none ' +
   'disabled:cursor-not-allowed disabled:opacity-50'
 
 const INVALID = 'border-status-danger/70 focus:border-status-danger'
@@ -48,16 +48,16 @@ export function FieldShell({
               {label}
             </label>
           )}
-          {addon && <span className="text-xs text-white/75">{addon}</span>}
+          {addon && <span className="text-xs text-white/60">{addon}</span>}
         </div>
       )}
 
       {children}
 
       {error ? (
-        <p className="mt-2 text-sm text-red-300">{error}</p>
+        <p className="mt-2 text-sm text-status-danger">{error}</p>
       ) : (
-        hint && <p className="mt-2 text-sm text-white/75">{hint}</p>
+        hint && <p className="mt-2 text-sm text-white/60">{hint}</p>
       )}
     </div>
   )
@@ -202,7 +202,7 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(
             id={id}
             className={cn(
               CONTROL_BASE,
-              'appearance-none pr-10 [&>option]:bg-navy-900 [&>option]:text-white',
+              'appearance-none pr-10 [&>option]:bg-surface-glass [&>option]:text-white',
               error && INVALID,
             )}
             {...props}

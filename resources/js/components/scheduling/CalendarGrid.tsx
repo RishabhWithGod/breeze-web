@@ -85,7 +85,7 @@ export function CalendarGrid({
                     className={cn(
                       'group/day h-40 border border-hairline align-top transition-colors',
                       day.isCurrentPeriod ? 'bg-white/5' : 'bg-transparent',
-                      day.isWeekend && 'bg-navy-950/25',
+                      day.isWeekend && 'bg-white/5',
                       day.isToday && 'ring-1 ring-brand/60 ring-inset',
                     )}
                   >

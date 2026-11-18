@@ -8,83 +8,106 @@
    no component ever hardcodes a raw colour, radius or shadow value.
    ========================================================================= */
 
+@font-face { font-family: 'Inter'; font-weight: 400; font-display: swap; src: url('../assets/fonts/inter-400.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-weight: 500; font-display: swap; src: url('../assets/fonts/inter-500.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-weight: 600; font-display: swap; src: url('../assets/fonts/inter-600.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-weight: 700; font-display: swap; src: url('../assets/fonts/inter-700.woff2') format('woff2'); }
+@font-face { font-family: 'Bricolage'; font-style: normal; font-display: swap; font-weight: 200 800; font-stretch: 75% 100%;
+  src: url('../assets/fonts/bricolage-var.woff2') format('woff2-variations'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 500;
+  src: url('../assets/fonts/jbmono-500.woff2') format('woff2'); }
+
 @theme {
   /* ---- Typography ------------------------------------------------------ */
-  --font-sans:
-    'Roboto', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Bricolage', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
-  /* The reference UI uses a 10px root with rem sizing; these are the same
-     rendered pixel sizes expressed against a standard 16px root. */
+  /* Type scale — the Breeze app's sizes, in px at a 16px root, and drawn at 100%:
+     body 14, buttons / tables / nav 13.5, labels 13, hints and badges 12, h1 31,
+     h2 17. Utility names are unchanged so no component needs to be touched. */
   --text-2xs: 0.6875rem; /* 11px */
-  --text-2xs--line-height: 1.5;
+  --text-2xs--line-height: 1.45;
   --text-xs: 0.75rem; /* 12px */
   --text-xs--line-height: 1.5;
-  --text-sm: 0.875rem; /* 14px */
-  --text-sm--line-height: 1.55;
-  --text-md: 0.9375rem; /* 15px */
-  --text-md--line-height: 1.6;
-  --text-base: 1.125rem; /* 18px — body */
-  --text-base--line-height: 1.6;
-  --text-lg: 1.25rem; /* 20px */
-  --text-lg--line-height: 1.5;
-  --text-xl: 1.5rem; /* 24px — card titles */
-  --text-xl--line-height: 1.4;
-  --text-2xl: 1.75rem; /* 28px */
-  --text-2xl--line-height: 1.35;
-  --text-3xl: 2rem; /* 32px — section headings */
+  --text-sm: 0.8125rem; /* 13px */
+  --text-sm--line-height: 1.5;
+  --text-md: 0.84375rem; /* 13.5px — buttons, tables, list rows */
+  --text-md--line-height: 1.5;
+  --text-base: 0.875rem; /* 14px — body */
+  --text-base--line-height: 1.5;
+  --text-lg: 0.9375rem; /* 15px — h3 */
+  --text-lg--line-height: 1.45;
+  --text-xl: 1.0625rem; /* 17px — h2, card titles */
+  --text-xl--line-height: 1.35;
+  --text-2xl: 1.375rem; /* 22px */
+  --text-2xl--line-height: 1.3;
+  --text-3xl: 1.625rem; /* 26px */
   --text-3xl--line-height: 1.25;
-  --text-4xl: 2.5rem; /* 40px */
-  --text-4xl--line-height: 1.2;
-  --text-5xl: 3.125rem; /* 50px — stat numbers */
+  --text-4xl: 1.9375rem; /* 31px — h1 */
+  --text-4xl--line-height: 1.15;
+  --text-5xl: 2.375rem; /* 38px — stat numbers */
   --text-5xl--line-height: 1.1;
-  --text-6xl: 3.75rem; /* 60px — hero */
+  --text-6xl: 3rem; /* 48px — hero */
   --text-6xl--line-height: 1.05;
 
-  /* ---- Brand palette --------------------------------------------------- */
-  --color-brand: #33e3ff;
-  --color-brand-soft: #85e9ff;
-  --color-brand-deep: #39d0ff;
-  --color-brand-ink: #09111c;
+  /* ---- Ink ---------------------------------------------------------------
+     The product moved from a dark glass theme to the light "Live Wire" theme
+     (shared with the Breeze app). Hundreds of components still say
+     `text-white` / `bg-white/10` meaning "the foreground colour" — so
+     `white` is now the page INK, and every tint built on it (`bg-white/6`,
+     `border-white/10`, `text-white/70`) becomes a dark-on-light tint.
+     Dark surfaces (sidebar, dark gradients, `.on-dark`) set it back to real
+     white locally, so their text stays light.                              */
+  --color-white: #0a1530;
 
-  --color-navy-950: #06070f;
-  --color-navy-900: #0a1424;
-  --color-navy-800: #1d224c;
-  --color-navy-700: #092261;
-  --color-ocean-900: #070f51;
-  --color-ocean-800: #0d57a1;
+  /* ---- Brand palette --------------------------------------------------- */
+  --color-brand: #2f5bff;
+  --color-brand-soft: #8fa8ff;
+  --color-brand-deep: #1f43e0;
+  --color-brand-ink: #ffffff; /* text placed ON a brand fill */
+  --color-accent: #12b8d8;
+  --color-accent-bright: #3ee6ff;
+
+  --color-navy-950: #040a1a;
+  --color-navy-900: #071230;
+  --color-navy-800: #0e2361;
+  --color-navy-700: #142a5c;
+  --color-ocean-900: #071230;
+  --color-ocean-800: #0a1d47;
   --color-ocean-700: #174797;
   --color-ocean-600: #2b5dab;
   --color-ocean-500: #2c72a1;
-  --color-steel-600: #1f83b6;
-  --color-steel-500: #258abe;
-  --color-steel-400: #518e9e;
-  --color-mist-300: #cbd3de;
+  --color-steel-600: #1f43e0;
+  --color-steel-500: #2f5bff;
+  --color-steel-400: #c9d3e3;
+  --color-mist-300: #43506a;
 
   /* ---- Semantic / status ----------------------------------------------- */
-  --color-status-success: #13f60b;
-  --color-status-info: #14dede;
-  --color-status-warning: #fb9613;
-  --color-status-danger: #d10404;
-  --color-status-neutral: #8faab2;
-  --color-status-purple: #a78bfa;
-  --color-status-blue: #4d9bff;
-  --color-accent-violet: #7c32de;
+  --color-status-success: #16a34a;
+  --color-status-info: #0284c7;
+  --color-status-warning: #d97706;
+  --color-status-danger: #dc2626;
+  --color-status-neutral: #5a6782;
+  --color-status-purple: #7c3aed;
+  --color-status-blue: #2f5bff;
+  --color-accent-violet: #7c3aed;
 
   /* Pale icon-tile fills used by the dashboard list rows. */
-  --color-tile-lilac: #bdc3f5;
-  --color-tile-butter: #f5f5bd;
+  --color-tile-lilac: #ebf0ff;
+  --color-tile-butter: #fff6e5;
 
-  /* ---- Translucent surfaces (glassmorphism) ---------------------------- */
-  --color-surface-glass: rgb(14 32 84 / 0.28);
-  --color-surface-glass-strong: rgb(30 58 128 / 0.36);
-  --color-surface-glass-hover: rgb(36 68 145 / 0.4);
-  --color-surface-input: rgb(255 255 255 / 0.18);
-  --color-surface-veil: rgb(255 255 255 / 0.35);
-  --color-surface-blue: rgb(29 86 143 / 0.3);
-  --color-surface-blue-strong: rgb(29 86 143 / 0.5);
+  /* ---- Surfaces (cards, inputs) ------------------------------------------ */
+  --color-surface-glass: #ffffff;
+  --color-surface-glass-strong: #ffffff;
+  --color-surface-glass-hover: #f6f8fc;
+  --color-surface-input: #ffffff;
+  --color-surface-veil: #f6f8fc;
+  --color-surface-blue: #ebf0ff;
+  --color-surface-blue-strong: #dbe4ff;
 
-  --color-hairline: rgb(96 140 255 / 0.2);
-  --color-hairline-strong: rgb(120 165 255 / 0.36);
+  --color-hairline: #dfe5f0;
+  --color-hairline-strong: #c9d3e3;
 
   /* ---- Radii ------------------------------------------------------------ */
   --radius-panel: 0.625rem; /* 10px */
@@ -93,13 +116,15 @@
   --radius-pill: 1.25rem; /* 20px */
 
   /* ---- Elevation -------------------------------------------------------- */
-  --shadow-panel: 0 3px 6px rgb(83 125 187 / 0.16);
-  --shadow-raised: 0 12px 32px -12px rgb(3 10 25 / 0.7);
-  --shadow-glow: 0 0 0 1px rgb(51 227 255 / 0.35), 0 8px 30px -8px rgb(51 227 255 / 0.45);
+  --shadow-panel: 0 1px 2px rgb(10 21 48 / 0.05);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.8) inset, 0 1px 2px rgb(10 21 48 / 0.04),
+    0 12px 32px -18px rgb(10 21 48 / 0.18);
+  --shadow-raised: 0 30px 80px -20px rgb(7 18 48 / 0.35), 0 2px 6px rgb(7 18 48 / 0.08);
+  --shadow-glow: 0 0 0 1px rgb(47 91 255 / 0.3), 0 8px 24px -8px rgb(47 91 255 / 0.45);
 
   /* ---- Layout ----------------------------------------------------------- */
-  --spacing-navbar: 4.875rem; /* 78px fixed header */
-  --spacing-sidebar: 16.25rem; /* 260px */
+  --spacing-navbar: 3.75rem; /* 60px fixed header, as in the app */
+  --spacing-sidebar: 15.5rem; /* 248px */
   --container-ultra: 120rem;
 
   /* ---- Motion ----------------------------------------------------------- */
@@ -110,47 +135,65 @@
   --animate-spin-slow: spin 2.6s linear infinite;
 }
 
+/* The page is drawn at 100% like the Breeze app. `min-h-page` fills the window;
+   it divides by `--page-zoom` so a zoom could be reintroduced in one place. */
+:root {
+  --page-zoom: 1;
+}
+@utility min-h-page {
+  min-height: calc(100dvh / var(--page-zoom));
+}
+
+/* Plain-CSS mirrors of the Live Wire tokens, for the few places (the robot,
+   the page backdrop) that are written in CSS rather than Tailwind. */
+:root {
+  --font-display: 'Bricolage', 'Inter', system-ui, sans-serif;
+  --brand: #2f5bff;
+  --brand-600: #1f43e0;
+  --brand-50: #ebf0ff;
+  --accent: #12b8d8;
+  --accent-bright: #3ee6ff;
+  --brand-grad: linear-gradient(135deg, #4a74ff 0%, #2f5bff 45%, #1d3fd6 100%);
+  --live-grad: linear-gradient(90deg, #2f5bff 0%, #12b8d8 100%);
+  --bg: #eef2f9;
+  --surface: #ffffff;
+  --surface-2: #f6f8fc;
+  --surface-3: #e9eef7;
+  --border: #dfe5f0;
+  --border-strong: #c9d3e3;
+  --text: #0a1530;
+  --text-2: #43506a;
+  --text-3: #5a6782;
+  --grid-line: rgba(47, 91, 255, 0.055);
+  --glow-a: rgba(47, 91, 255, 0.14);
+  --glow-b: rgba(18, 184, 216, 0.12);
+  --shadow-sm: 0 1px 2px rgba(10, 21, 48, 0.05);
+  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 1px 2px rgba(10, 21, 48, 0.04), 0 12px 32px -18px rgba(10, 21, 48, 0.18);
+  --sidebar-bg: linear-gradient(180deg, #050c20 0%, #071535 60%, #0a1d47 100%);
+  --sidebar-text: #b9c6e2;
+  --sidebar-muted: #6f81a8;
+  color-scheme: light;
+}
+
 @keyframes shimmer {
-  0% {
-    background-position: -160% 0;
-  }
-  100% {
-    background-position: 160% 0;
-  }
+  0% { background-position: -160% 0; }
+  100% { background-position: 160% 0; }
 }
 
 @keyframes pulse-ring {
-  0% {
-    transform: scale(0.9);
-    opacity: 0.7;
-  }
-  70% {
-    transform: scale(1.35);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1.35);
-    opacity: 0;
-  }
+  0% { transform: scale(0.9); opacity: 0.7; }
+  70% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
 }
 
 @keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
 
 @keyframes scan {
-  0% {
-    transform: translateY(-100%);
-  }
-  100% {
-    transform: translateY(1000%);
-  }
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(1000%); }
 }
 
 /* ============================================================================
@@ -163,11 +206,6 @@
   }
 
   html {
-    /* Matches what people were doing by hand with browser zoom at 80% —
-       `zoom` scales everything (icons, borders, images) uniformly, unlike
-       shrinking the root font-size, which would leave fixed-pixel icon
-       sizes looking oversized next to the now-smaller rem-based text. */
-    zoom: 80%;
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
   }
@@ -185,70 +223,36 @@
   }
 
   body {
-    /* Fallback tone behind the artwork — also what shows before it decodes. */
-    background-color: #081733;
+    background-color: var(--bg);
     color: var(--color-mist-300);
     font-family: var(--font-sans);
     font-size: var(--text-base);
     line-height: 1.6;
-    min-height: 100dvh;
+    min-height: calc(100dvh / var(--page-zoom));
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
   /* ------------------------------------------------------------------------
-     Application backdrop
+     Application backdrop — the Live Wire "blueprint" canvas
      ------------------------------------------------------------------------
-     Two fixed pseudo-element layers instead of `background-attachment: fixed`
-     on <body>: iOS Safari mishandles fixed attachment, and this keeps the
-     artwork pinned, uniformly `cover`-cropped (never stretched) and cheap to
-     repaint while the page scrolls. Both sit behind #root so every glass
-     surface blurs them correctly.
+     A fixed layer behind #root: two soft colour glows and a faint drafting
+     grid, fading out down the page. Fixed pseudo-element rather than
+     `background-attachment: fixed` because iOS Safari mishandles the latter.
      --------------------------------------------------------------------- */
   body::before {
     content: '';
     position: fixed;
     inset: 0;
     z-index: -2;
-    background-image: url('../assets/dashboard-bg.jpeg');
-    background-position: center center;
-    background-repeat: no-repeat;
-    background-size: cover;
-  }
-
-  /* Readability overlay: darkens the artwork and re-adds the cyan brand glow. */
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
     pointer-events: none;
-    background-image:
-      radial-gradient(55rem 40rem at 85% -10%, rgb(51 227 255 / 0.14), transparent 62%),
-      radial-gradient(45rem 38rem at 5% 5%, rgb(44 114 161 / 0.16), transparent 60%),
-      linear-gradient(
-        180deg,
-        rgb(4 11 28 / 0.46) 0%,
-        rgb(5 15 38 / 0.36) 40%,
-        rgb(4 11 28 / 0.56) 100%
-      );
-  }
-
-  /* Portrait phones crop far more aggressively — nudge the focal point and
-     deepen the overlay so text keeps its contrast over the busy mesh. */
-  @media (max-width: 640px) and (orientation: portrait) {
-    body::before {
-      background-position: 70% center;
-    }
-
-    body::after {
-      background-image: linear-gradient(
-        180deg,
-        rgb(4 11 28 / 0.66) 0%,
-        rgb(5 15 38 / 0.54) 45%,
-        rgb(4 11 28 / 0.74) 100%
-      );
-    }
+    background:
+      radial-gradient(900px 420px at 85% -80px, var(--glow-b), transparent 70%),
+      radial-gradient(800px 380px at 20% -120px, var(--glow-a), transparent 70%),
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 28px 28px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 28px 28px;
+    -webkit-mask-image: linear-gradient(180deg, #000 0, #000 520px, rgba(0, 0, 0, 0.35) 900px);
+    mask-image: linear-gradient(180deg, #000 0, #000 520px, rgba(0, 0, 0, 0.35) 900px);
   }
 
   h1,
@@ -257,16 +261,29 @@
   h4,
   h5,
   h6 {
-    color: #fff;
+    color: var(--text);
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.015em;
     text-wrap: balance;
   }
 
-  ::selection {
-    background: var(--color-brand);
-    color: var(--color-brand-ink);
+  h1 {
+    font-weight: 650;
+    letter-spacing: -0.025em;
   }
 
-  /* Consistent, theme-aware focus ring on every interactive element. */
+  h2,
+  h3 {
+    font-weight: 620;
+  }
+
+  ::selection {
+    background: rgba(47, 91, 255, 0.22);
+    color: inherit;
+  }
+
+  /* Consistent focus ring on every interactive element. */
   :where(a, button, input, textarea, select, [tabindex]):focus-visible {
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;
@@ -278,10 +295,10 @@
     height: 10px;
   }
   ::-webkit-scrollbar-track {
-    background: rgb(255 255 255 / 0.04);
+    background: rgb(10 21 48 / 0.04);
   }
   ::-webkit-scrollbar-thumb {
-    background: rgb(255 255 255 / 0.18);
+    background: rgb(10 21 48 / 0.2);
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
@@ -289,89 +306,81 @@
   }
 }
 
+/* A dark island inside the light page: restores real white for text/tints. */
+.on-dark {
+  --color-white: #ffffff;
+}
+
 /* ============================================================================
    Reusable surface + effect utilities
    ========================================================================= */
 
-/* Frosted panel used for every card / section in the app.
-   The blur is deliberately light: at higher radii the backdrop's mesh artwork
-   smears into flat colour and the cards stop reading as glass. */
+/* Card surface used for every card / section in the app: white, hairline
+   border (added by the variant), soft Live Wire card shadow. The name stays
+   `glass` so no component needs to change. */
 @utility glass {
   background-color: var(--color-surface-glass);
-  backdrop-filter: blur(2px) saturate(115%);
-  -webkit-backdrop-filter: blur(2px) saturate(115%);
+  box-shadow: var(--shadow-card);
 }
 
 @utility glass-strong {
   background-color: var(--color-surface-glass-strong);
-  backdrop-filter: blur(6px) saturate(115%);
-  -webkit-backdrop-filter: blur(6px) saturate(115%);
+  box-shadow: var(--shadow-card);
 }
 
-/* Deep blue gradient used for the sidebar and elevated headers. */
+/* Dark navy gradient used for the sidebar and elevated headers.
+   Dark surface: text inside it stays white. */
 @utility grad-ocean {
-  background-image: linear-gradient(
-    180deg,
-    rgb(13 87 161 / 0.92) 0%,
-    rgb(7 15 81 / 0.92) 100%
-  );
+  --color-white: #ffffff;
+  background-image: linear-gradient(180deg, #050c20 0%, #071535 60%, #0a1d47 100%);
 }
 
-/* Opaque variant for popovers and dialogs, where page content showing
-   through would hurt legibility. */
+/* Popovers and dialogs: opaque light surface. */
 @utility grad-ocean-solid {
-  background-image: linear-gradient(180deg, #0d57a1 0%, #070f51 100%);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background-color: var(--color-surface-glass);
+  box-shadow: var(--shadow-raised);
 }
 
 @utility grad-ocean-soft {
-  background-image: linear-gradient(
-    180deg,
-    rgb(13 87 161 / 0.28) 0%,
-    rgb(7 15 81 / 0.28) 100%
-  );
+  background-image: linear-gradient(180deg, var(--surface-2) 0%, var(--brand-50) 100%);
 }
 
 /* Dark button / active nav gradient. */
 @utility grad-midnight {
-  background-image: linear-gradient(180deg, #1d224c 0%, #06070f 100%);
+  --color-white: #ffffff;
+  background-image: linear-gradient(180deg, #0e2361 0%, #071230 100%);
 }
 
-/* Radial "spotlight" panel used for hero-style content blocks. */
+/* Soft "spotlight" panel used for hero-style content blocks. */
 @utility grad-spotlight {
   background-image: radial-gradient(
     closest-side at 50% 50%,
-    rgb(225 234 246 / 0.28) 0%,
-    rgb(44 114 161 / 0.34) 100%
+    var(--brand-50) 0%,
+    var(--surface-2) 100%
   );
 }
 
 @utility grad-sidebar {
-  background-image: radial-gradient(
-    closest-side at 50% 50%,
-    rgb(31 131 182 / 0.5) 0%,
-    rgb(16 66 91 / 0.5) 100%
-  );
+  --color-white: #ffffff;
+  background: linear-gradient(rgb(126 170 255 / 0.05) 1px, transparent 1px) 0 0 / 22px 22px,
+    linear-gradient(90deg, rgb(126 170 255 / 0.05) 1px, transparent 1px) 0 0 / 22px 22px,
+    radial-gradient(260px 200px at 0% 100%, rgb(62 230 255 / 0.12), transparent 70%),
+    linear-gradient(180deg, #050c20 0%, #071535 60%, #0a1d47 100%);
 }
 
 /* Skeleton / loading shimmer sweep. */
 @utility shimmer {
   background-image: linear-gradient(
     100deg,
-    rgb(255 255 255 / 0.04) 30%,
-    rgb(255 255 255 / 0.16) 50%,
-    rgb(255 255 255 / 0.04) 70%
+    rgb(10 21 48 / 0.04) 30%,
+    rgb(10 21 48 / 0.1) 50%,
+    rgb(10 21 48 / 0.04) 70%
   );
   background-size: 220% 100%;
   animation: var(--animate-shimmer);
 }
 
-/*
-  The rail's own scrollbar. The global one draws a light 10px channel, which cut
-  across the navigation rows' borders; here it is thin and trackless so a long
-  drawer scrolls without a visible gutter beside the entries.
-*/
+/* The rail's own scrollbar: thin and trackless, light thumb on the dark rail. */
 @utility sidebar-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgb(255 255 255 / 0.18) transparent;
@@ -387,16 +396,94 @@
     border-radius: 999px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: var(--color-brand);
+    background: var(--color-accent-bright);
   }
 }
 
 /* Faint blueprint grid used behind drawing previews. */
 @utility blueprint-grid {
   background-image:
-    linear-gradient(rgb(51 227 255 / 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(51 227 255 / 0.12) 1px, transparent 1px);
+    linear-gradient(rgb(47 91 255 / 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(47 91 255 / 0.1) 1px, transparent 1px);
   background-size: 28px 28px;
+}
+
+/* ============================================================================
+   Dark theme — same tokens, night values (from the Breeze app's dark theme).
+   `--color-white` is the page ink, so it flips to a light colour here and every
+   `text-white` / `bg-white/6` in the codebase reads correctly on dark.
+   ========================================================================= */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-white: #edf2ff;
+  --color-mist-300: #b3c1df;
+
+  --color-brand: #5b82ff;
+  --color-brand-soft: #8fa8ff;
+  --color-brand-deep: #4a6ff0;
+  --color-accent: #3ee6ff;
+
+  --color-status-success: #22c55e;
+  --color-status-info: #38bdf8;
+  --color-status-warning: #f59e0b;
+  --color-status-danger: #f87171;
+  --color-status-neutral: #8f9fc4;
+  --color-status-purple: #a78bfa;
+  --color-status-blue: #5b82ff;
+  --color-accent-violet: #a78bfa;
+
+  --color-tile-lilac: #14234f;
+  --color-tile-butter: #33250b;
+
+  --color-surface-glass: #0c1734;
+  --color-surface-glass-strong: #0c1734;
+  --color-surface-glass-hover: #13224a;
+  --color-surface-input: #0a1430;
+  --color-surface-veil: #0a1430;
+  --color-surface-blue: #14234f;
+  --color-surface-blue-strong: #1c2f66;
+
+  --color-hairline: #1c2c58;
+  --color-hairline-strong: #2a3f74;
+
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 16px 40px -20px rgb(0 0 0 / 0.7);
+  --shadow-raised: 0 30px 80px -20px rgb(0 0 0 / 0.75);
+
+  --brand: #5b82ff;
+  --brand-600: #4a6ff0;
+  --brand-50: #14234f;
+  --bg: #050b1c;
+  --surface: #0c1734;
+  --surface-2: #0a1430;
+  --surface-3: #13224a;
+  --border: #1c2c58;
+  --border-strong: #2a3f74;
+  --text: #edf2ff;
+  --text-2: #b3c1df;
+  --text-3: #8f9fc4;
+  --grid-line: rgba(126, 170, 255, 0.05);
+  --glow-a: rgba(47, 91, 255, 0.22);
+  --glow-b: rgba(18, 184, 216, 0.14);
+  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 16px 40px -20px rgba(0, 0, 0, 0.7);
+}
+
+:root[data-theme='dark'] ::-webkit-scrollbar-track {
+  background: rgb(255 255 255 / 0.04);
+}
+:root[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.18);
+}
+:root[data-theme='dark'] ::selection {
+  background: rgba(91, 130, 255, 0.35);
+}
+:root[data-theme='dark'] .shimmer {
+  background-image: linear-gradient(100deg, rgb(255 255 255 / 0.04) 30%, rgb(255 255 255 / 0.12) 50%, rgb(255 255 255 / 0.04) 70%);
+}
+:root[data-theme='dark'] .blueprint-grid {
+  background-image:
+    linear-gradient(rgb(62 230 255 / 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(62 230 255 / 0.1) 1px, transparent 1px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -409,3 +496,98 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================================================
+   Auth screens — the blueprint hero panel (from the Breeze app)
+   ========================================================================= */
+.auth-blueprint {
+  --color-white: #ffffff;
+  background:
+    linear-gradient(rgb(126 170 255 / 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(90deg, rgb(126 170 255 / 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
+    radial-gradient(520px 360px at 100% 0%, rgb(62 230 255 / 0.16), transparent 70%),
+    linear-gradient(180deg, #050c20 0%, #071535 60%, #0a1d47 100%);
+}
+.auth-blueprint::before,
+.auth-blueprint::after {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid rgb(62 230 255 / 0.55);
+  pointer-events: none;
+}
+.auth-blueprint::before { top: 18px; left: 18px; border-right: 0; border-bottom: 0; }
+.auth-blueprint::after { right: 18px; bottom: 18px; border-left: 0; border-top: 0; }
+.auth-grad-text {
+  font-style: normal;
+  background: linear-gradient(90deg, #8fb0ff, #3ee6ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.auth-wires path {
+  fill: none;
+  stroke: rgb(62 230 255 / 0.35);
+  stroke-width: 1.2;
+  stroke-dasharray: 6 10;
+  animation: auth-flow 6s linear infinite;
+}
+.auth-wires path.b { stroke: rgb(91 130 255 / 0.4); animation-duration: 9s; }
+.auth-wires circle { fill: #3ee6ff; filter: drop-shadow(0 0 6px rgb(62 230 255 / 0.9)); }
+@keyframes auth-flow { to { stroke-dashoffset: -64; } }
+
+/* ============================================================================
+   Blueprint panel — the dark hero band used at the top of key screens.
+   Always dark in both themes, like the Breeze app's `.blueprint`.
+   ========================================================================= */
+.blueprint {
+  --color-white: #ffffff;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 22px;
+  color: #eaf1ff;
+  background:
+    linear-gradient(rgb(126 170 255 / 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(90deg, rgb(126 170 255 / 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
+    radial-gradient(520px 360px at 100% 0%, rgb(62 230 255 / 0.16), transparent 70%),
+    linear-gradient(180deg, #050c20 0%, #071535 60%, #0a1d47 100%);
+  box-shadow: 0 30px 80px -30px rgb(7 18 48 / 0.55);
+}
+.blueprint h1,
+.blueprint h2,
+.blueprint h3 {
+  color: #fff;
+}
+.bp-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid rgb(62 230 255 / 0.55);
+  pointer-events: none;
+}
+.bp-corner.tl { left: 14px; top: 14px; border-right: 0; border-bottom: 0; }
+.bp-corner.tr { right: 14px; top: 14px; border-left: 0; border-bottom: 0; }
+.bp-corner.bl { left: 14px; bottom: 14px; border-right: 0; border-top: 0; }
+.bp-corner.br { right: 14px; bottom: 14px; border-left: 0; border-top: 0; }
+.bp-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #3ee6ff;
+}
+.bp-eyebrow::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3ee6ff;
+  box-shadow: 0 0 0 4px rgb(62 230 255 / 0.15), 0 0 12px rgb(62 230 255 / 0.9);
+  animation: bp-live 2s ease-in-out infinite;
+}
+@keyframes bp-live { 50% { opacity: 0.45; } }

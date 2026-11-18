@@ -69,7 +69,7 @@ export function ProjectDocumentList({
               className="mt-2.5 size-4 shrink-0 accent-brand"
             />
           ) : (
-            <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-ocean-600 text-white">
+            <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-brand text-brand-ink">
               <FileText size={16} aria-hidden />
             </span>
           )}
@@ -116,7 +116,7 @@ export function ProjectDocumentList({
               size="sm"
               disabled={disabled}
               onClick={() => onRemove(document)}
-              className="shrink-0 text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+              className="shrink-0 text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink"
             />
           )}
         </motion.li>

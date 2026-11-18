@@ -25,7 +25,7 @@ export function CompanyMark({ logoUrl, name, size = 40, className }: CompanyMark
       style={{ width: size, height: size }}
       className={cn(
         'grid shrink-0 place-items-center overflow-hidden rounded-panel border border-hairline',
-        showLogo ? 'bg-white/90' : 'bg-white/8 text-white/85',
+        showLogo ? 'bg-brand-ink' : 'bg-white/8 text-white/85',
         className,
       )}
     >

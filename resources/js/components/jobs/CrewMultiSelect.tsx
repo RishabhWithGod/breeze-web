@@ -156,7 +156,7 @@ export function CrewMultiSelect({
               onClick={close}
             />
 
-            <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-panel border border-hairline bg-navy-900 shadow-xl">
+            <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-panel border border-hairline bg-surface-glass shadow-xl">
               <div className="relative border-b border-hairline">
                 <Search
                   size={15}
@@ -201,7 +201,7 @@ export function CrewMultiSelect({
                               aria-hidden
                               className={cn(
                                 'grid size-4.5 shrink-0 place-items-center rounded-sm border',
-                                selected ? 'border-brand bg-brand text-navy-900' : 'border-hairline-strong',
+                                selected ? 'border-brand bg-brand text-brand-ink' : 'border-hairline-strong',
                               )}
                             >
                               {selected && <Check size={13} />}

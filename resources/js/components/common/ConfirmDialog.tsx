@@ -60,7 +60,7 @@ export function ConfirmDialog({
           className={cn(
             'grid size-12 shrink-0 place-items-center rounded-full',
             tone === 'danger'
-              ? 'bg-status-danger/20 text-red-300'
+              ? 'bg-status-danger/20 text-status-danger'
               : 'bg-brand/15 text-brand',
           )}
         >

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { usePage } from '@inertiajs/react'
 import { AccessNotice } from './AccessNotice'
 import { Footer } from './Footer'
@@ -8,6 +8,8 @@ import { ResumeTakeoffButton } from './ResumeTakeoffButton'
 import { Sidebar } from './Sidebar'
 import type { SharedPageProps } from '@/types'
 import { cn } from '@/utils'
+
+const BreezyDock = lazy(() => import('@/components/breezy/BreezyDock'))
 
 /**
  * App shell: fixed header, responsive sidebar and a fluid content column that
@@ -23,7 +25,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const onDashboard = (url.split(/[?#]/)[0] ?? '').replace(/\/+$/, '') === '/home'
 
   return (
-    <div className="min-h-dvh pt-navbar">
+    <div className="min-h-page pt-navbar">
       <RealtimeUserSync />
       <AccessNotice />
       <Navbar />
@@ -33,7 +35,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <main
           id="main-content"
           className={cn(
-            'mx-auto flex min-h-[calc(100dvh-var(--spacing-navbar))] max-w-ultra flex-col px-4 py-6 sm:px-6 sm:py-8 xl:px-10',
+            'mx-auto flex min-h-[calc(100dvh/var(--page-zoom)-var(--spacing-navbar))] max-w-ultra flex-col px-4 py-6 sm:px-6 sm:py-8 xl:px-10',
             // Room for the floating Resume Takeoff button to sit in, clear of
             // a form's own trailing buttons — those are bottom-right on every
             // screen that has them, exactly where the widget floats too.
@@ -60,6 +62,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Above the content, below modals and the mobile drawer. */}
       <ResumeTakeoffButton />
+
+      {/* Breezy, the robot helper — bottom-right, loaded after the page is usable. */}
+      <Suspense fallback={null}>
+        <BreezyDock />
+      </Suspense>
     </div>
   )
 }

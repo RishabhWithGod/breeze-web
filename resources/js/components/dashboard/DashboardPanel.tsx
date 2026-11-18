@@ -16,6 +16,8 @@ export interface DashboardPanelProps {
   index?: number
   className?: string
   bodyClassName?: string
+  /** No body padding — for a table that runs edge to edge, as in the Breeze app. */
+  flush?: boolean
   children: ReactNode
 }
 
@@ -31,6 +33,7 @@ export function DashboardPanel({
   index = 0,
   className,
   bodyClassName,
+  flush = false,
   children,
 }: DashboardPanelProps) {
   return (
@@ -44,21 +47,21 @@ export function DashboardPanel({
       }}
       className={cn(
         'flex min-w-0 flex-col overflow-hidden rounded-card border border-hairline',
-        'glass shadow-panel',
+        'glass',
         className,
       )}
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline grad-ocean-soft px-5 py-4 sm:px-6">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-4">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-white sm:text-xl">{title}</h2>
-          {subtitle && <p className="mt-0.5 text-sm text-white/85">{subtitle}</p>}
+          <h2 className="font-display text-[1.0625rem] font-semibold tracking-tight text-white">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-sm text-white/60">{subtitle}</p>}
         </div>
 
         {actions ??
           (link && (
             <Link
               href={link.href}
-              className="group inline-flex shrink-0 items-center gap-1 text-sm font-medium text-white transition-colors hover:text-brand"
+              className="group inline-flex shrink-0 items-center gap-1 text-sm font-medium text-brand transition-colors hover:text-brand-deep"
             >
               {link.label}
               <ChevronRight
@@ -70,7 +73,7 @@ export function DashboardPanel({
           ))}
       </header>
 
-      <div className={cn('flex-1 p-5 sm:p-6', bodyClassName)}>{children}</div>
+      <div className={cn('flex-1', !flush && 'p-5 sm:p-6', bodyClassName)}>{children}</div>
     </motion.section>
   )
 }

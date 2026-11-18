@@ -587,7 +587,7 @@ export function DrawingOverlay({
               className="appearance-none bg-transparent pr-7 text-md font-semibold text-white focus:outline-none"
             >
               {pages.map((page) => (
-                <option key={page} value={page} className="bg-navy-900 text-white">
+                <option key={page} value={page} className="bg-surface-glass text-white">
                   Page {page}
                 </option>
               ))}
@@ -652,7 +652,7 @@ export function DrawingOverlay({
                       : 'border-hairline bg-white/4 hover:border-brand/50',
                   )}
                 >
-                  <span className="grid aspect-4/3 place-items-center overflow-hidden rounded-sm bg-white">
+                  <span className="grid aspect-4/3 place-items-center overflow-hidden rounded-sm bg-[#fff]">
                     <img
                       src={routeTo.reviewPage(resultId, page)}
                       alt=""
@@ -669,7 +669,7 @@ export function DrawingOverlay({
 
           <div
             ref={viewportRef}
-            className="relative grid h-105 w-full min-w-0 place-items-center overflow-auto rounded-panel border border-hairline bg-white select-none sm:h-150"
+            className="relative grid h-105 w-full min-w-0 place-items-center overflow-auto rounded-panel border border-hairline bg-[#fff] select-none sm:h-150"
             onWheel={handleWheel}
             onDoubleClick={handleDoubleClick}
             onPointerDown={handlePointerDown}
@@ -781,13 +781,13 @@ export function DrawingOverlay({
               )}
 
               {imageStatus === 'loading' && (
-                <div className="absolute inset-0 grid place-items-center bg-navy-900/60 text-center text-2xs text-white/75">
+                <div className="absolute inset-0 grid place-items-center bg-navy-900/60 text-center text-2xs text-white/75 on-dark">
                   Loading drawing…
                 </div>
               )}
 
               {imageStatus === 'error' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-navy-900/80 text-center text-2xs text-white/85">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-navy-900/80 text-center text-2xs text-white/85 on-dark">
                   <p>Unable to load this drawing page.</p>
                   <Button
                     variant="secondary"

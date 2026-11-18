@@ -177,7 +177,7 @@ export function ProjectMemberPicker({
       <label className="mb-2 flex items-center gap-2 text-md font-medium text-white">
         <Users size={16} aria-hidden className="text-white/60" />
         {label}
-        {required && <span className="text-red-300">*</span>}
+        {required && <span className="text-status-danger">*</span>}
       </label>
 
       {teamId === null && !allowNoTeam ? (
@@ -342,7 +342,7 @@ export function ProjectMemberPicker({
         </>
       )}
 
-      {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
+      {error && <p className="mt-2 text-sm text-status-danger">{error}</p>}
     </div>
   )
 }

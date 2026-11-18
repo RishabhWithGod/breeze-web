@@ -17,7 +17,7 @@ const DOT_STYLES: Record<ProcessingStageState['status'], string> = {
 const STATUS_TEXT: Record<ProcessingStageState['status'], { label: string; className: string }> = {
   complete: { label: 'Completed', className: 'text-brand/80' },
   active: { label: 'In progress', className: 'text-brand' },
-  failed: { label: 'Failed', className: 'text-red-300' },
+  failed: { label: 'Failed', className: 'text-status-danger' },
   pending: { label: 'Pending', className: 'text-white/65' },
 }
 

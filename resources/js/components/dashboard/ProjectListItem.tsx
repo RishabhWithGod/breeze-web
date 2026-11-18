@@ -47,7 +47,7 @@ export function ProjectListItem({
       <Link
         href={href}
         className={cn(
-          'group block rounded-panel border border-hairline bg-navy-950/30 p-4',
+          'group block rounded-panel border border-hairline bg-white/5 p-4',
           // `overflow-hidden` keeps the truncated title from inflating the
           // row's min-content width and widening its grid track.
           'overflow-hidden transition-colors hover:border-brand/45 hover:bg-white/8',

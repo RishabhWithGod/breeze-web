@@ -71,7 +71,7 @@ export function EstimateCard({
         <Button
           variant="white"
           size="sm"
-          className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+          className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink"
           onClick={() => onDelete(estimate)}
         >
           Delete

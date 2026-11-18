@@ -34,7 +34,7 @@ export function SheetList({ sheets, activeId, onSelect, className }: SheetListPr
                 'flex w-full items-center gap-3 rounded-panel border p-3 text-left transition-colors',
                 isActive
                   ? 'border-brand/60 bg-brand/12'
-                  : 'border-hairline bg-navy-950/30 hover:border-brand/40 hover:bg-white/8',
+                  : 'border-hairline bg-white/5 hover:border-brand/40 hover:bg-white/8',
               )}
             >
               <span className="grid size-9 shrink-0 place-items-center rounded-panel bg-white/10 text-brand">

@@ -151,11 +151,11 @@ export default function Notifications({ notifications, filters, tabCounts, categ
               onChange={(event) => applyFilters({ category: event.target.value })}
               className="cursor-pointer appearance-none rounded-panel border border-hairline-strong bg-white/8 py-3 pr-10 pl-11 text-md font-medium text-white focus:border-brand focus:outline-none"
             >
-              <option value="all" className="bg-navy-900">
+              <option value="all" className="bg-surface-glass">
                 Filter
               </option>
               {categories.map((option) => (
-                <option key={option.value} value={option.value} className="bg-navy-900">
+                <option key={option.value} value={option.value} className="bg-surface-glass">
                   {option.label}
                 </option>
               ))}

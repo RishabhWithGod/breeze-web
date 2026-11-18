@@ -102,7 +102,7 @@ function ProcessorRow({
                 size="sm"
                 leftIcon={Unplug}
                 onClick={disconnect}
-                className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white"
+                className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink"
               >
                 Disconnect
               </Button>
@@ -138,7 +138,7 @@ function ProcessorRow({
               autoComplete="off"
             />
           ))}
-          {errors.credentials && <p className="text-sm text-red-300">{errors.credentials}</p>}
+          {errors.credentials && <p className="text-sm text-status-danger">{errors.credentials}</p>}
           <p className="text-xs text-white/60">
             Stored encrypted on the server. Connecting makes one real, authenticated call to {processor.displayName} to confirm it works.
           </p>

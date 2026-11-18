@@ -71,7 +71,7 @@ export function ProjectSummaryCard({ project, index }: ProjectSummaryCardProps) 
             ))}
           </dl>
 
-          <div className="mt-7 flex items-center gap-5 rounded-card border border-hairline bg-navy-950/30 p-4">
+          <div className="mt-7 flex items-center gap-5 rounded-card border border-hairline bg-white/5 p-4">
             <CircularProgress value={confidence * 100} size="sm" tone="success">
               <span className="text-md font-bold text-white">
                 {formatPercent(confidence)}

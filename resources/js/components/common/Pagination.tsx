@@ -53,7 +53,7 @@ export function Pagination({
   const navButton = cn(
     'inline-flex h-9 items-center justify-center border transition-colors disabled:cursor-not-allowed disabled:opacity-40',
     isLight
-      ? 'border-hairline-strong bg-white/90 text-ocean-700 hover:bg-white'
+      ? 'border-brand bg-brand text-brand-ink'
       : 'rounded-panel border-hairline text-white hover:border-brand/60 hover:bg-white/10 hover:text-white',
     withLabels ? 'gap-1 px-3 text-sm font-medium' : 'w-9',
   )
@@ -108,8 +108,8 @@ export function Pagination({
                 !isLight && 'rounded-panel',
                 isLight
                   ? value === page
-                    ? 'border-ocean-700 bg-ocean-700 text-white'
-                    : 'border-hairline-strong bg-white/90 text-ocean-700 hover:bg-white'
+                    ? 'border-brand bg-brand text-brand-ink'
+                    : 'border-brand bg-brand text-brand-ink'
                   : value === page
                     ? 'border-brand bg-brand text-brand-ink'
                     : 'border-hairline text-white hover:border-brand/60 hover:bg-white/10 hover:text-white',

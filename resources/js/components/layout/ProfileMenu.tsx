@@ -35,7 +35,7 @@ export function ProfileMenu() {
         aria-expanded={isOpen}
         className="flex items-center gap-3 rounded-pill py-1 pr-2 pl-1 transition-colors hover:bg-white/10"
       >
-        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-ocean-800 text-md font-semibold text-white ring-1 ring-steel-600">
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand text-md font-semibold text-brand-ink ring-1 ring-brand/30">
           {user.initials}
         </span>
         <span className="hidden text-left leading-tight lg:block">
@@ -80,7 +80,7 @@ export function ProfileMenu() {
                   type="button"
                   role="menuitem"
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-3 rounded-panel px-3 py-2.5 text-md text-white transition-colors hover:bg-status-danger/15 hover:text-red-200"
+                  className="flex w-full items-center gap-3 rounded-panel px-3 py-2.5 text-md text-white transition-colors hover:bg-status-danger/15 hover:text-status-danger"
                 >
                   <LogOut size={17} aria-hidden />
                   Logout

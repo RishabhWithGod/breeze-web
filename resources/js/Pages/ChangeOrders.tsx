@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from '@inertiajs/react'
-import { Eye, FilePen, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { Eye, Pencil, Plus, Search, Trash2, X, FileDiff } from 'lucide-react'
 import { useState } from 'react'
 import {
   Alert,
@@ -171,7 +171,7 @@ export default function ChangeOrders({ orders, page, filters, jobs, canCreate }:
 
           {orders.length === 0 ? (
             <EmptyState
-              icon={FilePen}
+              icon={FileDiff}
               title={filtered ? 'No change orders match' : 'No change orders yet'}
               description={
                 filtered

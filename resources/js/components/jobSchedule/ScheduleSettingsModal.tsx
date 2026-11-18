@@ -74,7 +74,7 @@ export function ScheduleSettingsModal({ isOpen, onClose, jobId, schedule, schedu
               </button>
             ))}
           </div>
-          {errors.working_days && <p className="mt-2 text-sm text-red-300">{errors.working_days}</p>}
+          {errors.working_days && <p className="mt-2 text-sm text-status-danger">{errors.working_days}</p>}
         </div>
 
         <div className="grid grid-cols-3 gap-4">

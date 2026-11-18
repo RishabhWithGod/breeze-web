@@ -449,7 +449,7 @@ function InfoItem({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="grid size-10 shrink-0 place-items-center rounded-panel bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+      <span className="grid size-10 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
         <Icon size={18} aria-hidden />
       </span>
       <div className="min-w-0">

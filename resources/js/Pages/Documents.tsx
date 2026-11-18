@@ -161,9 +161,9 @@ export default function Documents({
             type="button"
             aria-label={document.isFavorite ? 'Unfavorite' : 'Favorite'}
             onClick={() => toggleFavorite(document)}
-            className="shrink-0 text-white/60 transition-colors hover:text-amber-300"
+            className="shrink-0 text-white/60 transition-colors hover:text-status-warning"
           >
-            <Star size={15} aria-hidden fill={document.isFavorite ? 'currentColor' : 'none'} className={document.isFavorite ? 'text-amber-300' : ''} />
+            <Star size={15} aria-hidden fill={document.isFavorite ? 'currentColor' : 'none'} className={document.isFavorite ? 'text-status-warning' : ''} />
           </button>
           <button
             type="button"
@@ -221,7 +221,7 @@ export default function Documents({
             variant="white"
             size="sm"
             disabled={!document.canDelete}
-            className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-white disabled:opacity-50"
+            className="text-status-danger hover:border-status-danger hover:bg-status-danger hover:text-brand-ink disabled:opacity-50"
             onClick={() => requestDelete(document)}
           >
             Delete

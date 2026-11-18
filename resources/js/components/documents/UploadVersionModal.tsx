@@ -65,7 +65,7 @@ export function UploadVersionModal({ isOpen, onClose, document: doc, maxFileSize
           }}
         />
         {fileName && <p className="text-sm text-white/80">Selected: {fileName}</p>}
-        {errors.file && <p className="text-sm text-red-300">{errors.file}</p>}
+        {errors.file && <p className="text-sm text-status-danger">{errors.file}</p>}
 
         <TextArea
           id="version-description"

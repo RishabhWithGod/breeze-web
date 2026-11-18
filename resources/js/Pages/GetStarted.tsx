@@ -5,7 +5,6 @@ import {
   Check,
   ChevronRight,
   Clock,
-  Contact,
   FolderKanban,
   Headphones,
   House,
@@ -15,6 +14,7 @@ import {
   BookOpen,
   Rocket,
   Users,
+  Package,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
@@ -58,8 +58,8 @@ export interface GetStartedProps {
 const STEP_ICON: Record<string, LucideIcon> = {
   company: Building2,
   team: Users,
-  commodities: ListChecks,
-  client: Contact,
+  commodities: Package,
+  client: Building2,
   project: FolderKanban,
 }
 
@@ -275,7 +275,7 @@ function StepRow({ step, onSkip, onUndo }: { step: Step; onSkip: () => void; onU
           'grid size-10 shrink-0 place-items-center rounded-full',
           step.status === 'completed'
             ? // A solid, deeper green with a white tick, so the check reads clearly.
-              'bg-green-600 text-white ring-2 ring-green-400/40'
+              'bg-green-600 text-brand-ink ring-2 ring-green-400/40'
             : 'bg-white/10 text-white/85 ring-1 ring-hairline',
         )}
       >

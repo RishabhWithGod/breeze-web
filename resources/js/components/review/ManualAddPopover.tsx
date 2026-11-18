@@ -45,7 +45,7 @@ export function ManualAddPopover({
       // Solid rather than the app's usual translucent glass panel — this
       // floats over the drawing image itself, where the translucent style
       // is nearly invisible against a light-colored page.
-      className="absolute z-20 w-64 rounded-panel border border-hairline-strong bg-navy-900 p-3 shadow-panel"
+      className="absolute z-20 w-64 rounded-panel border border-hairline-strong bg-surface-glass p-3 shadow-panel"
       style={anchorStyle}
       onClick={(event) => event.stopPropagation()}
     >

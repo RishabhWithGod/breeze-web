@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ClipboardList, Sparkles } from 'lucide-react'
+import { ScanLine, ListChecks } from 'lucide-react'
 import { Alert, ButtonLink, CollapsibleCard, Table } from '@/components/common'
 import type { JobBoqLine, JobTakeoff, TableColumn } from '@/types'
 import { formatCurrency } from '@/utils'
@@ -59,7 +59,7 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
       {takeoff.reviewed === false && (
         <Alert tone="warning" title="This job's quantities haven't been reviewed yet">
           Please review the drawing to confirm these counts before finalizing this job.
-          <ButtonLink href={takeoff.reviewUrl} size="sm" className="mt-3" leftIcon={Sparkles}>
+          <ButtonLink href={takeoff.reviewUrl} size="sm" className="mt-3" leftIcon={ScanLine}>
             Review the symbols
           </ButtonLink>
         </Alert>
@@ -73,7 +73,7 @@ export function JobTakeoffPanel({ takeoff }: JobTakeoffPanelProps) {
               ? 'From the AI response — rewritten when the review is signed off'
               : 'Copied from the reviewed takeoff'
           }
-          icon={ClipboardList}
+          icon={ListChecks}
           tone="warning"
           plain
           summary={

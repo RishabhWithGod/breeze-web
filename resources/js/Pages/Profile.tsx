@@ -53,7 +53,7 @@ export default function Profile({ user }: ProfileProps) {
           <SectionHeading title="Account" />
 
           <div className="flex items-center gap-4 pb-6">
-            <span className="grid size-16 shrink-0 place-items-center rounded-full bg-ocean-800 text-xl font-semibold text-white ring-1 ring-steel-600">
+            <span className="grid size-16 shrink-0 place-items-center rounded-full bg-brand text-xl font-semibold text-brand-ink ring-1 ring-brand/30">
               {user.initials}
             </span>
             <div>

@@ -22,6 +22,8 @@ import {
   Upload as UploadIcon,
   Users,
   type LucideIcon,
+  ScanLine,
+  HardHat,
 } from 'lucide-react'
 import {
   Alert,
@@ -181,7 +183,7 @@ export default function ProjectShow({
     ? { kind: 'link' as const, href: project.takeoffUrl, label: 'View Takeoff', icon: ExternalLink }
     : documents.length === 0
       ? { kind: 'link' as const, href: routeTo.uploadForProject(project.id), label: 'Upload a Drawing', icon: UploadIcon }
-      : { kind: 'action' as const, onClick: startTakeoff, label: 'Run AI Takeoff', icon: Sparkles }
+      : { kind: 'action' as const, onClick: startTakeoff, label: 'Run AI Takeoff', icon: ScanLine }
 
   /*
    * Every tab switches what this same screen shows — none of them navigate
@@ -191,9 +193,9 @@ export default function ProjectShow({
   const tabs: { key: TabKey; label: string; icon: LucideIcon }[] = [
     { key: 'overview', label: 'Overview', icon: FolderKanban },
     { key: 'drawings', label: 'Drawings', icon: FileText },
-    { key: 'takeoffs', label: 'Takeoffs', icon: Sparkles },
+    { key: 'takeoffs', label: 'Takeoffs', icon: ScanLine },
     { key: 'estimates', label: 'Estimates', icon: ClipboardList },
-    { key: 'jobs', label: 'Jobs', icon: Briefcase },
+    { key: 'jobs', label: 'Jobs', icon: HardHat },
     { key: 'team', label: 'Team', icon: Users },
     { key: 'documents', label: 'Documents', icon: Files },
     { key: 'invoices', label: 'Invoices', icon: Receipt },
@@ -429,7 +431,7 @@ export default function ProjectShow({
           onClick={() => setActiveTab('drawings')}
         />
         <StatCard
-          icon={Sparkles}
+          icon={ScanLine}
           label="Takeoffs"
           value={project.takeoffCount}
           tone="purple"
@@ -1040,7 +1042,7 @@ const TONE_STYLES: Record<StatTone, { border: string; iconBg: string; iconText: 
   purple: {
     border: 'border-purple-400/40 border-l-purple-400 hover:border-purple-400/70',
     iconBg: 'bg-purple-400/15',
-    iconText: 'text-purple-300',
+    iconText: 'text-status-purple',
     barFill: 'bg-purple-400',
   },
   info: {
@@ -1064,7 +1066,7 @@ const TONE_STYLES: Record<StatTone, { border: string; iconBg: string; iconText: 
   danger: {
     border: 'border-status-danger/40 border-l-status-danger hover:border-status-danger/70',
     iconBg: 'bg-status-danger/15',
-    iconText: 'text-red-300',
+    iconText: 'text-status-danger',
     barFill: 'bg-status-danger',
   },
   neutral: {
@@ -1082,7 +1084,7 @@ const ACTIVITY_TONE_STYLES: Record<Tone, string> = {
   blue: 'bg-status-blue/15 text-status-blue',
   success: 'bg-status-success/15 text-status-success',
   warning: 'bg-status-warning/15 text-status-warning',
-  danger: 'bg-status-danger/15 text-red-300',
+  danger: 'bg-status-danger/15 text-status-danger',
   neutral: 'bg-white/10 text-white',
 }
 

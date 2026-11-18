@@ -527,7 +527,7 @@ export function SymbolsPanel({
               />
               <span
                 aria-hidden
-                className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-md bg-white"
+                className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-md bg-[#fff]"
                 style={{ border: `2px solid ${look?.color ?? '#94a3b8'}` }}
               >
                 {look?.image ? (

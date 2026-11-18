@@ -8,32 +8,32 @@ const BASE =
 const VARIANTS: Record<Variant, string> = {
   /** Cyan call-to-action — inverts to white on hover, mirroring the reference. */
   primary:
-    'bg-brand border-brand text-brand-ink shadow-panel hover:bg-white hover:border-brand hover:text-brand-ink hover:shadow-glow',
+    'bg-brand border-brand text-brand-ink shadow-panel [background-image:var(--brand-grad)] hover:brightness-110 hover:shadow-glow',
   /** Solid blue call-to-action — the Add Task / Upload buttons of the dark screens. */
   blue:
-    'bg-linear-to-b from-blue-500 to-blue-600 border-blue-400/70 text-white shadow-panel hover:brightness-110',
+    'bg-brand border-brand text-brand-ink shadow-panel [background-image:var(--brand-grad)] hover:brightness-110',
   /** Purple accent — matches the Takeoffs cards on the project workspace. */
   purple:
-    'bg-purple-500/20 border-purple-400/60 text-purple-200 hover:bg-purple-500 hover:border-purple-400 hover:text-white',
+    'bg-status-purple/12 border-status-purple/50 text-status-purple hover:bg-status-purple hover:border-status-purple hover:text-brand-ink',
   /** Frosted secondary action. */
   secondary:
-    'glass-strong border-hairline-strong text-white hover:bg-white/20 hover:border-brand/60 hover:text-white',
+    'glass-strong border-hairline-strong text-white hover:bg-surface-glass-hover hover:border-brand/60 hover:text-white',
   /** Midnight gradient — the reference `btn-dark`. */
-  dark: 'grad-midnight border-navy-800 text-white hover:bg-brand hover:bg-none hover:border-brand hover:text-navy-800',
+  dark: 'grad-midnight border-navy-800 text-brand-ink hover:bg-brand hover:bg-none hover:border-brand hover:text-brand-ink',
   white:
-    'bg-white border-white text-brand-ink hover:bg-brand hover:border-brand hover:text-brand-ink',
+    'bg-surface-glass border-hairline-strong text-white hover:bg-brand hover:border-brand hover:text-brand-ink',
   outline:
     'bg-transparent border-brand/70 text-brand hover:bg-brand hover:text-brand-ink',
   ghost:
     'bg-transparent border-transparent text-white/80 hover:bg-white/10 hover:text-white',
   danger:
-    'bg-status-danger/90 border-status-danger text-white hover:bg-status-danger hover:shadow-panel',
+    'bg-status-danger/90 border-status-danger text-brand-ink hover:bg-status-danger hover:shadow-panel',
 }
 
 const SIZES: Record<Size, string> = {
-  sm: 'text-sm px-3 py-1.5',
-  md: 'text-base px-6 py-1.5',
-  lg: 'text-base px-8 py-3',
+  sm: 'text-sm px-2.5 py-1.5', // 30px, as the app's .btn-sm
+  md: 'text-md px-3.5 py-2', // 36px, as the app's .btn
+  lg: 'text-base px-5 py-3', // 44px, as the app's .btn-lg
 }
 
 export interface ButtonStyleProps {
@@ -55,7 +55,7 @@ export function buttonStyles({
 
 /** Circular icon-only geometry, layered on top of a variant. */
 export const ICON_BUTTON_SIZES: Record<Size, { box: string; icon: number }> = {
-  sm: { box: 'size-8', icon: 15 },
-  md: { box: 'size-10', icon: 18 },
-  lg: { box: 'size-12', icon: 22 },
+  sm: { box: 'size-[30px]', icon: 15 },
+  md: { box: 'size-9', icon: 17 },
+  lg: { box: 'size-11', icon: 20 },
 }

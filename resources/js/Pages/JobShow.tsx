@@ -5,14 +5,12 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
   Archive,
-  FilePen,
   ArrowLeft,
   BarChart3,
   Building2,
   Calculator,
   CalendarDays,
   ChevronDown,
-  ClipboardList,
   Clock,
   Database,
   FileText,
@@ -26,6 +24,7 @@ import {
   Receipt,
   Trash2,
   Users,
+  FileDiff,
 } from 'lucide-react'
 import {
   Alert,
@@ -315,7 +314,7 @@ export default function JobShow({
                   ? [
                       {
                         label: 'Create change order',
-                        icon: FilePen,
+                        icon: FileDiff,
                         onSelect: () => router.visit(routeTo.changeOrderForJob(job.id)),
                       },
                     ]
@@ -429,7 +428,7 @@ export default function JobShow({
               <h2 className="text-lg font-semibold text-white">Progress</h2>
               <div className="mt-4 flex items-center gap-4">
                 <div
-                  className="h-3.5 flex-1 overflow-hidden rounded-full bg-black/35"
+                  className="h-3.5 flex-1 overflow-hidden rounded-full bg-white/10"
                   role="progressbar"
                   aria-valuenow={progress}
                   aria-valuemin={0}
@@ -460,14 +459,14 @@ export default function JobShow({
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {canPlanWork && !isLocked && (
                   <QuickAction
-                    icon={ClipboardList}
+                    icon={ListChecks}
                     label="Create Task"
                     onClick={() => router.visit(routeTo.jobTaskSetupFromJob(job.id, from))}
                   />
                 )}
                 {changeOrders?.canRaise && (
                   <QuickAction
-                    icon={FilePen}
+                    icon={FileDiff}
                     label="Create Change Order"
                     onClick={() => router.visit(routeTo.changeOrderForJob(job.id))}
                   />
@@ -722,7 +721,7 @@ export default function JobShow({
                           className="size-16 shrink-0 rounded-sm bg-white/10 object-cover"
                         />
                       ) : (
-                        <span className="grid size-16 shrink-0 place-items-center rounded-sm bg-ocean-600/60 text-brand">
+                        <span className="grid size-16 shrink-0 place-items-center rounded-sm bg-brand/12 text-brand">
                           <FileText size={26} aria-hidden />
                         </span>
                       )}
@@ -797,7 +796,7 @@ const STATUS_PILL: Record<Tone, string> = {
   brand: 'border-brand/50 bg-brand/15 text-brand',
   success: 'border-status-success/50 bg-status-success/15 text-status-success',
   warning: 'border-status-warning/50 bg-status-warning/15 text-status-warning',
-  danger: 'border-status-danger/60 bg-status-danger/20 text-red-300',
+  danger: 'border-status-danger/60 bg-status-danger/20 text-status-danger',
   info: 'border-status-info/50 bg-status-info/15 text-status-info',
   purple: 'border-status-purple/50 bg-status-purple/15 text-status-purple',
   blue: 'border-status-blue/50 bg-status-blue/15 text-status-blue',
@@ -834,7 +833,7 @@ function StatusSelect({
         className="w-full cursor-pointer appearance-none bg-transparent focus:outline-none disabled:cursor-not-allowed"
       >
         {JOB_STATUS_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value} className="bg-navy-900 text-white">
+          <option key={option.value} value={option.value} className="bg-surface-glass text-white">
             {option.label}
           </option>
         ))}
@@ -857,7 +856,7 @@ function StatCard({
 }) {
   return (
     <Card padding="md" className="flex items-center gap-4">
-      <span className="grid size-14 shrink-0 place-items-center rounded-panel bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+      <span className="grid size-14 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
         <Icon size={24} aria-hidden />
       </span>
       <div className="min-w-0">
@@ -872,7 +871,7 @@ function StatCard({
 function ProgressFact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="grid size-11 shrink-0 place-items-center rounded-full bg-ocean-600/60 text-brand ring-1 ring-brand/25">
+      <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand/12 text-brand ring-1 ring-brand/25">
         <Icon size={19} aria-hidden />
       </span>
       <div className="min-w-0">
