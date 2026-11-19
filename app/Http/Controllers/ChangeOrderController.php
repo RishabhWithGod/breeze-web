@@ -83,6 +83,11 @@ class ChangeOrderController extends Controller
             ])->all(),
             'page' => ['current' => $orders->currentPage(), 'last' => $orders->lastPage(), 'total' => $orders->total(), 'from' => $orders->firstItem() ?? 0, 'to' => $orders->lastItem() ?? 0],
             'filters' => ['search' => $search, 'job' => $job === null ? null : (int) $job, 'status' => $status, 'source' => $source],
+            // Read-only totals over everything this person can see (not the filtered page), for the tiles and tabs.
+            'stats' => $this->access->visible(ChangeOrder::query(), $user)
+                ->selectRaw('status, count(*) as n, coalesce(sum(sell_total), 0) as sell')
+                ->groupBy('status')->get()
+                ->mapWithKeys(fn ($row) => [$row->status => ['count' => (int) $row->n, 'sell' => (float) $row->sell]])->all(),
             'jobs' => $this->access->visible(ChangeOrder::query(), $user)->with('job:id,name')->get()->pluck('job')->filter()->unique('id')->sortBy('name')
                 ->map(fn (Job $job) => ['id' => $job->id, 'name' => $job->name])->values()->all(),
             'canCreate' => $this->access->jobs($user)->exists(),

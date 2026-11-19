@@ -21,10 +21,12 @@ import {
 } from 'lucide-react'
 import {
   Alert,
+  Avatar,
   Badge,
   Button,
   ButtonLink,
-  Card,
+  Panel,
+  Stat,
   ConfirmDialog,
   Modal,
   Table,
@@ -258,7 +260,7 @@ export default function TimeEntryShow({
       )}
 
       {/* Who, where, what — the facts the rest of the screen hangs on. */}
-      <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
+      <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-4 rounded-card border border-hairline glass px-5 py-4">
         <MetaItem icon={UserRound} label="Employee" value={employee.role ? `${employee.name} · ${employee.role}` : employee.name} />
         <MetaItem icon={HardHat} label="Job" value={job?.name ?? 'No job'} />
         <MetaItem icon={ListChecks} label="Task" value={task?.title ?? entry.taskLabel ?? '—'} />
@@ -290,9 +292,8 @@ export default function TimeEntryShow({
 
       <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-5">
-          <Card padding="md">
-            <h2 className="text-lg font-semibold text-white">Time Details</h2>
-            <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
+          <Panel title="Time Details" className="h-auto">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
               <Field label="Date" value={formatDate(entry.date)} />
               <Field label="Check-in" value={clockTime(entry.startTime)} />
               <Field label="Checkout" value={clockTime(entry.endTime)} />
@@ -300,17 +301,16 @@ export default function TimeEntryShow({
               <Field label="Total Hours" value={formatHours(entry.hours)} strong />
               <Field label="Source" value={entry.source === 'timer' ? 'Timer' : 'Manual entry'} />
             </dl>
-          </Card>
+          </Panel>
 
-          <Card padding="md">
-            <h2 className="text-lg font-semibold text-white">Task</h2>
+          <Panel title="Task" className="h-auto">
             {task ? (
               <>
                 <dl className="mt-4 grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
                   <Field label="Task" value={task.title} />
                   <Field label="Type" value={task.category ? taskTypeLabel(task.category) : '—'} />
                   <div>
-                    <dt className="text-2xs tracking-wide text-white/80 uppercase">Status</dt>
+                    <dt className="text-xs text-[var(--text-3)]">Status</dt>
                     <dd className="mt-1">
                       <Badge>{taskTypeLabel(task.status)}</Badge>
                     </dd>
@@ -325,7 +325,7 @@ export default function TimeEntryShow({
                     value={`${task.estimatedHours !== null ? formatHours(task.estimatedHours) : '—'} est. · ${formatHours(task.actualHours)} actual`}
                   />
                   <div className="sm:col-span-2 lg:col-span-3">
-                    <dt className="text-2xs tracking-wide text-white/80 uppercase">Assigned</dt>
+                    <dt className="text-xs text-[var(--text-3)]">Assigned</dt>
                     <dd className="mt-1 text-md text-white">
                       {task.assignees.length > 0 ? task.assignees.map((a) => a.name).join(', ') : 'Nobody assigned yet'}
                     </dd>
@@ -344,17 +344,15 @@ export default function TimeEntryShow({
                     : 'No task recorded for this entry.'}
               </p>
             )}
-          </Card>
+          </Panel>
 
-          <Card padding="md">
-            <h2 className="text-lg font-semibold text-white">Work Performed</h2>
+          <Panel title="Work Performed" className="h-auto">
             <p className={cn('mt-3 text-md', entry.description ? 'text-white/90' : 'text-white/70')}>
               {entry.description ?? 'No description was entered for this entry.'}
             </p>
-          </Card>
+          </Panel>
 
-          <Card padding="md">
-            <h2 className="text-lg font-semibold text-white">Activity & Approval History</h2>
+          <Panel title="Activity & Approval History" className="h-auto">
             <p className="mt-0.5 text-xs text-white/70">Every status change, in order</p>
             <div className="mt-4">
               <ApprovalHistoryPanel entries={history} />
@@ -365,19 +363,19 @@ export default function TimeEntryShow({
                 <p className="mt-1 text-md">{entry.rejectionReason}</p>
               </div>
             )}
-          </Card>
+          </Panel>
         </div>
 
         <div className="min-w-0 space-y-5">
-          <Card padding="md">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-white">Job</h2>
-              {job && (
+          <Panel title="Job" className="h-auto" actions={
+            <>
+{job && (
                 <ButtonLink href={routeTo.job(job.id)} size="sm" variant="secondary">
                   Open job
                 </ButtonLink>
               )}
-            </div>
+            </>
+          }>
             {job ? (
               <dl className="mt-4 space-y-4">
                 <Field label="Job" value={`${job.name} (#${job.id})`} />
@@ -389,7 +387,7 @@ export default function TimeEntryShow({
                   value={job.startDate ? `${formatDate(job.startDate)} → ${job.endDate ? formatDate(job.endDate) : 'open'}` : '—'}
                 />
                 <div>
-                  <dt className="text-2xs tracking-wide text-white/80 uppercase">Status</dt>
+                  <dt className="text-xs text-[var(--text-3)]">Status</dt>
                   <dd className="mt-1">
                     <Badge>{job.status}</Badge>
                   </dd>
@@ -398,14 +396,11 @@ export default function TimeEntryShow({
             ) : (
               <p className="mt-3 text-md text-white/75">No job on record for this entry.</p>
             )}
-          </Card>
+          </Panel>
 
-          <Card padding="md">
-            <h2 className="text-lg font-semibold text-white">Employee</h2>
-            <div className="mt-4 flex items-center gap-4">
-              <span className="grid size-12 shrink-0 place-items-center rounded-full bg-brand/15 text-md font-semibold text-brand ring-1 ring-brand/30">
-                {employee.initials ?? employee.name.slice(0, 2).toUpperCase()}
-              </span>
+          <Panel title="Employee" className="h-auto">
+            <div className="flex items-center gap-4">
+              <Avatar person={{ name: employee.name, initials: employee.initials ?? null }} className="size-12 text-md" />
               <div className="min-w-0">
                 <p className="truncate text-md font-semibold text-white">{employee.name}</p>
                 {employee.role && <p className="text-sm text-white/75">{employee.role}</p>}
@@ -422,11 +417,10 @@ export default function TimeEntryShow({
                 )}
               </dl>
             )}
-          </Card>
+          </Panel>
 
           {cost && entry.laborCost !== null && (
-            <Card padding="md">
-              <h2 className="text-lg font-semibold text-white">Labor Cost</h2>
+            <Panel title="Labor Cost" className="h-auto">
               <dl className="mt-4 flex flex-col gap-2">
                 <TotalRow label="Hours" value={formatHours(entry.hours)} />
                 {entry.costRate !== null && <TotalRow label="Cost Rate" value={`${formatCurrency(entry.costRate, 2)}/hr`} />}
@@ -438,27 +432,25 @@ export default function TimeEntryShow({
                   <TotalRow label="Billable Amount" value={formatCurrency(entry.billableAmount, 2)} strong />
                 )}
               </dl>
-            </Card>
+            </Panel>
           )}
 
           {jobTimeSummary && (
-            <Card padding="md">
-              <h2 className="text-lg font-semibold text-white">Job Time</h2>
+            <Panel title="Job Time" className="h-auto">
               <dl className="mt-4 flex flex-col gap-2">
                 <TotalRow label="This Entry" value={formatHours(jobTimeSummary.thisEntryHours)} />
                 <TotalRow label="Approved Job Hours" value={formatHours(jobTimeSummary.approvedJobHours)} />
                 <TotalRow label="This Employee (Job)" value={formatHours(jobTimeSummary.employeeJobHours)} strong />
                 <TotalRow label="Billable" value={formatHours(jobTimeSummary.employeeJobBillableHours)} />
               </dl>
-            </Card>
+            </Panel>
           )}
         </div>
       </div>
 
       {/* ================================================ Related entries ====== */}
       {relatedEntries.length > 0 && (
-        <Card padding="md" className="mt-5">
-          <h2 className="text-lg font-semibold text-white">Related Entries</h2>
+        <Panel title="Related Entries" className="h-auto mt-5">
           <p className="mt-0.5 text-xs text-white/70">Other time logged on this job</p>
           <div className="mt-3 overflow-x-auto">
             <Table
@@ -472,7 +464,7 @@ export default function TimeEntryShow({
               caption="Related time entries"
             />
           </div>
-        </Card>
+        </Panel>
       )}
 
       <ConfirmDialog
@@ -524,8 +516,8 @@ export default function TimeEntryShow({
 function Field({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="min-w-0">
-      <dt className="text-2xs tracking-wide text-white/80 uppercase">{label}</dt>
-      <dd className={strong ? 'mt-1 text-lg font-semibold text-white' : 'mt-1 truncate text-md text-white'} title={value}>
+      <dt className="text-xs text-[var(--text-3)]">{label}</dt>
+      <dd className={strong ? 'mt-1 text-lg font-semibold text-white' : 'mt-1 truncate text-[14px] font-medium text-white'} title={value}>
         {value}
       </dd>
     </div>
@@ -544,23 +536,24 @@ function TotalRow({ label, value, strong }: { label: string; value: string; stro
 function MetaItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3">
-      <Icon size={22} aria-hidden className="shrink-0 text-white/85" />
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--brand-bg)] text-brand">
+        <Icon size={18} aria-hidden />
+      </span>
       <div className="min-w-0">
-        <dt className="text-xs text-white/70">{label}</dt>
-        <dd className="text-md font-medium text-white">{value}</dd>
+        <dt className="text-xs text-[var(--text-3)]">{label}</dt>
+        <dd className="text-[14px] font-semibold text-white">{value}</dd>
       </div>
     </div>
   )
 }
 
 function StatCard({
-  icon: Icon,
   label,
   value,
   note,
   nowrap = false,
 }: {
-  icon: LucideIcon
+  icon?: LucideIcon
   label: string
   value: string
   note?: string
@@ -568,16 +561,12 @@ function StatCard({
   nowrap?: boolean
 }) {
   return (
-    <Card padding="md" className="flex items-center gap-4">
-      <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
-        <Icon size={22} aria-hidden />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-white/75">{label}</p>
-        <p className={cn('text-xl leading-tight font-bold text-white', nowrap && 'whitespace-nowrap')}>{value}</p>
-        {note && <p className="text-xs text-white/65">{note}</p>}
-      </div>
-    </Card>
+    <Stat
+      label={label}
+      value={nowrap ? <span className="whitespace-nowrap">{value}</span> : value}
+      {...(note ? { delta: note } : {})}
+      className="h-full"
+    />
   )
 }
 

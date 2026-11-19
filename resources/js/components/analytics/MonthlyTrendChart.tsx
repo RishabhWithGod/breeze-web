@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import type { AnalyticsTrendPoint } from '@/types'
 import { formatCurrency } from '@/utils'
@@ -11,6 +12,13 @@ const SERIES = [
 /** Billed, collected and logged cost per month, as grouped bars on one shared scale. */
 export function MonthlyTrendChart({ points }: { points: readonly AnalyticsTrendPoint[] }) {
   const max = Math.max(1, ...points.flatMap((p) => [p.billed, p.collected, p.cost]))
+  const scroller = useRef<HTMLDivElement>(null)
+
+  // A narrow card scrolls sideways; open on the newest months, which are the ones that matter.
+  useEffect(() => {
+    const el = scroller.current
+    if (el) el.scrollLeft = el.scrollWidth
+  }, [points])
 
   return (
     <div>
@@ -22,7 +30,7 @@ export function MonthlyTrendChart({ points }: { points: readonly AnalyticsTrendP
           </span>
         ))}
       </div>
-      <div className="flex h-48 items-end gap-2 overflow-x-auto pb-1" role="img" aria-label="Monthly billed, collected and cost">
+      <div ref={scroller} className="flex h-48 items-end gap-2 overflow-x-auto pb-1" role="img" aria-label="Monthly billed, collected and cost">
         {points.map((point) => (
           <div key={point.month} className="flex min-w-[44px] flex-1 flex-col items-center gap-1.5">
             <div className="flex h-40 w-full items-end justify-center gap-0.5">

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Head, router } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Download, Settings2, SlidersHorizontal, X } from 'lucide-react'
-import { Button, FilterTabs, SelectField, Skeleton, TextInput } from '@/components/common'
+import { Button, SelectField, Skeleton, TextInput, UnderlineTabs } from '@/components/common'
 import {
   AlertsTab,
   BillingTab,
@@ -116,7 +116,7 @@ export default function JobCosting(props: JobCostingDashboardProps) {
             <Button variant="secondary" leftIcon={SlidersHorizontal} aria-expanded={filterBar.isOpen} onClick={filterBar.toggle}>
               Filter
             </Button>
-            <span className="inline-flex items-center rounded-panel border border-hairline-strong bg-white/10 px-4 py-2 text-sm text-white/90">
+            <span className="inline-flex items-center rounded-[10px] border border-hairline-strong bg-[var(--surface-3)] px-3.5 py-2 text-[13px] font-medium text-white">
               {hasRange ? `${filters.date_from ?? '…'} – ${filters.date_to ?? 'today'}` : 'All time'}
             </span>
             {can.manage && (
@@ -208,12 +208,14 @@ export default function JobCosting(props: JobCostingDashboardProps) {
         {hasRange && ' Date range narrows actual hours and logged costs only; estimates and revenue are whole-job figures.'}
       </p>
 
-      <FilterTabs
-        options={tabs}
+      <UnderlineTabs
+        tabs={tabs.map((option) => ({
+          key: option.value,
+          label: option.label,
+          ...(option.value === 'alerts' ? { count: alerts.length } : {}),
+        }))}
         value={tab}
         onChange={(value) => applyFilters({ tab: value })}
-        counts={{ alerts: alerts.length }}
-        className="mb-6"
       />
 
       {isLoading ? (

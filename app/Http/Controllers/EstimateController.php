@@ -56,7 +56,28 @@ class EstimateController extends Controller
             ->paginate(config('takeoff.per_page'))
             ->withQueryString();
 
+        /*
+         * The bid board shows every estimate at once, in lanes by status, so it cannot be a page of the list.
+         * Same register and the same search/client/project/date narrowing as the list — only the status filter
+         * and the paging are left off, because the lanes are the statuses. Read-only; capped so a very large
+         * register cannot make this one response huge.
+         */
+        $board = Estimate::query()
+            ->ownedBy($request->user())
+            ->withCount('addenda')
+            ->where('kind', '!=', Estimate::KIND_ADDENDUM)
+            ->search($filters['search'] ?? null)
+            ->when($client !== 'all', fn ($query) => $query->where('client', $client))
+            ->when($project !== 'all', fn ($query) => $query->where('project', $project))
+            ->issuedBetween($filters['date_from'] ?? null, $filters['date_to'] ?? null)
+            ->sorted('date-desc')
+            ->limit(300)
+            ->get();
+
         return Inertia::render('Estimates', [
+            // The bid board is the default view; `?view=list` is the paged list.
+            'view' => $request->query('view') === 'list' ? 'list' : 'board',
+            'board' => EstimateResource::collection($board)->resolve($request),
             'estimates' => EstimateResource::collection($estimates),
             'filters' => [
                 'search' => $filters['search'] ?? '',
@@ -67,6 +88,20 @@ class EstimateController extends Controller
                 'date_to' => $filters['date_to'] ?? '',
                 'sort' => $sort,
             ],
+            /*
+             * How many estimates sit in each status, and what they add up to — over the search only, never
+             * the status filter, so each status tab shows what choosing it would give and the figures above
+             * the list describe the whole register. Read-only: nothing here is stored or changed.
+             */
+            'statusCounts' => Estimate::query()
+                ->ownedBy($request->user())
+                ->where('kind', '!=', Estimate::KIND_ADDENDUM)
+                ->search($filters['search'] ?? null)
+                ->reorder()
+                ->selectRaw('status, count(*) as total, coalesce(sum(amount), 0) as amount')
+                ->groupBy('status')
+                ->get()
+                ->mapWithKeys(fn ($row) => [$row->status => ['count' => (int) $row->total, 'amount' => round((float) $row->amount, 2)]]),
             // Drives the Client dropdown; kept in sync with whatever is stored.
             'clients' => Estimate::query()
                 ->ownedBy($request->user())

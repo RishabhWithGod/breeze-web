@@ -70,7 +70,7 @@ export function ProfitabilityTab({ rows, canViewCosts }: { rows: readonly JobCos
 
   return (
     <Card accent="brand" padding="lg">
-      <SectionHeading as="h3" title="Job Profitability" />
+      <SectionHeading className="mb-4" as="h3" title="Job Profitability" />
       {rows.length === 0 ? (
         <EmptyState title="No jobs in this view" description="Adjust the filters to see job profitability." />
       ) : (

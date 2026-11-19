@@ -177,7 +177,7 @@ export default function Home({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 content-start gap-3">
+        <div className="grid grid-cols-2 auto-rows-fr content-start gap-3">
           {summary.map((stat, index) => (
             <StatMedallionCard key={stat.id} stat={stat} index={index} />
           ))}

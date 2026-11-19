@@ -35,6 +35,8 @@ import {
   IconButton,
   MoreMenu,
   SectionHeading,
+  Panel,
+  Stat,
 } from '@/components/common'
 import {
   JobAttachmentsPanel,
@@ -259,17 +261,17 @@ export default function JobShow({
         <div className="min-w-0">
           <Link
             href={back.url}
-            className="inline-flex items-center gap-2 text-md font-medium text-white transition-colors hover:text-brand"
+            className="inline-flex items-center gap-1.5 text-[13px] text-[var(--text-3)] transition-colors hover:text-brand"
           >
-            <ArrowLeft size={17} aria-hidden />
+            <ArrowLeft size={14} aria-hidden />
             {back.label}
           </Link>
-          <h1 className="mt-3 text-3xl font-bold text-white sm:text-4xl">{job.name}</h1>
+          <h1 className="mt-2 font-display text-4xl font-[650] tracking-[-0.025em] text-white">{job.name}</h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           {!isLocked && permitted('jobs.edit') && (
-            <ButtonLink href={routeTo.jobEditFrom(job.id, from)} variant="white" leftIcon={PencilLine}>
+            <ButtonLink href={routeTo.jobEditFrom(job.id, from)} variant="secondary" leftIcon={PencilLine}>
               Edit Job
             </ButtonLink>
           )}
@@ -375,10 +377,7 @@ export default function JobShow({
       </div>
 
       {/* ====================================================== Tabs ========= */}
-      <nav
-        aria-label="Job sections"
-        className="mt-5 flex gap-1 overflow-x-auto rounded-card border border-hairline glass px-2"
-      >
+      <nav aria-label="Job sections" className="no-scrollbar mt-5 flex gap-0.5 overflow-x-auto border-b border-hairline">
         {tabs.map((item) => (
           <button
             key={item.key}
@@ -386,18 +385,17 @@ export default function JobShow({
             onClick={() => setTab(item.key)}
             aria-current={tab === item.key ? 'page' : undefined}
             className={cn(
-              'relative shrink-0 px-5 py-4 text-md font-medium transition-colors',
-              tab === item.key ? 'text-white' : 'text-white/75 hover:text-white',
+              '-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-[14px] font-[550] whitespace-nowrap transition-colors',
+              tab === item.key
+                ? 'border-brand text-white'
+                : 'border-transparent text-[var(--text-3)] hover:text-white',
             )}
           >
             {item.label}
             {item.count !== undefined && item.count > 0 && (
-              <span className="ml-2 rounded-full bg-white/12 px-2 py-0.5 text-2xs text-white/85">
+              <span className="rounded-full bg-[var(--surface-3)] px-[7px] text-[11.5px] leading-[1.5] font-[550] text-[var(--text-2)]">
                 {item.count}
               </span>
-            )}
-            {tab === item.key && (
-              <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-brand" aria-hidden />
             )}
           </button>
         ))}
@@ -406,7 +404,7 @@ export default function JobShow({
       {/* =================================================== Overview ======== */}
       {tab === 'overview' && (
         <div className="mt-5 space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             <StatCard icon={FileText} label="Job Value" value={money(jobValue)} />
             <StatCard
               icon={Database}
@@ -421,25 +419,24 @@ export default function JobShow({
               value={jobCosting.marginPct === null ? '—' : `${jobCosting.marginPct.toFixed(1)}%`}
               {...(jobCosting.profit !== null ? { note: money(jobCosting.profit) } : {})}
             />
-          </div>
+          </section>
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-            <Card padding="md">
-              <h2 className="text-lg font-semibold text-white">Progress</h2>
-              <div className="mt-4 flex items-center gap-4">
+            <Panel title="Progress">
+              <div className="flex items-center gap-4">
                 <div
-                  className="h-3.5 flex-1 overflow-hidden rounded-full bg-white/10"
+                  className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--surface-3)]"
                   role="progressbar"
                   aria-valuenow={progress}
                   aria-valuemin={0}
                   aria-valuemax={100}
                 >
                   <div
-                    className="h-full rounded-full bg-linear-to-r from-status-success/40 to-status-success transition-[width] duration-700"
+                    className="h-full rounded-full bg-status-success transition-[width] duration-700"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <span className="w-12 text-right text-md font-semibold text-white">{progress}%</span>
+                <span className="w-12 text-right text-md font-bold text-white tabular-nums">{progress}%</span>
               </div>
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -452,11 +449,10 @@ export default function JobShow({
                 <ProgressFact icon={FileText} label="Estimates" value={String(job.estimates.length)} />
                 <ProgressFact icon={Users} label="Crew" value={String(job.team.length)} />
               </div>
-            </Card>
+            </Panel>
 
-            <Card padding="md">
-              <h2 className="text-lg font-semibold text-white">Quick Actions</h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <Panel title="Quick actions">
+              <div className="grid gap-2.5 sm:grid-cols-2">
                 {canPlanWork && !isLocked && (
                   <QuickAction
                     icon={ListChecks}
@@ -475,26 +471,23 @@ export default function JobShow({
                 <QuickAction icon={FileUp} label="Add Document" onClick={() => setTab('documents')} />
                 <QuickAction icon={FileText} label="View Estimates" onClick={() => setTab('estimates')} />
               </div>
-            </Card>
+            </Panel>
           </div>
 
           {job.takeoff && <JobTakeoffPanel takeoff={job.takeoff} />}
 
-          <Card padding="md">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
-            </div>
+          <Panel title="Recent activity">
             {job.activities.length === 0 ? (
-              <p className="mt-3 text-md text-white/75">Nothing has happened on this job yet.</p>
+              <p className="text-[var(--text-3)]">Nothing has happened on this job yet.</p>
             ) : (
-              <ul className="mt-3 divide-y divide-hairline">
+              <ul className="divide-y divide-hairline">
                 {job.activities.slice(0, 6).map((activity) => (
                   <li key={activity.id} className="flex items-center gap-4 py-3">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white/8 text-brand ring-1 ring-hairline">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--brand-bg)] text-brand">
                       <Activity size={17} aria-hidden />
                     </span>
                     <p className="min-w-0 flex-1 truncate text-md text-white">{activity.description}</p>
-                    <span className="shrink-0 text-right text-xs text-white/70">
+                    <span className="shrink-0 text-right text-xs text-[var(--text-3)]">
                       {formatRelative(activity.createdAt)}
                       <br />
                       by {activity.actor}
@@ -503,7 +496,7 @@ export default function JobShow({
                 ))}
               </ul>
             )}
-          </Card>
+          </Panel>
         </div>
       )}
 
@@ -783,24 +776,24 @@ type JobTab = 'overview' | 'tasks' | 'team' | 'estimates' | 'changeOrders' | 'no
 function MetaItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3">
-      <Icon size={22} aria-hidden className="shrink-0 text-white/85" />
+      <Icon size={18} aria-hidden className="shrink-0 text-[var(--text-3)]" />
       <div className="min-w-0">
-        <dt className="text-xs text-white/70">{label}</dt>
-        <dd className="text-md font-medium text-white">{value}</dd>
+        <dt className="text-xs text-[var(--text-3)]">{label}</dt>
+        <dd className="font-medium text-white">{value}</dd>
       </div>
     </div>
   )
 }
 
 const STATUS_PILL: Record<Tone, string> = {
-  brand: 'border-brand/50 bg-brand/15 text-brand',
-  success: 'border-status-success/50 bg-status-success/15 text-status-success',
-  warning: 'border-status-warning/50 bg-status-warning/15 text-status-warning',
-  danger: 'border-status-danger/60 bg-status-danger/20 text-status-danger',
-  info: 'border-status-info/50 bg-status-info/15 text-status-info',
-  purple: 'border-status-purple/50 bg-status-purple/15 text-status-purple',
-  blue: 'border-status-blue/50 bg-status-blue/15 text-status-blue',
-  neutral: 'border-hairline-strong bg-white/10 text-white',
+  brand: 'bg-[var(--brand-bg)] text-brand',
+  success: 'bg-[var(--ok-bg)] text-[var(--ok-text)]',
+  warning: 'bg-[var(--warn-bg)] text-[var(--warn-text)]',
+  danger: 'bg-[var(--danger-bg)] text-[var(--danger-text)]',
+  info: 'bg-[var(--info-bg)] text-[var(--info-text)]',
+  purple: 'bg-[var(--violet-bg)] text-[var(--violet-text)]',
+  blue: 'bg-[var(--brand-bg)] text-brand',
+  neutral: 'bg-[var(--gray-bg)] text-[var(--gray-text)]',
 }
 
 /** The job's status as a pill that is also the control for changing it. */
@@ -818,7 +811,7 @@ function StatusSelect({
   return (
     <label
       className={cn(
-        'relative inline-flex min-w-52 items-center gap-2.5 rounded-full border py-2.5 pr-10 pl-4 text-md font-semibold',
+        'relative inline-flex min-w-48 items-center gap-2.5 rounded-full py-2 pr-9 pl-4 text-[13.5px] font-semibold',
         STATUS_PILL[tone],
         disabled && 'opacity-80',
       )}
@@ -843,40 +836,20 @@ function StatusSelect({
   )
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  note,
-}: {
-  icon: LucideIcon
-  label: string
-  value: string
-  note?: string
-}) {
-  return (
-    <Card padding="md" className="flex items-center gap-4">
-      <span className="grid size-14 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
-        <Icon size={24} aria-hidden />
-      </span>
-      <div className="min-w-0">
-        <p className="text-sm text-white/75">{label}</p>
-        <p className="truncate text-2xl font-bold text-white">{value}</p>
-        {note && <p className="text-sm text-white/65">{note}</p>}
-      </div>
-    </Card>
-  )
+/** A KPI tile — the same light Stat tile the project page uses. */
+function StatCard({ label, value, note }: { icon?: LucideIcon; label: string; value: string; note?: string }) {
+  return <Stat label={label} value={value} {...(note ? { delta: note } : {})} className="h-full" />
 }
 
 function ProgressFact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand/12 text-brand ring-1 ring-brand/25">
-        <Icon size={19} aria-hidden />
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--brand-bg)] text-brand">
+        <Icon size={17} aria-hidden />
       </span>
       <div className="min-w-0">
-        <p className="text-sm text-white/75">{label}</p>
-        <p className="truncate text-md font-semibold text-white">{value}</p>
+        <p className="text-xs text-[var(--text-3)]">{label}</p>
+        <p className="truncate text-[13.5px] font-semibold text-white">{value}</p>
       </div>
     </div>
   )
@@ -887,9 +860,9 @@ function QuickAction({ icon: Icon, label, onClick }: { icon: LucideIcon; label: 
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-4 rounded-panel border border-hairline bg-white/6 px-5 py-4 text-left text-md font-medium text-white transition-colors hover:border-brand/50 hover:bg-white/12"
+      className="flex items-center gap-3 rounded-panel border border-hairline bg-[var(--surface-2)] px-3.5 py-3 text-left text-[13.5px] font-semibold text-white transition-colors hover:border-brand/40"
     >
-      <Icon size={22} aria-hidden className="shrink-0 text-brand" />
+      <Icon size={18} aria-hidden className="shrink-0 text-brand" />
       {label}
     </button>
   )

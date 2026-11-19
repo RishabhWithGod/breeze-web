@@ -303,8 +303,8 @@ PaymentSetup.layout = appLayout
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="overflow-hidden rounded-card border border-hairline glass">
-      <header className="border-b border-hairline bg-linear-to-b from-ocean-700/50 to-ocean-700/10 px-4 py-3">
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
+      <header className="border-b border-hairline px-[22px] py-[18px]">
+        <h2 className="font-display text-xl leading-[1.25] font-[620] tracking-[-0.01em] text-white">{title}</h2>
       </header>
       {children}
     </section>

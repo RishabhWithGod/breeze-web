@@ -16,7 +16,7 @@ export interface UnderlineTabsProps<T extends string> {
 /** The Breeze app's tab strip: an underline under the current tab, a small count pill beside each label. */
 export function UnderlineTabs<T extends string>({ tabs, value, onChange, className }: UnderlineTabsProps<T>) {
   return (
-    <div role="tablist" className={cn('mb-5 flex gap-0.5 overflow-x-auto border-b border-hairline', className)}>
+    <div role="tablist" className={cn('no-scrollbar mb-5 flex gap-0.5 overflow-x-auto border-b border-hairline', className)}>
       {tabs.map((tab) => {
         const on = tab.key === value
 

@@ -387,6 +387,16 @@
   animation: var(--animate-shimmer);
 }
 
+/* Tab strips scroll sideways on a narrow screen but never show a bar while they do. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* The rail's own scrollbar: thin and trackless, light thumb on the dark rail. */
 @utility sidebar-scroll {
   scrollbar-width: thin;
@@ -563,11 +573,26 @@
   border-radius: 22px;
   color: #eaf1ff;
   background:
-    linear-gradient(rgb(126 170 255 / 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
-    linear-gradient(90deg, rgb(126 170 255 / 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
-    radial-gradient(520px 360px at 100% 0%, rgb(62 230 255 / 0.16), transparent 70%),
-    linear-gradient(180deg, #050c20 0%, #071535 60%, #0a1d47 100%);
-  box-shadow: 0 30px 80px -30px rgb(7 18 48 / 0.55);
+    radial-gradient(700px 300px at 100% 0%, rgb(62 230 255 / 0.16), transparent 65%),
+    radial-gradient(600px 320px at 0% 100%, rgb(47 91 255 / 0.3), transparent 65%),
+    linear-gradient(160deg, #081a44 0%, #061230 55%, #040b1f 100%);
+  border: 1px solid rgb(126 170 255 / 0.16);
+  box-shadow: 0 30px 70px -34px rgb(7 18 48 / 0.65), inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+/* The drafting grid, faded out toward the bottom-left — as in the Breeze app. */
+.blueprint::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(rgb(126 170 255 / 0.22) 1px, transparent 1px) 0 0 / 120px 120px,
+    linear-gradient(90deg, rgb(126 170 255 / 0.22) 1px, transparent 1px) 0 0 / 120px 120px,
+    linear-gradient(rgb(126 170 255 / 0.11) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, rgb(126 170 255 / 0.11) 1px, transparent 1px) 0 0 / 24px 24px;
+  -webkit-mask-image: radial-gradient(120% 120% at 70% 0%, #000 30%, transparent 85%);
+  mask-image: radial-gradient(120% 120% at 70% 0%, #000 30%, transparent 85%);
 }
 .blueprint h1,
 .blueprint h2,

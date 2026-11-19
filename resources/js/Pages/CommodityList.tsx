@@ -103,6 +103,17 @@ export default function CommodityList({
   const [search, setSearch] = useState(filters.search)
   const [editing, setEditing] = useState<CommodityRow | 'new' | null>(null)
   const [importing, setImporting] = useState(false)
+  // Opened from the sidebar → no "Back" (there is nothing to go back to). Opened any other way — the
+  // setup flow's "Continue to Commodity List", say — Back stays. Read once, so a later visit decides afresh.
+  const [fromSidebar] = useState(() => {
+    try {
+      const mine = sessionStorage.getItem('breeze.cameFromSidebar') === ROUTES.commodities
+      sessionStorage.removeItem('breeze.cameFromSidebar')
+      return mine
+    } catch {
+      return false
+    }
+  })
 
   const visit = (changes: Record<string, string | number | boolean | null>) => {
     const next = { ...filters, page: page.current, ...changes }
@@ -129,28 +140,30 @@ export default function CommodityList({
     <PageTransition>
       <Head title="Commodity List Setup" />
 
-      <Card padding="none" className="overflow-hidden">
-        <PageHeader
-          title="Commodity List Setup"
-          subtitle="Manage your material and labor items for estimates. Create, edit, and organize your commodity list. Projects with no rate list of their own are priced from it."
-          className="mb-0 border-b border-hairline p-4 sm:p-5"
-          actions={
-            <>
+      <PageHeader
+        title="Commodity List Setup"
+        subtitle="Manage your material and labor items for estimates. Create, edit, and organize your commodity list. Projects with no rate list of their own are priced from it."
+        actions={
+          <>
+            {!fromSidebar && (
               <Button variant="secondary" leftIcon={ArrowLeft} onClick={() => window.history.back()}>
                 Back
               </Button>
-              <Button variant="outline" leftIcon={Upload} onClick={() => setImporting(true)}>
-                Upload List
-              </Button>
-              <Button variant="secondary" leftIcon={Plus} onClick={() => setEditing('new')}>
-                Add Item
-              </Button>
-              <Button leftIcon={Save} onClick={save}>
-                Save Default List
-              </Button>
-            </>
-          }
-        />
+            )}
+            <Button variant="outline" leftIcon={Upload} onClick={() => setImporting(true)}>
+              Upload List
+            </Button>
+            <Button variant="secondary" leftIcon={Plus} onClick={() => setEditing('new')}>
+              Add Item
+            </Button>
+            <Button leftIcon={Save} onClick={save}>
+              Save Default List
+            </Button>
+          </>
+        }
+      />
+
+      <Card padding="none" className="overflow-hidden">
 
         <div className="p-4 sm:p-5">
           {flash.success && (

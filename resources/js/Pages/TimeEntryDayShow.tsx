@@ -13,7 +13,7 @@ import {
   Timer,
   type LucideIcon,
 } from 'lucide-react'
-import { Button, ButtonLink, Card, Table } from '@/components/common'
+import { Avatar, Button, ButtonLink, Panel, Stat, Table } from '@/components/common'
 import { appLayout, PageTransition } from '@/components/layout'
 import {
   CheckOutDialog,
@@ -225,6 +225,7 @@ export default function TimeEntryDayShow({ day }: TimeEntryDayShowProps) {
           </Link>
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Avatar person={{ name: day.employee.name }} className="size-11 text-base" />
             <h1 className="text-3xl font-bold text-white sm:text-4xl">{day.employee.name}</h1>
             {day.employee.role && (
               <span className="inline-flex rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-medium text-brand">
@@ -248,7 +249,7 @@ export default function TimeEntryDayShow({ day }: TimeEntryDayShowProps) {
       </div>
 
       {/* ================================================= Summary cards ===== */}
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard icon={Clock} label="Total Hours" value={formatHours(day.totalHours)} />
         <StatCard icon={CheckCircle2} label="Approved" value={formatHours(hours.approved)} />
         <StatCard icon={Hourglass} label="Waiting on Approval" value={formatHours(hours.waiting)} />
@@ -260,50 +261,45 @@ export default function TimeEntryDayShow({ day }: TimeEntryDayShowProps) {
         />
       </div>
 
-      <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_21rem]">
+      <div className="mt-5 grid items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_21rem]">
         <div className="min-w-0 space-y-5">
           {day.entries.length > 0 && (
-            <Card padding="md">
-              <CardTitle title="Timer & Manual Entries" count={day.entries.length} />
-              <div className="mt-3 overflow-x-auto">
+            <Panel className="h-auto" title={<CardTitle title="Timer & Manual Entries" count={day.entries.length} />}>
+              <div className="overflow-x-auto">
                 <Table
                   dense
                   variant="lined"
                   headerVariant="plain"
-                  className="min-w-4xl text-sm [&_th]:text-sm [&_td]:text-sm"
+                  className="min-w-[40rem] text-sm [&_th]:text-sm [&_td]:text-sm"
                   columns={entryColumns}
                   rows={day.entries}
                   getRowId={(entry) => entry.id}
                   caption="Timer and manual entries for the day"
                 />
               </div>
-            </Card>
+            </Panel>
           )}
 
           {day.attendance.length > 0 && (
-            <Card padding="md">
-              <CardTitle title="GPS Check-ins" count={day.attendance.length} />
-              <div className="mt-3 overflow-x-auto">
+            <Panel className="h-auto" title={<CardTitle title="GPS Check-ins" count={day.attendance.length} />}>
+              <div className="overflow-x-auto">
                 <Table
                   dense
                   variant="lined"
                   headerVariant="plain"
-                  className="min-w-4xl text-sm [&_th]:text-sm [&_td]:text-sm"
+                  className="min-w-[40rem] text-sm [&_th]:text-sm [&_td]:text-sm"
                   columns={attendanceColumns}
                   rows={day.attendance}
                   getRowId={(row) => row.id}
                   caption="GPS check-ins for the day"
                 />
               </div>
-            </Card>
+            </Panel>
           )}
         </div>
 
-        <Card padding="md">
-          <h2 className="text-lg font-semibold text-white">Time by Job / Site</h2>
-          <p className="mt-0.5 text-xs text-white/70">Every site the day&apos;s total is split across</p>
-
-          <ul className="mt-4 space-y-4">
+        <Panel className="h-auto" title="Time by Job / Site" sub="Every site the day's total is split across">
+          <ul className="space-y-4">
             {day.jobBreakdown.map((row) => {
               const share = Math.round((row.hours / total) * 100)
 
@@ -313,7 +309,7 @@ export default function TimeEntryDayShow({ day }: TimeEntryDayShowProps) {
                     <span className="min-w-0 truncate text-white">{row.job}</span>
                     <span className="shrink-0 font-semibold tabular-nums text-white">{formatHours(row.hours)}</span>
                   </div>
-                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/12" aria-hidden>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[var(--surface-3)]" aria-hidden>
                     <div
                       className="h-full rounded-full bg-linear-to-r from-status-success/40 to-status-success"
                       style={{ width: `${Math.min(share, 100)}%` }}
@@ -330,7 +326,7 @@ export default function TimeEntryDayShow({ day }: TimeEntryDayShowProps) {
               <span className="text-lg font-bold tabular-nums text-white">{formatHours(day.totalHours)}</span>
             </div>
           )}
-        </Card>
+        </Panel>
       </div>
 
       <CheckOutDialog target={closing} onClose={() => setClosing(null)} />
@@ -342,10 +338,10 @@ TimeEntryDayShow.layout = appLayout
 
 function CardTitle({ title, count }: { title: string; count: number }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <h2 className="text-lg font-semibold text-white">{title}</h2>
-      <span className="rounded-full bg-white/12 px-2 py-0.5 text-2xs text-white/85">{count}</span>
-    </div>
+    <span className="flex items-center gap-2.5">
+      {title}
+      <span className="rounded-full bg-[var(--surface-3)] px-2 py-0.5 text-2xs font-medium text-[var(--text-2)]">{count}</span>
+    </span>
   )
 }
 
@@ -359,26 +355,14 @@ function Clocked({ icon: Icon, value }: { icon: LucideIcon; value: string }) {
 }
 
 function StatCard({
-  icon: Icon,
   label,
   value,
   note,
 }: {
-  icon: LucideIcon
+  icon?: LucideIcon
   label: string
   value: string
   note?: string
 }) {
-  return (
-    <Card padding="md" className="flex items-center gap-4">
-      <span className="grid size-12 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
-        <Icon size={22} aria-hidden />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-white/75">{label}</p>
-        <p className="text-xl leading-tight font-bold text-white">{value}</p>
-        {note && <p className="text-xs text-white/65">{note}</p>}
-      </div>
-    </Card>
-  )
+  return <Stat label={label} value={value} {...(note ? { delta: note } : {})} className="h-full" />
 }

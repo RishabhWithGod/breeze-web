@@ -379,7 +379,7 @@ const buttonLink =
 
 function SectionTitle({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
   return (
-    <h2 className="flex items-center gap-3 text-lg font-semibold text-white">
+    <h2 className="flex items-center gap-3 font-display text-xl font-[620] tracking-[-0.01em] text-white">
       <Icon size={22} aria-hidden className="text-white/90" />
       {children}
     </h2>

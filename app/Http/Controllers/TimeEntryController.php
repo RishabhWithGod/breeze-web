@@ -104,6 +104,12 @@ class TimeEntryController extends Controller
                 ],
             ],
             'exceptionCount' => app(SessionLogBuilder::class)->exceptionCount($filters, $canViewCrew, $request->user()->id),
+            // Read-only totals per status (the status filter itself left out), for the tiles and tabs.
+            'stats' => $this->dailyBuilder->entryQuery(['status' => 'all'] + $filters, $canViewCrew, $request->user()->id)
+                ->reorder()
+                ->selectRaw('status, count(*) as n, coalesce(sum(hours), 0) as hours, coalesce(sum(overtime_hours), 0) as overtime')
+                ->groupBy('status')->get()
+                ->mapWithKeys(fn ($row) => [$row->status => ['count' => (int) $row->n, 'hours' => (float) $row->hours, 'overtime' => (float) $row->overtime]])->all(),
             // Plain arrays, not Eloquent models — `TimeEntryResource::collection()`
             // isn't in play here to get Laravel's `{data, meta}` shape for free,
             // so it is built by hand to match what the frontend's `Paginated<T>`

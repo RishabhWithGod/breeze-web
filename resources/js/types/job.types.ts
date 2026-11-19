@@ -41,6 +41,8 @@ export interface Job {
   readonly teamCount: number
   /** Distinct people assigned to any of the job's tasks. */
   readonly crewCount: number
+  /** The same people, by name — for the list's avatar stack. */
+  readonly crew?: readonly { readonly id: string; readonly name: string }[]
   /** The project the job was raised from, when there is one. */
   readonly projectName: string | null
   /** Tasks not yet completed or cancelled. */

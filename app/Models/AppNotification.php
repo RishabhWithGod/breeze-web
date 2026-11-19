@@ -33,6 +33,8 @@ class AppNotification extends Model
         'security-' => 'security',
         'breeze-bucks-' => 'breeze-bucks',
         'technician-' => 'teams',
+        'leave-' => 'teams',
+        'change-order-' => 'jobs',
     ];
 
     /**

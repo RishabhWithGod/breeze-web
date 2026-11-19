@@ -1,6 +1,6 @@
 import { Head, router, useForm } from '@inertiajs/react'
 import { ArrowRight, Calculator, Plus } from 'lucide-react'
-import { Alert, Button, ButtonLink, Card, EmptyState, SelectField, Badge, Table } from '@/components/common'
+import { Alert, Button, ButtonLink, Panel, EmptyState, SelectField, Badge, Table } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { TableColumn, Tone } from '@/types'
@@ -100,11 +100,11 @@ export default function EstimateBuilderHome({ estimates, projects }: EstimateBui
         breadcrumbs={[{ label: 'Estimates', href: ROUTES.estimates }, { label: 'Estimate Builder' }]}
       />
 
-      <Card padding="md" className="mb-5">
-        <h2 className="mb-1 text-lg font-semibold text-white">Start an estimate</h2>
-        <p className="mb-4 text-sm text-white/70">
-          Pick the project it is for. Its takeoff comes in with it — quantities, material prices and install labor — and you check and adjust from there.
-        </p>
+      <Panel
+        title="Start an estimate"
+        sub="Pick the project it is for. Its takeoff comes in with it — quantities, material prices and install labor — and you check and adjust from there."
+        className="mb-4"
+      >
         {projects.length === 0 ? (
           <Alert tone="info">Add a project first — an estimate is always raised on one.</Alert>
         ) : (
@@ -135,10 +135,9 @@ export default function EstimateBuilderHome({ estimates, projects }: EstimateBui
             </Button>
           </form>
         )}
-      </Card>
+      </Panel>
 
-      <Card padding="md">
-        <h2 className="mb-4 text-lg font-semibold text-white">In the builder</h2>
+      <Panel title="In the builder" pad={estimates.length === 0}>
         {estimates.length === 0 ? (
           <EmptyState
             icon={Calculator}
@@ -155,7 +154,7 @@ export default function EstimateBuilderHome({ estimates, projects }: EstimateBui
             onRowClick={(row) => router.visit(routeTo.estimateBuilderShow(row.id))}
           />
         )}
-      </Card>
+      </Panel>
     </PageTransition>
   )
 }

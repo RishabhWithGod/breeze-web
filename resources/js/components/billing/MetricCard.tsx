@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
-import { cn } from '@/utils'
+import { Stat } from '@/components/common/Stat'
 
+// Kept only so existing callers' `tone` prop still type-checks.
 const TONE = {
   cyan: { border: 'border-brand/70', icon: 'bg-brand/15 text-brand' },
   blue: { border: 'border-status-blue/70', icon: 'bg-status-blue/15 text-status-blue' },
@@ -19,18 +20,7 @@ export interface MetricCardProps {
   note?: string | undefined
 }
 
-/** One key figure: what it is, top left; its icon, top right; the number, large. */
-export function MetricCard({ label, value, icon: Icon, tone, note }: MetricCardProps) {
-  return (
-    <div className={cn('rounded-card border-2 bg-white/4 p-5 backdrop-blur-sm', TONE[tone].border)}>
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-md font-medium text-white/90">{label}</p>
-        <span className={cn('grid size-10 shrink-0 place-items-center rounded-full', TONE[tone].icon)}>
-          <Icon size={18} aria-hidden />
-        </span>
-      </div>
-      <p className="mt-4 text-3xl font-bold tabular-nums text-white">{value}</p>
-      {note && <p className="mt-0.5 text-xs text-white/65">{note}</p>}
-    </div>
-  )
+/** One key figure — the app's stat tile (the old coloured border and icon bubble are retired). */
+export function MetricCard({ label, value, note }: MetricCardProps) {
+  return <Stat label={label} value={value} {...(note ? { delta: note } : {})} className="h-full" />
 }

@@ -1,7 +1,7 @@
 import { Head } from '@inertiajs/react'
-import { ExternalLink, FileText, FolderOpen } from 'lucide-react'
+import { ArrowRight, FileText, FolderOpen } from 'lucide-react'
 import { useState } from 'react'
-import { ButtonLink, Card, IconBubble, SelectField } from '@/components/common'
+import { ButtonLink, SelectField } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ELECTRICAL_TOOLS, routeTo } from '@/constants'
 
@@ -34,51 +34,53 @@ export default function ElectricalTools({ projects }: ElectricalToolsProps) {
         subtitle="Professional electrical calculation tools to support accurate, code-compliant estimates and design."
       />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {ELECTRICAL_TOOLS.map((tool) => (
-          <Card key={tool.slug} padding="lg" className="flex flex-col">
-            <div className="flex items-start gap-4">
-              <IconBubble icon={tool.icon} tone="brand" size="lg" />
-              <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-white">{tool.name}</h3>
-                <p className="mt-1.5 text-md text-white/80">{tool.description}</p>
-              </div>
-            </div>
+      <div className="grid gap-5 md:grid-cols-2">
+        {ELECTRICAL_TOOLS.map((tool) => {
+          const Icon = tool.icon
 
-            <div className="mt-6 flex flex-1 flex-wrap items-end justify-between gap-4">
-              <span className="flex items-center gap-2 text-sm text-white/80">
-                <FileText size={16} aria-hidden />
-                <strong className="text-white">{tool.savedCalculations}</strong> Saved Calculations
-              </span>
-
-              <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1.5 text-sm text-white/80">
-                  <FolderOpen size={16} aria-hidden />
-                  Project Context
-                </span>
-                <SelectField
-                  aria-label={`Project context for ${tool.name}`}
-                  className="w-48"
-                  options={projectOptions}
-                  value={selectedProjects[tool.slug] ?? ''}
-                  onChange={(event) =>
-                    setSelectedProjects((current) => ({ ...current, [tool.slug]: event.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <ButtonLink
-              href={routeTo.electricalTool(tool.slug)}
-              variant="primary"
-              leftIcon={ExternalLink}
-              fullWidth
-              className="mt-6"
+          return (
+            <section
+              key={tool.slug}
+              className="glass flex flex-col rounded-card border border-hairline p-[22px] transition-[transform,border-color] duration-150 hover:-translate-y-0.5 hover:border-brand/45"
             >
-              Open Tool
-            </ButtonLink>
-          </Card>
-        ))}
+              <div className="flex items-start gap-4">
+                <span className="grid size-[54px] shrink-0 place-items-center rounded-[14px] bg-[var(--brand-bg)] text-brand">
+                  <Icon size={26} aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-display text-xl leading-[1.25] font-[620] tracking-[-0.01em] text-white">{tool.name}</h3>
+                  <p className="mt-1.5 text-[14px] text-[var(--text-2)]">{tool.description}</p>
+                  <p className="mt-2.5 flex items-center gap-1.5 text-[13px] text-[var(--text-3)]">
+                    <FileText size={14} aria-hidden />
+                    <strong className="font-semibold text-white">{tool.savedCalculations}</strong> saved calculations
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-1 flex-wrap items-end justify-between gap-3 border-t border-hairline pt-4">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5 text-[13px] text-[var(--text-3)]">
+                    <FolderOpen size={15} aria-hidden />
+                    Project context
+                  </span>
+                  <SelectField
+                    aria-label={`Project context for ${tool.name}`}
+                    className="w-48"
+                    options={projectOptions}
+                    value={selectedProjects[tool.slug] ?? ''}
+                    onChange={(event) =>
+                      setSelectedProjects((current) => ({ ...current, [tool.slug]: event.target.value }))
+                    }
+                  />
+                </div>
+
+                <ButtonLink href={routeTo.electricalTool(tool.slug)} variant="primary" rightIcon={ArrowRight}>
+                  Open tool
+                </ButtonLink>
+              </div>
+            </section>
+          )
+        })}
       </div>
     </PageTransition>
   )

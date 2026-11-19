@@ -22,13 +22,14 @@ import {
   Button,
   Card,
   EmptyState,
-  FilterTabs,
   Modal,
   MoreMenu,
   SelectField,
   Badge,
+  Stat,
   TextArea,
   TextInput,
+  UnderlineTabs,
   noticeClasses
 } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
@@ -425,29 +426,30 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
         {/* ------------------------------------------------------------ Estimate title -- */}
         <div className="border-b border-hairline px-5 py-4 sm:px-6">
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="font-display text-2xl font-bold text-white">{estimate.project}</h2>
+            <h2 className="font-display text-xl font-[620] tracking-[-0.01em] text-white">{estimate.project}</h2>
             <Badge tone={status.tone}>{status.label}</Badge>
             {dirty && !locked && <Badge tone="warning">Unsaved changes</Badge>}
           </div>
-          <p className="mt-1 text-sm text-white/75">
-            Client: {estimate.client} <span className="mx-2 text-white/40">|</span> Estimate: {estimate.number}
+          <p className="mt-1 text-[13px] text-[var(--text-3)]">
+            Client: {estimate.client} <span className="mx-2 opacity-50">·</span> Estimate: {estimate.number}
             {estimate.takeoffSource && (
               <>
-                <span className="mx-2 text-white/40">|</span> Takeoff: {estimate.takeoffSource.number}
+                <span className="mx-2 opacity-50">·</span> Takeoff: {estimate.takeoffSource.number}
               </>
             )}
           </p>
         </div>
 
         {/* ------------------------------------------------------------------ Tabs -- */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-3 sm:px-6">
-          <FilterTabs<Tab>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 pt-1 sm:px-6">
+          <UnderlineTabs<Tab>
+            className="mb-0 border-b-0"
             value={tab}
             onChange={setTab}
-            options={[
-              { label: 'Takeoff Items', value: 'items' },
-              { label: 'Commodity Pricing', value: 'pricing' },
-              { label: 'Summary', value: 'summary' },
+            tabs={[
+              { key: 'items', label: 'Takeoff Items' },
+              { key: 'pricing', label: 'Commodity Pricing' },
+              { key: 'summary', label: 'Summary' },
             ]}
           />
 
@@ -490,7 +492,7 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
         </div>
 
         {showFilters && tab === 'items' && (
-          <div className="flex flex-wrap items-end gap-3 border-b border-hairline bg-white/3 px-5 py-3 sm:px-6">
+          <div className="flex flex-wrap items-end gap-3 border-b border-hairline bg-[var(--surface-2)] px-5 py-3 sm:px-6">
             <TextInput
               id="builder-search"
               label="Search items"
@@ -576,7 +578,7 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
                 <div className="overflow-x-auto rounded-panel border border-hairline">
                   <table className="w-full min-w-[78rem] text-left text-sm">
                     <thead>
-                      <tr className="border-b border-hairline bg-white/4 text-xs text-white/80">
+                      <tr className="border-b border-hairline bg-surface-veil text-xs font-semibold tracking-[0.04em] text-[var(--text-2)] uppercase">
                         <th className="w-10 px-3 py-3">
                           <input
                             type="checkbox"
@@ -837,7 +839,7 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
           <div className="p-5 sm:p-6">
             <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-white">Commodity list prices</h3>
+                <h3 className="font-display text-xl font-[620] tracking-[-0.01em] text-white">Commodity list prices</h3>
                 <p className="text-sm text-white/70">{priceListVersion}</p>
               </div>
               <TextInput
@@ -862,7 +864,7 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
               <div className="overflow-x-auto rounded-panel border border-hairline">
                 <table className="w-full min-w-3xl text-left text-sm">
                   <thead>
-                    <tr className="border-b border-hairline bg-white/4 text-xs text-white/80">
+                    <tr className="border-b border-hairline bg-surface-veil text-xs font-semibold tracking-[0.04em] text-[var(--text-2)] uppercase">
                       <th className="px-3 py-3 font-semibold">Description</th>
                       <th className="px-3 py-3 font-semibold">Commodity</th>
                       <th className="px-3 py-3 font-semibold">Unit</th>
@@ -998,7 +1000,7 @@ function Builder({ estimate, lines, priceList, priceListVersion, importSources }
 /** Subtotal, tax and total — the figures the estimate ends up with. */
 function TotalsCard({ totals, taxPct }: { totals: ReturnType<typeof builderTotals>; taxPct: number }) {
   return (
-    <div className="w-full rounded-panel border border-hairline bg-white/4 sm:w-96">
+    <div className="w-full rounded-card border border-hairline bg-[var(--surface-2)] sm:w-96">
       <dl className="space-y-2 px-4 py-3 text-sm">
         <div className="flex justify-between gap-4 text-white/85">
           <dt>Subtotal</dt>
@@ -1065,28 +1067,24 @@ function SummaryTab({
     <div className="space-y-6 p-5 sm:p-6">
       <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {tiles.map(([label, value]) => (
-          <div
+          <Stat
             key={label}
-            className={cn(
-              'rounded-panel border border-hairline bg-white/4 px-4 py-3',
-              label === 'Total' && 'border-brand/50 bg-brand/10',
-            )}
-          >
-            <p className="text-xs text-white/70">{label}</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-white">{formatCurrency(value, 2)}</p>
-          </div>
+            label={label}
+            value={formatCurrency(value, 2)}
+            className={label === 'Total' ? 'border-brand/50' : undefined}
+          />
         ))}
       </div>
 
       <div>
-        <h3 className="mb-3 text-lg font-semibold text-white">By commodity</h3>
+        <h3 className="mb-3 font-display text-xl font-[620] tracking-[-0.01em] text-white">By commodity</h3>
         {byCommodity.length === 0 ? (
           <p className="text-sm text-white/70">Nothing has been priced yet.</p>
         ) : (
           <div className="overflow-x-auto rounded-panel border border-hairline">
             <table className="w-full min-w-2xl text-left text-sm">
               <thead>
-                <tr className="border-b border-hairline bg-white/4 text-xs text-white/80">
+                <tr className="border-b border-hairline bg-surface-veil text-xs font-semibold tracking-[0.04em] text-[var(--text-2)] uppercase">
                   <th className="px-3 py-3 font-semibold">Commodity</th>
                   <th className="px-3 py-3 text-center font-semibold">Items</th>
                   <th className="px-3 py-3 text-right font-semibold">Material</th>
@@ -1117,18 +1115,18 @@ function SummaryTab({
       </div>
 
       <div>
-        <h3 className="mb-3 text-lg font-semibold text-white">Where it came from</h3>
+        <h3 className="mb-3 font-display text-xl font-[620] tracking-[-0.01em] text-white">Where it came from</h3>
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <div className="rounded-panel border border-hairline bg-white/4 px-4 py-3">
-            <dt className="text-xs text-white/70">Takeoff source</dt>
+          <div className="rounded-card border border-hairline bg-[var(--surface-2)] px-4 py-3">
+            <dt className="text-xs text-[var(--text-3)]">Takeoff source</dt>
             <dd className="mt-1 text-white">
               {estimate.takeoffSource
                 ? `${estimate.takeoffSource.number} — ${estimate.takeoffSource.project}`
                 : 'Priced by hand — no takeoff copied in'}
             </dd>
           </div>
-          <div className="rounded-panel border border-hairline bg-white/4 px-4 py-3">
-            <dt className="text-xs text-white/70">Commodity list version</dt>
+          <div className="rounded-card border border-hairline bg-[var(--surface-2)] px-4 py-3">
+            <dt className="text-xs text-[var(--text-3)]">Commodity list version</dt>
             <dd className="mt-1 text-white">{estimate.commodityVersion ?? 'Not saved yet'}</dd>
             {estimate.commodityVersion && estimate.commodityVersion !== priceListVersion && (
               <dd className="mt-1 text-xs text-status-warning">

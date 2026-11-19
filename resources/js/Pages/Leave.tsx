@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AlertTriangle, CalendarOff, Check, Undo2, Users, X } from 'lucide-react'
-import { Alert, Button, Card, EmptyState, FilterTabs, Modal, StatusChip, TextArea } from '@/components/common'
+import { Alert, Avatar, Button, Card, EmptyState, Modal, Stat, StatusChip, TextArea, UnderlineTabs } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { LeaveRequestRow, SharedPageProps } from '@/types'
@@ -85,16 +85,36 @@ export default function Leave({ today, pending, approved, history, overlap }: Le
         </Alert>
       )}
 
-      <FilterTabs
-        className="mb-5"
+      <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <Stat
+          label="Waiting for approval"
+          value={pending.length}
+          delta={pending.length === 1 ? '1 request' : `${pending.length} requests`}
+          className="h-full"
+        />
+        <Stat
+          label="Approved"
+          value={approved.length}
+          delta="Under way or coming up"
+          className="h-full"
+        />
+        <Stat
+          label="Off today"
+          value={approved.filter((leave) => leave.underway).length}
+          delta="On leave right now"
+          className="h-full"
+        />
+        <Stat label="History" value={history.length} delta="Turned down, cancelled or finished" className="h-full" />
+      </div>
+
+      <UnderlineTabs
         value={tab}
         onChange={setTab}
-        options={[
-          { label: 'Waiting', value: 'pending' },
-          { label: 'Approved', value: 'approved' },
-          { label: 'History', value: 'history' },
+        tabs={[
+          { label: 'Waiting', key: 'pending', count: pending.length },
+          { label: 'Approved', key: 'approved', count: approved.length },
+          { label: 'History', key: 'history' },
         ]}
-        counts={{ pending: pending.length, approved: approved.length }}
       />
 
       {rows.length === 0 ? (
@@ -154,15 +174,13 @@ function LeaveCard({
     <Card padding="md">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand/15 text-xs font-semibold text-brand ring-1 ring-brand/30">
-            {member?.initials ?? '?'}
-          </span>
+          <Avatar person={{ name: member?.name ?? '?', initials: member?.initials ?? null }} className="size-10 text-xs" />
           <div className="min-w-0">
             <p className="font-semibold text-white">
               {member?.name ?? 'Former member'}
               {member?.inactive && <span className="ml-2 text-xs font-normal text-white/60">(inactive)</span>}
             </p>
-            <p className="text-sm text-white/65">
+            <p className="text-sm text-[var(--text-3)]">
               {[member?.roleLabel, member?.team].filter(Boolean).join(' · ') || '—'}
             </p>
           </div>
@@ -185,15 +203,15 @@ function LeaveCard({
 
       <dl className="mt-4 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-3">
         <div>
-          <dt className="text-xs text-white/55">Type</dt>
+          <dt className="text-xs text-[var(--text-3)]">Type</dt>
           <dd className="mt-0.5 font-medium text-white">{leave.typeLabel}</dd>
         </div>
         <div>
-          <dt className="text-xs text-white/55">Days</dt>
+          <dt className="text-xs text-[var(--text-3)]">Days</dt>
           <dd className="mt-0.5 font-medium text-white">{leaveRange(leave.startDate, leave.endDate, leave.days)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-white/55">Asked</dt>
+          <dt className="text-xs text-[var(--text-3)]">Asked</dt>
           <dd className="mt-0.5 text-white/85">
             {leave.requestedAt ? formatDate(leave.requestedAt, 'MMM d, h:mm a') : '—'}
           </dd>
@@ -201,7 +219,7 @@ function LeaveCard({
       </dl>
 
       {leave.reason && (
-        <p className="mt-3 rounded-panel bg-white/5 px-3 py-2 text-sm text-white/85">“{leave.reason}”</p>
+        <p className="mt-3 rounded-panel bg-[var(--surface-2)] px-3 py-2 text-sm text-white/85">“{leave.reason}”</p>
       )}
 
       {leave.status === 'pending' && (leave.shiftsAffected > 0 || alsoOff.length > 0) && (

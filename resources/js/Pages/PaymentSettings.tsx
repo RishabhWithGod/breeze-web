@@ -31,10 +31,12 @@ import {
   ButtonLink,
   EmptyState,
   Pagination,
+  Panel as BasePanel,
   SelectField,
   StatusChip,
   Switch,
   Table,
+  UnderlineTabs,
 } from '@/components/common'
 import { AddPaymentMethodModal, BuySeatsModal, ManageProcessorsModal, ProcessorMark } from '@/components/payments'
 import { appLayout, CompanyMark, PageHeader, PageTransition } from '@/components/layout'
@@ -195,38 +197,11 @@ export default function PaymentSettings({
       </AnimatePresence>
 
       {/* ===================================================== Tabs ========== */}
-      <nav
-        aria-label="Settings sections"
-        className="mb-5 grid grid-cols-2 overflow-hidden rounded-card border border-hairline glass sm:grid-cols-3"
-      >
-        {TABS.map((item) => {
-          const active = item.key === tab
-          const classes = cn(
-            'relative flex items-center justify-center gap-3 px-4 py-4 text-md font-semibold transition-colors',
-            active ? 'text-white' : 'text-white/85 hover:bg-white/6 hover:text-white',
-          )
-          const content = (
-            <>
-              <item.icon size={20} aria-hidden />
-              {item.label}
-              {active && <span className="absolute inset-x-0 bottom-0 h-1 rounded-full bg-brand" aria-hidden />}
-            </>
-          )
-
-          return (
-            <button
-              key={item.key}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => selectTab(item.key)}
-              className={classes}
-            >
-              {content}
-            </button>
-          )
-        })}
-      </nav>
+      <UnderlineTabs
+        tabs={TABS.map((item) => ({ key: item.key, label: item.label }))}
+        value={tab}
+        onChange={selectTab}
+      />
 
       {tab === 'company' && (
         <div className="space-y-5">
@@ -245,7 +220,7 @@ export default function PaymentSettings({
           {/* ================================================ Subscription ======= */}
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             <div className="min-w-0 space-y-5">
-              <section className="rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-surface-glass to-surface-glass p-5 shadow-glow sm:p-6">
+              <section className="glass relative overflow-hidden rounded-card border border-brand/35 p-[22px] sm:p-6 before:pointer-events-none before:absolute before:-top-16 before:-right-16 before:size-56 before:rounded-full before:bg-[radial-gradient(circle,var(--glow-a),transparent_70%)] before:content-['']">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-sm text-white/85">Current Plan</p>
@@ -339,7 +314,7 @@ export default function PaymentSettings({
                         className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3"
                       >
                         <span className="text-xs text-white/90">{item.label}</span>
-                        <span className="h-2 overflow-hidden rounded-full bg-white/12" aria-hidden>
+                        <span className="h-2 overflow-hidden rounded-full bg-[var(--surface-3)]" aria-hidden>
                           <span
                             className={cn(
                               'block h-full rounded-full',
@@ -375,7 +350,7 @@ export default function PaymentSettings({
           <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             <div className="flex min-w-0 flex-col gap-5">
               {/* ============================================== The connection ==== */}
-              <section className="flex flex-1 flex-col rounded-card border border-brand/50 bg-linear-to-br from-brand/10 via-surface-glass to-surface-glass p-5 shadow-glow sm:p-6">
+              <section className="flex flex-1 flex-col glass relative overflow-hidden rounded-card border border-brand/35 p-[22px] sm:p-6 before:pointer-events-none before:absolute before:-top-16 before:-right-16 before:size-56 before:rounded-full before:bg-[radial-gradient(circle,var(--glow-a),transparent_70%)] before:content-['']">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-sm text-white/85">Payment processor</p>
@@ -459,7 +434,7 @@ export default function PaymentSettings({
             <div className="mt-5">
               <Panel icon={CreditCard} title="Subscription Payment">
                 <div className="grid gap-5 p-5 md:grid-cols-2">
-                  <div className="flex items-center gap-4 rounded-panel border border-hairline bg-white/4 p-4">
+                  <div className="flex items-center gap-4 rounded-panel border border-hairline bg-[var(--surface-2)] p-4">
                     <span className="grid h-11 w-16 shrink-0 place-items-center rounded-panel bg-[#fff] text-sm font-extrabold tracking-wide text-blue-800 uppercase italic">
                       {subscriptionPayment.card.brand}
                     </span>
@@ -735,7 +710,7 @@ function PreferencesTab({ billingSettings }: { billingSettings: BillingSettings 
 /** A fill colour per usage bar, in the order the figures are listed. */
 const USAGE_FILL = ['bg-status-success', 'bg-brand', 'bg-status-purple', 'bg-status-warning'] as const
 
-/** A card with a titled header bar over its body — the shape every block on this screen takes. */
+/** A card with a titled header over its body — the shape every block on this screen takes. */
 function Panel({
   icon: Icon,
   title,
@@ -751,19 +726,21 @@ function Panel({
   children: React.ReactNode
 }) {
   return (
-    <section
-      id={id}
-      className={cn(
-        'scroll-mt-24 overflow-hidden rounded-card border border-hairline glass',
-        grow && 'flex flex-1 flex-col',
-      )}
+    <BasePanel
+      {...(id ? { id } : {})}
+      pad={false}
+      className={cn('scroll-mt-24 overflow-hidden', grow ? 'flex-1' : 'h-auto')}
+      title={
+        <span className="flex items-center gap-2.5">
+          <span className="grid size-8 place-items-center rounded-lg bg-[var(--brand-bg)] text-brand">
+            <Icon size={16} aria-hidden />
+          </span>
+          {title}
+        </span>
+      }
     >
-      <header className="flex items-center gap-3 border-b border-hairline bg-linear-to-b from-ocean-700/50 to-ocean-700/10 px-4 py-3">
-        <Icon size={18} aria-hidden className="text-white/90" />
-        <h2 className="text-md font-semibold text-white">{title}</h2>
-      </header>
       {children}
-    </section>
+    </BasePanel>
   )
 }
 
@@ -771,8 +748,8 @@ function Panel({
 function Row({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
-      <dt className="flex items-center gap-2.5 text-sm text-white/85">
-        <Icon size={17} aria-hidden className="text-white/85" />
+      <dt className="flex items-center gap-2.5 text-sm text-[var(--text-2)]">
+        <Icon size={17} aria-hidden className="text-[var(--text-3)]" />
         {label}
       </dt>
       <dd className="text-right text-sm font-semibold text-white">{value}</dd>

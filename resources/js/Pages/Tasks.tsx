@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { Head, Link, router } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ListChecks, PencilLine, Plus, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { CalendarDays, Clock, ListChecks, PencilLine, Plus, SlidersHorizontal, Trash2 } from 'lucide-react'
 import {
   Button,
   ButtonLink,
   Card,
-  cardAccentAt,
   ConfirmDialog,
   EmptyState,
   IconButton,
+  Avatar,
+  Badge,
   Pagination,
+  Seg,
   SearchBox,
   SelectField,
   StatusChip,
@@ -76,6 +78,8 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
   const [search, setSearch] = useState(filters.search)
   const [removing, setRemoving] = useState<TaskRow | null>(null)
   const filterBar = useDisclosure()
+  // The Breeze app opens on the board; the grouped list is one click away. Display only.
+  const [view, setView] = useState<'board' | 'list'>('board')
 
   /** How many filters are actually narrowing the list, for the button's badge. */
   const activeFilters = [filters.search !== '', filters.status !== 'all', filters.foreman !== 'all']
@@ -311,6 +315,23 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
         )}
       </AnimatePresence>
 
+      {groups.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <Seg
+            ariaLabel="Task view"
+            options={[
+              { key: 'board', label: 'Board' },
+              { key: 'list', label: 'List' },
+            ]}
+            value={view}
+            onChange={setView}
+          />
+          <span className="ml-auto text-[13px] text-[var(--text-3)]">
+            {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
+          </span>
+        </div>
+      )}
+
       {groups.length === 0 ? (
         <Card padding="lg">
           {/*
@@ -350,13 +371,15 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
                 : {})}
           />
         </Card>
+      ) : view === 'board' ? (
+        <TaskBoard groups={groups} canEdit={canEdit} />
       ) : (
         <div className="flex flex-col gap-4">
-          {groups.map((group, index) => {
+          {groups.map((group) => {
             const totalHours = plannedHours(group.tasks)
 
             return (
-              <Card key={group.id} padding="lg" className={cardAccentAt(index)}>
+              <Card key={group.id} padding="lg">
                 <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hairline pb-3">
                   <div className="min-w-0">
                     <Link
@@ -453,3 +476,85 @@ export default function Tasks({ jobs, filters, statuses, foremen, canEdit }: Tas
 }
 
 Tasks.layout = appLayout
+
+/** Lanes left to right, each with its own top-edge colour (the Breeze app's board). Delayed/blocked work sits with In progress, cancelled with Done. */
+const LANES: readonly { readonly statuses: readonly TaskStatus[]; readonly label: string; readonly lane: string }[] = [
+  { statuses: ['pending', 'ready'], label: 'To do', lane: 'bg-[#94a3b8]' },
+  { statuses: ['in-progress', 'delayed', 'blocked'], label: 'In progress', lane: 'bg-linear-to-r from-[#2f5bff] to-[#7c9bff]' },
+  // Hidden for now — blocked work shows under "In progress", cancelled under "Done".
+  // { statuses: ['blocked'], label: 'Blocked', lane: 'bg-linear-to-r from-[#dc2626] to-[#f87171]' },
+  { statuses: ['completed', 'cancelled'], label: 'Done', lane: 'bg-linear-to-r from-[#16a34a] to-[#4ade80]' },
+]
+
+/**
+ * The same tasks as the list, as cards in the lane of their status. Read-only: a card opens the
+ * task to edit (or the job when it can't be edited); nothing here changes a task.
+ */
+function TaskBoard({ groups, canEdit }: { groups: readonly JobGroup[]; canEdit: boolean }) {
+  const all = groups.flatMap((group) => group.tasks.map((task) => ({ task, group })))
+
+  return (
+    <div className="grid grid-cols-[repeat(3,minmax(240px,1fr))] gap-3 overflow-x-auto pb-1">
+      {LANES.map(({ statuses, label, lane }) => {
+        const items = all.filter(({ task }) => statuses.includes(task.status))
+
+        return (
+          <section
+            key={label}
+            aria-label={label}
+            className="relative min-h-52 overflow-hidden rounded-[18px] border border-hairline bg-[var(--surface-2)]/70 p-3"
+          >
+            <span aria-hidden className={`absolute inset-x-0 top-0 h-[3px] ${lane}`} />
+            <h3 className="mx-1 mt-1 mb-3 flex items-center justify-between text-xs font-semibold tracking-[0.06em] text-[var(--text-2)] uppercase">
+              <Badge tone="neutral" size="sm">
+                {label}
+              </Badge>
+              <span>{items.length}</span>
+            </h3>
+
+            <div className="grid gap-2">
+              {items.map(({ task, group }) => {
+                const editable = canEdit && task.status !== 'completed'
+                const person = task.foreman ?? task.supervisor
+                const late =
+                  task.dueOn !== null &&
+                  task.status !== 'completed' &&
+                  new Date(`${task.dueOn}T23:59:59`) < new Date()
+
+                return (
+                  <Link
+                    key={task.id}
+                    href={editable ? routeTo.taskEdit(task.id) : routeTo.jobFrom(group.id, 'tasks')}
+                    className="block rounded-xl border border-hairline bg-surface-glass px-3.5 py-3 shadow-[var(--card-shadow)] transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-0.5 hover:border-brand/45 hover:shadow-[0_16px_36px_-20px_rgb(47_91_255/0.5)]"
+                  >
+                    <p className="text-[13.5px] font-semibold text-white">{task.title}</p>
+                    <p className="mt-0.5 truncate text-[13px] text-[var(--text-3)]">{group.name}</p>
+                    <div className="mt-2.5 flex items-center gap-3 text-xs text-[var(--text-3)]">
+                      {task.dueOn && (
+                        <span className={`flex items-center gap-1 ${late ? 'text-status-danger' : ''}`}>
+                          <CalendarDays size={12} aria-hidden />
+                          {formatCalendarDate(task.dueOn)}
+                        </span>
+                      )}
+                      {task.estimatedHours !== null && (
+                        <span className="flex items-center gap-1">
+                          <Clock size={12} aria-hidden />
+                          {formatHours(task.estimatedHours)}
+                        </span>
+                      )}
+                      <span className="ml-auto">
+                        {person ? <Avatar person={{ name: person }} /> : <span>Unassigned</span>}
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
+
+              {items.length === 0 && <p className="p-2 text-center text-[13px] text-[var(--text-3)]">Nothing here.</p>}
+            </div>
+          </section>
+        )
+      })}
+    </div>
+  )
+}

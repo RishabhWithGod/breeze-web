@@ -1,5 +1,6 @@
 export * from './AddEstimateLineCard'
 export * from './AddendumSelectionList'
+export * from './BidBoard'
 export * from './EstimateCard'
 export * from './estimateLineDraft'
 export * from './EstimateItemsTable'

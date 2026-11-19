@@ -8,6 +8,8 @@ import {
   BarChart3,
   Users,
   ListChecks,
+  ShieldCheck,
+  Settings,
   Zap,
   ScanLine,
   HardHat,
@@ -40,17 +42,6 @@ const NAV_ITEMS: readonly NavItem[] = [
     permission: 'clients.view',
     children: [
       { label: 'Projects', href: ROUTES.projects, icon: FolderKanban, permission: 'projects.view' },
-      // The people who run the work, and technicians who signed up from the
-      // mobile app — a pending-approval section at the top of this screen.
-      { label: 'Teams', href: ROUTES.teams, icon: Users, permission: 'crew.view' },
-      // Time off the crew asked for in the field app — approved or turned down here.
-      {
-        label: 'Leave',
-        href: ROUTES.leave,
-        icon: CalendarOff,
-        permission: 'crew.view',
-        roles: ['project manager', 'admin', 'owner'],
-      },
     ],
   },
   // Lands on the takeoff history, matching the reference product.
@@ -117,6 +108,29 @@ const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Time Tracking', href: ROUTES.timeTracking, icon: Clock, permission: 'time_tracking.view' },
   { label: 'Billing', href: ROUTES.billing, icon: Receipt, permission: 'billing.view' },
   { label: 'Analytics', href: ROUTES.jobCosting, icon: BarChart3 },
+  /*
+   * The company itself — its people, what each role may do, and its own account. These sat under
+   * Clients (Teams, Leave) or in the profile menu (Settings); they are grouped as "Company" in the rail,
+   * as in the Breeze app.
+   */
+  {
+    label: 'Teams',
+    href: ROUTES.teams,
+    icon: Users,
+    permission: 'crew.view',
+    children: [
+      // Time off the crew asked for in the field app — approved or turned down here.
+      {
+        label: 'Leave',
+        href: ROUTES.leave,
+        icon: CalendarOff,
+        permission: 'crew.view',
+        roles: ['project manager', 'admin', 'owner'],
+      },
+    ],
+  },
+  { label: 'Roles & Permissions', href: ROUTES.rolesPermissions, icon: ShieldCheck, permission: 'admin.manage_roles' },
+  { label: 'Settings', href: ROUTES.settings, icon: Settings },
 ]
 
 export interface SidebarGroup {
@@ -136,6 +150,8 @@ const GROUPED: readonly SidebarGroup[] = [
   { label: 'Field operations', items: pick('Jobs', 'Time Tracking') },
   { label: 'Finance', items: pick('Billing', 'Analytics') },
   { label: 'Resources', items: pick('Electrical Tools') },
+  // The company's own people and account.
+  { label: 'Company', items: pick('Teams', 'Roles & Permissions', 'Settings') },
 ]
 
 /**

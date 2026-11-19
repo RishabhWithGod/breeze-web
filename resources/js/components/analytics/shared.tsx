@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
+import { Stat } from '@/components/common/Stat'
 import { cn } from '@/utils'
 
 export function StatBlock({
@@ -17,30 +18,32 @@ export function StatBlock({
   noteTone?: 'success' | 'danger' | 'neutral'
   onClick?: () => void
 }) {
-  const Wrapper = onClick ? 'button' : 'div'
+  // The app's stat tile: label, a large figure, and the detail / note lines beneath it.
+  const delta =
+    detail || note ? (
+      <>
+        {detail && <span className="block">{detail}</span>}
+        {note && (
+          <span
+            className={cn(
+              'block font-medium',
+              noteTone === 'danger' ? 'text-status-danger' : noteTone === 'success' ? 'text-status-success' : '',
+            )}
+          >
+            {note}
+          </span>
+        )}
+      </>
+    ) : undefined
 
-  return (
-    <Wrapper
-      {...(onClick ? { type: 'button' as const, onClick } : {})}
-      className={cn(
-        'rounded-panel border border-hairline bg-white/4 p-4 text-left',
-        onClick && 'transition-colors hover:bg-white/8',
-      )}
-    >
-      <p className="text-2xs tracking-wide text-white/70 uppercase">{label}</p>
-      <p className="mt-1 text-xl font-bold text-white">{value}</p>
-      {detail && <p className="mt-0.5 text-sm text-white/75">{detail}</p>}
-      {note && (
-        <p
-          className={cn(
-            'mt-1 text-sm font-medium',
-            noteTone === 'danger' ? 'text-status-danger' : noteTone === 'success' ? 'text-status-success' : 'text-white/70',
-          )}
-        >
-          {note}
-        </p>
-      )}
-    </Wrapper>
+  const tile = <Stat label={label} value={value} {...(delta ? { delta } : {})} className="h-full" />
+
+  return onClick ? (
+    <button type="button" onClick={onClick} className="block h-full text-left transition-transform hover:-translate-y-0.5">
+      {tile}
+    </button>
+  ) : (
+    <div className="h-full">{tile}</div>
   )
 }
 

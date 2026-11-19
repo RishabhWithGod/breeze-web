@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react'
+import { Link, router } from '@inertiajs/react'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { Button, ButtonLink, Card, EmptyState, ProgressBar, SectionHeading, noticeClasses } from '@/components/common'
 import { ComparisonBarChart, DonutChart } from '@/components/jobCosting'
@@ -105,7 +105,7 @@ export function OverviewTab({ props, onTab }: { props: JobCostingDashboardProps;
       {/* ================================================ Trend ============== */}
       {trend && trend.length > 0 && canViewCosts && (
         <Card accent="brand" padding="lg" className="mb-6">
-          <SectionHeading as="h3" title="Monthly Billing, Collections & Cost" />
+          <SectionHeading className="mb-4" as="h3" title="Monthly Billing, Collections & Cost" />
           <MonthlyTrendChart points={trend} />
           <p className="mt-3 text-xs text-white/60">Cost is labor from logged time at the project rate plus manually logged costs.</p>
         </Card>
@@ -115,7 +115,7 @@ export function OverviewTab({ props, onTab }: { props: JobCostingDashboardProps;
       <div className="grid gap-6 xl:grid-cols-2">
         {showLabor && (
           <Card accent="brand" padding="lg">
-            <SectionHeading as="h3" title="Estimated vs Actual Labor" />
+            <SectionHeading className="mb-4" as="h3" title="Estimated vs Actual Labor" />
             {canViewCosts && laborTotals.estimatedCost !== null && laborTotals.actualCost !== null ? (
               <>
                 <ComparisonBarChart
@@ -150,7 +150,7 @@ export function OverviewTab({ props, onTab }: { props: JobCostingDashboardProps;
 
         {showMaterials && (
           <Card accent="success" padding="lg">
-            <SectionHeading as="h3" title="Materials: Estimated vs Actual" />
+            <SectionHeading className="mb-4" as="h3" title="Materials: Estimated vs Actual" />
             {!canViewCosts ? (
               <EmptyState title="Cost figures are restricted" description="Only a Client Manager, Admin or Owner can see material cost totals." />
             ) : materialTotals.estimatedCost === 0 && materialTotals.actualCost === 0 ? (
@@ -184,7 +184,7 @@ export function OverviewTab({ props, onTab }: { props: JobCostingDashboardProps;
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         {canViewCosts && costBreakdown.length > 0 && (
           <Card accent="info" padding="lg">
-            <SectionHeading as="h3" title="Cost by Category" />
+            <SectionHeading className="mb-4" as="h3" title="Cost by Category" />
             <ul className="flex flex-col gap-4">
               {costBreakdown.map((category) => {
                 const highlighted = costType === category.key
@@ -210,7 +210,7 @@ export function OverviewTab({ props, onTab }: { props: JobCostingDashboardProps;
         )}
 
         <Card accent="warning" padding="lg">
-          <SectionHeading as="h3" title="Profit/Loss" />
+          <SectionHeading className="mb-4" as="h3" title="Profit/Loss" />
           {canViewCosts && profitLoss.revenue !== null && profitLoss.profit !== null ? (
             <>
               <ComparisonBarChart
@@ -273,7 +273,7 @@ export function OverviewTab({ props, onTab }: { props: JobCostingDashboardProps;
       {/* ================================================ Status + Rankings === */}
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <Card accent="brand" padding="lg">
-          <SectionHeading as="h3" title="Jobs by Status" />
+          <SectionHeading className="mb-4" as="h3" title="Jobs by Status" />
           {jobsByStatus.length === 0 ? (
             <EmptyState title="No jobs in this view" description="Adjust the filters to see jobs by status." />
           ) : (
@@ -319,7 +319,7 @@ function RankingCard({
 }) {
   return (
     <Card accent={accent} padding="lg">
-      <SectionHeading as="h3" title={title} />
+      <SectionHeading className="mb-4" as="h3" title={title} />
       {rows.length === 0 ? (
         <EmptyState title="No costed jobs yet" description="Jobs with revenue and cost data will rank here." />
       ) : (
@@ -329,7 +329,10 @@ function RankingCard({
             const progress = showFinancials && row.revenue! > 0 ? Math.min(100, Math.max(0, (row.profit! / row.revenue!) * 100)) : 0
             return (
               <li key={row.jobId}>
-                <ButtonLink href={routeTo.jobCosting(row.jobId)} variant="ghost" className="block w-full p-0 text-left hover:bg-transparent">
+                <Link
+                  href={routeTo.jobCosting(row.jobId)}
+                  className="-m-2 block rounded-lg p-2 text-left transition-colors hover:bg-[var(--surface-2)]"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-white">{row.jobName}</p>
@@ -343,7 +346,7 @@ function RankingCard({
                       <span className="shrink-0 text-sm font-medium text-white/90">{formatCurrency(row.profit!, 0)}</span>
                     </div>
                   )}
-                </ButtonLink>
+                </Link>
               </li>
             )
           })}

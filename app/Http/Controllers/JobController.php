@@ -102,7 +102,11 @@ class JobController extends Controller
 
         // The crew on each job: everyone on any of its tasks, counted once.
         $crew = JobCrew::countsFor($jobs->pluck('id')->all());
-        $jobs->getCollection()->each(fn (Job $job) => $job->setAttribute('crew_count', $crew[$job->id] ?? 0));
+        $people = JobCrew::peopleFor($jobs->pluck('id')->all());
+        $jobs->getCollection()->each(function (Job $job) use ($crew, $people) {
+            $job->setAttribute('crew_count', $crew[$job->id] ?? 0);
+            $job->setAttribute('crew_people', $people[$job->id] ?? []);
+        });
 
         return Inertia::render('Jobs', [
             'jobs' => JobResource::collection($jobs),

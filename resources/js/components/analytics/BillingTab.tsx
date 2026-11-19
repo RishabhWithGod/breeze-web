@@ -72,7 +72,7 @@ export function BillingTab({
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card accent="warning" padding="lg">
-          <SectionHeading as="h3" title="Invoice Aging" />
+          <SectionHeading className="mb-4" as="h3" title="Invoice Aging" />
           <ComparisonBarChart
             rows={[
               { label: 'Current / not due', value: report.aging.current, barClassName: 'bg-status-success' },
@@ -85,19 +85,19 @@ export function BillingTab({
         </Card>
 
         <Card accent="brand" padding="lg">
-          <SectionHeading as="h3" title="Billed vs Collected by Month" />
+          <SectionHeading className="mb-4" as="h3" title="Billed vs Collected by Month" />
           {trend && trend.length > 0 ? <MonthlyTrendChart points={trend} /> : <EmptyState title="No history yet" description="Invoices will chart here by month." />}
         </Card>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
         <Card accent="neutral" padding="lg" className="xl:col-span-2">
-          <SectionHeading as="h3" title="Largest Outstanding Invoices" />
+          <SectionHeading className="mb-4" as="h3" title="Largest Outstanding Invoices" />
           <SortableTable columns={invoiceColumns} rows={report.invoices} getRowId={(i) => i.id} initialSort={{ key: 'balance', dir: 'desc' }} emptyText="No outstanding invoices." />
         </Card>
 
         <Card accent="info" padding="lg">
-          <SectionHeading as="h3" title="Who Owes the Most" />
+          <SectionHeading className="mb-4" as="h3" title="Who Owes the Most" />
           {report.byClient.length === 0 ? (
             <EmptyState title="All paid up" description="No client has an outstanding balance." />
           ) : (

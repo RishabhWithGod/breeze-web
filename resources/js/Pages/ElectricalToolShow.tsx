@@ -1,6 +1,6 @@
 import { Head } from '@inertiajs/react'
 import { ArrowLeft } from 'lucide-react'
-import { Badge, ButtonLink, Card, CardHeader, IconBubble, Table } from '@/components/common'
+import { Badge, ButtonLink, IconBubble, Panel, Stat, Table } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { findElectricalTool } from '@/constants'
 import { ROUTES } from '@/constants'
@@ -63,16 +63,23 @@ const MEASUREMENT_ROWS: readonly ConversionRow[] = [
   { quantity: 'Wire Pull', input: '250 ft', output: '76.2 m' },
 ]
 
+/** The inputs as a list, and the last row — the answer — as a tile of its own. */
 function StatList({ rows }: { rows: readonly StatRow[] }) {
+  const inputs = rows.slice(0, -1)
+  const result = rows[rows.length - 1]
+
   return (
-    <dl className="space-y-3">
-      {rows.map((row) => (
-        <div key={row.label} className="flex items-center justify-between gap-4 border-b border-hairline pb-3 last:border-0 last:pb-0">
-          <dt className="text-md text-white/80">{row.label}</dt>
-          <dd className="text-md font-semibold text-white">{row.value}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <dl className="space-y-3">
+        {inputs.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-4 border-b border-hairline pb-3 last:border-0 last:pb-0">
+            <dt className="text-md text-[var(--text-2)]">{row.label}</dt>
+            <dd className="text-md font-semibold text-white">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {result && <Stat label={result.label} value={result.value} className="h-full" />}
+    </div>
   )
 }
 
@@ -121,22 +128,22 @@ export default function ElectricalToolShow({ tool }: ElectricalToolShowProps) {
         }
       />
 
-      <Card padding="lg">
-        <CardHeader
-          title="Sample Calculation"
-          subtitle="An illustrative example — enter your own project's values once this tool is fully connected."
-          actions={<IconBubble icon={definition.icon} tone="brand" />}
-        />
-
+      <Panel
+        title="Sample Calculation"
+        sub="An illustrative example — enter your own project's values once this tool is fully connected."
+        actions={<IconBubble icon={definition.icon} tone="brand" />}
+        pad={tool === 'circuit-colors' || tool === 'measurement-calculator' ? false : true}
+        className="h-auto"
+      >
         {tool === 'circuit-colors' && (
-          <Table columns={circuitColumns} rows={CIRCUIT_COLOR_ROWS} getRowId={(row) => row.circuit} />
+          <Table variant="lined" columns={circuitColumns} rows={CIRCUIT_COLOR_ROWS} getRowId={(row) => row.circuit} />
         )}
         {tool === 'conduit-fill' && <StatList rows={CONDUIT_FILL_STATS} />}
         {tool === 'voltage-drop' && <StatList rows={VOLTAGE_DROP_STATS} />}
         {tool === 'measurement-calculator' && (
-          <Table columns={conversionColumns} rows={MEASUREMENT_ROWS} getRowId={(row) => row.quantity} />
+          <Table variant="lined" columns={conversionColumns} rows={MEASUREMENT_ROWS} getRowId={(row) => row.quantity} />
         )}
-      </Card>
+      </Panel>
     </PageTransition>
   )
 }

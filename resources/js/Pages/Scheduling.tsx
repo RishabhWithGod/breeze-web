@@ -10,7 +10,7 @@ import {
   Search,
   Clock,
 } from 'lucide-react'
-import { Alert, EmptyState } from '@/components/common'
+import { Alert, EmptyState, Seg } from '@/components/common'
 import { appLayout, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type {
@@ -33,8 +33,8 @@ export interface SchedulingProps {
 }
 
 const VIEWS: readonly { value: CalendarView; label: string }[] = [
-  { value: 'day', label: 'Day' },
   { value: 'week', label: 'Week' },
+  { value: 'day', label: 'Day' },
   { value: 'month', label: 'Month' },
 ]
 
@@ -167,18 +167,24 @@ export default function Scheduling({ anchor, today, board }: SchedulingProps) {
       {/* ===================================================== Toolbar ========= */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-card border border-hairline glass px-4 py-3">
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => goTo({ date: today })}
-            className="rounded-panel border border-hairline-strong bg-white/8 px-5 py-2.5 text-md font-semibold text-white transition-colors hover:bg-white/15"
-          >
-            Today
-          </button>
-          <div className="flex items-center gap-1.5">
+          <Seg
+            ariaLabel="Calendar view"
+            options={VIEWS.map((option) => ({ key: option.value, label: option.label }))}
+            value={view}
+            onChange={(next) => goTo({ view: next })}
+          />
+          <div className="flex items-center gap-1">
             <NavButton label={`Previous ${view}`} onClick={() => step(-1)} icon={ChevronLeft} />
+            <button
+              type="button"
+              onClick={() => goTo({ date: today })}
+              className="h-9 rounded-[10px] border border-hairline-strong bg-surface-glass px-3.5 text-[13px] font-semibold text-white transition-colors hover:border-brand/45"
+            >
+              Today
+            </button>
             <NavButton label={`Next ${view}`} onClick={() => step(1)} icon={ChevronRight} />
           </div>
-          <h2 className="ml-2 text-lg font-semibold text-white">{board.label}</h2>
+          <h2 className="ml-1 font-display text-lg font-semibold text-white">{board.label}</h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -197,7 +203,7 @@ export default function Scheduling({ anchor, today, board }: SchedulingProps) {
             aria-label="Crew"
             value={crewFilter}
             onChange={(event) => setCrewFilter(event.target.value)}
-            className="rounded-panel border border-hairline-strong bg-white/8 px-3 py-2.5 text-md text-white focus:border-brand focus:outline-none"
+            className="h-9 rounded-[10px] border border-hairline-strong bg-surface-glass px-3 text-[13px] text-white focus:border-brand focus:outline-none"
           >
             <option value="all" className="bg-surface-glass">All crews</option>
             {board.crews.map((crew) => (
@@ -207,28 +213,6 @@ export default function Scheduling({ anchor, today, board }: SchedulingProps) {
             ))}
           </select>
 
-        <div
-          className="inline-flex overflow-hidden rounded-panel border border-hairline-strong"
-          role="group"
-          aria-label="Calendar view"
-        >
-          {VIEWS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={view === option.value}
-              onClick={() => goTo({ view: option.value })}
-              className={cn(
-                'px-5 py-2.5 text-md font-semibold transition-colors',
-                view === option.value
-                  ? 'bg-blue-600 text-brand-ink'
-                  : 'bg-white/6 text-white/85 hover:bg-white/12',
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
         </div>
       </div>
 
@@ -270,9 +254,9 @@ function NavButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="grid size-10 place-items-center rounded-panel border border-hairline-strong bg-white/8 text-white transition-colors hover:bg-white/15"
+      className="grid size-9 place-items-center rounded-[10px] border border-hairline-strong bg-surface-glass text-white transition-colors hover:border-brand/45"
     >
-      <Icon size={18} aria-hidden />
+      <Icon size={16} aria-hidden />
     </button>
   )
 }
@@ -450,16 +434,26 @@ function MonthChip({ block, crewName }: { block: BoardBlock; crewName: string | 
           : block.state === 'in-progress'
             ? 'bg-cyan-400'
             : 'bg-blue-400'
+  const edge =
+    block.state === 'completed'
+      ? 'border-l-emerald-400'
+      : block.state === 'conflict'
+        ? 'border-l-red-400'
+        : block.state === 'attention'
+          ? 'border-l-amber-400'
+          : block.state === 'in-progress'
+            ? 'border-l-cyan-400'
+            : 'border-l-blue-400'
 
   return (
     <Link
       href={routeTo.jobFrom(block.jobId, 'scheduling-calendar')}
       title={`${block.name}${crewName ? ` · ${crewName}` : ''} — ${style.label}`}
-      className="flex items-center gap-1.5 rounded-sm bg-white/8 px-1.5 py-1 text-2xs leading-tight text-white transition-colors hover:bg-white/18"
+      className={cn('flex items-center gap-1.5 rounded-md border-l-[3px] bg-[var(--surface-3)] px-1.5 py-1 text-2xs leading-tight text-white transition-colors hover:bg-[var(--surface-2)]', edge)}
     >
-      <span className={cn('size-2 shrink-0 rounded-full', tone)} aria-hidden />
+      <span className={cn('hidden size-2 shrink-0 rounded-full', tone)} aria-hidden />
       <span className="truncate font-medium">{block.name}</span>
-      {crewName && <span className="ml-auto shrink-0 truncate text-white/60">{crewName}</span>}
+      {crewName && <span className="ml-auto max-w-[45%] shrink truncate text-white/60">{crewName}</span>}
     </Link>
   )
 }

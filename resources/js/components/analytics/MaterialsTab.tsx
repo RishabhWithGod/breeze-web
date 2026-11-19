@@ -87,7 +87,7 @@ export function MaterialsTab({
       <div className="grid gap-6 xl:grid-cols-2">
         {goods.map((category) => (
           <Card key={category.key} accent={category.key === 'material' ? 'success' : 'info'} padding="lg">
-            <SectionHeading as="h3" title={`${category.label}: Estimated vs Actual`} />
+            <SectionHeading className="mb-4" as="h3" title={`${category.label}: Estimated vs Actual`} />
             <ComparisonBarChart
               rows={[
                 { label: 'Estimated (at job creation)', value: category.estimated, barClassName: 'bg-brand-deep' },
@@ -103,7 +103,7 @@ export function MaterialsTab({
         ))}
       </div>
       <Card accent="neutral" padding="lg">
-        <SectionHeading as="h3" title="Materials & Equipment by Job" />
+        <SectionHeading className="mb-4" as="h3" title="Materials & Equipment by Job" />
         <SortableTable columns={columns} rows={rows} getRowId={(r) => r.jobId} initialSort={{ key: 'mVar', dir: 'desc' }} emptyText="No jobs in this view." />
       </Card>
     </div>

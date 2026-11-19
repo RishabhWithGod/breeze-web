@@ -1,6 +1,6 @@
-import { Link } from '@inertiajs/react'
+// import { Link } from '@inertiajs/react' // used again if the "View all" link is restored
 import { motion } from 'framer-motion'
-import { ArrowRight } from 'lucide-react'
+// import { ArrowRight } from 'lucide-react'
 import { MOTION } from '@/constants'
 import { FeedIcon } from '@/lib/icons'
 import type { DashboardSummary } from '@/types'
@@ -31,12 +31,7 @@ export function StatMedallionCard({ stat, index = 0, className }: StatMedallionC
         className,
       )}
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -top-10 -right-10 size-28 rounded-full bg-[radial-gradient(circle,rgb(62_230_255/0.16),transparent_70%)]"
-      />
-
-      <p className="relative flex items-center gap-1.5 font-mono text-[11.5px] tracking-[0.06em] text-[#a7b7d9] uppercase">
+      <p className="relative flex items-center gap-1.5 text-xs font-semibold tracking-[0.04em] text-[#a7b7d9] uppercase">
         <FeedIcon name={stat.icon} size={13} aria-hidden />
         <span className="leading-tight">{stat.label}</span>
       </p>
@@ -45,6 +40,7 @@ export function StatMedallionCard({ stat, index = 0, className }: StatMedallionC
         <AnimatedCounter value={stat.value} />
       </p>
 
+      {/* "View all …" link hidden for now.
       <Link
         href={stat.href}
         className="relative mt-1 inline-flex items-center gap-1 text-[13px] font-medium text-[#3ee6ff] transition-colors hover:text-white"
@@ -52,6 +48,7 @@ export function StatMedallionCard({ stat, index = 0, className }: StatMedallionC
         {stat.linkLabel}
         <ArrowRight size={13} aria-hidden className="transition-transform group-hover:translate-x-0.5" />
       </Link>
+      */}
     </motion.div>
   )
 }

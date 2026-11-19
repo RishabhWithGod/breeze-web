@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Alert, Button, Card } from '@/components/common'
+import { Alert, Avatar, Button, Card, Stat } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
 import type { SharedPageProps } from '@/types'
@@ -159,12 +159,12 @@ export default function RolesPermissions({ roles, modules, granted, defaults, cu
 
       <Card padding="md" className="mb-4">
         <div className="flex items-center gap-4">
-          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand/15 text-brand">
+          <span className="grid size-11 shrink-0 place-items-center rounded-[14px] bg-[var(--brand-bg)] text-brand">
             <ShieldCheck size={22} aria-hidden />
           </span>
           <div>
             <p className="font-semibold text-white">Role-based access control</p>
-            <p className="text-sm text-white/80">
+            <p className="text-sm text-[var(--text-2)]">
               Set permissions for each role. Changes apply to all team members with the selected role. A Project Manager
               always has full access.
             </p>
@@ -172,7 +172,24 @@ export default function RolesPermissions({ roles, modules, granted, defaults, cu
         </div>
       </Card>
 
-      <div className="overflow-x-auto rounded-panel border border-hairline glass">
+      <div className="mb-4 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {roles.map((role) => {
+          const total = modules.reduce((sum, module) => sum + module.permissions.length, 0)
+          const on = role.locked ? total : (grants[role.key]?.size ?? 0)
+
+          return (
+            <Stat
+              key={role.key}
+              label={role.label}
+              value={`${on} / ${total}`}
+              delta={role.locked ? 'Always full access' : 'permissions on'}
+              className="h-full"
+            />
+          )
+        })}
+      </div>
+
+      <div className="overflow-x-auto rounded-card border border-hairline glass">
         <table className="w-full min-w-[46rem] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-hairline">
@@ -181,11 +198,12 @@ export default function RolesPermissions({ roles, modules, granted, defaults, cu
               </th>
               {roles.map((role) => (
                 <th key={role.key} scope="col" className="border-l border-hairline px-3 py-4 text-center">
-                  <span className="mx-auto mb-2 grid size-10 place-items-center rounded-full bg-brand/25 text-xs font-bold text-white ring-1 ring-brand/40">
-                    {initials(role.label)}
-                  </span>
+                  <Avatar
+                    person={{ name: role.label, initials: initials(role.label) }}
+                    className="mx-auto mb-2 size-10 text-xs"
+                  />
                   <span className="block text-xs font-semibold text-white">{role.label}</span>
-                  {role.locked && <span className="block text-2xs font-normal text-white/60">Always full access</span>}
+                  {role.locked && <span className="block text-2xs font-normal text-[var(--text-3)]">Always full access</span>}
                 </th>
               ))}
             </tr>
@@ -197,7 +215,7 @@ export default function RolesPermissions({ roles, modules, granted, defaults, cu
 
             return (
               <tbody key={module.key}>
-                <tr className="border-y border-hairline bg-white/6">
+                <tr className="border-y border-hairline bg-[var(--surface-2)]">
                   <th scope="rowgroup" className="px-5 py-2 text-left">
                     <button
                       type="button"
@@ -205,7 +223,7 @@ export default function RolesPermissions({ roles, modules, granted, defaults, cu
                       onClick={() => toggleModule(module.key)}
                       className="flex w-full items-center gap-3 font-semibold text-white"
                     >
-                      <Icon size={17} aria-hidden className="text-white/80" />
+                      <Icon size={17} aria-hidden className="text-brand" />
                       {module.label}
                       <ChevronUp
                         size={16}
@@ -221,7 +239,7 @@ export default function RolesPermissions({ roles, modules, granted, defaults, cu
 
                 {!isCollapsed &&
                   module.permissions.map((permission) => (
-                    <tr key={permission.key} className="border-b border-hairline/60 hover:bg-white/4">
+                    <tr key={permission.key} className="border-b border-hairline/60 hover:bg-[var(--surface-2)]/60">
                       <th scope="row" className="py-2 pr-3 pl-14 text-left font-normal text-white/90">
                         {permission.label}
                       </th>
@@ -244,7 +262,7 @@ export default function RolesPermissions({ roles, modules, granted, defaults, cu
                                 aria-hidden
                                 className={cn(
                                   'relative inline-flex h-5 w-9 items-center rounded-full border transition-colors',
-                                  on ? 'border-brand bg-brand' : 'border-hairline-strong bg-white/12',
+                                  on ? 'border-brand bg-brand' : 'border-hairline-strong bg-[var(--surface-3)]',
                                   'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand',
                                 )}
                               >

@@ -66,6 +66,8 @@ export interface SharedPageProps {
    * its own screens. Null once it is finished, dismissed, or never started.
    */
   readonly takeoffFlow: ResumableTakeoff | null
+  /** What is waiting on this person — the counts on the sidebar rows. */
+  readonly sidebarCounts: { readonly takeoff: number; readonly changeOrders: number; readonly timeEntries: number } | null
   readonly flash: FlashMessages
   readonly errors: Record<string, string>
   /** Set by Inertia on every response. */

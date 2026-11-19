@@ -7,7 +7,7 @@ import {
   Button,
   Card,
   CardFooter,
-  CardHeader,
+  Panel,
   IconBubble,
   Switch,
 } from '@/components/common'
@@ -146,11 +146,10 @@ export default function SecuritySettings({
       </Card>
 
       {/* ==================================================== Authentication Method */}
-      <Card accent="success" className="mt-6">
-        <CardHeader title="Authentication Method" subtitle="Choose how you receive verification codes" />
+      <Panel className="mt-6 h-auto" title="Authentication Method" sub="Choose how you receive verification codes">
 
         <ul className="space-y-3">
-          <li className="flex items-center justify-between gap-3 rounded-panel border border-hairline bg-white/4 p-4">
+          <li className="flex items-center justify-between gap-3 rounded-panel border border-hairline bg-[var(--surface-2)] p-4">
             <button type="button" onClick={() => selectMethod('email')} className="flex flex-1 items-center gap-3 text-left">
               <RadioDot checked={twoFactor.method === 'email'} />
               <IconBubble icon={Mail} tone="brand" size="sm" />
@@ -165,16 +164,15 @@ export default function SecuritySettings({
           </li>
 
         </ul>
-      </Card>
+      </Panel>
 
       {/* ==================================================== Activity Notifications */}
-      <Card accent="warning" className="mt-6">
-        <CardHeader title="Activity Notifications" subtitle="Choose how you're notified about account activity" />
+      <Panel className="mt-6 h-auto" title="Activity Notifications" sub="Choose how you're notified about account activity">
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-md">
             <thead>
-              <tr className="text-sm text-white/60">
+              <tr className="text-sm text-[var(--text-3)]">
                 <th className="py-2 pr-4 font-medium">Event</th>
                 <th className="py-2 font-medium">Email</th>
               </tr>
@@ -195,7 +193,7 @@ export default function SecuritySettings({
             </tbody>
           </table>
         </div>
-      </Card>
+      </Panel>
 
       <EnableTwoFactorModal isOpen={enable2fa.isOpen} onClose={enable2fa.close} maskedEmail={maskedEmail} />
       <DisableTwoFactorModal isOpen={disable2fa.isOpen} onClose={disable2fa.close} />

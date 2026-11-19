@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Link, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -127,7 +127,15 @@ function SidebarLink({ item, isActive, onNavigate, nested = false, padEnd = fals
   return (
     <Link
       href={item.href}
-      onClick={onNavigate}
+      onClick={() => {
+        // Remembered for the screen this opens: it was reached from the rail, so it needs no "Back".
+        try {
+          sessionStorage.setItem('breeze.cameFromSidebar', item.href)
+        } catch {
+          /* storage blocked */
+        }
+        onNavigate?.()
+      }}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
         'nav-link',
@@ -158,17 +166,26 @@ function SidebarLink({ item, isActive, onNavigate, nested = false, padEnd = fals
       <span className="truncate">{item.label}</span>
       {item.badge ? (
         <span className="ml-auto grid min-w-6 place-items-center rounded-full bg-linear-to-br from-[#ffcf5a] to-[#f59e0b] px-1.5 py-0.5 text-2xs font-bold text-[#2a1700] shadow-[0_0_10px_rgb(245_158_11/0.35)]">
-          {item.badge}
+          {item.badge > 99 ? '99+' : item.badge}
         </span>
       ) : null}
     </Link>
   )
 }
 
+/** Which sidebar rows carry a count, and which shared figure feeds each. */
+const BADGE_KEY = { 'AI Takeoff': 'takeoff', 'Change Orders': 'changeOrders', 'Time Tracking': 'timeEntries' } as const
+
 function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname()
   const active = activeHref(pathname)
-  const { auth, permissions } = usePage<SharedPageProps>().props
+  const { auth, permissions, sidebarCounts } = usePage<SharedPageProps>().props
+  const withBadge = (item: NavItem): NavItem => {
+    const key = BADGE_KEY[item.label as keyof typeof BADGE_KEY]
+    const count = key && sidebarCounts ? sidebarCounts[key] : 0
+
+    return count > 0 ? { ...item, badge: count } : item
+  }
   const role = (auth.user?.role ?? '').trim().toLowerCase()
   const isOwner = auth.user?.isOwner === true
 
@@ -178,8 +195,8 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
     label: group.label,
     items: group.items.flatMap((item): readonly NavItem[] =>
       allowed(item, role, isOwner, permissions)
-        ? [item]
-        : (item.children ?? []).filter((child) => allowed(child, role, isOwner, permissions)),
+        ? [withBadge({ ...item, children: item.children?.map(withBadge) })]
+        : (item.children ?? []).filter((child) => allowed(child, role, isOwner, permissions)).map(withBadge),
     ),
   })).filter((group) => group.items.length > 0)
 
@@ -189,6 +206,17 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
   // holding the page you are on stays open whatever was asked of it, so the rail
   // never hides where you are.
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
+
+  // Whatever page is open, the rail scrolls itself to its row — on a long rail the current tab
+  // would otherwise sit out of view below the fold, and a page change (or a fresh mount) resets
+  // nothing in the user's favour. `nearest` leaves the rail alone when the row is already visible.
+  const navRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const row = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]')
+
+    row?.scrollIntoView({ block: 'nearest' })
+  }, [active])
 
   const toggle = (label: string) =>
     setFolded((current) => {
@@ -214,7 +242,7 @@ function SidebarNav({ onNavigate }: SidebarNavProps) {
     // `overscroll-contain` keeps a flick at the end of the list from scrolling
     // the page behind it; the bottom padding stops the last entry sitting hard
     // against the window edge once the rail is long enough to scroll.
-    <nav aria-label="Main navigation" className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain px-2.5 py-2 pb-6">
+    <nav ref={navRef} aria-label="Main navigation" className="sidebar-scroll flex-1 overflow-y-auto overscroll-contain px-2.5 py-2 pb-6">
       {visibleGroups.map((group, groupIndex) => (
         <div key={group.label ?? `group-${groupIndex}`} className="pt-2 pb-1">
           {group.label && (

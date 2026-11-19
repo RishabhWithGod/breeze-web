@@ -1,19 +1,14 @@
 import { useCallback, useState } from 'react'
 import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { LucideIcon } from 'lucide-react'
 import {
   ChevronDown,
-  DollarSign,
   Eye,
   Filter,
-  Hourglass,
   Plus,
   SearchX,
-  Timer,
   Trash2,
   Undo2,
-  Wallet,
 } from 'lucide-react'
 import {
   Alert,
@@ -23,13 +18,15 @@ import {
   EmptyState,
   MoreMenu,
   Pagination,
-  SearchBox,
   SelectField,
+  Stat,
   StatusChip,
   Table,
   TextInput,
+  ToolbarSearch,
+  UnderlineTabs,
+  Card,
 } from '@/components/common'
-import { MetricCard, type MetricTone } from '@/components/billing'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import {
   INVOICE_SORT_OPTIONS,
@@ -75,6 +72,8 @@ export interface InvoicesProps {
   clients: readonly string[]
   jobs: readonly InvoiceJobOption[]
   summary: InvoiceSummary
+  /** Per status tab, over everything the person owns. */
+  statusCounts: Record<string, number>
   can: InvoiceAbilities
 }
 
@@ -82,7 +81,7 @@ export interface InvoicesProps {
  * Billing Overview — every client invoice in one place, filterable, with the
  * key figures (outstanding, overdue, paid, days to pay) above it from real payment data.
  */
-export default function Invoices({ invoices, filters, clients, jobs, summary, can }: InvoicesProps) {
+export default function Invoices({ invoices, filters, clients, jobs, summary, statusCounts, can }: InvoicesProps) {
   const { can: permitted } = usePermissions()
   const { flash } = usePage<SharedPageProps>().props
 
@@ -255,18 +254,6 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
     },
   ]
 
-  const summaryCards: readonly { label: string; value: string; icon: LucideIcon; tone: MetricTone }[] = [
-    { label: 'Total Outstanding', value: formatCurrency(summary.totalOutstanding, 2), icon: Wallet, tone: 'cyan' },
-    { label: 'Overdue', value: formatCurrency(summary.overdue, 2), icon: Timer, tone: 'red' },
-    { label: 'Paid This Month', value: formatCurrency(summary.paidThisMonth, 2), icon: DollarSign, tone: 'green' },
-    {
-      label: 'Average Days to Pay',
-      value: summary.averageDaysToPay !== null ? `${summary.averageDaysToPay} days` : '0 days',
-      icon: Hourglass,
-      tone: 'cyan',
-    },
-  ]
-
   return (
     <PageTransition>
       <Head title="Invoices" />
@@ -275,43 +262,36 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
         title="Billing Overview"
         subtitle="View key metrics and invoice details across all clients and projects."
         breadcrumbs={[{ label: 'Billing' }, { label: 'Billing Overview' }]}
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              leftIcon={Filter}
+              rightIcon={ChevronDown}
+              aria-expanded={filterBar.isOpen}
+              onClick={filterBar.toggle}
+            >
+              Filters
+            </Button>
+            {can.create && permitted('billing.create') && (
+              <ButtonLink href={ROUTES.invoiceCreate} leftIcon={Plus}>
+                Create Invoice
+              </ButtonLink>
+            )}
+          </>
+        }
       />
 
       {/* ================================================== Key figures ====== */}
-      <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {summaryCards.map((card) => (
-          <MetricCard key={card.label} {...card} />
-        ))}
-      </div>
-
-      {/* ============================================ Search + actions ======= */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <SearchBox
-          id="invoice-search"
-          value={query}
-          onValueChange={setQuery}
-          onSearch={(value) => applyFilters({ search: value })}
-          placeholder="Search clients, projects, or invoice numbers..."
-          aria-label="Search invoices"
-          containerClassName="w-full max-w-xl"
+      <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <Stat label="Total Outstanding" value={formatCurrency(summary.totalOutstanding, 2)} className="h-full" />
+        <Stat label="Overdue" value={formatCurrency(summary.overdue, 2)} className="h-full" />
+        <Stat label="Paid This Month" value={formatCurrency(summary.paidThisMonth, 2)} className="h-full" />
+        <Stat
+          label="Average Days to Pay"
+          value={summary.averageDaysToPay !== null ? `${summary.averageDaysToPay} days` : '0 days'}
+          className="h-full"
         />
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="secondary"
-            leftIcon={Filter}
-            rightIcon={ChevronDown}
-            aria-expanded={filterBar.isOpen}
-            onClick={filterBar.toggle}
-          >
-            Filters
-          </Button>
-          {can.create && permitted('billing.create') && (
-            <ButtonLink href={ROUTES.invoiceCreate} variant="secondary" leftIcon={Plus}>
-              Create Invoice
-            </ButtonLink>
-          )}
-        </div>
       </div>
 
       <AnimatePresence initial={false}>
@@ -424,8 +404,35 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
       </AnimatePresence>
 
       {/* ================================================= Invoices table ====== */}
-      <div className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
-        <div className="p-5 sm:p-6">
+      <UnderlineTabs
+        tabs={[
+          { key: 'all', label: 'All', count: (statusCounts['draft'] ?? 0) + (statusCounts['sent'] ?? 0) + (statusCounts['paid'] ?? 0) },
+          { key: 'draft', label: 'Draft', count: statusCounts['draft'] ?? 0 },
+          { key: 'sent', label: 'Pending', count: statusCounts['sent'] ?? 0 },
+          { key: 'paid', label: 'Paid', count: statusCounts['paid'] ?? 0 },
+          { key: 'overdue', label: 'Overdue', count: statusCounts['overdue'] ?? 0 },
+        ]}
+        value={filters.status}
+        onChange={(next) => {
+          setDraft({ ...draft, status: next as InvoiceStatusFilter })
+          applyFilters({ status: next as InvoiceStatusFilter })
+        }}
+      />
+
+      <Card padding="none" className="overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
+          <ToolbarSearch
+            value={query}
+            onChange={setQuery}
+            onSubmit={(value) => applyFilters({ search: value })}
+            applied={filters.search !== ''}
+            placeholder="Search clients, projects, or invoice numbers"
+          />
+          <span className="ml-auto text-[13px] text-[var(--text-3)]">
+            {meta.total} {meta.total === 1 ? 'invoice' : 'invoices'}
+          </span>
+        </div>
+        <div className="p-4 sm:p-5">
           {rows.length === 0 ? (
             <EmptyState
               icon={SearchX}
@@ -438,19 +445,17 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
               }
             />
           ) : (
-            <>
-              <Table
-                dense
-                variant="lined"
-                headerVariant="plain"
-                className="text-sm [&_th]:text-sm [&_td]:text-sm"
-                columns={columns}
-                rows={rows}
-                getRowId={(invoice) => invoice.id}
-                onRowClick={(invoice) => router.visit(routeTo.invoice(invoice.id))}
-                caption="Client invoices"
-              />
-            </>
+            <Table
+              dense
+              variant="lined"
+              headerVariant="plain"
+              className="text-sm [&_th]:text-sm [&_td]:text-sm"
+              columns={columns}
+              rows={rows}
+              getRowId={(invoice) => invoice.id}
+              onRowClick={(invoice) => router.visit(routeTo.invoice(invoice.id))}
+              caption="Client invoices"
+            />
           )}
 
           <Pagination
@@ -463,7 +468,7 @@ export default function Invoices({ invoices, filters, clients, jobs, summary, ca
             summary={meta.total === 0 ? 'No invoices to display' : `Showing ${rows.length} of ${meta.total} invoices`}
           />
         </div>
-      </div>
+      </Card>
 
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}

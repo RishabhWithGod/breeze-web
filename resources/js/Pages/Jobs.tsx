@@ -13,21 +13,22 @@ import {
 } from 'lucide-react'
 import {
   Alert,
+  AvatarStack,
   Badge,
   Button,
   ButtonLink,
+  Card,
   Checkbox,
   ConfirmDialog,
   EmptyState,
   MoreMenu,
   Pagination,
-  SearchBox,
   SelectField,
-  StatusChip,
   Table,
+  ToolbarSearch,
 } from '@/components/common'
 import { JobCard } from '@/components/jobs'
-import { appLayout, PageTransition } from '@/components/layout'
+import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import {
   JOB_SORT_OPTIONS,
   JOB_STATUS_FILTERS,
@@ -48,7 +49,7 @@ import type {
   SharedPageProps,
   TableColumn,
 } from '@/types'
-import { JOB_STATUS_LABEL, JOB_STATUS_TONE, formatCalendarDate } from '@/utils'
+import { JOB_STATUS_LABEL, JOB_STATUS_TONE, formatCalendarDate, formatCurrency } from '@/utils'
 
 const STATUS_FILTER_OPTIONS = JOB_STATUS_FILTERS.map((option) => ({
   label: option.label,
@@ -263,10 +264,13 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
           >
             {job.name}
           </a>
-          <span className="mt-0.5 flex items-center gap-2 text-xs text-white/75">
-            {job.location ?? '—'}
+          <span
+            className="mt-0.5 flex items-center gap-2 text-[13px] text-[var(--text-3)]"
+            title={job.location ?? undefined}
+          >
+            {[job.projectName, job.client].filter(Boolean).join(' · ') || '—'}
             {job.isArchived && (
-              <Badge tone="warning" className="py-0 text-2xs">
+              <Badge tone="warning" size="sm">
                 Archived
               </Badge>
             )}
@@ -275,25 +279,10 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
       ),
     },
     {
-      key: 'project',
-      header: 'Project',
-      render: (job) => <span className="text-white">{job.projectName ?? '—'}</span>,
-    },
-    {
-      key: 'client',
-      header: 'Client',
-      render: (job) => <span className="text-white">{job.client ?? '—'}</span>,
-    },
-    {
       key: 'status',
       header: 'Status',
       render: (job) => (
-        <StatusChip
-          pill
-          tone={JOB_STATUS_TONE[job.status]}
-          label={JOB_STATUS_LABEL[job.status]}
-          className="whitespace-nowrap"
-        />
+        <Badge tone={JOB_STATUS_TONE[job.status]}>{JOB_STATUS_LABEL[job.status]}</Badge>
       ),
     },
     {
@@ -301,60 +290,66 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
       header: 'Progress',
       render: (job) =>
         job.progress === null ? (
-          <span className="text-white/45">—</span>
+          <span className="text-[var(--text-3)]">—</span>
         ) : (
-          <span className="flex items-center gap-3">
-            <span className="h-2 w-24 overflow-hidden rounded-full bg-white/15" aria-hidden>
+          <span className="flex min-w-32 items-center gap-2.5">
+            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--surface-3)]" aria-hidden>
               <span
-                className="block h-full rounded-full bg-linear-to-r from-status-success/40 to-status-success"
+                className={job.progress === 100 ? 'block h-full rounded-full bg-status-success' : 'block h-full rounded-full bg-brand'}
                 style={{ width: `${job.progress}%` }}
               />
             </span>
-            <span className="tabular-nums text-white">{job.progress}%</span>
+            <span className="font-mono text-[13px] tabular-nums text-white">{job.progress}%</span>
           </span>
         ),
     },
     {
       key: 'crew',
       header: 'Crew',
-      render: (job) => <span className="tabular-nums text-white">{job.crewCount}</span>,
+      render: (job) => (
+        <AvatarStack people={job.crew ?? []} />
+      ),
     },
     {
-      key: 'schedule',
-      header: 'Schedule',
-      render: (job) => {
-        if (!job.startDate && !job.endDate) return <span className="text-white/45">—</span>
-
-        const start = job.startDate ? formatCalendarDate(job.startDate) : null
-        const end = job.endDate ? formatCalendarDate(job.endDate) : null
-
-        // One day, or one end only: nothing to span, so no dash.
-        if (start === end || !start || !end) {
-          return <span className="whitespace-nowrap text-white/90">{start ?? end}</span>
-        }
-
-        return (
-          <span className="text-white/90">
-            <span className="whitespace-nowrap">{start} –</span>
-            <br />
-            <span className="whitespace-nowrap">{end}</span>
-          </span>
-        )
-      },
+      key: 'start',
+      header: 'Start',
+      render: (job) => (
+        <span className="whitespace-nowrap">{job.startDate ? formatCalendarDate(job.startDate) : '—'}</span>
+      ),
+    },
+    {
+      key: 'end',
+      header: 'End',
+      render: (job) => (
+        <span className="whitespace-nowrap">{job.endDate ? formatCalendarDate(job.endDate) : '—'}</span>
+      ),
     },
     {
       key: 'openTasks',
-      header: 'Open Tasks',
-      align: 'center',
-      render: (job) => <span className="tabular-nums text-white">{job.openTasks}</span>,
+      header: 'Open tasks',
+      align: 'right',
+      render: (job) => <span className="tabular-nums">{job.openTasks}</span>,
+    },
+    {
+      key: 'value',
+      header: 'Value',
+      align: 'right',
+      render: (job) => (
+        <span className="font-semibold whitespace-nowrap tabular-nums text-white">
+          {job.budget === null ? '—' : formatCurrency(job.budget, 0)}
+        </span>
+      ),
     },
     {
       key: 'actions',
-      header: 'Actions',
-      width: 'w-24',
+      header: '',
+      align: 'right',
+      width: 'w-12',
+      cellClassName: 'pl-1',
       render: (job) => (
         <MoreMenu
           ariaLabel={`Actions for ${job.name}`}
+          variant="minimal"
           items={[
             { label: 'View', icon: Eye, onSelect: () => router.visit(routeTo.job(job.id)) },
             ...(!job.isLocked && permitted('jobs.edit')
@@ -405,28 +400,13 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
     <PageTransition>
       <Head title="Jobs" />
 
-      {/* ================================================ Jobs panel ========= */}
-      <section className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
-        <header className="flex flex-col gap-4 border-b border-hairline grad-ocean-soft px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-white sm:text-3xl">Jobs</h1>
-            <p className="mt-1 text-sm text-white/85">
-              Manage active jobs, track progress, and keep project details, field activity, and job performance organized in one place
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 lg:shrink-0">
-            <SearchBox
-              id="job-search"
-              value={query}
-              onValueChange={setQuery}
-              onSearch={(value) => applyFilters({ search: value })}
-              placeholder="Search jobs, projects, clients..."
-              aria-label="Search jobs"
-              containerClassName="w-full sm:w-72"
-            />
+      <PageHeader
+        title="Jobs"
+        subtitle="Manage active jobs, track progress, and keep project details, field activity, and job performance organized in one place"
+        actions={
+          <>
             <Button
-              variant={isFiltersOpen ? 'primary' : 'white'}
+              variant={isFiltersOpen ? 'primary' : 'secondary'}
               leftIcon={SlidersHorizontal}
               aria-expanded={isFiltersOpen}
               onClick={() => applyFilters({ panel: isFiltersOpen ? '' : 'open' })}
@@ -434,18 +414,46 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
               Filters
             </Button>
             {permitted('jobs.create') && (
-              <ButtonLink href={ROUTES.jobCreate} variant="dark" leftIcon={Plus}>
-                Create Job
+              <ButtonLink href={ROUTES.jobCreate} leftIcon={Plus}>
+                Create job
               </ButtonLink>
             )}
+          </>
+        }
+      />
+
+      <Alert tone="info" className="mb-4 [&_p]:text-md [&_div]:text-sm" title="Office & Field, Fully Connected">
+        Keep your office and field teams aligned with real-time updates to job details, tasks, schedules, and project changes across web and mobile.
+      </Alert>
+
+      <Card padding="none" className="overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
+          <ToolbarSearch
+            value={query}
+            onChange={setQuery}
+            onSubmit={(value) => applyFilters({ search: value })}
+            applied={filters.search !== ''}
+            placeholder="Search jobs, projects, clients"
+          />
+          <div className="ml-auto flex items-center gap-2.5">
+            <label htmlFor="job-sort" className="text-[13px] font-medium whitespace-nowrap text-[var(--text-2)]">
+              Sort by:
+            </label>
+            <div className="w-48">
+              <SelectField
+                id="job-sort"
+                options={SORT_OPTIONS}
+                value={filters.sort}
+                onChange={(event) => applyFilters({ sort: event.target.value as JobSort })}
+              />
+            </div>
           </div>
-        </header>
+          <span className="text-[13px] text-[var(--text-3)]">
+            {meta.total} {meta.total === 1 ? 'job' : 'jobs'}
+          </span>
+        </div>
 
-        <div className="p-5 sm:p-6">
-          <Alert tone="info" className="mb-5 [&_p]:text-md [&_div]:text-sm" title="Office & Field, Fully Connected">
-            Keep your office and field teams aligned with real-time updates to job details, tasks, schedules, and project changes across web and mobile.
-          </Alert>
-
+        <div>
           <AnimatePresence initial={false}>
             {isFiltersOpen && (
               <motion.div
@@ -456,7 +464,7 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
                 transition={{ duration: MOTION.base }}
                 className="overflow-hidden"
               >
-                <div className="mb-6 grid gap-4 rounded-panel border border-hairline bg-white/4 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
+                <div className="grid gap-4 border-b border-hairline bg-[var(--surface-2)] p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
                   <SelectField
                     id="job-status-filter"
                     label="Status"
@@ -483,27 +491,6 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
             )}
           </AnimatePresence>
 
-          {/* The dropdown is wrapped in its own sized container rather than
-              sized through `SelectField`'s `className`, which narrows the
-              inner `<select>` and leaves the chevron floating at the wrapper's
-              full width. */}
-          <div className="mb-5 flex items-center justify-end gap-3">
-            <label
-              htmlFor="job-sort"
-              className="text-md font-medium whitespace-nowrap text-white/90"
-            >
-              Sort by:
-            </label>
-            <div className="w-48">
-              <SelectField
-                id="job-sort"
-                options={SORT_OPTIONS}
-                value={filters.sort}
-                onChange={(event) => applyFilters({ sort: event.target.value as JobSort })}
-              />
-            </div>
-          </div>
-
           {/* Bulk action bar */}
           <AnimatePresence initial={false}>
             {selectedOnPage.length > 0 && (
@@ -512,7 +499,7 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                className="mb-5 flex flex-wrap items-center gap-3 rounded-panel border border-brand/40 bg-brand/10 p-4"
+                className="flex flex-wrap items-center gap-3 border-b border-hairline bg-[var(--brand-bg)] px-4 py-3"
               >
                 <p className="text-md font-medium text-white">
                   {selectedOnPage.length} selected
@@ -555,7 +542,7 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
               <Alert
                 key={notice}
                 tone={flash.warning ? 'warning' : 'success'}
-                className="mb-5"
+                className="m-4"
                 onDismiss={() => setDismissed(notice)}
               >
                 <span className="flex flex-wrap items-center gap-3">
@@ -591,10 +578,7 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
               {/* Table view — xl and up */}
               <div className="hidden xl:block">
                 <Table
-                  dense
                   variant="lined"
-                  headerVariant="plain"
-                  className="text-sm [&_th]:text-sm [&_td]:text-sm [&_td_span]:text-sm"
                   columns={columns}
                   rows={rows}
                   getRowId={(job) => job.id}
@@ -604,7 +588,7 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
               </div>
 
               {/* Card view — below xl */}
-              <ul className="space-y-3 xl:hidden">
+              <ul className="space-y-3 p-4 xl:hidden">
                 {rows.map((job, index) => (
                   <JobCard
                     key={job.id}
@@ -626,21 +610,21 @@ export default function Jobs({ jobs, filters, canCreateInvoice }: JobsProps) {
             </>
           )}
 
-          <Pagination
-            withLabels
-            tone="light"
-            className="mt-6"
-            page={meta.current_page}
-            pageCount={meta.last_page}
-            onPageChange={(page) => applyFilters({ page })}
-            summary={
-              meta.total === 0
-                ? 'No jobs to display'
-                : `Showing ${meta.from}–${meta.to} of ${meta.total} jobs`
-            }
-          />
         </div>
-      </section>
+      </Card>
+
+      <Pagination
+        withLabels
+        className="mt-5"
+        page={meta.current_page}
+        pageCount={meta.last_page}
+        onPageChange={(page) => applyFilters({ page })}
+        summary={
+          meta.total === 0
+            ? 'No jobs to display'
+            : `Showing ${meta.from}–${meta.to} of ${meta.total} jobs`
+        }
+      />
 
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}

@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bell, ChevronDown, ChevronRight, Filter, MailOpen, SearchX } from 'lucide-react'
-import { Alert, EmptyState, Pagination, SearchBox } from '@/components/common'
+import { Alert, Button, EmptyState, Pagination, SearchBox, Seg } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import {
   NOTIFICATION_CATEGORY_ICON,
@@ -97,39 +97,16 @@ export default function Notifications({ notifications, filters, tabCounts, categ
 
       {/* =============================================== Tabs + tools ======== */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-        <div
-          role="tablist"
-          aria-label="Notification views"
-          className="inline-flex gap-1 rounded-card border border-hairline bg-white/5 p-1"
-        >
-          {NOTIFICATION_TABS.map((tab) => {
-            const active = filters.tab === tab.value
+        <Seg
+          ariaLabel="Notification views"
+          options={NOTIFICATION_TABS.map((tab) => {
             const count = tab.value === 'all' ? 0 : tabCounts[tab.value]
 
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => applyFilters({ tab: tab.value as NotificationTab })}
-                className={cn(
-                  'inline-flex items-center gap-2 rounded-panel border px-5 py-2.5 text-md font-semibold transition-colors',
-                  active
-                    ? 'border-brand/70 bg-brand/12 text-white shadow-glow'
-                    : 'border-transparent text-white/85 hover:bg-white/8',
-                )}
-              >
-                {tab.label}
-                {count > 0 && (
-                  <span className="rounded-md border border-status-blue/40 bg-status-blue/15 px-2 py-0.5 text-xs text-status-blue">
-                    {count}
-                  </span>
-                )}
-              </button>
-            )
+            return { key: tab.value, label: count > 0 ? `${tab.label} (${count})` : tab.label }
           })}
-        </div>
+          value={filters.tab}
+          onChange={(value) => applyFilters({ tab: value as NotificationTab })}
+        />
 
         <div className="flex flex-wrap items-center gap-3">
           <SearchBox
@@ -149,7 +126,7 @@ export default function Notifications({ notifications, filters, tabCounts, categ
               aria-label="Filter by type"
               value={filters.category}
               onChange={(event) => applyFilters({ category: event.target.value })}
-              className="cursor-pointer appearance-none rounded-panel border border-hairline-strong bg-white/8 py-3 pr-10 pl-11 text-md font-medium text-white focus:border-brand focus:outline-none"
+              className="cursor-pointer appearance-none h-11 rounded-[10px] border border-hairline-strong bg-surface-glass pr-10 pl-11 text-[14px] font-medium text-white focus:border-brand focus:outline-none"
             >
               <option value="all" className="bg-surface-glass">
                 Filter
@@ -163,15 +140,9 @@ export default function Notifications({ notifications, filters, tabCounts, categ
             <ChevronDown size={16} aria-hidden className="pointer-events-none absolute right-4 text-white/85" />
           </label>
 
-          <button
-            type="button"
-            onClick={markAllRead}
-            disabled={tabCounts.unread === 0}
-            className="inline-flex items-center gap-2 rounded-panel border border-status-blue/50 bg-status-blue/15 px-5 py-3 text-md font-semibold whitespace-nowrap text-white transition-colors hover:bg-status-blue/30 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <MailOpen size={17} aria-hidden />
+          <Button variant="secondary" leftIcon={MailOpen} onClick={markAllRead} disabled={tabCounts.unread === 0}>
             Mark All Read
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -247,11 +218,17 @@ function NotificationCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
       className={cn(
-        'relative flex items-center gap-4 overflow-hidden rounded-panel border bg-white/4 py-3 pr-4 pl-6 backdrop-blur-sm transition-colors hover:bg-white/8',
-        notification.unread ? 'border-brand/40' : 'border-hairline',
+        'group glass relative flex items-center gap-4 overflow-hidden rounded-card border px-[18px] py-4 transition-[transform,border-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-brand/45 hover:shadow-[0_16px_36px_-22px_rgb(47_91_255/0.55)]',
+        notification.unread ? 'border-brand/35' : 'border-hairline',
       )}
     >
-      <span className={cn('absolute inset-y-0 left-0 w-1', tone.stripe)} aria-hidden />
+      {/* A soft wash of the category's colour behind an unread card, so it reads before it is read. */}
+      {notification.unread && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -top-14 -right-10 size-44 rounded-full bg-[radial-gradient(circle,var(--glow-a),transparent_70%)]"
+        />
+      )}
 
       <button
         type="button"
@@ -260,37 +237,63 @@ function NotificationCard({
         aria-label={`Open ${notification.title}`}
       />
 
-      <span className={cn('relative z-10 grid size-11 shrink-0 place-items-center rounded-full', tone.tile)}>
-        <Icon size={20} aria-hidden />
+      <span className="relative z-10 shrink-0">
+        <span className={cn('grid size-12 place-items-center rounded-[14px]', tone.tile)}>
+          <Icon size={22} aria-hidden />
+        </span>
+        {notification.unread && (
+          <span
+            className="absolute -top-1 -right-1 size-3 rounded-full bg-brand ring-2 ring-[var(--surface)]"
+            aria-label="Unread"
+          />
+        )}
       </span>
 
       <div className="pointer-events-none relative z-10 min-w-0 flex-1">
-        <p className={cn('text-md', notification.unread ? 'font-bold text-white' : 'font-semibold text-white/90')}>
-          {notification.title}
-        </p>
-        <p className="mt-0.5 text-sm text-white/85">{notification.detail}</p>
-
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-hairline-strong bg-white/8 px-3 py-0.5 text-xs text-white/90">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <p
+            className={cn(
+              'font-display text-[15px] leading-snug tracking-[-0.01em]',
+              notification.unread ? 'font-[650] text-white' : 'font-[560] text-[var(--text-2)]',
+            )}
+          >
+            {notification.title}
+          </p>
+          <span className="rounded-full bg-[var(--surface-3)] px-2.5 py-px text-[11px] font-semibold tracking-[0.03em] text-[var(--text-2)] uppercase">
             {categoryLabel}
           </span>
-          {others.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              onClick={() => onOpen(notification, action.href)}
-              className="pointer-events-auto rounded-full border border-brand/40 bg-brand/10 px-3 py-0.5 text-xs font-medium text-brand transition-colors hover:bg-brand/20"
-            >
-              {action.label}
-            </button>
-          ))}
         </div>
+        <p className="mt-1 text-[13.5px] leading-snug text-[var(--text-2)]">{notification.detail}</p>
+
+        {(primary || others.length > 0) && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            {primary && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-bg)] px-3 py-1 text-xs font-semibold text-brand">
+                {primary.label}
+                <ChevronRight size={13} aria-hidden />
+              </span>
+            )}
+            {others.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => onOpen(notification, action.href)}
+                className="pointer-events-auto rounded-full border border-hairline-strong px-3 py-1 text-xs font-medium text-[var(--text-2)] transition-colors hover:border-brand/45 hover:text-brand"
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="pointer-events-none relative z-10 flex shrink-0 items-center gap-3 text-xs text-white/90">
+      <div className="pointer-events-none relative z-10 flex shrink-0 flex-col items-end gap-2 text-xs text-[var(--text-3)]">
         <span className="whitespace-nowrap">{formatRelative(notification.timestamp)}</span>
-        {notification.unread && <span className="size-2.5 rounded-full bg-status-blue" aria-label="Unread" />}
-        <ChevronRight size={18} aria-hidden />
+        {/* Round arrow button hidden for now — the whole card is the click target.
+        <span className="grid size-7 place-items-center rounded-full bg-[var(--surface-3)] text-[var(--text-2)] transition-colors group-hover:bg-brand group-hover:text-brand-ink">
+          <ChevronRight size={15} aria-hidden />
+        </span>
+        */}
       </div>
     </motion.li>
   )

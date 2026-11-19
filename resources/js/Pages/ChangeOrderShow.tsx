@@ -1,7 +1,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/react'
 import { ArrowLeft, Check, FileText, History, Pencil, Paperclip, Send, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { Alert, Button, Card, ConfirmDialog, Modal, TextArea } from '@/components/common'
+import { Alert, Button, ConfirmDialog, Modal, Panel, TextArea } from '@/components/common'
 import { ChangeOrderSourcePill, ChangeOrderStatusPill } from '@/components/changeOrders/ChangeOrderPills'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
@@ -105,8 +105,7 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
     const isLabor = kind === 'labor'
 
     return (
-      <Card padding="md" className="mt-4">
-        <h2 className="mb-3 text-lg font-semibold text-white">{title}</h2>
+      <Panel title={title} className="mt-4 h-auto">
         {rows.length === 0 ? (
           <p className="text-sm text-white/70">No {isLabor ? 'labor' : 'material'} lines.</p>
         ) : (
@@ -135,7 +134,7 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
             </table>
           </div>
         )}
-      </Card>
+      </Panel>
     )
   }
 
@@ -240,7 +239,7 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
 
       <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
         <div>
-          <Card padding="md">
+          <Panel title="Details" className="h-auto">
             <dl className="grid gap-4 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-white/70">Job</dt>
@@ -276,15 +275,14 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
                 </dd>
               </div>
             </dl>
-          </Card>
+          </Panel>
 
           {table('Materials', 'material')}
           {table('Labor', 'labor')}
         </div>
 
         <aside className="space-y-4">
-          <Card padding="md">
-            <h2 className="mb-3 text-lg font-semibold text-white">Cost and sell impact</h2>
+          <Panel title="Cost and sell impact" className="h-auto">
             <dl className="space-y-2 text-sm">
               {(
                 [
@@ -302,14 +300,15 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
             </dl>
             <div className="mt-4 flex items-center justify-between border-t border-hairline pt-3">
               <span className="font-semibold text-white">Sell amount</span>
-              <span className="text-xl font-bold text-white tabular-nums">{formatCurrency(co.amount, 2)}</span>
+              <span className="font-display text-xl font-bold text-white tabular-nums">{formatCurrency(co.amount, 2)}</span>
             </div>
-          </Card>
+          </Panel>
 
-          <Card padding="md">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-white">Evidence</h2>
-              {canAddEvidence && (
+          <Panel
+            title="Evidence"
+            className="h-auto"
+            actions={
+              canAddEvidence && (
                 <>
                   <input
                     ref={fileInput}
@@ -338,8 +337,9 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
                     Add
                   </Button>
                 </>
-              )}
-            </div>
+              )
+            }
+          >
             {co.attachments.length === 0 ? (
               <p className="flex items-center gap-2 text-sm text-white/70">
                 <Paperclip size={14} aria-hidden /> No evidence attached.
@@ -349,7 +349,7 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
                 {co.attachments.map((file) => (
                   <li
                     key={file.id}
-                    className="flex items-center gap-2 rounded-panel border border-hairline bg-white/4 px-3 py-1.5 text-sm"
+                    className="flex items-center gap-2 rounded-panel border border-hairline bg-[var(--surface-2)] px-3 py-1.5 text-sm"
                   >
                     <FileText size={14} aria-hidden className="shrink-0 text-brand" />
                     <a
@@ -373,12 +373,9 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
                 ))}
               </ul>
             )}
-          </Card>
+          </Panel>
 
-          <Card padding="md">
-            <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-white">
-              <History size={17} aria-hidden /> History
-            </h2>
+          <Panel className="h-auto" title={<span className="flex items-center gap-2"><History size={17} aria-hidden /> History</span>}>
             <ol className="space-y-3">
               {co.history.map((event) => (
                 <li key={event.id} className="border-l-2 border-brand/50 pl-3 text-sm">
@@ -395,7 +392,7 @@ export default function ChangeOrderShow({ changeOrder: co }: ChangeOrderShowProp
                 </li>
               ))}
             </ol>
-          </Card>
+          </Panel>
         </aside>
       </div>
 

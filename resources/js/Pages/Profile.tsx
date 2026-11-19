@@ -1,6 +1,6 @@
 import { Head, useForm, usePage } from '@inertiajs/react'
-import { Save, User as UserIcon } from 'lucide-react'
-import { Alert, Button, Card, SectionHeading, TextInput } from '@/components/common'
+import { Mail, Phone, Save, ShieldCheck, User as UserIcon } from 'lucide-react'
+import { Alert, Avatar, Badge, Button, Panel, Stat, TextInput } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES } from '@/constants'
 import { toTitleCase } from '@/utils'
@@ -48,20 +48,9 @@ export default function Profile({ user }: ProfileProps) {
         </Alert>
       )}
 
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
       <form onSubmit={submit} noValidate>
-        <Card padding="lg">
-          <SectionHeading title="Account" />
-
-          <div className="flex items-center gap-4 pb-6">
-            <span className="grid size-16 shrink-0 place-items-center rounded-full bg-brand text-xl font-semibold text-brand-ink ring-1 ring-brand/30">
-              {user.initials}
-            </span>
-            <div>
-              <p className="text-md font-semibold text-white">{user.name}</p>
-              <p className="text-xs text-white/70">{user.role}</p>
-            </div>
-          </div>
-
+        <Panel title="Account" sub="Your name and sign-in details" className="h-auto min-w-0">
           <div className="space-y-6">
             <TextInput
               id="profile-name"
@@ -110,8 +99,36 @@ export default function Profile({ user }: ProfileProps) {
               Save changes
             </Button>
           </div>
-        </Card>
+        </Panel>
       </form>
+
+        <div className="min-w-0 space-y-4">
+          <div className="glass relative overflow-hidden rounded-card border border-hairline p-[22px] text-center">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-[radial-gradient(circle,var(--glow-a),transparent_70%)]"
+            />
+            <Avatar person={{ name: user.name, initials: user.initials }} className="relative mx-auto size-20 text-2xl" />
+            <p className="relative mt-3 font-display text-xl font-[620] text-white">{user.name}</p>
+            <div className="relative mt-1.5 flex justify-center">
+              <Badge tone="brand">{user.role}</Badge>
+            </div>
+          </div>
+
+          <Stat label="Email" icon={<Mail size={13} aria-hidden />} value={<span className="block truncate text-lg">{user.email}</span>} className="h-full" />
+          <Stat
+            label="Phone"
+            icon={<Phone size={13} aria-hidden />}
+            value={<span className="block truncate text-lg">{user.phone ?? 'Not set'}</span>}
+            delta={
+              <span className="inline-flex items-center gap-1">
+                <ShieldCheck size={12} aria-hidden /> Changed from Security settings
+              </span>
+            }
+            className="h-full"
+          />
+        </div>
+      </div>
     </PageTransition>
   )
 }

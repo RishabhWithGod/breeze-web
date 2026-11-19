@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AnimatePresence } from 'framer-motion'
 import {
+  ArrowLeft,
   BadgeCheck,
   Briefcase,
   CalendarOff,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react'
 import {
   Alert,
+  Avatar,
   Badge,
   Button,
   ButtonLink,
@@ -199,16 +201,7 @@ export default function ForemanShow({ foreman, tasks, canManage, account, leave 
         breadcrumbs={[{ label: 'Teams', href: ROUTES.teams }, { label: foreman.name }]}
         title={
           <span className="flex flex-wrap items-center gap-3">
-            <span
-              aria-hidden
-              className={
-                isBusy
-                  ? 'grid size-11 shrink-0 place-items-center rounded-full bg-[var(--brand-bg)] text-base font-semibold text-brand'
-                  : 'grid size-11 shrink-0 place-items-center rounded-full bg-[var(--gray-bg)] text-base font-semibold text-[var(--gray-text)]'
-              }
-            >
-              {foreman.initials}
-            </span>
+            <Avatar person={{ name: foreman.name, initials: foreman.initials }} className="size-11 text-base" />
             {foreman.name}
             <Badge tone="brand">{foreman.roleLabel}</Badge>
             {account?.status === 'inactive' ? (
@@ -228,16 +221,21 @@ export default function ForemanShow({ foreman, tasks, canManage, account, leave 
         }`}
         className="mb-4"
         actions={
-          canManage ? (
-            <>
-              <ButtonLink href={routeTo.foremanEdit(foreman.id)} variant="secondary" leftIcon={PencilLine}>
-                Edit
-              </ButtonLink>
-              <Button variant="secondary" leftIcon={Trash2} disabled={hasHistory} onClick={deleteDialog.open}>
-                Remove
-              </Button>
-            </>
-          ) : undefined
+          <>
+            <ButtonLink href={ROUTES.teams} variant="ghost" leftIcon={ArrowLeft}>
+              Back
+            </ButtonLink>
+            {canManage && (
+              <>
+                <ButtonLink href={routeTo.foremanEdit(foreman.id)} variant="secondary" leftIcon={PencilLine}>
+                  Edit
+                </ButtonLink>
+                <Button variant="secondary" leftIcon={Trash2} disabled={hasHistory} onClick={deleteDialog.open}>
+                  Remove
+                </Button>
+              </>
+            )}
+          </>
         }
       />
 
@@ -260,13 +258,13 @@ export default function ForemanShow({ foreman, tasks, canManage, account, leave 
         )}
       </AnimatePresence>
       {canManage && hasHistory && (
-        <p className="mt-2 text-xs text-white/60">
+        <p className="mt-2 mb-4 text-xs text-[var(--text-3)]">
           They have been handed work, so removing them would erase who did it.
         </p>
       )}
 
       {/* ================================================= Summary cards ===== */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard icon={ClipboardList} label="Open Tasks" value={String(foreman.openTasks)} />
         <StatCard icon={Briefcase} label="Jobs" value={String(foreman.openJobs)} />
         <StatCard

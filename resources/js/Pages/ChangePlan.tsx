@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Head, router, usePage } from '@inertiajs/react'
 import { ArrowLeft, Check, Info, Layers, Lock, X } from 'lucide-react'
-import { Alert, Button, ButtonLink } from '@/components/common'
+import { Alert, Button, ButtonLink, Seg } from '@/components/common'
 import { PlanPanel } from '@/components/payments'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
@@ -113,31 +113,15 @@ export default function ChangePlan({ origin, subscription, seatOffer, blockers }
           {/* ------------------------------------------------------------ billing cycle -- */}
           <PlanPanel title="Billing cycle">
             <div className="flex flex-wrap items-center gap-3 p-4">
-              <div
-                role="group"
-                aria-label="Billing cycle"
-                className="inline-flex overflow-hidden rounded-panel border border-hairline-strong"
-              >
-                {(
-                  [
-                    ['monthly', 'Monthly'],
-                    ['yearly', 'Annual'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={cycle === value}
-                    onClick={() => setCycle(value)}
-                    className={cn(
-                      'min-w-28 px-5 py-2 text-sm font-semibold transition-colors',
-                      cycle === value ? 'bg-blue-500 text-brand-ink' : 'bg-white/6 text-white/85 hover:bg-white/12',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <Seg
+                ariaLabel="Billing cycle"
+                options={[
+                  { key: 'monthly', label: 'Monthly' },
+                  { key: 'yearly', label: 'Annual' },
+                ]}
+                value={cycle}
+                onChange={setCycle}
+              />
               {discount > 0 && (
                 <span className="rounded-full border border-status-success/60 bg-status-success/15 px-3 py-1 text-xs font-semibold text-status-success">
                   Annual saves {discount}%
@@ -250,7 +234,7 @@ export default function ChangePlan({ origin, subscription, seatOffer, blockers }
                       <strong className="text-lg text-white tabular-nums">{formatCents(Math.abs(estimate))}</strong>
                     </p>
                   )}
-                  <p className="flex gap-3 rounded-panel border border-hairline bg-white/4 p-3 text-xs text-white/85">
+                  <p className="flex gap-3 rounded-panel border border-hairline bg-[var(--surface-2)] p-3 text-xs text-white/85">
                     <Info size={16} aria-hidden className="shrink-0 text-brand" />
                     {seatOffer.via === 'stripe'
                       ? `The difference for the rest of this period (to ${seatOffer.renewsOn ? formatCalendarDate(seatOffer.renewsOn, 'MMM d') : 'renewal'}) is charged to your card on file, or credited if the new plan costs less. If the payment fails, the plan does not change.`
@@ -324,8 +308,8 @@ function PlanChoice({
         'relative flex flex-col rounded-card border p-4 transition-colors',
         blocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer',
         selected
-          ? 'border-2 border-status-success bg-status-success/6 shadow-glow'
-          : 'border-hairline-strong bg-white/4',
+          ? 'border-2 border-brand bg-[var(--brand-bg)]'
+          : 'border-hairline-strong bg-[var(--surface-2)]',
         !selected && !blocked && 'hover:border-brand/50',
       )}
     >
@@ -449,7 +433,7 @@ function Side({
     <div
       className={cn(
         'rounded-panel border p-3',
-        highlight ? 'border-brand/50 bg-brand/8' : 'border-hairline bg-white/4',
+        highlight ? 'border-brand/50 bg-[var(--brand-bg)]' : 'border-hairline bg-[var(--surface-2)]',
       )}
     >
       <dt className="text-2xs uppercase tracking-wide text-white/60">{label}</dt>

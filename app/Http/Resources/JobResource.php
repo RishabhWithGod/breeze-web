@@ -43,6 +43,8 @@ class JobResource extends JsonResource
             'teamCount' => $this->team_members_count ?? 0,
             // Distinct people assigned to this job's tasks.
             'crewCount' => (int) ($this->crew_count ?? 0),
+            // The same people by name, for the avatar stack on the list.
+            'crew' => $this->crew_people ?? [],
             // The project this job was raised from, when it came from one.
             'projectName' => $this->relationLoaded('project') ? $this->project?->name : null,
             // From the job's own task schedule. `progress` is null when it has

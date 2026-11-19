@@ -26,7 +26,7 @@ export function AlertsTab({ alerts }: { alerts: readonly AnalyticsAlert[] }) {
 
   return (
     <Card accent="warning" padding="lg">
-      <SectionHeading as="h3" title="Needs Attention" />
+      <SectionHeading className="mb-4" as="h3" title="Needs Attention" />
       <FilterTabs options={TYPE_FILTERS} value={filter} onChange={setFilter} counts={counts} className="mb-5" />
       {visible.length === 0 ? (
         <EmptyState title="Nothing needs attention" description="No jobs, invoices or timers match this filter right now." />

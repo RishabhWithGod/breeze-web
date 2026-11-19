@@ -101,6 +101,10 @@ class InvoiceController extends Controller
             'clients' => Invoice::query()->ownedBy($request->user())->distinct()->orderBy('client')->pluck('client'),
             'jobs' => Job::query()->ownedBy($request->user())->orderBy('name')->get(['id', 'name']),
             'summary' => $this->summary->calculate($request->user()),
+            // Read-only counts per status tab, over everything this person owns.
+            'statusCounts' => collect(['draft', 'sent', 'paid', 'overdue'])
+                ->mapWithKeys(fn (string $tab) => [$tab => Invoice::query()->ownedBy($request->user())->displayStatus($tab)->count()])
+                ->all(),
             'can' => app(InvoicePolicy::class)->abilities($request->user()),
         ]);
     }

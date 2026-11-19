@@ -30,6 +30,7 @@ import {
   Card,
   CollapsibleCard,
   ConfirmDialog,
+  Panel,
   StatusChip,
   TextInput,
   buttonStyles,
@@ -245,7 +246,7 @@ export default function InvoiceShow({
       </Card>
 
       {/* ============================================== Summary cards ======== */}
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
         <MetricCard
           icon={FileText}
           label="Approved Estimate"
@@ -337,37 +338,41 @@ export default function InvoiceShow({
 
       {/* ================================================ Notes + totals ===== */}
       <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        <Card padding="md">
-          <div className="flex items-center gap-3">
-            <MessageSquare size={20} aria-hidden className="text-white/85" />
-            <h2 className="text-md font-semibold text-white">Notes</h2>
-          </div>
-          <p className={cn('mt-3 text-md whitespace-pre-line', invoice.notes ? 'text-white/90' : 'text-white/60')}>
+        <Panel
+          className="h-auto"
+          title={
+            <span className="flex items-center gap-2">
+              <MessageSquare size={17} aria-hidden className="text-brand" />
+              Notes
+            </span>
+          }
+        >
+          <p className={cn('text-md whitespace-pre-line', invoice.notes ? 'text-white/90' : 'text-[var(--text-3)]')}>
             {invoice.notes ?? 'No note on this invoice.'}
           </p>
-        </Card>
+        </Panel>
 
-        <Card padding="md">
+        <Panel className="h-auto" title="Totals">
           <dl className="space-y-3 text-md">
             <TotalRow label="Subtotal" value={formatCurrency(invoice.subtotal, 2)} />
             <TotalRow label={`Sales Tax (${invoice.taxPct}%)`} value={formatCurrency(invoice.taxTotal, 2)} />
             <div className="flex items-center justify-between gap-3 border-t border-hairline-strong pt-3">
               <dt className="text-lg font-semibold text-white">Total</dt>
-              <dd className="text-2xl font-bold tabular-nums text-white">{formatCurrency(invoice.total, 2)}</dd>
+              <dd className="font-display text-2xl font-bold tabular-nums text-white">{formatCurrency(invoice.total, 2)}</dd>
             </div>
             <TotalRow label="Paid" value={formatCurrency(invoice.paidAmount, 2)} />
             <TotalRow label="Balance Due" value={formatCurrency(invoice.outstanding, 2)} strong />
           </dl>
-        </Card>
+        </Panel>
       </div>
 
       {invoice.jobId !== null && (
-        <Card padding="md" className="mt-5">
-          <h2 className="text-lg font-semibold text-white">Journeyman Labor Hours</h2>
-          <p className="mt-0.5 text-xs text-white/70">
-            Every person&apos;s total hours on this job — counted the moment they&apos;re logged, no approval wait
-          </p>
-          <div className="mt-4 flex flex-col gap-2">
+        <Panel
+          className="mt-5 h-auto"
+          title="Journeyman Labor Hours"
+          sub="Every person's total hours on this job — counted the moment they're logged, no approval wait"
+        >
+          <div className="flex flex-col gap-2">
             {journeymanHours.length === 0 ? (
               <p className="text-md text-white/70">No time logged on this job yet.</p>
             ) : (
@@ -381,7 +386,7 @@ export default function InvoiceShow({
               ))
             )}
           </div>
-        </Card>
+        </Panel>
       )}
 
       {jobCostSummary && (
@@ -449,12 +454,12 @@ function InfoItem({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="grid size-10 shrink-0 place-items-center rounded-panel bg-brand/12 text-brand ring-1 ring-brand/25">
-        <Icon size={18} aria-hidden />
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--brand-bg)] text-brand">
+        <Icon size={17} aria-hidden />
       </span>
       <div className="min-w-0">
-        <dt className="text-xs text-white/70">{label}</dt>
-        <dd className="text-md font-medium text-white">{value}</dd>
+        <dt className="text-xs text-[var(--text-3)]">{label}</dt>
+        <dd className="text-[14px] font-semibold text-white">{value}</dd>
         {children}
       </div>
     </div>

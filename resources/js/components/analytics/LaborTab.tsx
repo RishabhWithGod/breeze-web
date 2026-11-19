@@ -46,7 +46,7 @@ export function LaborTab({ labor, rows, canViewCosts }: { labor: AnalyticsLabor;
       </div>
 
       <Card accent="brand" padding="lg">
-        <SectionHeading as="h3" title="Hours by Person" />
+        <SectionHeading className="mb-4" as="h3" title="Hours by Person" />
         {labor.people.length === 0 ? (
           <EmptyState title="No time logged" description="No time entries match the current filters." />
         ) : (
@@ -56,12 +56,12 @@ export function LaborTab({ labor, rows, canViewCosts }: { labor: AnalyticsLabor;
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card accent="info" padding="lg">
-          <SectionHeading as="h3" title="By Role" />
+          <SectionHeading className="mb-4" as="h3" title="By Role" />
           <SortableTable columns={roleColumns} rows={labor.roles} getRowId={(r) => r.role} initialSort={{ key: 'hours', dir: 'desc' }} emptyText="No time logged." />
         </Card>
 
         <Card accent="warning" padding="lg">
-          <SectionHeading as="h3" title="Hours vs Estimate by Job" />
+          <SectionHeading className="mb-4" as="h3" title="Hours vs Estimate by Job" />
           {taskRows.length === 0 ? (
             <EmptyState title="No hour estimates" description="Jobs with estimated task hours will show here." />
           ) : (

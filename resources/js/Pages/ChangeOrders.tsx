@@ -1,5 +1,5 @@
-import { Head, Link, router, usePage } from '@inertiajs/react'
-import { Eye, Pencil, Plus, Search, Trash2, X, FileDiff } from 'lucide-react'
+import { Head, router, usePage } from '@inertiajs/react'
+import { Eye, Pencil, Plus, Trash2, X, FileDiff } from 'lucide-react'
 import { useState } from 'react'
 import {
   Alert,
@@ -10,12 +10,16 @@ import {
   MoreMenu,
   Pagination,
   SelectField,
-  TextInput,
+  Stat,
+  Table,
+  ToolbarSearch,
+  UnderlineTabs,
 } from '@/components/common'
 import { ChangeOrderSourcePill, ChangeOrderStatusPill } from '@/components/changeOrders/ChangeOrderPills'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { ROUTES, routeTo } from '@/constants'
 import type { ChangeOrderSource, ChangeOrderStatus, SharedPageProps } from '@/types'
+import type { TableColumn } from '@/types'
 import { formatCurrency } from '@/utils'
 
 interface Row {
@@ -39,16 +43,10 @@ export interface ChangeOrdersProps {
   page: { current: number; last: number; total: number; from: number; to: number }
   filters: { search: string; job: number | null; status: string; source: string }
   jobs: readonly { readonly id: number; readonly name: string }[]
+  /** Per status, over everything the person can see — not just this page. */
+  stats: Partial<Record<string, { count: number; sell: number }>>
   canCreate: boolean
 }
-
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'submitted', label: 'Submitted' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-]
 
 const SOURCE_OPTIONS = [
   { value: 'all', label: 'All Sources' },
@@ -60,7 +58,7 @@ const SOURCE_OPTIONS = [
  * Change Orders: added work, materials or labor documented after a job begins. Made by hand — no
  * drawing is needed — then submitted, and approved or rejected by a manager.
  */
-export default function ChangeOrders({ orders, page, filters, jobs, canCreate }: ChangeOrdersProps) {
+export default function ChangeOrders({ orders, page, filters, jobs, stats, canCreate }: ChangeOrdersProps) {
   const { flash } = usePage<SharedPageProps>().props
   const [search, setSearch] = useState(filters.search)
   const [deleting, setDeleting] = useState<Row | null>(null)
@@ -79,97 +77,164 @@ export default function ChangeOrders({ orders, page, filters, jobs, canCreate }:
 
   const filtered = filters.search !== '' || filters.job !== null || filters.status !== 'all' || filters.source !== 'all'
 
+  const count = (status: string) => stats[status]?.count ?? 0
+  const sell = (status: string) => stats[status]?.sell ?? 0
+  const total = Object.values(stats).reduce((sum, item) => sum + (item?.count ?? 0), 0)
+
+  const columns: TableColumn<Row>[] = [
+    {
+      key: 'number',
+      header: 'Change order #',
+      render: (row) => <span className="font-semibold text-white">{row.label}</span>,
+    },
+    { key: 'job', header: 'Job', render: (row) => <span className="whitespace-nowrap">{row.job.name}</span> },
+    { key: 'description', header: 'Description', render: (row) => <span className="block max-w-xs">{row.description ?? '—'}</span> },
+    {
+      key: 'reason',
+      header: 'Reason',
+      render: (row) => (
+        <span className="whitespace-nowrap">
+          {row.reasonLabel ?? '—'}
+          {row.customerRequested && (
+            <span className="ml-2 rounded-full bg-[var(--brand-bg)] px-2 py-0.5 text-xs font-semibold text-brand">
+              Customer
+            </span>
+          )}
+        </span>
+      ),
+    },
+    { key: 'source', header: 'Source', render: (row) => <ChangeOrderSourcePill source={row.source} /> },
+    { key: 'labor', header: 'Labor impact', render: (row) => <span className="whitespace-nowrap tabular-nums">{row.laborHours} hrs</span> },
+    { key: 'material', header: 'Material impact', render: (row) => <span className="tabular-nums">{formatCurrency(row.materialCost)}</span> },
+    { key: 'amount', header: 'Amount', render: (row) => <span className="font-semibold text-white tabular-nums">{formatCurrency(row.amount)}</span> },
+    { key: 'status', header: 'Status', render: (row) => <ChangeOrderStatusPill status={row.status} /> },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (row) => (
+        <MoreMenu
+          variant="minimal"
+          ariaLabel={`Actions for ${row.label}`}
+          items={[
+            { label: 'View', icon: Eye, onSelect: () => router.visit(routeTo.changeOrder(row.id)) },
+            ...(row.canEdit
+              ? [{ label: 'Edit', icon: Pencil, onSelect: () => router.visit(routeTo.changeOrderEdit(row.id)) }]
+              : []),
+            ...(row.canDelete
+              ? [{ label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setDeleting(row) }]
+              : []),
+          ]}
+        />
+      ),
+    },
+  ]
+
   return (
     <PageTransition>
       <Head title="Change Orders" />
 
-      <Card padding="none" className="overflow-hidden">
-        <PageHeader
-          title="Change Orders"
-          subtitle="Manage change orders for your electrical jobs"
-          className="mb-0 border-b border-hairline p-4 sm:p-5"
-          actions={
-            canCreate ? (
-              <Button leftIcon={Plus} onClick={() => router.visit(ROUTES.changeOrderCreate)}>
-                Create Change Order
-              </Button>
-            ) : undefined
-          }
+      <PageHeader
+        title="Change Orders"
+        subtitle="Extra work after a job starts — priced, approved and billed. No drawing needed."
+        actions={
+          canCreate ? (
+            <Button leftIcon={Plus} onClick={() => router.visit(ROUTES.changeOrderCreate)}>
+              Create Change Order
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {flash.success && (
+        <Alert key={flash.success} tone="success" className="mb-4">
+          {flash.success}
+        </Alert>
+      )}
+      {flash.warning && (
+        <Alert key={flash.warning} tone="warning" className="mb-4">
+          {flash.warning}
+        </Alert>
+      )}
+
+      <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <Stat
+          label="Waiting for approval"
+          value={formatCurrency(sell('submitted'), 0)}
+          delta={`${count('submitted')} change ${count('submitted') === 1 ? 'order' : 'orders'}`}
+          className="h-full"
         />
+        <Stat
+          label="Approved"
+          value={formatCurrency(sell('approved'), 0)}
+          delta={`${count('approved')} added to job value`}
+          className="h-full"
+        />
+        <Stat label="Drafts" value={count('draft')} className="h-full" />
+        <Stat label="Rejected" value={count('rejected')} className="h-full" />
+      </div>
 
-        <div className="p-4 sm:p-5">
-          {flash.success && (
-            <Alert key={flash.success} tone="success" className="mb-4">
-              {flash.success}
-            </Alert>
-          )}
-          {flash.warning && (
-            <Alert key={flash.warning} tone="warning" className="mb-4">
-              {flash.warning}
-            </Alert>
-          )}
+      <UnderlineTabs
+        tabs={[
+          { key: 'all', label: 'All', count: total },
+          { key: 'draft', label: 'Draft', count: count('draft') },
+          { key: 'submitted', label: 'Submitted', count: count('submitted') },
+          { key: 'approved', label: 'Approved', count: count('approved') },
+          { key: 'rejected', label: 'Rejected', count: count('rejected') },
+        ]}
+        value={filters.status}
+        onChange={(next) => visit({ status: next, page: 1 })}
+      />
 
-          <form
-            className="mb-4 flex flex-wrap items-center justify-between gap-3"
-            onSubmit={(event) => {
-              event.preventDefault()
-              visit({ search: search.trim(), page: 1 })
-            }}
-          >
-            <TextInput
-              id="change-order-search"
-              aria-label="Search change orders by job, description, or number"
-              placeholder="Search change orders by job, description, or number..."
-              leftIcon={Search}
-              className="w-full lg:max-w-md lg:flex-1"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              onBlur={() => search.trim() !== filters.search && visit({ search: search.trim(), page: 1 })}
+      <Card padding="none" className="overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
+          <ToolbarSearch
+            value={search}
+            onChange={setSearch}
+            onSubmit={(value) => visit({ search: value.trim(), page: 1 })}
+            applied={filters.search !== ''}
+            placeholder="Search by job, description, or number"
+          />
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            <SelectField
+              aria-label="Filter by job"
+              className="w-44"
+              value={filters.job === null ? '' : String(filters.job)}
+              onChange={(event) =>
+                visit({ job: event.target.value === '' ? null : Number(event.target.value), page: 1 })
+              }
+              options={[
+                { value: '', label: 'All Jobs' },
+                ...jobs.map((job) => ({ value: String(job.id), label: job.name })),
+              ]}
             />
-            <div className="flex flex-wrap items-center gap-3">
-              <SelectField
-                aria-label="Filter by job"
-                className="w-44"
-                value={filters.job === null ? '' : String(filters.job)}
-                onChange={(event) =>
-                  visit({ job: event.target.value === '' ? null : Number(event.target.value), page: 1 })
-                }
-                options={[
-                  { value: '', label: 'All Jobs' },
-                  ...jobs.map((job) => ({ value: String(job.id), label: job.name })),
-                ]}
-              />
-              <SelectField
-                aria-label="Filter by status"
-                className="w-40"
-                value={filters.status}
-                onChange={(event) => visit({ status: event.target.value, page: 1 })}
-                options={STATUS_OPTIONS}
-              />
-              <SelectField
-                aria-label="Filter by source"
-                className="w-36"
-                value={filters.source}
-                onChange={(event) => visit({ source: event.target.value, page: 1 })}
-                options={SOURCE_OPTIONS}
-              />
-              {filtered && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  leftIcon={X}
-                  onClick={() => {
-                    setSearch('')
-                    router.get(ROUTES.changeOrders, {}, { replace: true })
-                  }}
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
-          </form>
+            <SelectField
+              aria-label="Filter by source"
+              className="w-36"
+              value={filters.source}
+              onChange={(event) => visit({ source: event.target.value, page: 1 })}
+              options={SOURCE_OPTIONS}
+            />
+            {filtered && (
+              <Button
+                type="button"
+                variant="ghost"
+                leftIcon={X}
+                onClick={() => {
+                  setSearch('')
+                  router.get(ROUTES.changeOrders, {}, { replace: true })
+                }}
+              >
+                Clear
+              </Button>
+            )}
+            <span className="text-[13px] text-[var(--text-3)]">
+              {page.total} {page.total === 1 ? 'change order' : 'change orders'}
+            </span>
+          </div>
+        </div>
 
-          {orders.length === 0 ? (
+        {orders.length === 0 ? (
+          <div className="p-6">
             <EmptyState
               icon={FileDiff}
               title={filtered ? 'No change orders match' : 'No change orders yet'}
@@ -188,100 +253,35 @@ export default function ChangeOrders({ orders, page, filters, jobs, canCreate }:
                   }
                 : {})}
             />
-          ) : (
-            <div className="overflow-x-auto rounded-panel border border-hairline">
-              <table className="w-full min-w-[68rem] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-hairline bg-white/6 text-xs font-semibold text-white/90">
-                    <th className="px-4 py-3">Change Order #</th>
-                    <th className="px-4 py-3">Job</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Reason</th>
-                    <th className="px-4 py-3">Source</th>
-                    <th className="px-4 py-3">Labor Impact</th>
-                    <th className="px-4 py-3">Material Impact</th>
-                    <th className="px-4 py-3">Amount</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-hairline text-white/90">
-                  {orders.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="cursor-pointer hover:bg-white/4"
-                      onClick={() => router.visit(routeTo.changeOrder(row.id))}
-                    >
-                      <td className="px-4 py-3">
-                        <Link href={routeTo.changeOrder(row.id)} className="font-medium text-white hover:text-brand">
-                          {row.label}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3">{row.job.name}</td>
-                      <td className="max-w-xs px-4 py-3">{row.description ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        {row.reasonLabel ?? '—'}
-                        {row.customerRequested && (
-                          <span className="ml-2 rounded-full bg-brand/20 px-2 py-0.5 text-xs font-semibold text-white">
-                            Customer
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <ChangeOrderSourcePill source={row.source} />
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap tabular-nums">{row.laborHours} hrs</td>
-                      <td className="px-4 py-3 tabular-nums">{formatCurrency(row.materialCost)}</td>
-                      <td className="px-4 py-3 tabular-nums">{formatCurrency(row.amount)}</td>
-                      <td className="px-4 py-3">
-                        <ChangeOrderStatusPill status={row.status} />
-                      </td>
-                      <td className="px-4 py-3 text-center" onClick={(event) => event.stopPropagation()}>
-                        <MoreMenu
-                          variant="minimal"
-                          ariaLabel={`Actions for ${row.label}`}
-                          items={[
-                            { label: 'View', icon: Eye, onSelect: () => router.visit(routeTo.changeOrder(row.id)) },
-                            ...(row.canEdit
-                              ? [
-                                  {
-                                    label: 'Edit',
-                                    icon: Pencil,
-                                    onSelect: () => router.visit(routeTo.changeOrderEdit(row.id)),
-                                  },
-                                ]
-                              : []),
-                            ...(row.canDelete
-                              ? [{ label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setDeleting(row) }]
-                              : []),
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          </div>
+        ) : (
+          <Table
+            variant="lined"
+            columns={columns}
+            rows={orders}
+            getRowId={(row) => row.id}
+            caption="Change orders"
+            onRowClick={(row) => router.visit(routeTo.changeOrder(row.id))}
+          />
+        )}
+      </Card>
 
-          {page.total > 0 && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-white/85">
-                Showing {page.from} - {page.to} of {page.total} change {page.total === 1 ? 'order' : 'orders'}
-              </p>
-              {page.last > 1 && (
-                <Pagination
-                  tone="light"
-                  withLabels
-                  page={page.current}
-                  pageCount={page.last}
-                  onPageChange={(next) => visit({ page: next })}
-                />
-              )}
-            </div>
+      {page.total > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-[var(--text-3)]">
+            Showing {page.from} - {page.to} of {page.total} change {page.total === 1 ? 'order' : 'orders'}
+          </p>
+          {page.last > 1 && (
+            <Pagination
+              tone="light"
+              withLabels
+              page={page.current}
+              pageCount={page.last}
+              onPageChange={(next) => visit({ page: next })}
+            />
           )}
         </div>
-      </Card>
+      )}
 
       <ConfirmDialog
         isOpen={deleting !== null}

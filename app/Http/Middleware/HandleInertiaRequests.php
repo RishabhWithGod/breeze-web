@@ -3,9 +3,15 @@
 namespace App\Http\Middleware;
 
 use App\Http\Resources\NotificationResource;
+use App\Models\ChangeOrder;
 use App\Models\CompanyProfile;
+use App\Models\Project;
+use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\Access\Permissions;
+use App\Services\ChangeOrders\ChangeOrderAccess;
+use App\Services\TimeTracking\DailyTimesheetBuilder;
+use App\Support\Ownership;
 use App\Services\Places\GooglePlaces;
 use App\Services\Takeoff\TakeoffFlow;
 use App\Services\TimeTracking\TimerService;
@@ -80,6 +86,10 @@ class HandleInertiaRequests extends Middleware
                 ? NotificationResource::collection($user->appNotifications()->latest()->latest('id')->take(8)->get())->resolve()
                 : [],
 
+            // What is waiting on this person, for the little counts on the sidebar rows: takeoffs ready for
+            // review, change orders and time entries submitted for approval. Read-only; lazy like the bell.
+            'sidebarCounts' => fn () => $user ? $this->sidebarCounts($user) : null,
+
             'unreadNotificationCount' => fn () => $user
                 ? $user->appNotifications()->unread()->count()
                 : 0,
@@ -107,6 +117,27 @@ class HandleInertiaRequests extends Middleware
                 'recoveryCodes' => $request->session()->get('recoveryCodes'),
             ],
         ];
+    }
+
+    /** @return array{takeoff: int, changeOrders: int, timeEntries: int} */
+    private function sidebarCounts(User $user): array
+    {
+        $takeoff = Project::query()
+            ->whereIn('user_id', Ownership::userIds($user))
+            ->whereIn('status', ['processing', 'completed', 'converted'])
+            ->whereIn('review_status', ['pending', 'in-review'])
+            ->count();
+
+        $changeOrders = app(ChangeOrderAccess::class)
+            ->visible(ChangeOrder::query(), $user)
+            ->where('status', ChangeOrder::STATUS_SUBMITTED)
+            ->count();
+
+        $timeEntries = app(DailyTimesheetBuilder::class)
+            ->entryQuery(['status' => TimeEntry::STATUS_SUBMITTED], $user->can('viewCrew', TimeEntry::class), $user->id)
+            ->count();
+
+        return ['takeoff' => $takeoff, 'changeOrders' => $changeOrders, 'timeEntries' => $timeEntries];
     }
 
     /** @return array<string, mixed>|null */

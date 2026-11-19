@@ -15,7 +15,7 @@ import {
   TriangleAlert,
   type LucideIcon,
 } from 'lucide-react'
-import { Alert, Badge, Button, ButtonLink, EmptyState, Pagination, SelectField, Table, TextInput } from '@/components/common'
+import { Alert, Avatar, Badge, Button, ButtonLink, Card, EmptyState, Pagination, SelectField, Stat, Table, TextInput, UnderlineTabs } from '@/components/common'
 import { appLayout, PageHeader, PageTransition } from '@/components/layout'
 import { CheckOutDialog, SessionStatus, type CheckOutTarget } from '@/components/timeTracking'
 import { BILLABLE_FILTERS, ROUTES, TIME_ENTRY_STATUS_FILTERS, routeTo } from '@/constants'
@@ -46,6 +46,8 @@ export interface TimeEntriesProps {
   log: Paginated<TimeLogRow>
   /** Sessions that need a look: a check-in never closed, or a rejected entry. */
   exceptionCount: number
+  /** Per status over everything matching the other filters — for the tiles and tabs. */
+  stats: Partial<Record<string, { count: number; hours: number; overtime: number }>>
   filters: EntryFilters
   jobs: readonly TimeTrackingJobOption[]
   teamMembers: readonly TimeEntryPersonRef[]
@@ -65,6 +67,7 @@ const taskTypeLabel = (value: string) => value.replace(/-/g, ' ')
 export default function TimeEntries({
   log,
   exceptionCount,
+  stats,
   filters,
   jobs,
   teamMembers,
@@ -130,6 +133,11 @@ export default function TimeEntries({
 
   const { meta } = log
 
+  const stat = (status: string) => stats[status] ?? { count: 0, hours: 0, overtime: 0 }
+  const totalEntries = Object.values(stats).reduce((sum, item) => sum + (item?.count ?? 0), 0)
+  const overtime = Object.values(stats).reduce((sum, item) => sum + (item?.overtime ?? 0), 0)
+  const tabValue = ['submitted', 'approved', 'draft', 'rejected'].includes(filters.status) ? filters.status : 'all'
+
   const approve = (row: TimeLogRow) => {
     if (row.entryId === null) return
 
@@ -156,20 +164,21 @@ export default function TimeEntries({
       // Who, and what they are, in one cell — a column of its own for a small chip only
       // made the row wider than the card.
       render: (row) => (
-        <div className="min-w-0">
-          <span className="block text-white">{row.employee.name}</span>
-          {row.employee.role && (
-            <span className="mt-1 inline-flex rounded-full border border-brand/40 bg-brand/10 px-2.5 py-0.5 text-2xs font-medium text-brand">
-              {row.employee.role}
-            </span>
-          )}
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Avatar person={{ name: row.employee.name }} />
+          <div className="min-w-0">
+            <span className="block font-semibold text-white">{row.employee.name}</span>
+            {row.employee.role && (
+              <span className="block text-xs text-[var(--text-3)]">{row.employee.role}</span>
+            )}
+          </div>
         </div>
       ),
     },
     {
       key: 'job',
       header: 'Job',
-      render: (row) => <span className="text-white">{row.job ?? '—'}</span>,
+      render: (row) => <span className="whitespace-nowrap text-white">{row.job ?? '—'}</span>,
     },
     {
       key: 'checkIn',
@@ -392,8 +401,50 @@ export default function TimeEntries({
       )}
 
       {/* ================================================== Session log ==== */}
-      <div className="overflow-hidden rounded-card border border-hairline glass shadow-panel">
-        <div className="p-5 sm:p-6">
+      <div className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <Stat
+          label="Waiting for approval"
+          value={formatHours(stat('submitted').hours)}
+          delta={`${stat('submitted').count} ${stat('submitted').count === 1 ? 'entry' : 'entries'}`}
+          className="h-full"
+        />
+        <Stat
+          label="Approved"
+          value={formatHours(stat('approved').hours + stat('locked').hours)}
+          delta={`${stat('approved').count + stat('locked').count} entries`}
+          className="h-full"
+        />
+        <Stat
+          label="Overtime"
+          value={formatHours(overtime)}
+          delta="Over 8 h a day"
+          className="h-full"
+        />
+        <Stat label="Drafts" value={stat('draft').count} className="h-full" />
+      </div>
+
+      <UnderlineTabs
+        tabs={[
+          { key: 'all', label: 'All', count: totalEntries },
+          { key: 'submitted', label: 'To approve', count: stat('submitted').count },
+          { key: 'approved', label: 'Approved', count: stat('approved').count },
+          { key: 'draft', label: 'Draft', count: stat('draft').count },
+          { key: 'rejected', label: 'Rejected', count: stat('rejected').count },
+        ]}
+        value={tabValue}
+        onChange={(next) => {
+          setDraft({ ...draft, status: next })
+          updateQuery({ ...draft, status: next, exceptions: filters.exceptions ? 1 : '' })
+        }}
+      />
+
+      <Card padding="none" className="overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
+          <span className="text-[13px] text-[var(--text-3)]">
+            {meta.total} {meta.total === 1 ? 'session' : 'sessions'}
+          </span>
+        </div>
+        <div className="p-4 sm:p-5">
           {log.data.length === 0 ? (
             <EmptyState
               icon={SearchX}
@@ -437,7 +488,7 @@ export default function TimeEntries({
             }
           />
         </div>
-      </div>
+      </Card>
 
       <CheckOutDialog target={closing} onClose={() => setClosing(null)} />
     </PageTransition>
